@@ -28,7 +28,7 @@ class CartPoleEnv(gym.Wrapper):
         Args:
             env: Base Gymnasium CartPole environment
             observation_noise_std: Standard deviation for observation noise (Gaussian)
-            action_noise_std: Standard deviation for action noise (Gaussian)
+            action_noise_std: Probability of flipping discrete actions (0.0-1.0)
             domain_randomization: Dictionary with keys 'gravity', 'pole_length', 'cart_mass'
                                  Each value is a tuple (min, max) for uniform sampling
         """
@@ -130,7 +130,7 @@ class CartPoleEnv(gym.Wrapper):
         if 'pole_length' in self.domain_randomization:
             min_len, max_len = self.domain_randomization['pole_length']
             unwrapped.length = np.random.uniform(min_len, max_len)
-            unwrapped.total_length = unwrapped.length + unwrapped.length / 2  # Update total length
+            unwrapped.polemass_length = unwrapped.masspole * unwrapped.length  # Update pole mass * length
             
         if 'cart_mass' in self.domain_randomization:
             min_mass, max_mass = self.domain_randomization['cart_mass']
