@@ -61,7 +61,9 @@ def save_config(config: Dict[str, Any], save_path: str) -> None:
         config: Configuration dictionary to save
         save_path: Path to save the configuration
     """
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    dir_path = os.path.dirname(save_path)
+    if dir_path:
+        os.makedirs(dir_path, exist_ok=True)
     
     with open(save_path, "w") as f:
         yaml.dump(config, f, default_flow_style=False)

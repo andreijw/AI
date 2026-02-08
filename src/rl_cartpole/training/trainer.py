@@ -1,6 +1,6 @@
 """Training pipeline for RL agents."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -100,7 +100,7 @@ class Trainer:
             "final_avg_reward": np.mean(self.episode_rewards[-100:]),
         }
     
-    def _run_episode(self, training: bool = True) -> tuple[float, int]:
+    def _run_episode(self, training: bool = True) -> Tuple[float, int]:
         """
         Run a single episode.
         
