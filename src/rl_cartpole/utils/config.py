@@ -1,0 +1,67 @@
+"""Configuration loading and management."""
+
+import json
+import os
+from typing import Any, Dict
+
+import yaml
+
+
+def load_config(config_path: str) -> Dict[str, Any]:
+    """
+    Load configuration from a YAML or JSON file.
+    
+    Args:
+        config_path: Path to the configuration file
+        
+    Returns:
+        Configuration dictionary
+        
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+        ValueError: If config file format is not supported
+    """
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    
+    file_ext = os.path.splitext(config_path)[1].lower()
+    
+    with open(config_path, "r") as f:
+        if file_ext in [".yaml", ".yml"]:
+            config = yaml.safe_load(f)
+        elif file_ext == ".json":
+            config = json.load(f)
+        else:
+            raise ValueError(f"Unsupported config format: {file_ext}")
+    
+    return config
+
+
+def merge_configs(base_config: Dict[str, Any], override_config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Merge two configuration dictionaries.
+    
+    Args:
+        base_config: Base configuration
+        override_config: Configuration to override base
+        
+    Returns:
+        Merged configuration dictionary
+    """
+    merged = base_config.copy()
+    merged.update(override_config)
+    return merged
+
+
+def save_config(config: Dict[str, Any], save_path: str) -> None:
+    """
+    Save configuration to a YAML file.
+    
+    Args:
+        config: Configuration dictionary to save
+        save_path: Path to save the configuration
+    """
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    with open(save_path, "w") as f:
+        yaml.dump(config, f, default_flow_style=False)

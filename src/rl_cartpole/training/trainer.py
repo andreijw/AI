@@ -1,0 +1,187 @@
+"""Training pipeline for RL agents."""
+
+from typing import Any, Dict, Optional
+
+import numpy as np
+
+from ..agents.base_agent import BaseAgent
+from ..environments.cartpole_env import CartPoleEnv
+
+
+class Trainer:
+    """
+    Training pipeline for reinforcement learning agents.
+    
+    Handles the training loop, episode collection, and metric logging.
+    """
+    
+    def __init__(
+        self,
+        env: CartPoleEnv,
+        agent: BaseAgent,
+        config: Dict[str, Any],
+        logger: Optional[Any] = None,
+    ):
+        """
+        Initialize the trainer.
+        
+        Args:
+            env: Environment to train in
+            agent: Agent to train
+            config: Training configuration
+            logger: Optional logger for training metrics
+        """
+        self.env = env
+        self.agent = agent
+        self.config = config
+        self.logger = logger
+        
+        # Training parameters
+        self.num_episodes = config.get("num_episodes", 1000)
+        self.max_steps_per_episode = config.get("max_steps_per_episode", 500)
+        self.eval_frequency = config.get("eval_frequency", 100)
+        self.save_frequency = config.get("save_frequency", 100)
+        self.checkpoint_dir = config.get("checkpoint_dir", "./checkpoints")
+        
+        # Metrics tracking
+        self.episode_rewards = []
+        self.episode_lengths = []
+        
+    def train(self) -> Dict[str, Any]:
+        """
+        Run the training loop.
+        
+        Returns:
+            Dictionary of training statistics
+        """
+        print(f"Starting training for {self.num_episodes} episodes...")
+        
+        for episode in range(self.num_episodes):
+            episode_reward, episode_length = self._run_episode(training=True)
+            
+            self.episode_rewards.append(episode_reward)
+            self.episode_lengths.append(episode_length)
+            
+            # Log progress
+            if (episode + 1) % 10 == 0:
+                avg_reward = np.mean(self.episode_rewards[-10:])
+                avg_length = np.mean(self.episode_lengths[-10:])
+                print(
+                    f"Episode {episode + 1}/{self.num_episodes} | "
+                    f"Avg Reward (last 10): {avg_reward:.2f} | "
+                    f"Avg Length (last 10): {avg_length:.2f}"
+                )
+                
+                if self.logger:
+                    self.logger.log({
+                        "episode": episode + 1,
+                        "avg_reward": avg_reward,
+                        "avg_length": avg_length,
+                    })
+            
+            # Evaluation
+            if (episode + 1) % self.eval_frequency == 0:
+                eval_stats = self._evaluate()
+                print(f"Evaluation at episode {episode + 1}: {eval_stats}")
+                
+                if self.logger:
+                    self.logger.log({"evaluation": eval_stats})
+            
+            # Save checkpoint
+            if (episode + 1) % self.save_frequency == 0:
+                self._save_checkpoint(episode + 1)
+        
+        print("Training complete!")
+        
+        return {
+            "total_episodes": self.num_episodes,
+            "avg_reward": np.mean(self.episode_rewards),
+            "avg_length": np.mean(self.episode_lengths),
+            "final_avg_reward": np.mean(self.episode_rewards[-100:]),
+        }
+    
+    def _run_episode(self, training: bool = True) -> tuple[float, int]:
+        """
+        Run a single episode.
+        
+        Args:
+            training: Whether to train during the episode
+            
+        Returns:
+            Tuple of (episode_reward, episode_length)
+        """
+        obs, _ = self.env.reset()
+        episode_reward = 0.0
+        episode_length = 0
+        
+        # Placeholder for trajectory collection (for future PPO implementation)
+        observations = []
+        actions = []
+        rewards = []
+        
+        done = False
+        while not done and episode_length < self.max_steps_per_episode:
+            # Select action
+            action = self.agent.select_action(obs, training=training)
+            
+            # Take step
+            next_obs, reward, terminated, truncated, info = self.env.step(action)
+            done = terminated or truncated
+            
+            # Store trajectory (for future policy updates)
+            observations.append(obs)
+            actions.append(action)
+            rewards.append(reward)
+            
+            episode_reward += reward
+            episode_length += 1
+            obs = next_obs
+        
+        # Agent update (placeholder - actual implementation depends on algorithm)
+        if training:
+            batch = {
+                "observations": np.array(observations),
+                "actions": np.array(actions),
+                "rewards": np.array(rewards),
+            }
+            self.agent.update(batch)
+        
+        return episode_reward, episode_length
+    
+    def _evaluate(self, num_episodes: int = 10) -> Dict[str, float]:
+        """
+        Evaluate the agent.
+        
+        Args:
+            num_episodes: Number of episodes to evaluate over
+            
+        Returns:
+            Dictionary of evaluation metrics
+        """
+        eval_rewards = []
+        eval_lengths = []
+        
+        for _ in range(num_episodes):
+            episode_reward, episode_length = self._run_episode(training=False)
+            eval_rewards.append(episode_reward)
+            eval_lengths.append(episode_length)
+        
+        return {
+            "mean_reward": np.mean(eval_rewards),
+            "std_reward": np.std(eval_rewards),
+            "mean_length": np.mean(eval_lengths),
+        }
+    
+    def _save_checkpoint(self, episode: int) -> None:
+        """
+        Save a training checkpoint.
+        
+        Args:
+            episode: Current episode number
+        """
+        import os
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        
+        checkpoint_path = os.path.join(self.checkpoint_dir, f"agent_episode_{episode}.pt")
+        self.agent.save(checkpoint_path)
+        print(f"Checkpoint saved to {checkpoint_path}")
