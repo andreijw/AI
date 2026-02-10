@@ -144,6 +144,7 @@ class CartPoleEnv:
             Potentially flipped action
         """
         # Interpret noise_std as probability of flipping the action
+        # Cap at 1.0 for safety, though docstring specifies valid range is 0.0-1.0
         flip_prob = min(self.action_noise_std, 1.0)
         if np.random.random() < flip_prob:
             # Flip action (for CartPole: 0 -> 1, 1 -> 0)

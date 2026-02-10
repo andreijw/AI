@@ -97,7 +97,7 @@ class Trainer:
             "total_episodes": self.num_episodes,
             "avg_reward": np.mean(self.episode_rewards),
             "avg_length": np.mean(self.episode_lengths),
-            "final_avg_reward": np.mean(self.episode_rewards[-100:]),
+            "final_avg_reward": np.mean(self.episode_rewards[-min(100, len(self.episode_rewards)):]),
         }
     
     def _run_episode(self, training: bool = True) -> Tuple[float, int]:

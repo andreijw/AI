@@ -9,8 +9,8 @@ environment:
   seed: 42
   
   # Environment augmentation (for robust training)
-  observation_noise_std: 0.01  # Add Gaussian noise to observations
-  action_noise_std: 0.05       # 5% chance of random action flipping
+  observation_noise_std: 0.01  # Standard deviation of Gaussian observation noise
+  action_noise_std: 0.05       # Probability (0.0-1.0) of random action flipping (5% here)
   
   # Domain randomization (randomizes physics on each episode)
   domain_randomization:

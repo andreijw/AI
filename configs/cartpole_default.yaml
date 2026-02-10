@@ -9,7 +9,7 @@ environment:
   
   # Environment augmentation (for robust training)
   observation_noise_std: 0.0  # Standard deviation of Gaussian observation noise
-  action_noise_std: 0.0       # Probability of random action flipping (0.0-1.0)
+  action_noise_std: 0.0       # Probability (0.0-1.0) of random action flipping
   
   # Domain randomization (randomizes physics on each episode)
   domain_randomization:
