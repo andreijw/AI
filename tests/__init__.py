@@ -1,3 +1,1 @@
-"""
-Test suite for CartPole RL project.
-"""
+"""Test suite for RL CartPole project."""

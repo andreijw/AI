@@ -1,0 +1,34 @@
+# CartPole RL Training Configuration
+
+# Environment settings
+environment:
+  name: "CartPole-v1"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 500
+  seed: 42
+
+# Agent settings
+agent:
+  type: "random"  # Options: "random", "ppo" (ppo not yet implemented)
+  # Future PPO hyperparameters will go here
+  config:
+    learning_rate: 0.0003
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_epsilon: 0.2
+    value_coef: 0.5
+    entropy_coef: 0.01
+
+# Training settings
+training:
+  num_episodes: 1000
+  max_steps_per_episode: 500
+  eval_frequency: 100  # Evaluate every N episodes
+  save_frequency: 100  # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true
