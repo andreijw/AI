@@ -84,3 +84,77 @@ def test_env_episode_completion():
             assert "reward" in info["episode"]
     
     env.close()
+
+
+def test_observation_noise():
+    """Test observation noise injection."""
+    env = CartPoleEnv(seed=42, observation_noise_std=0.1)
+    obs, _ = env.reset(seed=42)
+    
+    # With noise, observations should be valid but different from deterministic
+    assert obs.shape == (4,)
+    assert not np.any(np.isnan(obs))
+    
+    env.close()
+
+
+def test_action_noise():
+    """Test action noise (probabilistic flipping)."""
+    env = CartPoleEnv(seed=42, action_noise_std=0.5)
+    obs, _ = env.reset(seed=42)
+    
+    # Action noise should not cause errors
+    for _ in range(10):
+        obs, reward, terminated, truncated, info = env.step(0)
+        assert obs.shape == (4,)
+        if terminated or truncated:
+            break
+    
+    env.close()
+
+
+def test_domain_randomization():
+    """Test domain randomization of physics parameters."""
+    domain_randomization = {
+        'gravity': (9.0, 11.0),
+        'pole_length': (0.45, 0.55),
+        'cart_mass': (0.9, 1.1),
+    }
+    
+    env = CartPoleEnv(seed=42, domain_randomization=domain_randomization)
+    
+    # Reset and check physics parameters were randomized
+    obs, _ = env.reset(seed=42)
+    unwrapped = env.env.unwrapped
+    
+    assert 9.0 <= unwrapped.gravity <= 11.0
+    assert 0.45 <= unwrapped.length <= 0.55
+    assert 0.9 <= unwrapped.masscart <= 1.1
+    
+    env.close()
+
+
+def test_combined_augmentation():
+    """Test environment with all augmentation features."""
+    domain_randomization = {
+        'gravity': (9.5, 10.5),
+    }
+    
+    env = CartPoleEnv(
+        seed=42,
+        observation_noise_std=0.01,
+        action_noise_std=0.1,
+        domain_randomization=domain_randomization,
+    )
+    
+    obs, _ = env.reset(seed=42)
+    assert obs.shape == (4,)
+    
+    # Run a few steps to ensure everything works together
+    for _ in range(10):
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        if terminated or truncated:
+            obs, _ = env.reset()
+    
+    env.close()

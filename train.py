@@ -43,12 +43,40 @@ def main():
     
     # Create environment
     render_mode = "human" if args.render else config["environment"].get("render_mode")
+    
+    # Prepare domain randomization config if enabled
+    domain_randomization = None
+    dr_config = config["environment"].get("domain_randomization", {})
+    if dr_config.get("enabled", False):
+        domain_randomization = {}
+        if "gravity" in dr_config:
+            domain_randomization["gravity"] = (
+                dr_config["gravity"]["min"],
+                dr_config["gravity"]["max"]
+            )
+        if "pole_length" in dr_config:
+            domain_randomization["pole_length"] = (
+                dr_config["pole_length"]["min"],
+                dr_config["pole_length"]["max"]
+            )
+        if "cart_mass" in dr_config:
+            domain_randomization["cart_mass"] = (
+                dr_config["cart_mass"]["min"],
+                dr_config["cart_mass"]["max"]
+            )
+    
     env = CartPoleEnv(
         render_mode=render_mode,
         max_episode_steps=config["environment"]["max_episode_steps"],
         seed=config["environment"]["seed"],
+        observation_noise_std=config["environment"].get("observation_noise_std", 0.0),
+        action_noise_std=config["environment"].get("action_noise_std", 0.0),
+        domain_randomization=domain_randomization,
     )
     logger.info("Environment created")
+    logger.info(f"Environment augmentation: obs_noise={config['environment'].get('observation_noise_std', 0.0)}, "
+                f"action_noise={config['environment'].get('action_noise_std', 0.0)}, "
+                f"domain_rand={'enabled' if domain_randomization else 'disabled'}")
     
     # Create agent
     agent_type = config["agent"]["type"]

@@ -6,6 +6,23 @@ environment:
   render_mode: null  # Set to 'human' for visualization
   max_episode_steps: 500
   seed: 42
+  
+  # Environment augmentation (for robust training)
+  observation_noise_std: 0.0  # Standard deviation of Gaussian observation noise
+  action_noise_std: 0.0       # Probability of random action flipping (0.0-1.0)
+  
+  # Domain randomization (randomizes physics on each episode)
+  domain_randomization:
+    enabled: false
+    gravity:
+      min: 9.0
+      max: 11.0
+    pole_length:
+      min: 0.45
+      max: 0.55
+    cart_mass:
+      min: 0.9
+      max: 1.1
 
 # Agent settings
 agent:
