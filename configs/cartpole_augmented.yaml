@@ -1,0 +1,51 @@
+# CartPole RL Training Configuration with Environment Augmentation
+# This configuration demonstrates all augmentation features for robust training
+
+# Environment settings
+environment:
+  name: "CartPole-v1"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 500
+  seed: 42
+  
+  # Environment augmentation (for robust training)
+  observation_noise_std: 0.01  # Add Gaussian noise to observations
+  action_noise_std: 0.05       # 5% chance of random action flipping
+  
+  # Domain randomization (randomizes physics on each episode)
+  domain_randomization:
+    enabled: true
+    gravity:
+      min: 9.5
+      max: 10.5
+    pole_length:
+      min: 0.475
+      max: 0.525
+    cart_mass:
+      min: 0.95
+      max: 1.05
+
+# Agent settings
+agent:
+  type: "random"  # Options: "random", "ppo" (ppo not yet implemented)
+  config:
+    learning_rate: 0.0003
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_epsilon: 0.2
+    value_coef: 0.5
+    entropy_coef: 0.01
+
+# Training settings
+training:
+  num_episodes: 100  # Reduced for testing
+  max_steps_per_episode: 500
+  eval_frequency: 50
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true
