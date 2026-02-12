@@ -3,8 +3,6 @@ name: Copilot Deployment
 on:
   push:
     branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
@@ -72,11 +70,10 @@ jobs:
       - name: Commit and push changes
         if: steps.check-changes.outputs.has_changes == 'true'
         run: |
+          git pull --rebase origin ${{ github.ref_name }}
           git add -A
           git commit -S -m "chore: automated deployment updates by Copilot [bot]"
           git push
-        env:
-          GPG_TTY: $(tty)
 
       - name: Verify commit signature
         if: steps.check-changes.outputs.has_changes == 'true'
