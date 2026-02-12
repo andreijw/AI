@@ -28,11 +28,11 @@ def main():
         help="Render the environment during training",
     )
     args = parser.parse_args()
-    
+
     # Load configuration
     print(f"Loading configuration from {args.config}")
     config = load_config(args.config)
-    
+
     # Setup logger
     logger = setup_logger(
         name="rl_cartpole",
@@ -40,7 +40,7 @@ def main():
     )
     logger.info("Starting CartPole RL training")
     logger.info(f"Configuration: {config}")
-    
+
     # Create environment
     render_mode = "human" if args.render else config["environment"].get("render_mode")
     env = CartPoleEnv(
@@ -49,7 +49,7 @@ def main():
         seed=config["environment"]["seed"],
     )
     logger.info("Environment created")
-    
+
     # Create agent
     agent_type = config["agent"]["type"]
     if agent_type == "random":
@@ -60,9 +60,9 @@ def main():
         )
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")
-    
+
     logger.info(f"Agent created: {agent_type}")
-    
+
     # Create trainer
     trainer = Trainer(
         env=env,
@@ -71,7 +71,7 @@ def main():
         logger=logger,
     )
     logger.info("Trainer created")
-    
+
     # Train
     try:
         stats = trainer.train()
