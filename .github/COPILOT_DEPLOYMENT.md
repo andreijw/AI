@@ -79,13 +79,12 @@ The Copilot deployment workflow includes:
 - **GPG Signing**: All commits are signed with GPG
 - **Signature Verification**: Verifies commit signatures after pushing
 - **Change Detection**: Only commits when there are actual changes
-- **Flexible Triggers**: Supports push, pull request, and manual dispatch
+- **Flexible Triggers**: Supports push to main/develop branches and manual dispatch
 
 ## Workflow Triggers
 
 The workflow runs on:
 - Push to `main` or `develop` branches
-- Pull requests to `main` or `develop` branches
 - Manual trigger via workflow dispatch
 
 ## Customization

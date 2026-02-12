@@ -70,6 +70,7 @@ jobs:
       - name: Commit and push changes
         if: steps.check-changes.outputs.has_changes == 'true'
         run: |
+          set -e  # Exit on any error
           git pull --rebase origin ${{ github.ref_name }}
           git add -A
           git commit -S -m "chore: automated deployment updates by Copilot [bot]"
@@ -78,5 +79,5 @@ jobs:
       - name: Verify commit signature
         if: steps.check-changes.outputs.has_changes == 'true'
         run: |
-          git verify-commit HEAD || echo "Warning: Commit signature verification failed"
+          git verify-commit HEAD
           git log --show-signature -1
