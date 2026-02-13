@@ -60,9 +60,15 @@ Add the following secrets to your GitHub repository:
    gpg --armor --export KEY_ID
    ```
 
-2. Add to GitHub:
-   - Go to: Settings → SSH and GPG keys → New GPG key
-   - Paste the public key and save
+2. Add the public key to the appropriate place in GitHub:
+   - **For a personal user account (signing your own commits)**:
+     - Go to your user profile: Settings → SSH and GPG keys → New GPG key
+     - Paste the public key and save
+   - **For automated/bot usage (for example, keys named `github-actions[bot]`)**:
+     - Prefer a dedicated machine user (a separate GitHub account used only by automation):
+       - Sign in as the machine user, then go to: Settings → SSH and GPG keys → New GPG key
+       - Paste the public key and save
+     - Do **not** add a bot key to your personal account. For repository-level authentication (such as Deploy Keys), configure access for the bot or machine user according to your organization’s security practices.
 
 ### 5. Enable Vigilant Mode (Optional)
 
