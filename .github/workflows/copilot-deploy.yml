@@ -69,7 +69,36 @@ jobs:
         if: steps.check-changes.outputs.has_changes == 'true'
         run: |
           set -e  # Exit on any error
-          git pull --rebase origin ${{ github.ref_name }}
+          echo "Syncing with remote branch using git pull --rebase..."
+          attempt=0
+          max_attempts=3
+          backoff=5
+
+          while [ "$attempt" -lt "$max_attempts" ]; do
+            attempt=$((attempt + 1))
+            echo "Attempt ${attempt} of ${max_attempts} to pull with rebase..."
+            if git pull --rebase origin "${{ github.ref_name }}"; then
+              echo "git pull --rebase succeeded."
+              break
+            fi
+
+            echo "git pull --rebase failed."
+
+            # Detect and abort any in-progress rebase to avoid leaving the repo in a conflicted state.
+            if [ -d ".git/rebase-apply" ] || [ -d ".git/rebase-merge" ]; then
+              echo "Rebase conflict detected. Aborting rebase."
+              git rebase --abort || true
+            fi
+
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              echo "Retrying after ${backoff}s..."
+              sleep "$backoff"
+              backoff=$((backoff * 2))
+            else
+              echo "Failed to pull with rebase after ${max_attempts} attempts. Please resolve conflicts manually."
+              exit 1
+            fi
+          done
           git add -A
           git commit -S -m "chore: automated deployment updates by Copilot [bot]"
           git verify-commit HEAD
