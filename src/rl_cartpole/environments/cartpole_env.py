@@ -12,7 +12,7 @@ class CartPoleEnv:
 
     Provides a standardized interface for the training pipeline and
     adds logging, monitoring, and preprocessing capabilities.
-    
+
     Features:
     - Observation noise injection
     - Action noise injection
@@ -45,11 +45,11 @@ class CartPoleEnv:
         self.max_episode_steps = max_episode_steps
         self.seed = seed
         self.render_mode = render_mode
-        
+
         # Noise parameters
         self.obs_noise_std = obs_noise_std
         self.action_noise_prob = action_noise_prob
-        
+
         # Domain randomization parameters
         self.domain_randomization = domain_randomization or {}
 
@@ -77,30 +77,30 @@ class CartPoleEnv:
         """Apply domain randomization to environment parameters."""
         if not self.domain_randomization:
             return
-            
+
         # Access the underlying environment (unwrap if needed)
         base_env = self.env.unwrapped
-        
+
         # Randomize gravity
-        if 'gravity' in self.domain_randomization:
-            min_g, max_g = self.domain_randomization['gravity']
+        if "gravity" in self.domain_randomization:
+            min_g, max_g = self.domain_randomization["gravity"]
             base_env.gravity = np.random.uniform(min_g, max_g)
-        
+
         # Randomize cart mass
-        if 'masscart' in self.domain_randomization:
-            min_m, max_m = self.domain_randomization['masscart']
+        if "masscart" in self.domain_randomization:
+            min_m, max_m = self.domain_randomization["masscart"]
             base_env.masscart = np.random.uniform(min_m, max_m)
-        
+
         # Randomize pole mass
-        if 'masspole' in self.domain_randomization:
-            min_m, max_m = self.domain_randomization['masspole']
+        if "masspole" in self.domain_randomization:
+            min_m, max_m = self.domain_randomization["masspole"]
             base_env.masspole = np.random.uniform(min_m, max_m)
-        
+
         # Randomize pole length
-        if 'length' in self.domain_randomization:
-            min_l, max_l = self.domain_randomization['length']
+        if "length" in self.domain_randomization:
+            min_l, max_l = self.domain_randomization["length"]
             base_env.length = np.random.uniform(min_l, max_l)
-        
+
         # Update total mass (used in dynamics)
         base_env.total_mass = base_env.masspole + base_env.masscart
         base_env.polemass_length = base_env.masspole * base_env.length
@@ -108,10 +108,10 @@ class CartPoleEnv:
     def _add_observation_noise(self, obs: np.ndarray) -> np.ndarray:
         """
         Add Gaussian noise to observations.
-        
+
         Args:
             obs: Original observation
-            
+
         Returns:
             Noisy observation
         """
@@ -119,14 +119,14 @@ class CartPoleEnv:
             noise = np.random.normal(0, self.obs_noise_std, obs.shape)
             return obs + noise
         return obs
-    
+
     def _apply_action_noise(self, action: int) -> int:
         """
         Apply action noise by randomly flipping the action.
-        
+
         Args:
             action: Original action
-            
+
         Returns:
             Potentially flipped action
         """
@@ -135,7 +135,9 @@ class CartPoleEnv:
             return 1 - action
         return action
 
-    def reset(self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def reset(
+        self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
         Reset the environment to initial state.
 
@@ -150,13 +152,13 @@ class CartPoleEnv:
         self._episode_reward = 0.0
 
         obs, info = self.env.reset(seed=seed, options=options)
-        
+
         # Apply domain randomization at the start of each episode
         self._apply_domain_randomization()
-        
+
         # Apply observation noise
         obs = self._add_observation_noise(obs)
-        
+
         return obs, info
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
@@ -171,12 +173,12 @@ class CartPoleEnv:
         """
         # Apply action noise
         noisy_action = self._apply_action_noise(action)
-        
+
         obs, reward, terminated, truncated, info = self.env.step(noisy_action)
 
         self._episode_steps += 1
         self._episode_reward += reward
-        
+
         # Apply observation noise
         obs = self._add_observation_noise(obs)
 
