@@ -42,13 +42,6 @@ jobs:
           git_committer_name: "github-actions[bot]"
           git_committer_email: "github-actions[bot]@users.noreply.github.com"
 
-      - name: Configure Git for signed commits
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global commit.gpgsign true
-          git config --global user.signingkey ${{ steps.import-gpg.outputs.keyid }}
-
       - name: Run automated tasks
         run: |
           echo "Running Copilot automated tasks..."
