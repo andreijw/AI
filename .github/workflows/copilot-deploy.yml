@@ -74,10 +74,11 @@ jobs:
           git pull --rebase origin ${{ github.ref_name }}
           git add -A
           git commit -S -m "chore: automated deployment updates by Copilot [bot]"
+          git verify-commit HEAD
+          git log --show-signature -1
           git push
 
       - name: Verify commit signature
         if: steps.check-changes.outputs.has_changes == 'true'
         run: |
-          git verify-commit HEAD
-          git log --show-signature -1
+          echo "Commit signature was verified before pushing."
