@@ -85,13 +85,14 @@ The Copilot deployment workflow includes:
 - **GPG Signing**: All commits are signed with GPG
 - **Signature Verification**: Verifies commit signatures before pushing changes to the repository
 - **Change Detection**: Only commits when there are actual changes
-- **Flexible Triggers**: Supports push to main/develop branches and manual dispatch
+- **Manual Trigger**: Currently configured for manual dispatch only until deployment tasks are implemented
 
 ## Workflow Triggers
 
 The workflow runs on:
-- Push to `main` or `develop` branches
 - Manual trigger via workflow dispatch
+
+**Note**: The workflow is currently configured to run only on manual dispatch. Once you've implemented your deployment tasks, you can add push triggers for the `main` or `develop` branches by updating the workflow's `on:` section.
 
 ## Customization
 
@@ -110,6 +111,19 @@ Edit the "Run automated tasks" step in `.github/workflows/copilot-deploy.yml`:
     # - Security scanning: pip-audit
     echo "Deployment tasks completed successfully"
 ```
+
+### Enabling Automatic Triggers
+
+Once you've implemented your deployment tasks, you can enable the workflow to run automatically on push events. Edit the `on:` section in `.github/workflows/copilot-deploy.yml`:
+
+```yaml
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+```
+
+This will trigger the workflow on every push to `main` or `develop` branches, in addition to manual dispatch.
 
 ### Changing Commit Message
 
