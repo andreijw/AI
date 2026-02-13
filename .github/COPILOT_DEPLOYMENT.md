@@ -68,7 +68,7 @@ Add the following secrets to your GitHub repository:
      - Prefer a dedicated machine user (a separate GitHub account used only by automation):
        - Sign in as the machine user, then go to: Settings → SSH and GPG keys → New GPG key
        - Paste the public key and save
-     - Do **not** add a bot key to your personal account. For repository-level authentication (such as Deploy Keys), configure access for the bot or machine user according to your organization’s security practices.
+     - Do **not** add a bot GPG key to your personal account
 
 ### 5. Enable Vigilant Mode (Optional)
 
