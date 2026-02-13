@@ -117,7 +117,7 @@ git commit -S -m "chore: automated deployment updates by Copilot [bot]"
 
 ### Issue: "gpg: signing failed: Inappropriate ioctl for device"
 
-**Solution**: The workflow already sets `GPG_TTY`, but if you still encounter this:
+**Solution**: Ensure your workflow sets `GPG_TTY` (for example, `export GPG_TTY=$(tty)`), and if you still encounter this:
 1. Check that your GPG_PRIVATE_KEY is correctly formatted
 2. Verify that your GPG_PASSPHRASE matches the key
 
