@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
+from gymnasium.utils import seeding
 
 
 class CartPoleEnv:
@@ -74,8 +75,8 @@ class CartPoleEnv:
         self._episode_reward = 0.0
 
         # Per-environment RNG for noise and domain randomization
-        # This will be properly seeded during reset()
-        self._np_random = None
+        # Initialize with a default RNG; will be synced with env RNG on reset()
+        self._np_random, _ = seeding.np_random(seed)
 
     def _apply_domain_randomization(self) -> None:
         """Apply domain randomization to environment parameters."""
