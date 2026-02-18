@@ -72,7 +72,7 @@ def make_vec_env(
     Example:
         >>> # Create 4 parallel environments with async execution
         >>> vec_env = make_vec_env(num_envs=4, seed=42)
-        >>> obs = vec_env.reset()
+        >>> obs, info = vec_env.reset()
         >>> obs.shape  # (4, 4) - 4 envs, 4 observations each
 
         >>> # With domain randomization
