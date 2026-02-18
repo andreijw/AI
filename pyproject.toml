@@ -76,7 +76,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=src/rl_cartpole --cov-report=term-missing"
+addopts = "-v --cov=src --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 100
@@ -102,5 +102,5 @@ ignore = [
 "__init__.py" = ["F401"]  # Unused imports in __init__.py files
 
 [tool.bandit]
-exclude_dirs = ["/tests", "/test", "*/test_*.py"]
-skips = ["B101"]  # Skip assert_used check in tests
+exclude_dirs = ["/tests", "/test"]
+# Test files are in separate test directories, no need to exclude by pattern
