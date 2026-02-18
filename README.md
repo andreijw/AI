@@ -160,6 +160,16 @@ Run type checking with mypy:
 mypy src/
 ```
 
+## CI/CD
+
+This repository includes GitHub Actions workflows for:
+
+- **Linting**: Automated code quality checks with Ruff
+- **CodeQL**: Security scanning and vulnerability detection
+- **Copilot Deployment**: Automated deployment with signed commits
+
+For more information about the Copilot deployment workflow and GPG signing setup, see [.github/COPILOT_DEPLOYMENT.md](.github/COPILOT_DEPLOYMENT.md).
+
 ## Architecture
 
 ### Environment Wrapper
