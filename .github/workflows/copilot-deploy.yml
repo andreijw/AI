@@ -1,0 +1,98 @@
+name: Copilot Deployment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    name: Deploy with Copilot
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Import GPG key for signing
+        id: import-gpg
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          git_tag_gpgsign: true
+          git_push_gpgsign: false
+          git_committer_name: "github-actions[bot]"
+          git_committer_email: "github-actions[bot]@users.noreply.github.com"
+
+      - name: Run automated tasks
+        run: |
+          echo "Running Copilot automated tasks..."
+          # Add any automated tasks here (e.g., dependency updates, code formatting, etc.)
+          # Example: python -m pip list --outdated
+          echo "Deployment tasks completed successfully"
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if [[ -n $(git status -s) ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          set -e  # Exit on any error
+          echo "Syncing with remote branch using git pull --rebase..."
+          attempt=0
+          max_attempts=3
+          backoff=5
+
+          while [ "$attempt" -lt "$max_attempts" ]; do
+            attempt=$((attempt + 1))
+            echo "Attempt ${attempt} of ${max_attempts} to pull with rebase..."
+            if git pull --rebase origin "${{ github.ref_name }}"; then
+              echo "git pull --rebase succeeded."
+              break
+            fi
+
+            echo "git pull --rebase failed."
+
+            # Detect and abort any in-progress rebase to avoid leaving the repo in a conflicted state.
+            if [ -d ".git/rebase-apply" ] || [ -d ".git/rebase-merge" ]; then
+              echo "Rebase conflict detected. Aborting rebase."
+              git rebase --abort || true
+            fi
+
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              echo "Retrying after ${backoff}s..."
+              sleep "$backoff"
+              backoff=$((backoff * 2))
+            else
+              echo "Failed to pull with rebase after ${max_attempts} attempts. Please resolve conflicts manually."
+              exit 1
+            fi
+          done
+          git add -A
+          git commit -S -m "chore: automated deployment updates by Copilot [bot]"
+          git verify-commit HEAD
+          git log --show-signature -1
+          git push
+
+      - name: Verify commit signature
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          echo "Commit signature was verified before pushing."
