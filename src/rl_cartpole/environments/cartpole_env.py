@@ -73,6 +73,10 @@ class CartPoleEnv:
         self._episode_steps = 0
         self._episode_reward = 0.0
 
+        # Per-environment RNG for noise and domain randomization
+        # This will be properly seeded during reset()
+        self._np_random = None
+
     def _apply_domain_randomization(self) -> None:
         """Apply domain randomization to environment parameters."""
         if not self.domain_randomization:
@@ -84,22 +88,22 @@ class CartPoleEnv:
         # Randomize gravity
         if "gravity" in self.domain_randomization:
             min_g, max_g = self.domain_randomization["gravity"]
-            base_env.gravity = np.random.uniform(min_g, max_g)
+            base_env.gravity = self._np_random.uniform(min_g, max_g)
 
         # Randomize cart mass
         if "masscart" in self.domain_randomization:
             min_m, max_m = self.domain_randomization["masscart"]
-            base_env.masscart = np.random.uniform(min_m, max_m)
+            base_env.masscart = self._np_random.uniform(min_m, max_m)
 
         # Randomize pole mass
         if "masspole" in self.domain_randomization:
             min_m, max_m = self.domain_randomization["masspole"]
-            base_env.masspole = np.random.uniform(min_m, max_m)
+            base_env.masspole = self._np_random.uniform(min_m, max_m)
 
         # Randomize pole length
         if "length" in self.domain_randomization:
             min_l, max_l = self.domain_randomization["length"]
-            base_env.length = np.random.uniform(min_l, max_l)
+            base_env.length = self._np_random.uniform(min_l, max_l)
 
         # Update total mass (used in dynamics)
         base_env.total_mass = base_env.masspole + base_env.masscart
@@ -113,11 +117,12 @@ class CartPoleEnv:
             obs: Original observation
 
         Returns:
-            Noisy observation
+            Noisy observation (preserving original dtype)
         """
         if self.obs_noise_std > 0:
-            noise = np.random.normal(0, self.obs_noise_std, obs.shape)
-            return obs + noise
+            noise = self._np_random.normal(0, self.obs_noise_std, obs.shape)
+            # Preserve the original dtype (e.g., float32)
+            return (obs + noise).astype(obs.dtype)
         return obs
 
     def _apply_action_noise(self, action: int) -> int:
@@ -130,7 +135,7 @@ class CartPoleEnv:
         Returns:
             Potentially flipped action
         """
-        if self.action_noise_prob > 0 and np.random.random() < self.action_noise_prob:
+        if self.action_noise_prob > 0 and self._np_random.random() < self.action_noise_prob:
             # Flip the action (0 -> 1, 1 -> 0)
             return 1 - action
         return action
@@ -151,7 +156,14 @@ class CartPoleEnv:
         self._episode_steps = 0
         self._episode_reward = 0.0
 
-        obs, info = self.env.reset(seed=seed, options=options)
+        # Determine the seed to use for this episode
+        episode_seed = seed if seed is not None else self.seed
+
+        obs, info = self.env.reset(seed=episode_seed, options=options)
+
+        # Initialize or update the wrapper's RNG from the underlying env's RNG
+        # This ensures deterministic noise/domain-randomization per episode
+        self._np_random = self.env.unwrapped.np_random
 
         # Apply domain randomization at the start of each episode
         self._apply_domain_randomization()

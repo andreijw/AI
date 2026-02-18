@@ -82,7 +82,7 @@ def make_vec_env(
         ... )
     """
 
-    def _make_env(env_seed: int) -> Callable[[], CartPoleEnv]:
+    def _make_env(env_seed: Optional[int]) -> Callable[[], CartPoleEnv]:
         """Create a function that returns an environment with specific seed."""
 
         def _init() -> CartPoleEnv:
