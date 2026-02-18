@@ -22,6 +22,7 @@ class CartPoleEnv:
 
     def __init__(
         self,
+        env_name: str = "CartPole-v1",
         render_mode: Optional[str] = None,
         max_episode_steps: int = 500,
         seed: Optional[int] = None,
@@ -33,6 +34,7 @@ class CartPoleEnv:
         Initialize the CartPole environment.
 
         Args:
+            env_name: Name of the Gymnasium environment to create (default: "CartPole-v1")
             render_mode: Rendering mode ('human', 'rgb_array', or None)
             max_episode_steps: Maximum steps per episode
             seed: Random seed for reproducibility
@@ -43,6 +45,7 @@ class CartPoleEnv:
                 Values should be tuples of (min, max) for uniform sampling
                 Example: {'gravity': (8.0, 12.0), 'length': (0.3, 0.7)}
         """
+        self.env_name = env_name
         self.max_episode_steps = max_episode_steps
         self.seed = seed
         self.render_mode = render_mode
@@ -56,7 +59,7 @@ class CartPoleEnv:
 
         # Create the base environment
         self.env = gym.make(
-            "CartPole-v1",
+            env_name,
             render_mode=render_mode,
             max_episode_steps=max_episode_steps,
         )

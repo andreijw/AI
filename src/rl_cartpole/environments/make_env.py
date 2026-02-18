@@ -9,6 +9,7 @@ from .cartpole_env import CartPoleEnv
 
 
 def make_env(
+    env_name: str = "CartPole-v1",
     render_mode: Optional[str] = None,
     max_episode_steps: int = 500,
     seed: Optional[int] = None,
@@ -20,6 +21,7 @@ def make_env(
     Create a single CartPole environment.
 
     Args:
+        env_name: Name of the Gymnasium environment to create (default: "CartPole-v1")
         render_mode: Rendering mode ('human', 'rgb_array', or None)
         max_episode_steps: Maximum steps per episode
         seed: Random seed for reproducibility
@@ -33,6 +35,7 @@ def make_env(
         CartPoleEnv instance
     """
     return CartPoleEnv(
+        env_name=env_name,
         render_mode=render_mode,
         max_episode_steps=max_episode_steps,
         seed=seed,
@@ -44,6 +47,7 @@ def make_env(
 
 def make_vec_env(
     num_envs: int = 4,
+    env_name: str = "CartPole-v1",
     render_mode: Optional[str] = None,
     max_episode_steps: int = 500,
     seed: Optional[int] = None,
@@ -57,6 +61,7 @@ def make_vec_env(
 
     Args:
         num_envs: Number of parallel environments
+        env_name: Name of the Gymnasium environment to create (default: "CartPole-v1")
         render_mode: Rendering mode ('human', 'rgb_array', or None)
         max_episode_steps: Maximum steps per episode
         seed: Base random seed (each env gets seed + i)
@@ -87,6 +92,7 @@ def make_vec_env(
 
         def _init() -> CartPoleEnv:
             return make_env(
+                env_name=env_name,
                 render_mode=render_mode,
                 max_episode_steps=max_episode_steps,
                 seed=env_seed,
@@ -119,6 +125,7 @@ def make_env_from_config(config: Dict) -> CartPoleEnv:
 
     Example:
         >>> config = {
+        ...     'name': 'CartPole-v1',
         ...     'render_mode': None,
         ...     'max_episode_steps': 500,
         ...     'seed': 42,
@@ -137,6 +144,7 @@ def make_env_from_config(config: Dict) -> CartPoleEnv:
         domain_rand = {k: tuple(v) if isinstance(v, list) else v for k, v in domain_rand.items()}
 
     return make_env(
+        env_name=config.get("name", "CartPole-v1"),
         render_mode=config.get("render_mode"),
         max_episode_steps=config.get("max_episode_steps", 500),
         seed=config.get("seed"),
@@ -159,6 +167,7 @@ def make_vec_env_from_config(config: Dict, num_envs: int = 4) -> gym.vector.Vect
 
     Example:
         >>> config = {
+        ...     'name': 'CartPole-v1',
         ...     'max_episode_steps': 500,
         ...     'seed': 42,
         ...     'obs_noise_std': 0.01
@@ -172,6 +181,7 @@ def make_vec_env_from_config(config: Dict, num_envs: int = 4) -> gym.vector.Vect
 
     return make_vec_env(
         num_envs=num_envs,
+        env_name=config.get("name", "CartPole-v1"),
         render_mode=config.get("render_mode"),
         max_episode_steps=config.get("max_episode_steps", 500),
         seed=config.get("seed"),
