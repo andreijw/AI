@@ -64,15 +64,21 @@ def demo_action_noise():
 
     # With 50% action noise probability
     env = make_env(seed=42, action_noise_prob=0.5)
-    env.reset()
+    obs, info = env.reset()
 
-    print("Testing action noise (50% flip probability):")
+    print("Testing action noise (50% flip probability) using env.step:")
     actions = [0, 1, 0, 1, 0, 1]
 
-    for action in actions:
-        noisy_action = env._apply_action_noise(action)
-        flipped = "FLIPPED" if action != noisy_action else "same"
-        print(f"  Action {action} -> {noisy_action} ({flipped})")
+    for i, action in enumerate(actions, start=1):
+        obs, reward, terminated, truncated, info = env.step(action)
+        print(
+            f"  Step {i}: intended action={action}, "
+            f"observation={obs}, reward={reward:.2f}, "
+            f"terminated={terminated}, truncated={truncated}"
+        )
+        if terminated or truncated:
+            # Restart episode to continue illustrating action noise
+            obs, info = env.reset()
 
     env.close()
     print()
