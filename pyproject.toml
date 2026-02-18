@@ -40,6 +40,8 @@ dev = [
     "flake8>=6.0.0",
     "mypy>=1.0.0",
     "ruff>=0.1.0",
+    "bandit[toml]>=1.7.0",
+    "pre-commit>=3.0.0",
 ]
 
 [project.urls]
@@ -92,3 +94,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Unused imports in __init__.py files
+
+[tool.bandit]
+exclude_dirs = ["/tests", "/test", "*/test_*.py"]
+skips = ["B101"]  # Skip assert_used check in tests
