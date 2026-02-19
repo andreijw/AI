@@ -126,15 +126,19 @@ def make_vec_env(
         return SyncVectorEnv(env_fns)
 
 
-def _validate_domain_randomization(domain_rand: Dict) -> Dict[str, Tuple[float, float]]:
+def _validate_domain_randomization(
+    domain_rand: Optional[Dict[str, Tuple[float, float]]],
+) -> Optional[Dict[str, Tuple[float, float]]]:
     """
     Validate and normalize domain randomization configuration.
 
     Args:
-        domain_rand: Dictionary with parameter ranges for randomization
+        domain_rand: Optional dictionary with parameter ranges for randomization.
+            If None or empty, no domain randomization is applied.
 
     Returns:
-        Validated dictionary with tuples of (min, max) for each parameter
+        Validated dictionary with tuples of (min, max) for each parameter, or None
+        if no domain randomization configuration is provided.
 
     Raises:
         ValueError: If ranges are malformed (wrong length, non-numeric, min > max)
