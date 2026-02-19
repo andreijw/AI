@@ -56,6 +56,7 @@ Add the following secrets to your GitHub repository:
 ### 4. Add GPG Public Key to GitHub
 
 1. Export your public key:
+
    ```bash
    gpg --armor --export KEY_ID
    ```
@@ -90,6 +91,7 @@ The Copilot deployment workflow includes:
 ## Workflow Triggers
 
 The workflow runs on:
+
 - Manual trigger via workflow dispatch
 
 **Note**: The workflow is currently configured to run only on manual dispatch. Once you've implemented your deployment tasks, you can add push triggers for the `main` or `develop` branches by updating the workflow's `on:` section.
@@ -138,12 +140,14 @@ git commit -S -m "chore: automated deployment updates by Copilot [bot]"
 ### Issue: "gpg: signing failed: Inappropriate ioctl for device"
 
 **Solution**: The ghaction-import-gpg action handles GPG configuration automatically. If you still encounter this:
+
 1. Check that your GPG_PRIVATE_KEY is correctly formatted
 2. Verify that your GPG_PASSPHRASE matches the key
 
 ### Issue: "Commit signature verification failed"
 
-**Solution**: 
+**Solution**:
+
 1. Ensure the GPG public key is added to your GitHub account
 2. Verify the private key and passphrase are correct in secrets
 3. Check that the email in the GPG key matches the git committer email
@@ -151,6 +155,7 @@ git commit -S -m "chore: automated deployment updates by Copilot [bot]"
 ### Issue: "Permission denied" when pushing
 
 **Solution**:
+
 1. Ensure the workflow has proper permissions (contents: write)
 2. Check that branch protection rules allow Actions to push
 
