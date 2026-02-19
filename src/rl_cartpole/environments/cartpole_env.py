@@ -80,7 +80,7 @@ class CartPoleEnv:
         obs, reward, terminated, truncated, info = self.env.step(action)
 
         self._episode_steps += 1
-        self._episode_reward += reward
+        self._episode_reward += float(reward)
 
         # Add episode statistics to info
         if terminated or truncated:
@@ -89,7 +89,7 @@ class CartPoleEnv:
                 "reward": self._episode_reward,
             }
 
-        return obs, reward, terminated, truncated, info
+        return obs, float(reward), terminated, truncated, info
 
     def close(self) -> None:
         """Close the environment and cleanup resources."""
