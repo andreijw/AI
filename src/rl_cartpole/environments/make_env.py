@@ -127,7 +127,7 @@ def make_vec_env(
 
 
 def _validate_domain_randomization(
-    domain_rand: Optional[Dict[str, Any]]
+    domain_rand: Optional[Dict[str, Any]],
 ) -> Optional[Dict[str, Tuple[float, float]]]:
     """
     Validate and normalize domain randomization configuration.

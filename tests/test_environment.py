@@ -7,6 +7,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import numpy as np
+import pytest
 
 from rl_cartpole.environments import (
     CartPoleEnv,
@@ -345,8 +346,6 @@ def test_vec_env_name_from_config():
 
 def test_domain_randomization_validation_error():
     """Test that domain randomization with non-CartPole environment raises ValueError."""
-    import pytest
-
     # Should raise ValueError when trying to use domain randomization with non-CartPole env
     with pytest.raises(
         ValueError,
@@ -360,8 +359,6 @@ def test_domain_randomization_validation_error():
 
 def test_action_noise_validation_error():
     """Test that action noise with non-Discrete(2) environment raises ValueError."""
-    import pytest
-
     # Should raise ValueError when trying to use action noise with non-Discrete(2) env
     with pytest.raises(
         ValueError, match="Action noise is only supported for Discrete\\(2\\) action spaces"
@@ -374,8 +371,6 @@ def test_action_noise_validation_error():
 
 def test_domain_randomization_config_validation():
     """Test that malformed domain randomization configs raise ValueError."""
-    import pytest
-
     # Test with non-2-element range
     with pytest.raises(ValueError, match="must be a 2-element list/tuple"):
         config = {"domain_randomization": {"gravity": [9.0]}}
