@@ -174,27 +174,16 @@ Creates vectorized environments from configuration dictionary.
 
 ## Testing
 
-### Test Coverage
-- 15 test cases for environment functionality
-- 100% coverage of new features
-- All tests pass successfully
+The environment implementation includes comprehensive tests covering:
 
-### Test Categories
-1. **Basic Environment Tests** (5 tests)
-   - Creation, reset, step, episode tracking, completion
+- **Basic Environment Functionality**: Environment creation, reset, step, episode tracking, and completion
+- **Noise Injection**: Observation noise and action noise application
+- **Domain Randomization**: Parameter randomization and per-episode variation
+- **Factory Functions**: Single and vectorized environment creation, with and without features
+- **Configuration-based Creation**: Creating environments from configuration dictionaries
+- **Environment Name Support**: Using different Gymnasium environments with the wrapper
 
-2. **Noise Tests** (2 tests)
-   - Observation noise injection
-   - Action noise application
-
-3. **Domain Randomization Tests** (2 tests)
-   - Parameter randomization
-   - Per-episode variation
-
-4. **Factory Function Tests** (6 tests)
-   - make_env with/without features
-   - make_vec_env (async and sync)
-   - Configuration-based creation
+All tests are located in `tests/test_environment.py` and can be run with pytest.
 
 ## Example Usage
 
