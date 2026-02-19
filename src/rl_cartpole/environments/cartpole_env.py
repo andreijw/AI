@@ -235,9 +235,9 @@ class CartPoleEnv:
 
         obs, info = self.env.reset(seed=episode_seed, options=options)
 
-        # Initialize or update the wrapper's RNG from the underlying env's RNG
-        # This ensures deterministic noise/domain-randomization per episode
-        self._np_random = self.env.unwrapped.np_random
+        # Initialize or update the wrapper's RNG using a seed derived from this episode
+        # This keeps the wrapper's randomness separate from the underlying env's RNG
+        self._np_random, _ = seeding.np_random(episode_seed)
 
         # Apply domain randomization at the start of each episode
         self._apply_domain_randomization()
