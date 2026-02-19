@@ -126,6 +126,52 @@ def make_vec_env(
         return SyncVectorEnv(env_fns)
 
 
+def _validate_domain_randomization(domain_rand: Dict) -> Dict[str, Tuple[float, float]]:
+    """
+    Validate and normalize domain randomization configuration.
+
+    Args:
+        domain_rand: Dictionary with parameter ranges for randomization
+
+    Returns:
+        Validated dictionary with tuples of (min, max) for each parameter
+
+    Raises:
+        ValueError: If ranges are malformed (wrong length, non-numeric, min > max)
+    """
+    if not domain_rand:
+        return None
+
+    validated_domain_rand = {}
+    for key, value in domain_rand.items():
+        # Convert list to tuple if needed
+        if isinstance(value, list):
+            value = tuple(value)
+
+        # Validate that it's a 2-element tuple of numbers
+        if not isinstance(value, tuple) or len(value) != 2:
+            raise ValueError(
+                f"Domain randomization range for '{key}' must be a 2-element list/tuple "
+                f"[min, max], got: {value}"
+            )
+
+        min_val, max_val = value
+        if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
+            raise ValueError(
+                f"Domain randomization range for '{key}' must contain numeric values, "
+                f"got: [{min_val}, {max_val}]"
+            )
+
+        if min_val > max_val:
+            raise ValueError(
+                f"Domain randomization range for '{key}' has min > max: [{min_val}, {max_val}]"
+            )
+
+        validated_domain_rand[key] = value
+
+    return validated_domain_rand
+
+
 def make_env_from_config(config: Dict) -> CartPoleEnv:
     """
     Create a CartPole environment from a configuration dictionary.
@@ -154,37 +200,8 @@ def make_env_from_config(config: Dict) -> CartPoleEnv:
         ... }
         >>> env = make_env_from_config(config)
     """
-    # Extract domain randomization and convert lists to tuples if needed
-    domain_rand = config.get("domain_randomization")
-    if domain_rand:
-        validated_domain_rand = {}
-        for key, value in domain_rand.items():
-            # Convert list to tuple if needed
-            if isinstance(value, list):
-                value = tuple(value)
-
-            # Validate that it's a 2-element tuple of numbers
-            if not isinstance(value, tuple) or len(value) != 2:
-                raise ValueError(
-                    f"Domain randomization range for '{key}' must be a 2-element list/tuple "
-                    f"[min, max], got: {value}"
-                )
-
-            min_val, max_val = value
-            if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
-                raise ValueError(
-                    f"Domain randomization range for '{key}' must contain numeric values, "
-                    f"got: [{min_val}, {max_val}]"
-                )
-
-            if min_val > max_val:
-                raise ValueError(
-                    f"Domain randomization range for '{key}' has min > max: [{min_val}, {max_val}]"
-                )
-
-            validated_domain_rand[key] = value
-
-        domain_rand = validated_domain_rand
+    # Extract and validate domain randomization
+    domain_rand = _validate_domain_randomization(config.get("domain_randomization"))
 
     return make_env(
         env_name=config.get("name", "CartPole-v1"),
@@ -208,6 +225,9 @@ def make_vec_env_from_config(config: Dict, num_envs: int = 4) -> gym.vector.Vect
     Returns:
         VectorEnv instance
 
+    Raises:
+        ValueError: If domain_randomization ranges are malformed.
+
     Example:
         >>> config = {
         ...     'name': 'CartPole-v1',
@@ -217,10 +237,8 @@ def make_vec_env_from_config(config: Dict, num_envs: int = 4) -> gym.vector.Vect
         ... }
         >>> vec_env = make_vec_env_from_config(config, num_envs=8)
     """
-    # Extract domain randomization and convert lists to tuples if needed
-    domain_rand = config.get("domain_randomization")
-    if domain_rand:
-        domain_rand = {k: tuple(v) if isinstance(v, list) else v for k, v in domain_rand.items()}
+    # Extract and validate domain randomization
+    domain_rand = _validate_domain_randomization(config.get("domain_randomization"))
 
     return make_vec_env(
         num_envs=num_envs,
