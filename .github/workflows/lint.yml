@@ -29,3 +29,23 @@ jobs:
 
       - name: Run Ruff formatter check
         run: ruff format --check .
+
+  markdownlint:
+    name: Markdown Linting
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install markdownlint-cli
+        run: npm install -g markdownlint-cli@0.39.0
+
+      - name: Run markdownlint
+        run: markdownlint '**/*.md' --ignore node_modules
