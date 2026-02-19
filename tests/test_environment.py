@@ -341,3 +341,52 @@ def test_vec_env_name_from_config():
     vec_env = make_vec_env_from_config(config, num_envs=2)
     assert vec_env.num_envs == 2
     vec_env.close()
+
+
+def test_domain_randomization_validation_error():
+    """Test that domain randomization with non-CartPole environment raises ValueError."""
+    import pytest
+
+    # Should raise ValueError when trying to use domain randomization with non-CartPole env
+    with pytest.raises(
+        ValueError,
+        match="Domain randomization is only supported for CartPole environments",
+    ):
+        CartPoleEnv(
+            env_name="Acrobot-v1",
+            domain_randomization={"gravity": (9.0, 10.0)},
+        )
+
+
+def test_action_noise_validation_error():
+    """Test that action noise with non-Discrete(2) environment raises ValueError."""
+    import pytest
+
+    # Should raise ValueError when trying to use action noise with non-Discrete(2) env
+    with pytest.raises(
+        ValueError, match="Action noise is only supported for Discrete\\(2\\) action spaces"
+    ):
+        CartPoleEnv(
+            env_name="MountainCar-v0",  # Has Discrete(3) action space
+            action_noise_prob=0.1,
+        )
+
+
+def test_domain_randomization_config_validation():
+    """Test that malformed domain randomization configs raise ValueError."""
+    import pytest
+
+    # Test with non-2-element range
+    with pytest.raises(ValueError, match="must be a 2-element list/tuple"):
+        config = {"domain_randomization": {"gravity": [9.0]}}
+        make_env_from_config(config)
+
+    # Test with non-numeric values
+    with pytest.raises(ValueError, match="must contain numeric values"):
+        config = {"domain_randomization": {"gravity": ["a", "b"]}}
+        make_env_from_config(config)
+
+    # Test with min > max
+    with pytest.raises(ValueError, match="has min > max"):
+        config = {"domain_randomization": {"gravity": [10.0, 9.0]}}
+        make_env_from_config(config)

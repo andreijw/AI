@@ -7,7 +7,7 @@ certain features are environment-specific:
 - Action noise currently only supports Discrete(2) action spaces
 """
 
-from typing import Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
@@ -127,7 +127,7 @@ def make_vec_env(
 
 
 def _validate_domain_randomization(
-    domain_rand: Optional[Dict[str, Tuple[float, float]]],
+    domain_rand: Optional[Dict[str, Any]]
 ) -> Optional[Dict[str, Tuple[float, float]]]:
     """
     Validate and normalize domain randomization configuration.

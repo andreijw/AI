@@ -91,6 +91,17 @@ class CartPoleEnv:
             max_episode_steps=max_episode_steps,
         )
 
+        # Validate action noise compatibility early (after env creation)
+        if action_noise_prob > 0:
+            action_space = self.env.action_space
+            if not isinstance(action_space, gym.spaces.Discrete) or action_space.n != 2:
+                raise ValueError(
+                    f"Action noise is only supported for Discrete(2) action spaces; "
+                    f"got {type(action_space).__name__} with n={getattr(action_space, 'n', None)}. "
+                    f"Environment '{env_name}' has an incompatible action space. "
+                    f"Either use an environment with Discrete(2) actions or set action_noise_prob=0."
+                )
+
         if seed is not None:
             self.env.action_space.seed(seed)
             np.random.seed(seed)
@@ -186,28 +197,16 @@ class CartPoleEnv:
         Apply action noise by randomly flipping the action.
 
         Note: This method only works for Discrete(2) action spaces (binary actions).
+        Validation is performed in __init__ to fail fast.
 
         Args:
             action: Original action
 
         Returns:
             Potentially flipped action
-
-        Raises:
-            ValueError: If action_noise_prob > 0 but the action space is not Discrete(2).
         """
         if self.action_noise_prob <= 0:
             return action
-
-        # Validate that the action space is compatible with this noise scheme
-        # The flip operation (1 - action) is only valid for Discrete(2) spaces
-        action_space = self.env.action_space
-        if not isinstance(action_space, gym.spaces.Discrete) or action_space.n != 2:
-            raise ValueError(
-                f"Action noise is only supported for Discrete(2) action spaces; "
-                f"got {type(action_space).__name__} with n={getattr(action_space, 'n', None)}. "
-                f"Either use an environment with Discrete(2) actions or set action_noise_prob=0."
-            )
 
         if self._np_random.random() < self.action_noise_prob:
             # Flip the action (0 -> 1, 1 -> 0) for Discrete(2) spaces
