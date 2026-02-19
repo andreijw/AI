@@ -72,7 +72,7 @@ git clone https://github.com/andreijw/AI.git
 cd AI
 ```
 
-1. Install dependencies:
+2. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
