@@ -54,12 +54,14 @@ This document describes the architecture of the RL CartPole framework, explainin
 **Purpose**: Wraps the Gymnasium CartPole environment to provide a standardized interface.
 
 **Key Components**:
+
 - `CartPoleEnv`: Main environment wrapper class
   - Manages episode lifecycle
   - Tracks episode statistics (steps, rewards)
   - Provides consistent API for training pipeline
 
 **Design Decisions**:
+
 - Wrapper pattern allows easy extension to other environments
 - Episode tracking built-in for simplified metrics collection
 - Configurable via constructor parameters (render mode, seed, etc.)
@@ -69,6 +71,7 @@ This document describes the architecture of the RL CartPole framework, explainin
 **Purpose**: Defines the agent interface and implementations.
 
 **Key Components**:
+
 - `BaseAgent`: Abstract base class defining the agent contract
   - `select_action()`: Policy function
   - `update()`: Learning/optimization step
@@ -76,11 +79,13 @@ This document describes the architecture of the RL CartPole framework, explainin
 - `RandomAgent`: Baseline implementation for testing
 
 **Design Decisions**:
+
 - Abstract base class enforces consistent interface across algorithms
 - Separate training/inference modes via `training` flag
 - Agent owns its own hyperparameters and state
 
 **Future Extensions**:
+
 - `PPOAgent`: Proximal Policy Optimization
 - `DQNAgent`: Deep Q-Network
 - `A3CAgent`: Asynchronous Advantage Actor-Critic
@@ -90,6 +95,7 @@ This document describes the architecture of the RL CartPole framework, explainin
 **Purpose**: Orchestrates the training loop and manages the interaction between environment and agent.
 
 **Key Components**:
+
 - `Trainer`: Main training pipeline class
   - Episode collection loop
   - Calls agent updates
@@ -98,6 +104,7 @@ This document describes the architecture of the RL CartPole framework, explainin
   - Metrics logging
 
 **Design Decisions**:
+
 - Trainer is algorithm-agnostic (delegates learning to agent)
 - Configurable evaluation and checkpoint frequencies
 - Trajectory collection for batch updates (ready for PPO)
@@ -108,6 +115,7 @@ This document describes the architecture of the RL CartPole framework, explainin
 **Purpose**: Shared utilities for configuration and logging.
 
 **Key Components**:
+
 - `config.py`: Configuration management
   - YAML/JSON loading
   - Config merging
@@ -118,6 +126,7 @@ This document describes the architecture of the RL CartPole framework, explainin
   - Multiple logging levels
 
 **Design Decisions**:
+
 - YAML as primary config format (human-readable, hierarchical)
 - Structured logging for easy metrics analysis
 - Logger integration with training pipeline
@@ -125,6 +134,7 @@ This document describes the architecture of the RL CartPole framework, explainin
 ## Data Flow
 
 ### Training Loop
+
 1. Trainer initializes environment and agent
 2. For each episode:
    - Environment reset
@@ -136,12 +146,14 @@ This document describes the architecture of the RL CartPole framework, explainin
 4. Periodic checkpoint saving
 
 ### Configuration Flow
+
 1. Load YAML config file
 2. Parse into nested dictionary
 3. Pass relevant sections to components
 4. Components use config for initialization
 
 ### Metrics Flow
+
 1. Environment tracks episode statistics
 2. Trainer aggregates metrics across episodes
 3. Logger writes to console and structured files
