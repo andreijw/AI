@@ -130,9 +130,10 @@ env = make_env_from_config(config)
 ### Factory Functions
 
 #### `make_env(...)`
-Creates a single CartPole environment with all features.
+Creates a single environment with noise injection and domain randomization features.
 
 **Parameters**:
+- `env_name`: Name of the Gymnasium environment to create (default: "CartPole-v1")
 - `render_mode`: Rendering mode (None, 'human', 'rgb_array')
 - `max_episode_steps`: Maximum steps per episode (default: 500)
 - `seed`: Random seed for reproducibility
@@ -141,6 +142,8 @@ Creates a single CartPole environment with all features.
 - `domain_randomization`: Dict of parameter ranges (default: None)
 
 **Returns**: `CartPoleEnv` instance
+
+**Note**: Domain randomization is CartPole-specific and action noise requires Discrete(2) action spaces.
 
 #### `make_vec_env(...)`
 Creates vectorized CartPole environments for parallel training.

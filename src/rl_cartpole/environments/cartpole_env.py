@@ -9,15 +9,21 @@ from gymnasium.utils import seeding
 
 class CartPoleEnv:
     """
-    Wrapper around Gymnasium's CartPole environment.
+    Wrapper around Gymnasium environments with noise injection and domain randomization.
 
     Provides a standardized interface for the training pipeline and
     adds logging, monitoring, and preprocessing capabilities.
 
+    While this wrapper can work with any Gymnasium environment, certain features
+    have specific requirements:
+
     Features:
-    - Observation noise injection
-    - Action noise injection
-    - Domain randomization (gravity, pole length, cart mass)
+    - Observation noise injection (works with any environment)
+    - Action noise injection (requires Discrete(2) action space)
+    - Domain randomization (CartPole-specific: requires gravity, masscart, masspole, length attributes)
+
+    The class is named CartPoleEnv for historical reasons and because the advanced features
+    (domain randomization) are CartPole-specific, but basic noise injection works with other environments.
     """
 
     def __init__(
@@ -31,7 +37,7 @@ class CartPoleEnv:
         domain_randomization: Optional[Dict[str, Tuple[float, float]]] = None,
     ):
         """
-        Initialize the CartPole environment.
+        Initialize the environment wrapper.
 
         Args:
             env_name: Name of the Gymnasium environment to create (default: "CartPole-v1")
@@ -40,8 +46,9 @@ class CartPoleEnv:
             seed: Random seed for reproducibility
             obs_noise_std: Standard deviation of Gaussian noise added to observations
             action_noise_prob: Probability of flipping the action (0.0 to 1.0)
+                              Note: Only works with Discrete(2) action spaces
             domain_randomization: Dictionary with parameter ranges for randomization.
-                Supported keys: 'gravity', 'masscart', 'masspole', 'length'
+                CartPole-specific. Supported keys: 'gravity', 'masscart', 'masspole', 'length'
                 Values should be tuples of (min, max) for uniform sampling
                 Example: {'gravity': (8.0, 12.0), 'length': (0.3, 0.7)}
         """
@@ -82,12 +89,37 @@ class CartPoleEnv:
         self._np_random, _ = seeding.np_random(seed)
 
     def _apply_domain_randomization(self) -> None:
-        """Apply domain randomization to environment parameters."""
+        """Apply domain randomization to environment parameters.
+
+        Note: This method is CartPole-specific and requires the wrapped environment
+        to have CartPole attributes (gravity, masscart, masspole, length).
+
+        Raises:
+            ValueError: If domain_randomization is enabled but the environment
+                       doesn't support CartPole-specific attributes.
+        """
         if not self.domain_randomization:
             return
 
         # Access the underlying environment (unwrap if needed)
         base_env = self.env.unwrapped
+
+        # Validate that the environment supports CartPole domain randomization
+        required_attrs = [
+            "gravity",
+            "masscart",
+            "masspole",
+            "length",
+            "total_mass",
+            "polemass_length",
+        ]
+        missing_attrs = [attr for attr in required_attrs if not hasattr(base_env, attr)]
+        if missing_attrs:
+            raise ValueError(
+                f"Domain randomization is only supported for CartPole environments. "
+                f"The environment '{self.env_name}' is missing required attributes: {missing_attrs}. "
+                f"Either use a CartPole environment or disable domain_randomization."
+            )
 
         # Randomize gravity
         if "gravity" in self.domain_randomization:
@@ -133,14 +165,32 @@ class CartPoleEnv:
         """
         Apply action noise by randomly flipping the action.
 
+        Note: This method only works for Discrete(2) action spaces (binary actions).
+
         Args:
             action: Original action
 
         Returns:
             Potentially flipped action
+
+        Raises:
+            ValueError: If action_noise_prob > 0 but the action space is not Discrete(2).
         """
-        if self.action_noise_prob > 0 and self._np_random.random() < self.action_noise_prob:
-            # Flip the action (0 -> 1, 1 -> 0)
+        if self.action_noise_prob <= 0:
+            return action
+
+        # Validate that the action space is compatible with this noise scheme
+        # The flip operation (1 - action) is only valid for Discrete(2) spaces
+        action_space = self.env.action_space
+        if not isinstance(action_space, gym.spaces.Discrete) or action_space.n != 2:
+            raise ValueError(
+                f"Action noise is only supported for Discrete(2) action spaces; "
+                f"got {type(action_space).__name__} with n={getattr(action_space, 'n', None)}. "
+                f"Either use an environment with Discrete(2) actions or set action_noise_prob=0."
+            )
+
+        if self._np_random.random() < self.action_noise_prob:
+            # Flip the action (0 -> 1, 1 -> 0) for Discrete(2) spaces
             return 1 - action
         return action
 

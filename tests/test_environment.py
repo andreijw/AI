@@ -297,3 +297,47 @@ def test_make_vec_env_from_config():
     assert obs.shape == (3, 4)
 
     vec_env.close()
+
+
+def test_env_name_parameter():
+    """Test that env_name parameter is properly used."""
+    # Test with default CartPole-v1
+    env1 = make_env()
+    assert env1.env_name == "CartPole-v1"
+    env1.close()
+
+    # Test with explicit CartPole-v0
+    env2 = make_env(env_name="CartPole-v0")
+    assert env2.env_name == "CartPole-v0"
+    assert env2.env.spec.id == "CartPole-v0"
+    env2.close()
+
+
+def test_env_name_from_config():
+    """Test that config 'name' field is properly used."""
+    # Test with name in config
+    config = {
+        "name": "CartPole-v0",
+        "seed": 42,
+    }
+    env = make_env_from_config(config)
+    assert env.env_name == "CartPole-v0"
+    assert env.env.spec.id == "CartPole-v0"
+    env.close()
+
+    # Test with default when name not in config
+    config2 = {"seed": 42}
+    env2 = make_env_from_config(config2)
+    assert env2.env_name == "CartPole-v1"
+    env2.close()
+
+
+def test_vec_env_name_from_config():
+    """Test that vectorized env respects config 'name' field."""
+    config = {
+        "name": "CartPole-v0",
+        "seed": 42,
+    }
+    vec_env = make_vec_env_from_config(config, num_envs=2)
+    assert vec_env.num_envs == 2
+    vec_env.close()

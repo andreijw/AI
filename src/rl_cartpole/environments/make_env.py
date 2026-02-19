@@ -1,4 +1,11 @@
-"""Factory functions for creating CartPole environments."""
+"""Factory functions for creating Gymnasium environments with noise and domain randomization.
+
+This module provides factory functions to create Gymnasium environments wrapped with
+optional noise injection and domain randomization features. While the wrapper is generic,
+certain features are environment-specific:
+- Domain randomization is CartPole-specific (requires gravity, masscart, masspole, length attributes)
+- Action noise currently only supports Discrete(2) action spaces
+"""
 
 from typing import Callable, Dict, Optional, Tuple
 
@@ -18,7 +25,7 @@ def make_env(
     domain_randomization: Optional[Dict[str, Tuple[float, float]]] = None,
 ) -> CartPoleEnv:
     """
-    Create a single CartPole environment.
+    Create a Gymnasium environment with optional noise and domain randomization.
 
     Args:
         env_name: Name of the Gymnasium environment to create (default: "CartPole-v1")
@@ -27,12 +34,18 @@ def make_env(
         seed: Random seed for reproducibility
         obs_noise_std: Standard deviation of Gaussian noise added to observations
         action_noise_prob: Probability of flipping the action (0.0 to 1.0)
+                          Note: Only works with Discrete(2) action spaces
         domain_randomization: Dictionary with parameter ranges for randomization.
-            Supported keys: 'gravity', 'masscart', 'masspole', 'length'
+            Note: CartPole-specific. Supported keys: 'gravity', 'masscart', 'masspole', 'length'
             Values should be tuples of (min, max) for uniform sampling
 
     Returns:
-        CartPoleEnv instance
+        CartPoleEnv instance wrapping the specified Gymnasium environment
+
+    Note:
+        While env_name can be any Gymnasium environment ID, some features have requirements:
+        - domain_randomization only works with CartPole environments
+        - action_noise_prob only works with Discrete(2) action spaces
     """
     return CartPoleEnv(
         env_name=env_name,
@@ -123,6 +136,9 @@ def make_env_from_config(config: Dict) -> CartPoleEnv:
     Returns:
         CartPoleEnv instance
 
+    Raises:
+        ValueError: If domain_randomization ranges are malformed.
+
     Example:
         >>> config = {
         ...     'name': 'CartPole-v1',
@@ -141,7 +157,34 @@ def make_env_from_config(config: Dict) -> CartPoleEnv:
     # Extract domain randomization and convert lists to tuples if needed
     domain_rand = config.get("domain_randomization")
     if domain_rand:
-        domain_rand = {k: tuple(v) if isinstance(v, list) else v for k, v in domain_rand.items()}
+        validated_domain_rand = {}
+        for key, value in domain_rand.items():
+            # Convert list to tuple if needed
+            if isinstance(value, list):
+                value = tuple(value)
+
+            # Validate that it's a 2-element tuple of numbers
+            if not isinstance(value, tuple) or len(value) != 2:
+                raise ValueError(
+                    f"Domain randomization range for '{key}' must be a 2-element list/tuple "
+                    f"[min, max], got: {value}"
+                )
+
+            min_val, max_val = value
+            if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
+                raise ValueError(
+                    f"Domain randomization range for '{key}' must contain numeric values, "
+                    f"got: [{min_val}, {max_val}]"
+                )
+
+            if min_val > max_val:
+                raise ValueError(
+                    f"Domain randomization range for '{key}' has min > max: [{min_val}, {max_val}]"
+                )
+
+            validated_domain_rand[key] = value
+
+        domain_rand = validated_domain_rand
 
     return make_env(
         env_name=config.get("name", "CartPole-v1"),
