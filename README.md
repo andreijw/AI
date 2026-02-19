@@ -148,9 +148,26 @@ pytest tests/ --cov=src/rl_cartpole --cov-report=term-missing
 
 ### Code Formatting
 
-Format code with Black:
+Format code with Ruff (recommended):
+```bash
+ruff format .
+```
+
+Or use Black (also supported):
 ```bash
 black src/ tests/
+```
+
+### Linting
+
+Check code quality with Ruff:
+```bash
+ruff check .
+```
+
+Fix auto-fixable issues:
+```bash
+ruff check --fix .
 ```
 
 ### Type Checking
@@ -160,13 +177,52 @@ Run type checking with mypy:
 mypy src/
 ```
 
+### Security Scanning
+
+Run security checks with Bandit:
+```bash
+bandit -r src/ -ll
+```
+
 ## CI/CD
 
-This repository includes GitHub Actions workflows for:
+This repository includes comprehensive GitHub Actions workflows for maintaining code quality and security:
 
-- **Linting**: Automated code quality checks with Ruff
-- **CodeQL**: Security scanning and vulnerability detection
-- **Copilot Deployment**: Automated deployment with signed commits
+### Automated Quality Checks
+
+- **Linting**: Automated code quality checks with Ruff (format & linting)
+- **Type Checking**: Static type checking with MyPy for type safety
+- **Testing**: Automated unit tests with pytest and coverage reporting (50% minimum)
+- **Security Scanning**: 
+  - CodeQL for comprehensive security analysis
+  - Bandit for Python-specific security vulnerabilities
+- **Dependency Management**: Dependabot for automated dependency updates
+
+### Local Development Tools
+
+Pre-commit hooks are available for local development. Install them with:
+```bash
+pip install -e ".[dev]"
+pre-commit install
+```
+
+The pre-commit hooks will automatically run:
+- Code formatting (Ruff)
+- Linting checks (Ruff)
+- Type checking (MyPy)
+- Security scanning (Bandit)
+- File validation (trailing whitespace, YAML/JSON syntax, etc.)
+
+### Workflows
+
+All workflows run on push/PR to `main` and `develop` branches:
+
+1. **lint.yml** - Ruff linting and formatting checks
+2. **type-check.yml** - MyPy type checking (informational)
+3. **test.yml** - Pytest with coverage enforcement and Codecov integration
+4. **security.yml** - Bandit security scanning (also runs weekly)
+5. **codeql.yml** - CodeQL security analysis (also runs weekly)
+6. **copilot-deploy.yml** - Automated deployment with signed commits (manual trigger)
 
 For more information about the Copilot deployment workflow and GPG signing setup, see [.github/COPILOT_DEPLOYMENT.md](.github/COPILOT_DEPLOYMENT.md).
 
