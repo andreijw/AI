@@ -2,7 +2,8 @@
 
 ## Overview
 
-This document describes the architecture of the RL CartPole framework, explaining the design decisions and how the components interact.
+This document describes the architecture of the RL CartPole framework, explaining the design
+decisions and how the components interact.
 
 ## Design Principles
 
