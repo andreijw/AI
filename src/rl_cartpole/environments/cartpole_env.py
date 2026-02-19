@@ -104,7 +104,6 @@ class CartPoleEnv:
 
         if seed is not None:
             self.env.action_space.seed(seed)
-            np.random.seed(seed)
 
         # Environment properties
         self.observation_space = self.env.observation_space
