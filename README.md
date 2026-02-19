@@ -1,12 +1,17 @@
 # RL CartPole
 
-A modular reinforcement learning framework for CartPole simulation. This project implements a clean, extensible foundation for experimenting with RL algorithms in physics-based environments.
+A modular reinforcement learning framework for CartPole simulation. This project implements a
+clean, extensible foundation for experimenting with RL algorithms in physics-based environments.
 
 ## Overview
 
-This project implements a reinforcement learning (RL) agent that learns to balance a pole on a moving cart using pure simulation. It is intentionally designed as a foundational robotics/AI module: simple enough to complete quickly, but structured in a way that mirrors real robotics control loops and can be extended later.
+This project implements a reinforcement learning (RL) agent that learns to balance a pole on a
+moving cart using pure simulation. It is intentionally designed as a foundational robotics/AI
+module: simple enough to complete quickly, but structured in a way that mirrors real robotics
+control loops and can be extended later.
 
 The architecture is designed to support:
+
 - Multiple RL algorithms (currently includes baseline random agent, PPO coming soon)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
@@ -65,17 +70,20 @@ AI/
 ### Setup
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/andreijw/AI.git
 cd AI
 ```
 
 2. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 Or install in development mode:
+
 ```bash
 pip install -e .
 ```
@@ -85,6 +93,7 @@ pip install -e .
 ### Basic Training
 
 Run training with the default configuration:
+
 ```bash
 python train.py
 ```
@@ -92,6 +101,7 @@ python train.py
 ### Custom Configuration
 
 Use a custom configuration file:
+
 ```bash
 python train.py --config configs/cartpole_default.yaml
 ```
@@ -99,6 +109,7 @@ python train.py --config configs/cartpole_default.yaml
 ### Render Environment
 
 Visualize the training process:
+
 ```bash
 python train.py --render
 ```
@@ -137,11 +148,13 @@ training:
 ### Running Tests
 
 Run the test suite:
+
 ```bash
 pytest tests/
 ```
 
 Run tests with coverage:
+
 ```bash
 pytest tests/ --cov=src/rl_cartpole --cov-report=term-missing
 ```
@@ -149,11 +162,13 @@ pytest tests/ --cov=src/rl_cartpole --cov-report=term-missing
 ### Code Formatting
 
 Format code with Ruff (recommended):
+
 ```bash
 ruff format .
 ```
 
 Or use Black (also supported):
+
 ```bash
 black src/ tests/
 ```
@@ -161,11 +176,13 @@ black src/ tests/
 ### Linting
 
 Check code quality with Ruff:
+
 ```bash
 ruff check .
 ```
 
 Fix auto-fixable issues:
+
 ```bash
 ruff check --fix .
 ```
@@ -173,6 +190,7 @@ ruff check --fix .
 ### Type Checking
 
 Run type checking with mypy:
+
 ```bash
 mypy src/
 ```
@@ -180,6 +198,7 @@ mypy src/
 ### Security Scanning
 
 Run security checks with Bandit:
+
 ```bash
 bandit -r src/ -ll
 ```
@@ -193,7 +212,7 @@ This repository includes comprehensive GitHub Actions workflows for maintaining 
 - **Linting**: Automated code quality checks with Ruff (format & linting)
 - **Type Checking**: Static type checking with MyPy for type safety
 - **Testing**: Automated unit tests with pytest and coverage reporting (50% minimum)
-- **Security Scanning**: 
+- **Security Scanning**:
   - CodeQL for comprehensive security analysis
   - Bandit for Python-specific security vulnerabilities
 - **Dependency Management**: Dependabot for automated dependency updates
@@ -201,12 +220,14 @@ This repository includes comprehensive GitHub Actions workflows for maintaining 
 ### Local Development Tools
 
 Pre-commit hooks are available for local development. Install them with:
+
 ```bash
 pip install -e ".[dev]"
 pre-commit install
 ```
 
 The pre-commit hooks will automatically run:
+
 - Code formatting (Ruff)
 - Linting checks (Ruff)
 - Type checking (MyPy)
@@ -231,6 +252,7 @@ For more information about the Copilot deployment workflow and GPG signing setup
 ### Environment Wrapper
 
 The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment and provides:
+
 - Episode tracking and statistics
 - Standardized interface for training pipeline
 - Easy monitoring and logging integration
@@ -238,6 +260,7 @@ The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment and provides:
 ### Agent Framework
 
 The `BaseAgent` abstract class defines the interface for all RL agents:
+
 - `select_action()`: Choose actions based on observations
 - `update()`: Update policy based on collected experience
 - `save()` / `load()`: Checkpoint management
@@ -245,6 +268,7 @@ The `BaseAgent` abstract class defines the interface for all RL agents:
 ### Training Pipeline
 
 The `Trainer` class orchestrates the training process:
+
 - Episode collection and management
 - Agent policy updates
 - Evaluation and checkpointing
@@ -253,6 +277,7 @@ The `Trainer` class orchestrates the training process:
 ## Future Enhancements
 
 This initial structure sets the foundation for:
+
 - **PPO Implementation**: Full Proximal Policy Optimization algorithm
 - **Additional Algorithms**: DQN, A3C, SAC, etc.
 - **Advanced Environments**: More complex physics simulations
