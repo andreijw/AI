@@ -11,19 +11,24 @@ class CartPoleEnv:
     """
     Wrapper around Gymnasium environments with noise injection and domain randomization.
 
+    **Primary Use Case**: This wrapper is designed for CartPole environments but can
+    work with other Gymnasium environments for basic noise injection features.
+
     Provides a standardized interface for the training pipeline and
     adds logging, monitoring, and preprocessing capabilities.
 
-    While this wrapper can work with any Gymnasium environment, certain features
-    have specific requirements:
+    Feature Compatibility:
+    - **Observation noise injection**: Works with any Gymnasium environment
+    - **Action noise injection**: Requires Discrete(2) action space (e.g., CartPole, but not MountainCar)
+    - **Domain randomization**: CartPole-specific only (requires gravity, masscart, masspole, length attributes)
 
-    Features:
-    - Observation noise injection (works with any environment)
-    - Action noise injection (requires Discrete(2) action space)
-    - Domain randomization (CartPole-specific: requires gravity, masscart, masspole, length attributes)
+    The class is named CartPoleEnv because it was designed for CartPole environments and
+    contains CartPole-specific domain randomization. When using with non-CartPole environments,
+    only observation noise should be used (action noise and domain randomization will raise errors).
 
-    The class is named CartPoleEnv for historical reasons and because the advanced features
-    (domain randomization) are CartPole-specific, but basic noise injection works with other environments.
+    Raises:
+        ValueError: If domain_randomization is used with non-CartPole environments
+        ValueError: If action_noise_prob > 0 with non-Discrete(2) action spaces
     """
 
     def __init__(
@@ -41,6 +46,7 @@ class CartPoleEnv:
 
         Args:
             env_name: Name of the Gymnasium environment to create (default: "CartPole-v1")
+                     Note: Non-CartPole environments only support observation noise
             render_mode: Rendering mode ('human', 'rgb_array', or None)
             max_episode_steps: Maximum steps per episode
             seed: Random seed for reproducibility
@@ -51,6 +57,10 @@ class CartPoleEnv:
                 CartPole-specific. Supported keys: 'gravity', 'masscart', 'masspole', 'length'
                 Values should be tuples of (min, max) for uniform sampling
                 Example: {'gravity': (8.0, 12.0), 'length': (0.3, 0.7)}
+
+        Raises:
+            ValueError: If domain_randomization is enabled with non-CartPole environment
+            ValueError: If action_noise_prob > 0 with non-Discrete(2) action space
         """
         self.env_name = env_name
         self.max_episode_steps = max_episode_steps
@@ -63,6 +73,16 @@ class CartPoleEnv:
 
         # Domain randomization parameters
         self.domain_randomization = domain_randomization or {}
+
+        # Validate CartPole-specific features early
+        is_cartpole = "cartpole" in env_name.lower()
+        if domain_randomization and not is_cartpole:
+            raise ValueError(
+                f"Domain randomization is only supported for CartPole environments. "
+                f"Environment '{env_name}' does not appear to be a CartPole variant. "
+                f"If you need domain randomization, use a CartPole environment. "
+                f"Otherwise, remove domain_randomization parameter."
+            )
 
         # Create the base environment
         self.env = gym.make(
