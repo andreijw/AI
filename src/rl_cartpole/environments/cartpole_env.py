@@ -261,7 +261,7 @@ class CartPoleEnv:
         obs, reward, terminated, truncated, info = self.env.step(noisy_action)
 
         self._episode_steps += 1
-        self._episode_reward += reward
+        self._episode_reward += float(reward)
 
         # Apply observation noise
         obs = self._add_observation_noise(obs)
@@ -273,7 +273,7 @@ class CartPoleEnv:
                 "reward": self._episode_reward,
             }
 
-        return obs, reward, terminated, truncated, info
+        return obs, float(reward), terminated, truncated, info
 
     def close(self) -> None:
         """Close the environment and cleanup resources."""
