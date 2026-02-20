@@ -154,26 +154,26 @@ class CartPoleEnv:
         # Randomize gravity
         if "gravity" in self.domain_randomization:
             min_g, max_g = self.domain_randomization["gravity"]
-            base_env.gravity = self._np_random.uniform(min_g, max_g)
+            base_env.gravity = self._np_random.uniform(min_g, max_g)  # type: ignore[attr-defined]
 
         # Randomize cart mass
         if "masscart" in self.domain_randomization:
             min_m, max_m = self.domain_randomization["masscart"]
-            base_env.masscart = self._np_random.uniform(min_m, max_m)
+            base_env.masscart = self._np_random.uniform(min_m, max_m)  # type: ignore[attr-defined]
 
         # Randomize pole mass
         if "masspole" in self.domain_randomization:
             min_m, max_m = self.domain_randomization["masspole"]
-            base_env.masspole = self._np_random.uniform(min_m, max_m)
+            base_env.masspole = self._np_random.uniform(min_m, max_m)  # type: ignore[attr-defined]
 
         # Randomize pole length
         if "length" in self.domain_randomization:
             min_l, max_l = self.domain_randomization["length"]
-            base_env.length = self._np_random.uniform(min_l, max_l)
+            base_env.length = self._np_random.uniform(min_l, max_l)  # type: ignore[attr-defined]
 
         # Update total mass (used in dynamics)
-        base_env.total_mass = base_env.masspole + base_env.masscart
-        base_env.polemass_length = base_env.masspole * base_env.length
+        base_env.total_mass = base_env.masspole + base_env.masscart  # type: ignore[attr-defined]
+        base_env.polemass_length = base_env.masspole * base_env.length  # type: ignore[attr-defined]
 
     def _add_observation_noise(self, obs: np.ndarray) -> np.ndarray:
         """

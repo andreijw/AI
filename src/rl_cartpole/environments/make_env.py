@@ -121,9 +121,9 @@ def make_vec_env(
 
     # Create vectorized environment
     if async_envs:
-        return AsyncVectorEnv(env_fns)
+        return AsyncVectorEnv(env_fns)  # type: ignore[arg-type]
     else:
-        return SyncVectorEnv(env_fns)
+        return SyncVectorEnv(env_fns)  # type: ignore[arg-type]
 
 
 def _validate_domain_randomization(
