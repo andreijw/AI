@@ -114,29 +114,69 @@ def test_observation_noise():
 
 
 def test_action_noise():
-    """Test action noise application."""
-    # With 100% action noise, actions should always flip
-    env = CartPoleEnv(seed=42, action_noise_prob=1.0)
-    env.reset()
+    """Test action noise application via public step API."""
+    # With 100% action noise, actions should always flip.
+    # Compare a noisy env against a reference env without noise, using the same seed.
+    env_flip = CartPoleEnv(seed=42, action_noise_prob=1.0)
+    env_ref = CartPoleEnv(seed=42, action_noise_prob=0.0)
 
-    # Test action flipping
-    action_0_result = env._apply_action_noise(0)
-    action_1_result = env._apply_action_noise(1)
+    obs_flip, _ = env_flip.reset()
+    obs_ref, _ = env_ref.reset()
 
-    assert action_0_result == 1  # 0 should flip to 1
-    assert action_1_result == 0  # 1 should flip to 0
+    # Initial observations should be identical given the same seed.
+    assert isinstance(obs_flip, np.ndarray)
+    assert isinstance(obs_ref, np.ndarray)
+    assert obs_flip.shape == obs_ref.shape
+    assert np.allclose(obs_flip, obs_ref)
 
-    # With 0% action noise, actions should never flip
-    env_no_noise = CartPoleEnv(seed=42, action_noise_prob=0.0)
-    env_no_noise.reset()
+    # When action_noise_prob=1.0, the applied action should be the flipped one.
+    # Stepping the noisy env with action "a" should match stepping the reference
+    # env with action "1 - a".
+    intended_actions = [0, 1, 0, 1]
+    for a in intended_actions:
+        flipped_a = 1 - a
 
-    assert env_no_noise._apply_action_noise(0) == 0
-    assert env_no_noise._apply_action_noise(1) == 1
+        obs_ref, reward_ref, terminated_ref, truncated_ref, _ = env_ref.step(flipped_a)
+        obs_flip, reward_flip, terminated_flip, truncated_flip, _ = env_flip.step(a)
 
-    env.close()
-    env_no_noise.close()
+        assert np.allclose(obs_flip, obs_ref)
+        assert reward_flip == pytest.approx(reward_ref)
+        assert terminated_flip == terminated_ref
+        assert truncated_flip == truncated_ref
 
+        if terminated_ref or truncated_ref:
+            break
 
+    env_flip.close()
+    env_ref.close()
+
+    # With 0% action noise, behavior should be identical to a reference env.
+    env_no_noise_1 = CartPoleEnv(seed=123, action_noise_prob=0.0)
+    env_no_noise_2 = CartPoleEnv(seed=123, action_noise_prob=0.0)
+
+    obs1, _ = env_no_noise_1.reset()
+    obs2, _ = env_no_noise_2.reset()
+
+    assert isinstance(obs1, np.ndarray)
+    assert isinstance(obs2, np.ndarray)
+    assert obs1.shape == obs2.shape
+    assert np.allclose(obs1, obs2)
+
+    actions = [0, 1, 1, 0]
+    for a in actions:
+        obs1, reward1, terminated1, truncated1, _ = env_no_noise_1.step(a)
+        obs2, reward2, terminated2, truncated2, _ = env_no_noise_2.step(a)
+
+        assert np.allclose(obs1, obs2)
+        assert reward1 == pytest.approx(reward2)
+        assert terminated1 == terminated2
+        assert truncated1 == truncated2
+
+        if terminated1 or truncated1:
+            break
+
+    env_no_noise_1.close()
+    env_no_noise_2.close()
 def test_domain_randomization():
     """Test domain randomization."""
     domain_rand = {
