@@ -44,8 +44,8 @@ class Trainer:
         self.checkpoint_dir = config.get("checkpoint_dir", "./checkpoints")
 
         # Metrics tracking
-        self.episode_rewards = []
-        self.episode_lengths = []
+        self.episode_rewards: list[float] = []
+        self.episode_lengths: list[int] = []
 
     def train(self) -> Dict[str, Any]:
         """
@@ -169,9 +169,9 @@ class Trainer:
             eval_lengths.append(episode_length)
 
         return {
-            "mean_reward": np.mean(eval_rewards),
-            "std_reward": np.std(eval_rewards),
-            "mean_length": np.mean(eval_lengths),
+            "mean_reward": float(np.mean(eval_rewards)),
+            "std_reward": float(np.std(eval_rewards)),
+            "mean_length": float(np.mean(eval_lengths)),
         }
 
     def _save_checkpoint(self, episode: int) -> None:
