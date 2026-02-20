@@ -177,6 +177,8 @@ def test_action_noise():
 
     env_no_noise_1.close()
     env_no_noise_2.close()
+
+
 def test_domain_randomization():
     """Test domain randomization."""
     domain_rand = {
