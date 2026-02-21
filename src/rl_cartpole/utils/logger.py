@@ -1,5 +1,6 @@
 """Logging utilities for training."""
 
+import json
 import logging
 import os
 from datetime import datetime
@@ -66,8 +67,6 @@ class Logger:
             step: Optional step number
         """
         # Log to structured metrics file
-        import json
-
         with open(self.metrics_file, "a") as f:
             log_entry = {"step": step, **metrics} if step else metrics
             f.write(json.dumps(log_entry) + "\n")
