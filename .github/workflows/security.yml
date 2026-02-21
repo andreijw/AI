@@ -8,6 +8,10 @@ on:
   schedule:
     # Run weekly on Mondays at 9 AM UTC
     - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
 
 jobs:
   bandit:
@@ -22,16 +26,26 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
       - name: Install Bandit
-        run: pip install bandit[toml]
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[toml]
 
       - name: Run Bandit security scanner
-        run: bandit -r src/ -f json -o bandit-report.json || true
-
-      - name: Show Bandit results
-        run: bandit -r src/ -ll
+        run: |
+          status=0
+          if ! bandit -r src/ -f json -o bandit-report.json; then
+            status=$?
+            # Bandit exit codes: 0 = no issues, 1 = issues found, >1 = execution error
+            if [ "$status" -gt 1 ]; then
+              echo "Bandit JSON scan failed with exit code $status (execution error)."
+              exit "$status"
+            fi
+          fi
+          bandit -r src/ -ll
 
       - name: Upload Bandit report
         if: always()
