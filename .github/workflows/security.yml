@@ -36,7 +36,15 @@ jobs:
 
       - name: Run Bandit security scanner
         run: |
-          bandit -r src/ -f json -o bandit-report.json || true
+          status=0
+          if ! bandit -r src/ -f json -o bandit-report.json; then
+            status=$?
+            # Bandit exit codes: 0 = no issues, 1 = issues found, >1 = execution error
+            if [ "$status" -gt 1 ]; then
+              echo "Bandit JSON scan failed with exit code $status (execution error)."
+              exit "$status"
+            fi
+          fi
           bandit -r src/ -ll
 
       - name: Upload Bandit report
