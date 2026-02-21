@@ -68,7 +68,10 @@ class Logger:
         """
         # Log to structured metrics file
         with open(self.metrics_file, "a") as f:
-            log_entry = {"step": step, **metrics} if step else metrics
+            if step is not None:
+                log_entry = {**metrics, "step": step}
+            else:
+                log_entry = metrics
             f.write(json.dumps(log_entry) + "\n")
 
         # Log summary to console
