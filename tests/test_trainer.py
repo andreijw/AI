@@ -240,9 +240,11 @@ def test_train_triggers_checkpoint_save(env, agent):
             "checkpoint_dir": tmpdir,
         }
         trainer = Trainer(env=env, agent=agent, config=config)
-        trainer.train()
 
-        assert os.path.isdir(tmpdir)
+        # Patch _save_checkpoint to verify that it is called during training.
+        with patch.object(trainer, "_save_checkpoint", wraps=trainer._save_checkpoint) as mock_save:
+            trainer.train()
+            assert mock_save.called
 
 
 def test_train_triggers_evaluation(env, agent):
