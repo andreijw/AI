@@ -37,14 +37,14 @@ def agent():
 
 
 @pytest.fixture
-def trainer(env, agent):
+def trainer(env, agent, tmp_path):
     """Provide a Trainer with a minimal config."""
     config = {
         "num_episodes": 3,
         "max_steps_per_episode": 20,
         "eval_frequency": 2,
         "save_frequency": 2,
-        "checkpoint_dir": "/tmp/test_checkpoints",
+        "checkpoint_dir": str(tmp_path / "checkpoints"),
     }
     return Trainer(env=env, agent=agent, config=config)
 
@@ -54,14 +54,15 @@ def trainer(env, agent):
 # ---------------------------------------------------------------------------
 
 
-def test_trainer_creation(env, agent):
+def test_trainer_creation(env, agent, tmp_path):
     """Test that Trainer is created with correct attributes."""
+    ckpt_dir = str(tmp_path / "ckpt")
     config = {
         "num_episodes": 10,
         "max_steps_per_episode": 50,
         "eval_frequency": 5,
         "save_frequency": 5,
-        "checkpoint_dir": "/tmp/ckpt",
+        "checkpoint_dir": ckpt_dir,
     }
     trainer = Trainer(env=env, agent=agent, config=config)
 
@@ -71,7 +72,7 @@ def test_trainer_creation(env, agent):
     assert trainer.max_steps_per_episode == 50
     assert trainer.eval_frequency == 5
     assert trainer.save_frequency == 5
-    assert trainer.checkpoint_dir == "/tmp/ckpt"
+    assert trainer.checkpoint_dir == ckpt_dir
     assert trainer.episode_rewards == []
     assert trainer.episode_lengths == []
 
@@ -154,21 +155,21 @@ def test_evaluate_std_for_single_episode(trainer):
 # ---------------------------------------------------------------------------
 
 
-def test_save_checkpoint_creates_file(env, agent):
+def test_save_checkpoint_creates_file(env):
     """_save_checkpoint should create the checkpoint directory and call agent.save."""
     with tempfile.TemporaryDirectory() as tmpdir:
         config = {
             "num_episodes": 1,
             "checkpoint_dir": tmpdir,
         }
-        trainer = Trainer(env=env, agent=agent, config=config)
+        mock_agent = MagicMock()
+        trainer = Trainer(env=env, agent=mock_agent, config=config)
 
         trainer._save_checkpoint(episode=1)
 
         expected_path = os.path.join(tmpdir, "agent_episode_1.pt")
-        # RandomAgent.save is a no-op, but the directory must be created
         assert os.path.isdir(tmpdir)
-        # Call succeeds without error (no assertion on file existence since RandomAgent is a no-op)
+        mock_agent.save.assert_called_once_with(expected_path)
 
 
 def test_save_checkpoint_creates_nested_directory(env, agent):
@@ -210,7 +211,7 @@ def test_train_accumulates_metrics(trainer):
     assert all(isinstance(l, int) for l in trainer.episode_lengths)
 
 
-def test_train_with_logger_calls_log(env, agent):
+def test_train_with_logger_calls_log(env, agent, tmp_path):
     """Trainer should call logger.log when a logger is provided."""
     logger = MagicMock()
     config = {
@@ -218,7 +219,7 @@ def test_train_with_logger_calls_log(env, agent):
         "max_steps_per_episode": 20,
         "eval_frequency": 10,
         "save_frequency": 10,
-        "checkpoint_dir": "/tmp/test_ckpt",
+        "checkpoint_dir": str(tmp_path / "ckpt"),
     }
     trainer = Trainer(env=env, agent=agent, config=config, logger=logger)
     trainer.train()
@@ -227,30 +228,30 @@ def test_train_with_logger_calls_log(env, agent):
     assert logger.log.called
 
 
-def test_train_triggers_checkpoint_save(env, agent):
-    """Trainer should save a checkpoint when episode reaches save_frequency."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config = {
-            "num_episodes": 2,
-            "max_steps_per_episode": 20,
-            "eval_frequency": 10,
-            "save_frequency": 2,
-            "checkpoint_dir": tmpdir,
-        }
-        trainer = Trainer(env=env, agent=agent, config=config)
+def test_train_triggers_checkpoint_save(env, agent, tmp_path):
+    """Trainer should call _save_checkpoint when episode reaches save_frequency."""
+    config = {
+        "num_episodes": 2,
+        "max_steps_per_episode": 20,
+        "eval_frequency": 10,
+        "save_frequency": 2,
+        "checkpoint_dir": str(tmp_path / "ckpt"),
+    }
+    trainer = Trainer(env=env, agent=agent, config=config)
+
+    with patch.object(trainer, "_save_checkpoint", wraps=trainer._save_checkpoint) as mock_save:
         trainer.train()
+        assert mock_save.called
 
-        assert os.path.isdir(tmpdir)
 
-
-def test_train_triggers_evaluation(env, agent):
+def test_train_triggers_evaluation(env, agent, tmp_path):
     """Trainer should call _evaluate when episode reaches eval_frequency."""
     config = {
         "num_episodes": 2,
         "max_steps_per_episode": 20,
         "eval_frequency": 2,
         "save_frequency": 100,
-        "checkpoint_dir": "/tmp/no_save",
+        "checkpoint_dir": str(tmp_path / "no_save"),
     }
     trainer = Trainer(env=env, agent=agent, config=config)
 

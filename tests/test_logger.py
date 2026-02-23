@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import sys
-import tempfile
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -12,6 +11,24 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import pytest
 
 from rl_cartpole.utils.logger import Logger, setup_logger
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _safe_logger_name(request) -> str:
+    """Return a unique, filesystem-safe logger name derived from the test node-id."""
+    return request.node.nodeid.replace("/", "_").replace("::", "_").replace(".", "_")
+
+
+def _cleanup_logger(name: str) -> None:
+    """Close and remove all handlers for the named Python logger."""
+    py_logger = logging.getLogger(name)
+    for handler in py_logger.handlers[:]:
+        handler.close()
+        py_logger.removeHandler(handler)
 
 
 # ---------------------------------------------------------------------------
@@ -26,9 +43,16 @@ def log_dir(tmp_path):
 
 
 @pytest.fixture
-def logger(log_dir):
-    """Provide a Logger instance backed by a temporary directory."""
-    return Logger(name="test_logger", log_dir=log_dir, level=logging.DEBUG)
+def logger(log_dir, request):
+    """Provide a Logger instance backed by a temporary directory.
+
+    Uses the test's node-id as part of the logger name so that each test gets
+    a unique Python logger instance, preventing handler accumulation across tests.
+    """
+    safe_name = _safe_logger_name(request)
+    lg = Logger(name=safe_name, log_dir=log_dir, level=logging.DEBUG)
+    yield lg
+    _cleanup_logger(safe_name)
 
 
 # ---------------------------------------------------------------------------
@@ -36,37 +60,48 @@ def logger(log_dir):
 # ---------------------------------------------------------------------------
 
 
-def test_logger_creation(log_dir):
+def test_logger_creation(log_dir, request):
     """Logger should be created and the log directory should exist."""
-    lg = Logger(name="test_logger", log_dir=log_dir)
+    safe_name = _safe_logger_name(request)
+    lg = Logger(name=safe_name, log_dir=log_dir)
 
-    assert lg.name == "test_logger"
+    assert lg.name == safe_name
     assert lg.log_dir == log_dir
     assert os.path.isdir(log_dir)
 
+    _cleanup_logger(safe_name)
 
-def test_logger_creates_log_file(log_dir):
+
+def test_logger_creates_log_file(log_dir, request):
     """A .log file should be created in the log directory on instantiation."""
-    Logger(name="my_logger", log_dir=log_dir)
+    safe_name = _safe_logger_name(request)
+    Logger(name=safe_name, log_dir=log_dir)
 
     log_files = [f for f in os.listdir(log_dir) if f.endswith(".log")]
     assert len(log_files) == 1
 
+    _cleanup_logger(safe_name)
 
-def test_logger_creates_metrics_file(log_dir):
+
+def test_logger_creates_metrics_file(log_dir, request):
     """A metrics .jsonl file should be created in the log directory after the first log() call."""
-    lg = Logger(name="my_logger", log_dir=log_dir)
+    safe_name = _safe_logger_name(request)
+    lg = Logger(name=safe_name, log_dir=log_dir)
     lg.log({"value": 1})  # triggers file creation
 
     jsonl_files = [f for f in os.listdir(log_dir) if f.endswith(".jsonl")]
     assert len(jsonl_files) == 1
 
+    _cleanup_logger(safe_name)
+
 
 def test_logger_creates_directory_if_missing(tmp_path):
     """Logger should create the log directory if it does not exist."""
     new_dir = str(tmp_path / "new" / "nested" / "logs")
-    Logger(name="test", log_dir=new_dir)
+    Logger(name="dir_missing_test", log_dir=new_dir)
     assert os.path.isdir(new_dir)
+
+    _cleanup_logger("dir_missing_test")
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +133,18 @@ def test_logger_log_with_step_includes_step(logger, log_dir):
         entry = json.loads(f.readline().strip())
 
     assert entry["step"] == 100
+    assert entry["loss"] == 0.5
+
+
+def test_logger_log_with_zero_step_includes_step(logger, log_dir):
+    """When step=0, the JSON line should still include the step (zero is a valid step)."""
+    logger.log({"loss": 0.5}, step=0)
+
+    jsonl_files = [f for f in os.listdir(log_dir) if f.endswith(".jsonl")]
+    with open(os.path.join(log_dir, jsonl_files[0])) as f:
+        entry = json.loads(f.readline().strip())
+
+    assert entry["step"] == 0
     assert entry["loss"] == 0.5
 
 
@@ -157,21 +204,29 @@ def test_logger_debug(logger):
 # ---------------------------------------------------------------------------
 
 
-def test_setup_logger_returns_logger_instance(log_dir):
+def test_setup_logger_returns_logger_instance(log_dir, request):
     """setup_logger should return a Logger instance."""
-    lg = setup_logger(name="setup_test", log_dir=log_dir)
+    safe_name = _safe_logger_name(request)
+    lg = setup_logger(name=safe_name, log_dir=log_dir)
     assert isinstance(lg, Logger)
 
+    _cleanup_logger(safe_name)
 
-def test_setup_logger_passes_parameters(log_dir):
+
+def test_setup_logger_passes_parameters(log_dir, request):
     """setup_logger should pass name and log_dir to the Logger."""
-    lg = setup_logger(name="my_run", log_dir=log_dir, level=logging.WARNING)
-    assert lg.name == "my_run"
+    safe_name = _safe_logger_name(request)
+    lg = setup_logger(name=safe_name, log_dir=log_dir, level=logging.WARNING)
+    assert lg.name == safe_name
     assert lg.log_dir == log_dir
+
+    _cleanup_logger(safe_name)
 
 
 def test_setup_logger_creates_log_directory(tmp_path):
     """setup_logger should create the log directory if absent."""
     new_dir = str(tmp_path / "auto_created")
-    setup_logger(name="test", log_dir=new_dir)
+    setup_logger(name="setup_dir_test", log_dir=new_dir)
     assert os.path.isdir(new_dir)
+
+    _cleanup_logger("setup_dir_test")
