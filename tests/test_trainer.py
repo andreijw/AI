@@ -157,8 +157,6 @@ def test_evaluate_std_for_single_episode(trainer):
 
 def test_save_checkpoint_creates_file(env):
     """_save_checkpoint should create the checkpoint directory and call agent.save."""
-def test_save_checkpoint_creates_file(env):
-    """_save_checkpoint should create the checkpoint directory and call agent.save."""
     with tempfile.TemporaryDirectory() as tmpdir:
         config = {
             "num_episodes": 1,
