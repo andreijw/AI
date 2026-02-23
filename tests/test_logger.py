@@ -100,6 +100,16 @@ def test_logger_log_with_step_includes_step(logger, log_dir):
     assert entry["loss"] == 0.5
 
 
+def test_logger_log_with_zero_step_includes_step(logger, log_dir):
+    """When step is 0, the JSON line should still include it."""
+    logger.log({"loss": 0.5}, step=0)
+
+    jsonl_files = [f for f in os.listdir(log_dir) if f.endswith(".jsonl")]
+    with open(os.path.join(log_dir, jsonl_files[0])) as f:
+        entry = json.loads(f.readline().strip())
+
+    assert entry["step"] == 0
+    assert entry["loss"] == 0.5
 def test_logger_log_without_step_omits_step_key(logger, log_dir):
     """When step is not provided, the JSON line should not contain a 'step' key."""
     logger.log({"episode": 1})
