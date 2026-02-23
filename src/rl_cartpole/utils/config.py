@@ -48,8 +48,7 @@ def merge_configs(base_config: Dict[str, Any], override_config: Dict[str, Any]) 
     Returns:
         Merged configuration dictionary
     """
-    merged = base_config.copy()
-    merged.update(override_config)
+    merged = {**base_config, **override_config}
     return merged
 
 

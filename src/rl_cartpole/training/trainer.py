@@ -1,5 +1,6 @@
 """Training pipeline for RL agents."""
 
+import os
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -181,8 +182,6 @@ class Trainer:
         Args:
             episode: Current episode number
         """
-        import os
-
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
         checkpoint_path = os.path.join(self.checkpoint_dir, f"agent_episode_{episode}.pt")
