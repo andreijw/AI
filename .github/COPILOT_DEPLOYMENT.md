@@ -92,9 +92,10 @@ The Copilot deployment workflow includes:
 
 The workflow runs on:
 
+- Pull requests targeting `main` or `develop` branches
 - Manual trigger via workflow dispatch
 
-**Note**: The workflow is currently configured to run only on manual dispatch. Once you've implemented your deployment tasks, you can add push triggers for the `main` or `develop` branches by updating the workflow's `on:` section.
+**Note**: The `pull_request` trigger ensures the branch protection check ("Copilot Deployment") is satisfied automatically on every PR. The workflow itself always runs to completion, passing the required status check. The GPG import and commit/push steps are skipped when the automated tasks produce no file changes, keeping the workflow lightweight for routine PRs.
 
 ## Customization
 
@@ -116,16 +117,16 @@ Edit the "Run automated tasks" step in `.github/workflows/copilot-deploy.yml`:
 
 ### Enabling Automatic Triggers
 
-Once you've implemented your deployment tasks, you can enable the workflow to run automatically on push events. Edit the `on:` section in `.github/workflows/copilot-deploy.yml`:
+The workflow is already configured to trigger automatically on pull requests targeting `main` or `develop`. If you also want it to run on every push to those branches, add a `push` trigger to the `on:` section in `.github/workflows/copilot-deploy.yml`:
 
 ```yaml
 on:
   push:
     branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
   workflow_dispatch:
 ```
-
-This will trigger the workflow on every push to `main` or `develop` branches, in addition to manual dispatch.
 
 ### Changing Commit Message
 
