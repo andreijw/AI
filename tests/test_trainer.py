@@ -163,9 +163,11 @@ def test_save_checkpoint_creates_file(env, agent):
         }
         trainer = Trainer(env=env, agent=agent, config=config)
 
-        trainer._save_checkpoint(episode=1)
-
         expected_path = os.path.join(tmpdir, "agent_episode_1.pt")
+        with patch.object(agent, "save") as mock_save:
+            trainer._save_checkpoint(episode=1)
+
+        mock_save.assert_called_once_with(expected_path)
         # RandomAgent.save is a no-op, but the directory must be created
         assert os.path.isdir(tmpdir)
         # Call succeeds without error (no assertion on file existence since RandomAgent is a no-op)
