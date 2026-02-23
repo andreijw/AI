@@ -156,21 +156,22 @@ def test_evaluate_std_for_single_episode(trainer):
 
 def test_save_checkpoint_creates_file(env, agent):
     """_save_checkpoint should create the checkpoint directory and call agent.save."""
+def test_save_checkpoint_creates_file(env):
+    """_save_checkpoint should create the checkpoint directory and call agent.save."""
     with tempfile.TemporaryDirectory() as tmpdir:
         config = {
             "num_episodes": 1,
             "checkpoint_dir": tmpdir,
         }
-        trainer = Trainer(env=env, agent=agent, config=config)
+        mock_agent = MagicMock()
+        trainer = Trainer(env=env, agent=mock_agent, config=config)
+
+        trainer._save_checkpoint(episode=1)
 
         expected_path = os.path.join(tmpdir, "agent_episode_1.pt")
-        with patch.object(agent, "save") as mock_save:
-            trainer._save_checkpoint(episode=1)
-
-        mock_save.assert_called_once_with(expected_path)
-        # RandomAgent.save is a no-op, but the directory must be created
+        # Ensure the directory exists and that agent.save was called with the expected path
         assert os.path.isdir(tmpdir)
-        # Call succeeds without error (no assertion on file existence since RandomAgent is a no-op)
+        mock_agent.save.assert_called_once_with(expected_path)
 
 
 def test_save_checkpoint_creates_nested_directory(env, agent):
