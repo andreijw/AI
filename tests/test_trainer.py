@@ -168,6 +168,7 @@ def test_save_checkpoint_creates_file(env):
         trainer._save_checkpoint(episode=1)
 
         expected_path = os.path.join(tmpdir, "agent_episode_1.pt")
+        # Ensure the directory exists and that agent.save was called with the expected path
         assert os.path.isdir(tmpdir)
         mock_agent.save.assert_called_once_with(expected_path)
 
@@ -228,20 +229,22 @@ def test_train_with_logger_calls_log(env, agent, tmp_path):
     assert logger.log.called
 
 
-def test_train_triggers_checkpoint_save(env, agent, tmp_path):
-    """Trainer should call _save_checkpoint when episode reaches save_frequency."""
-    config = {
-        "num_episodes": 2,
-        "max_steps_per_episode": 20,
-        "eval_frequency": 10,
-        "save_frequency": 2,
-        "checkpoint_dir": str(tmp_path / "ckpt"),
-    }
-    trainer = Trainer(env=env, agent=agent, config=config)
+def test_train_triggers_checkpoint_save(env, agent):
+    """Trainer should save a checkpoint when episode reaches save_frequency."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = {
+            "num_episodes": 2,
+            "max_steps_per_episode": 20,
+            "eval_frequency": 10,
+            "save_frequency": 2,
+            "checkpoint_dir": tmpdir,
+        }
+        trainer = Trainer(env=env, agent=agent, config=config)
 
-    with patch.object(trainer, "_save_checkpoint", wraps=trainer._save_checkpoint) as mock_save:
-        trainer.train()
-        assert mock_save.called
+        # Patch _save_checkpoint to verify that it is called during training.
+        with patch.object(trainer, "_save_checkpoint", wraps=trainer._save_checkpoint) as mock_save:
+            trainer.train()
+            assert mock_save.called
 
 
 def test_train_triggers_evaluation(env, agent, tmp_path):

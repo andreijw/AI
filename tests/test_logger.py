@@ -230,3 +230,4 @@ def test_setup_logger_creates_log_directory(tmp_path):
     assert os.path.isdir(new_dir)
 
     _cleanup_logger("setup_dir_test")
+
