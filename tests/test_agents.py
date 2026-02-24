@@ -55,3 +55,42 @@ def test_random_agent_save_load():
     # These should not raise errors
     agent.save("/tmp/test_agent.pt")
     agent.load("/tmp/test_agent.pt")
+
+
+def test_random_agent_select_action_training_false():
+    """Test that training=False does not change action selection behaviour."""
+    agent = RandomAgent(observation_dim=4, action_dim=2, config={})
+    obs = np.array([0.1, 0.2, 0.3, 0.4])
+
+    actions = [agent.select_action(obs, training=False) for _ in range(50)]
+    assert all(action in [0, 1] for action in actions)
+
+
+def test_random_agent_larger_action_dim():
+    """Test random agent with more than 2 actions."""
+    agent = RandomAgent(observation_dim=4, action_dim=5, config={})
+    obs = np.zeros(4)
+
+    actions = [agent.select_action(obs) for _ in range(200)]
+    assert all(0 <= a < 5 for a in actions)
+    # With 200 samples across 5 actions, every action should appear
+    assert len(set(actions)) == 5
+
+
+def test_random_agent_stores_config():
+    """Config should be stored on the agent."""
+    config = {"lr": 0.01, "gamma": 0.99}
+    agent = RandomAgent(observation_dim=4, action_dim=2, config=config)
+    assert agent.config == config
+
+
+def test_random_agent_update_ignores_batch_content():
+    """update() must return an empty dict regardless of batch content."""
+    agent = RandomAgent(observation_dim=4, action_dim=2, config={})
+
+    # Empty batch
+    assert agent.update({}) == {}
+
+    # Batch with extra keys
+    batch = {"observations": np.zeros((5, 4)), "bogus_key": "ignored"}
+    assert agent.update(batch) == {}

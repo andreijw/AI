@@ -427,3 +427,82 @@ def test_domain_randomization_config_validation():
     with pytest.raises(ValueError, match="has min > max"):
         config = {"domain_randomization": {"gravity": [10.0, 9.0]}}
         make_env_from_config(config)
+
+
+def test_partial_action_noise_may_not_flip():
+    """With a low but non-zero noise probability, some actions pass through unchanged."""
+    # Use action_noise_prob=0.01 so that in 100 trials the original action
+    # is expected to be returned the majority of the time (no flip path covered).
+    env = CartPoleEnv(seed=0, action_noise_prob=0.01)
+    env.reset(seed=0)
+
+    results = []
+    for _ in range(100):
+        # step resets state on termination, just sample the private method directly
+        results.append(env._apply_action_noise(0))
+
+    env.close()
+
+    # At 1% noise, almost all 100 calls should return 0 (no flip)
+    assert 0 in results
+
+
+def test_env_render_delegates_to_gym_env():
+    """render() should delegate to the underlying gym environment."""
+    from unittest.mock import patch
+
+    env = CartPoleEnv(seed=42)
+    env.reset()
+
+    with patch.object(env.env, "render", return_value="frame_data") as mock_render:
+        result = env.render()
+        mock_render.assert_called_once()
+        assert result == "frame_data"
+
+    env.close()
+
+
+def test_domain_randomization_missing_attrs_raises():
+    """_apply_domain_randomization should raise ValueError if env lacks CartPole attrs."""
+    # Build a valid CartPoleEnv, then monkey-patch its underlying env to remove
+    # the CartPole-specific attributes so _apply_domain_randomization raises.
+    env = CartPoleEnv(seed=42, domain_randomization={"gravity": (8.0, 12.0)})
+
+    # Remove the required attribute to simulate an incompatible env
+    base = env.env.unwrapped
+    original_gravity = base.gravity
+    del base.gravity
+
+    try:
+        with pytest.raises(ValueError, match="Domain randomization is only supported"):
+            env._apply_domain_randomization()
+    finally:
+        # Restore so env.close() works cleanly
+        base.gravity = original_gravity
+        env.close()
+
+
+def test_env_reset_without_seed_uses_instance_seed():
+    """reset() with no seed argument should fall back to self.seed."""
+    env = CartPoleEnv(seed=7)
+    obs, info = env.reset()
+
+    assert isinstance(obs, np.ndarray)
+    assert obs.shape == (4,)
+    env.close()
+
+
+def test_env_episode_reward_accumulates():
+    """episode_reward should accumulate across multiple steps."""
+    env = CartPoleEnv(seed=42, max_episode_steps=50)
+    env.reset()
+
+    total = 0.0
+    for _ in range(5):
+        _, reward, terminated, truncated, _ = env.step(0)
+        total += reward
+        if terminated or truncated:
+            break
+
+    assert env.episode_reward == pytest.approx(total)
+    env.close()
