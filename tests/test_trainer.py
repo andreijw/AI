@@ -15,7 +15,6 @@ from rl_cartpole.agents import RandomAgent
 from rl_cartpole.environments import CartPoleEnv
 from rl_cartpole.training import Trainer
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -206,7 +205,7 @@ def test_train_accumulates_metrics(trainer):
     assert len(trainer.episode_rewards) == trainer.num_episodes
     assert len(trainer.episode_lengths) == trainer.num_episodes
     assert all(isinstance(r, float) for r in trainer.episode_rewards)
-    assert all(isinstance(l, int) for l in trainer.episode_lengths)
+    assert all(isinstance(ep_len, int) for ep_len in trainer.episode_lengths)
 
 
 def test_train_with_logger_calls_log(env, agent, tmp_path):
