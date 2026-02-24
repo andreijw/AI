@@ -2,9 +2,7 @@ name: Copilot Deployment
 
 on:
   pull_request:
-    branches:
-      - develop
-      - main
+    branches: [develop, main]
   workflow_dispatch:
 
 env:
