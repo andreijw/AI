@@ -92,10 +92,13 @@ The Copilot deployment workflow includes:
 
 The workflow runs on:
 
+- Pull requests targeting `main` or `develop` branches
 - Manual trigger via workflow dispatch
 
-**Note**: The workflow is currently configured to run only on manual dispatch. Once you've implemented your deployment tasks, you can add push triggers for the `main` or `develop` branches by updating the workflow's `on:` section.
-
+**Note**:
+- For `pull_request` events, the workflow runs in **validation/check-only** mode to satisfy the branch protection check ("Copilot Deployment"). GPG import, commit, and push steps are all skipped — no write access or secrets are required.
+- GPG import and commit/push steps only run on `workflow_dispatch` (or `push` if added), where the runner has write permissions and repository secrets available.
+- Pull requests from forks do not have access to repository secrets (for example, `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE`) and cannot push to the repository. The workflow therefore treats these runs as check-only, skipping steps that require secrets or write access while still allowing the status check to complete successfully.
 ## Customization
 
 ### Adding Automated Tasks
@@ -116,16 +119,16 @@ Edit the "Run automated tasks" step in `.github/workflows/copilot-deploy.yml`:
 
 ### Enabling Automatic Triggers
 
-Once you've implemented your deployment tasks, you can enable the workflow to run automatically on push events. Edit the `on:` section in `.github/workflows/copilot-deploy.yml`:
+The workflow is already configured to trigger automatically on pull requests targeting `main` or `develop`. If you also want it to run on every push to those branches, add a `push` trigger to the `on:` section in `.github/workflows/copilot-deploy.yml`:
 
 ```yaml
 on:
   push:
     branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
   workflow_dispatch:
 ```
-
-This will trigger the workflow on every push to `main` or `develop` branches, in addition to manual dispatch.
 
 ### Changing Commit Message
 
