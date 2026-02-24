@@ -87,3 +87,51 @@ def test_save_config():
 
         loaded = load_config(save_path)
         assert loaded == config
+
+
+def test_load_yml_extension():
+    """Test loading a .yml file (alternate YAML extension)."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+        yaml.dump({"foo": "bar"}, f)
+        temp_path = f.name
+
+    try:
+        config = load_config(temp_path)
+        assert config["foo"] == "bar"
+    finally:
+        os.unlink(temp_path)
+
+
+def test_merge_configs_does_not_mutate_base():
+    """merge_configs should not modify the original base config."""
+    base = {"a": 1, "b": 2}
+    original_base = base.copy()
+    merge_configs(base, {"b": 99, "c": 3})
+
+    assert base == original_base
+
+
+def test_merge_configs_empty_override():
+    """Merging with an empty override should return a copy of base."""
+    base = {"x": 10}
+    merged = merge_configs(base, {})
+    assert merged == base
+
+
+def test_merge_configs_empty_base():
+    """Merging an empty base with an override should return the override."""
+    override = {"y": 20}
+    merged = merge_configs({}, override)
+    assert merged == override
+
+
+def test_save_config_no_subdir():
+    """save_config should work when the target dir already exists (no subdir)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        save_path = os.path.join(tmpdir, "config.yaml")
+        config = {"answer": 42}
+        save_config(config, save_path)
+
+        assert os.path.exists(save_path)
+        loaded = load_config(save_path)
+        assert loaded == config
