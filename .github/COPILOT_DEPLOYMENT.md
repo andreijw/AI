@@ -95,7 +95,10 @@ The workflow runs on:
 - Pull requests targeting `main` or `develop` branches
 - Manual trigger via workflow dispatch
 
-**Note**: The `pull_request` trigger ensures the branch protection check ("Copilot Deployment") is satisfied automatically on every PR. The workflow itself always runs to completion, passing the required status check. The GPG import and commit/push steps are skipped when the automated tasks produce no file changes, keeping the workflow lightweight for routine PRs.
+**Note**:
+- For `pull_request` events, the workflow should run in **validation/check-only** mode to satisfy the branch protection check ("Copilot Deployment") and must **not** attempt to push commits.
+- GPG import and commit/push steps should only run on events that have write permissions to the repository, typically `push` or `workflow_dispatch`, where automated commits are intended.
+- Pull requests from forks may not have access to repository secrets (for example, `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE`) or to push permissions. The workflow should treat these runs as check-only, skipping steps that require secrets or write access while still allowing the status check to complete successfully.
 
 ## Customization
 
