@@ -95,7 +95,7 @@ def main():
         env.env = RecordVideo(
             env.env,
             video_folder=args.video_dir,
-            episode_trigger=lambda ep: ep % eval_frequency == 0,
+            episode_trigger=lambda ep: ep > 0 and ep % eval_frequency == 0,
             name_prefix="cartpole-training",
             disable_logger=True,
         )
