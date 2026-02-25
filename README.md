@@ -108,10 +108,43 @@ python train.py --config configs/cartpole_default.yaml
 
 ### Render Environment
 
-Visualize the training process:
+Visualize the training process (requires a local display):
 
 ```bash
 python train.py --render
+```
+
+### Record Training Videos (Headless / SSH)
+
+If you are running on a headless machine such as an **NVIDIA Orin Nano accessed via SSH**,
+there is no display available so `--render` will not work. Use `--record-video` instead to
+save MP4 videos of training episodes to disk. No display or X server is required.
+
+First, install the optional video dependencies:
+
+```bash
+pip install -e ".[video]"
+# or: pip install moviepy "gymnasium[classic-control]"
+```
+
+Then run training with video recording:
+
+```bash
+python train.py --record-video
+```
+
+Videos are saved to `./videos/` by default. Use `--video-dir` to choose a different location:
+
+```bash
+python train.py --record-video --video-dir /path/to/videos
+```
+
+A new video is recorded every `eval_frequency` episodes (configured in the YAML file, default
+100). After training, copy the videos to your local machine and open them in any video player:
+
+```bash
+# From your local machine
+scp user@orin-nano:/path/to/AI/videos/*.mp4 .
 ```
 
 ## Configuration

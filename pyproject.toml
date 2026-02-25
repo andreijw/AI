@@ -33,6 +33,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+video = [
+    "moviepy>=1.0.0",
+    "gymnasium[classic-control]>=0.29.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
