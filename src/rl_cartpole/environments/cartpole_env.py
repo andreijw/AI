@@ -261,6 +261,25 @@ class CartPoleEnv:
 
         return obs, float(reward), terminated, truncated, info
 
+    def wrap_env(self, wrapper: Any) -> None:
+        """Inject a Gymnasium wrapper around the inner environment.
+
+        This is the intended way to apply wrappers (e.g. RecordVideo) without
+        breaking the CartPoleEnv interface.  The wrapper must accept the current
+        ``self.env`` as its first constructor argument and has already been
+        fully constructed before being passed here.
+
+        Args:
+            wrapper: A fully-constructed Gymnasium wrapper that wraps ``self.env``.
+
+        Example::
+
+            from gymnasium.wrappers import RecordVideo
+            record_wrapper = RecordVideo(env.env, video_folder="./videos", ...)
+            env.wrap_env(record_wrapper)
+        """
+        self.env = wrapper
+
     def close(self) -> None:
         """Close the environment and cleanup resources."""
         self.env.close()
