@@ -25,9 +25,27 @@ def main():
     parser.add_argument(
         "--render",
         action="store_true",
-        help="Render the environment during training",
+        help="Render the environment during training (requires a display; mutually exclusive with --record-video)",
+    )
+    parser.add_argument(
+        "--record-video",
+        action="store_true",
+        help=(
+            "Record videos of training episodes to disk. "
+            "Works on headless machines (e.g. NVIDIA Orin Nano via SSH) "
+            "because no display is required. Mutually exclusive with --render."
+        ),
+    )
+    parser.add_argument(
+        "--video-dir",
+        type=str,
+        default="./videos",
+        help="Directory to save recorded videos (default: ./videos)",
     )
     args = parser.parse_args()
+
+    if args.render and args.record_video:
+        parser.error("--render and --record-video are mutually exclusive. Use one or the other.")
 
     # Load configuration
     print(f"Loading configuration from {args.config}")
@@ -41,13 +59,57 @@ def main():
     logger.info("Starting CartPole RL training")
     logger.info(f"Configuration: {config}")
 
+    # Configure pygame for off-screen rendering before CartPoleEnv is created.
+    # This is needed on headless machines (e.g. SSH into NVIDIA Orin Nano) and
+    # must be set before any pygame/SDL initialisation occurs.
+    if args.record_video:
+        os.environ.setdefault("SDL_VIDEODRIVER", "offscreen")
+        os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+
+    # Determine render mode.
+    # --record-video uses rgb_array (no display needed); --render uses human (requires display).
+    if args.record_video:
+        render_mode = "rgb_array"
+    elif args.render:
+        render_mode = "human"
+    else:
+        render_mode = config["environment"].get("render_mode")
+
     # Create environment
-    render_mode = "human" if args.render else config["environment"].get("render_mode")
     env = CartPoleEnv(
         render_mode=render_mode,
         max_episode_steps=config["environment"]["max_episode_steps"],
         seed=config["environment"]["seed"],
     )
+
+    # Wrap with RecordVideo when --record-video is set.
+    # RecordVideo captures rgb_array frames and saves them as mp4 files, so
+    # it works on headless machines where no display is available.
+    # CartPoleEnv.wrap_env() is used to inject the wrapper through the proper
+    # interface rather than bypassing it via direct attribute assignment.
+    if args.record_video:
+        try:
+            import moviepy  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "The 'moviepy' package is required for --record-video. "
+                "Install it with: pip install moviepy  "
+                "or: pip install -e '.[video]'"
+            ) from exc
+        from gymnasium.wrappers import RecordVideo
+
+        eval_frequency = config["training"].get("eval_frequency", 100)
+        os.makedirs(args.video_dir, exist_ok=True)
+        env.wrap_env(
+            RecordVideo(
+                env.env,
+                video_folder=args.video_dir,
+                episode_trigger=lambda ep: ep > 0 and ep % eval_frequency == 0,
+                name_prefix="cartpole-training",
+                disable_logger=True,
+            )
+        )
+        logger.info(f"Recording videos every {eval_frequency} episodes to '{args.video_dir}'")
     logger.info("Environment created")
 
     # Create agent
