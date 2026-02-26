@@ -1,6 +1,5 @@
 """Tests for headless video recording support in train.py."""
 
-import importlib
 import os
 import sys
 import types
@@ -12,7 +11,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_cartpole.environments import CartPoleEnv
-
 
 # ---------------------------------------------------------------------------
 # CartPoleEnv.wrap_env
@@ -34,6 +32,7 @@ def test_wrap_env_replaces_inner_env():
 
 def test_wrap_env_with_record_video(tmp_path):
     """wrap_env() should work correctly with the RecordVideo gymnasium wrapper."""
+    pytest.importorskip("moviepy")
     from gymnasium.wrappers import RecordVideo
 
     env = CartPoleEnv(render_mode="rgb_array", seed=42)
@@ -109,11 +108,10 @@ def test_record_video_missing_moviepy_raises_import_error(tmp_path, monkeypatch)
     config_path = _minimal_config(tmp_path)
 
     # Make moviepy unimportable
-    with patch.dict(sys.modules, {"moviepy": None}):
-        with pytest.raises(ImportError, match="moviepy"):
-            _run_main_with_args(
-                ["--record-video", "--config", config_path], monkeypatch
-            )
+    with patch.dict(sys.modules, {"moviepy": None}), pytest.raises(ImportError, match="moviepy"):
+        _run_main_with_args(
+            ["--record-video", "--config", config_path], monkeypatch
+        )
 
 
 def test_sdl_env_vars_set_for_headless(tmp_path, monkeypatch):
@@ -127,14 +125,14 @@ def test_sdl_env_vars_set_for_headless(tmp_path, monkeypatch):
 
     captured = {}
 
-    class _StopAfterCapture(Exception):
+    class _StopAfterCaptureError(Exception):
         pass
 
     def patched_init(self, *a, **kw):
         # Capture the env vars at the moment CartPoleEnv is initialised
         captured["SDL_VIDEODRIVER"] = os.environ.get("SDL_VIDEODRIVER")
         captured["SDL_AUDIODRIVER"] = os.environ.get("SDL_AUDIODRIVER")
-        raise _StopAfterCapture()
+        raise _StopAfterCaptureError()
 
     import rl_cartpole.environments.cartpole_env as _ce_mod
 
@@ -143,12 +141,11 @@ def test_sdl_env_vars_set_for_headless(tmp_path, monkeypatch):
     # moviepy must appear importable so we get past the import check
     fake_moviepy = types.ModuleType("moviepy")
 
-    with patch.dict(sys.modules, {"moviepy": fake_moviepy}):
-        with pytest.raises(_StopAfterCapture):
-            _run_main_with_args(
-                ["--record-video", "--video-dir", video_dir, "--config", config_path],
-                monkeypatch,
-            )
+    with patch.dict(sys.modules, {"moviepy": fake_moviepy}), pytest.raises(_StopAfterCaptureError):
+        _run_main_with_args(
+            ["--record-video", "--video-dir", video_dir, "--config", config_path],
+            monkeypatch,
+        )
 
     assert captured.get("SDL_VIDEODRIVER") == "offscreen", (
         "SDL_VIDEODRIVER was not set to 'offscreen' before CartPoleEnv creation"
@@ -188,19 +185,18 @@ def test_episode_trigger_skips_episode_zero(tmp_path, monkeypatch):
     monkeypatch.delenv("SDL_AUDIODRIVER", raising=False)
 
     captured_triggers = []
-    original_RecordVideo = None
 
-    from gymnasium.wrappers import RecordVideo as _RV
+    from gymnasium.wrappers import RecordVideo
 
-    original_RecordVideo = _RV
+    original_record_video = RecordVideo
 
-    def patching_RecordVideo(env, video_folder, episode_trigger, **kwargs):
+    def patching_record_video(env, video_folder, episode_trigger, **kwargs):
         captured_triggers.append(episode_trigger)
-        return original_RecordVideo(
+        return original_record_video(
             env, video_folder=video_folder, episode_trigger=episode_trigger, **kwargs
         )
 
-    with patch("gymnasium.wrappers.RecordVideo", side_effect=patching_RecordVideo):
+    with patch("gymnasium.wrappers.RecordVideo", side_effect=patching_record_video):
         _run_main_with_args(
             ["--record-video", "--video-dir", video_dir, "--config", config_path],
             monkeypatch,
