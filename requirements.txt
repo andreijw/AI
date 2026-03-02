@@ -2,6 +2,7 @@
 gymnasium>=0.29.0
 numpy>=1.21.0
 pyyaml>=6.0
+matplotlib>=3.5.0
 
 # Optional: video recording support (required for --record-video flag)
 # pip install moviepy "gymnasium[classic-control]"

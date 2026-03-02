@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from rl_cartpole.agents import RandomAgent
 from rl_cartpole.environments import CartPoleEnv
 from rl_cartpole.training import Trainer
-from rl_cartpole.utils import load_config, setup_logger
+from rl_cartpole.utils import load_config, plot_training_metrics, setup_logger
 
 
 def main():
@@ -41,6 +41,17 @@ def main():
         type=str,
         default="./videos",
         help="Directory to save recorded videos (default: ./videos)",
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Save a training-metrics plot (rewards and episode lengths) after training.",
+    )
+    parser.add_argument(
+        "--plot-dir",
+        type=str,
+        default="./plots",
+        help="Directory to save the training metrics plot (default: ./plots)",
     )
     args = parser.parse_args()
 
@@ -138,6 +149,14 @@ def main():
     try:
         stats = trainer.train()
         logger.info(f"Training complete. Final stats: {stats}")
+
+        if args.plot:
+            plot_path = plot_training_metrics(
+                episode_rewards=trainer.episode_rewards,
+                episode_lengths=trainer.episode_lengths,
+                save_dir=args.plot_dir,
+            )
+            logger.info(f"Training metrics plot saved to '{plot_path}'")
     except KeyboardInterrupt:
         logger.info("Training interrupted by user")
     finally:
