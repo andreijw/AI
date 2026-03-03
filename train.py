@@ -155,6 +155,7 @@ def main():
                 episode_rewards=trainer.episode_rewards,
                 episode_lengths=trainer.episode_lengths,
                 save_dir=args.plot_dir,
+                title=f"CartPole {agent_type.capitalize()} Agent – Training Metrics",
             )
             logger.info(f"Training metrics plot saved to '{plot_path}'")
     except KeyboardInterrupt:
