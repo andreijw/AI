@@ -48,7 +48,7 @@ jobs:
       - name: Import GPG key for signing
         id: import-gpg
         if: steps.check-changes.outputs.has_changes == 'true' && github.event_name != 'pull_request'
-        uses: crazy-max/ghaction-import-gpg@v6
+        uses: crazy-max/ghaction-import-gpg@v7
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
