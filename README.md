@@ -90,6 +90,52 @@ pip install -e .
 
 ## Usage
 
+### Quick Start: Train Your First Agent
+
+The fastest way to try the framework is to run a short training session with the default
+random-agent baseline. Add a small `num_episodes` value so the run completes in seconds:
+
+```bash
+python train.py --config configs/cartpole_default.yaml
+```
+
+For a quick smoke-test you can override `num_episodes` by editing
+`configs/cartpole_default.yaml` (change `num_episodes: 1000` to e.g. `50`) or by
+creating a minimal config:
+
+```yaml
+# configs/quick_test.yaml
+environment:
+  name: "CartPole-v1"
+  max_episode_steps: 500
+  seed: 42
+
+agent:
+  type: "random"
+  config:
+    seed: 42          # makes action selection reproducible
+
+training:
+  num_episodes: 50
+  max_steps_per_episode: 500
+  eval_frequency: 10
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+```
+
+Then run:
+
+```bash
+python train.py --config configs/quick_test.yaml
+```
+
+After training completes you can view the learning-curve plots:
+
+```bash
+python train.py --config configs/quick_test.yaml --plot --plot-dir ./plots
+```
+
 ### Basic Training
 
 Run training with the default configuration:

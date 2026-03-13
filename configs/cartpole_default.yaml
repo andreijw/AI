@@ -10,14 +10,17 @@ environment:
 # Agent settings
 agent:
   type: "random"  # Options: "random", "ppo" (ppo not yet implemented)
-  # Future PPO hyperparameters will go here
   config:
-    learning_rate: 0.0003
-    gamma: 0.99
-    gae_lambda: 0.95
-    clip_epsilon: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
+    # seed: makes RandomAgent action selection reproducible across runs.
+    # Remove or set to null for non-deterministic behaviour.
+    seed: 42
+    # Future PPO hyperparameters will go here:
+    # learning_rate: 0.0003
+    # gamma: 0.99
+    # gae_lambda: 0.95
+    # clip_epsilon: 0.2
+    # value_coef: 0.5
+    # entropy_coef: 0.01
 
 # Training settings
 training:

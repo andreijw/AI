@@ -94,3 +94,38 @@ def test_random_agent_update_ignores_batch_content():
     # Batch with extra keys
     batch = {"observations": np.zeros((5, 4)), "bogus_key": "ignored"}
     assert agent.update(batch) == {}
+
+
+def test_random_agent_seeded_reproducibility():
+    """The same seed should produce the same action sequence."""
+    obs = np.zeros(4)
+
+    agent_a = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 99})
+    agent_b = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 99})
+
+    actions_a = [agent_a.select_action(obs) for _ in range(20)]
+    actions_b = [agent_b.select_action(obs) for _ in range(20)]
+
+    assert actions_a == actions_b
+
+
+def test_random_agent_different_seeds_differ():
+    """Different seeds should (almost certainly) produce different sequences."""
+    obs = np.zeros(4)
+
+    agent_a = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 1})
+    agent_b = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 2})
+
+    actions_a = [agent_a.select_action(obs) for _ in range(50)]
+    actions_b = [agent_b.select_action(obs) for _ in range(50)]
+
+    # With 50 binary samples it's astronomically unlikely both sequences match
+    assert actions_a != actions_b
+
+
+def test_random_agent_no_seed_does_not_raise():
+    """RandomAgent with no seed (seed=None) should work without raising."""
+    agent = RandomAgent(observation_dim=4, action_dim=2, config={})
+    obs = np.zeros(4)
+    action = agent.select_action(obs)
+    assert action in [0, 1]

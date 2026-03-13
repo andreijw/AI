@@ -48,6 +48,13 @@ class Trainer:
         self.episode_rewards: list[float] = []
         self.episode_lengths: list[int] = []
 
+    def _log_info(self, message: str) -> None:
+        """Log an informational message using the logger if available, otherwise print."""
+        if self.logger:
+            self.logger.info(message)
+        else:
+            print(message)
+
     def train(self) -> Dict[str, Any]:
         """
         Run the training loop.
@@ -55,7 +62,7 @@ class Trainer:
         Returns:
             Dictionary of training statistics
         """
-        print(f"Starting training for {self.num_episodes} episodes...")
+        self._log_info(f"Starting training for {self.num_episodes} episodes...")
 
         for episode in range(self.num_episodes):
             episode_reward, episode_length = self._run_episode(training=True)
@@ -67,7 +74,7 @@ class Trainer:
             if (episode + 1) % 10 == 0:
                 avg_reward = np.mean(self.episode_rewards[-10:])
                 avg_length = np.mean(self.episode_lengths[-10:])
-                print(
+                self._log_info(
                     f"Episode {episode + 1}/{self.num_episodes} | "
                     f"Avg Reward (last 10): {avg_reward:.2f} | "
                     f"Avg Length (last 10): {avg_length:.2f}"
@@ -85,7 +92,7 @@ class Trainer:
             # Evaluation
             if (episode + 1) % self.eval_frequency == 0:
                 eval_stats = self._evaluate()
-                print(f"Evaluation at episode {episode + 1}: {eval_stats}")
+                self._log_info(f"Evaluation at episode {episode + 1}: {eval_stats}")
 
                 if self.logger:
                     self.logger.log({"evaluation": eval_stats})
@@ -94,7 +101,7 @@ class Trainer:
             if (episode + 1) % self.save_frequency == 0:
                 self._save_checkpoint(episode + 1)
 
-        print("Training complete!")
+        self._log_info("Training complete!")
 
         return {
             "total_episodes": self.num_episodes,
@@ -186,4 +193,4 @@ class Trainer:
 
         checkpoint_path = os.path.join(self.checkpoint_dir, f"agent_episode_{episode}.pt")
         self.agent.save(checkpoint_path)
-        print(f"Checkpoint saved to {checkpoint_path}")
+        self._log_info(f"Checkpoint saved to {checkpoint_path}")
