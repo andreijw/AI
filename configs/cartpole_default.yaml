@@ -9,10 +9,10 @@ environment:
 
 # Agent settings
 agent:
-  type: "random"  # Options: "random", "reinforce"
+  type: "random"  # Options: "random", "ppo" (ppo not yet implemented)
   config:
     # seed: makes RandomAgent action selection reproducible across runs.
-    # Remove or set to null for non-deterministic behavior.
+    # Remove or set to null for non-deterministic behaviour.
     seed: 42
     # Future PPO hyperparameters will go here:
     # learning_rate: 0.0003
@@ -21,6 +21,7 @@ agent:
     # clip_epsilon: 0.2
     # value_coef: 0.5
     # entropy_coef: 0.01
+  # To train REINFORCE, use configs/cartpole_reinforce.yaml
 
 # Training settings
 training:
