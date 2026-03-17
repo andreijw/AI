@@ -65,9 +65,29 @@ class Trainer:
         - Standard `logging.Logger`-like objects (using `.info(...)`)
         - Fallback to printing when no compatible logger is provided
         """
+        def _normalize_value(value: Any) -> Any:
+            """
+            Recursively convert values to JSON-serializable Python built-ins.
+
+            - NumPy scalars (np.generic) -> corresponding Python scalars via .item()
+            - Containers (dict, list, tuple) -> same structure with normalized contents
+            """
+            if isinstance(value, np.generic):
+                # Includes np.floating, np.integer, etc.
+                return value.item()
+            if isinstance(value, dict):
+                return {k: _normalize_value(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_normalize_value(v) for v in value]
+            if isinstance(value, tuple):
+                return tuple(_normalize_value(v) for v in value)
+            return value
+
+        normalized_metrics = _normalize_value(metrics)
+
         # No logger configured: print metrics
         if self.logger is None:
-            print(f"METRICS: {metrics}")
+            print(f"METRICS: {normalized_metrics}")
             return
 
         # Special handling for standard logging.Logger instances
@@ -81,7 +101,7 @@ class Trainer:
         if callable(log_method):
             try:
                 # Custom logger expected to accept a single dict argument
-                log_method(metrics)
+                log_method(normalized_metrics)
                 return
             except TypeError:
                 # Likely a standard logging.Logger.log(level, msg, *args, **kwargs)
@@ -90,10 +110,10 @@ class Trainer:
         # Fallback: use `.info(...)` if available
         info_method = getattr(self.logger, "info", None)
         if callable(info_method):
-            info_method(f"Metrics: {metrics}")
+            info_method(f"Metrics: {normalized_metrics}")
         else:
             # Last resort: print metrics
-            print(f"METRICS: {metrics}")
+            print(f"METRICS: {normalized_metrics}")
 
     def train(self) -> Dict[str, Any]:
         """
