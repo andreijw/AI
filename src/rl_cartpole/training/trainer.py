@@ -51,10 +51,12 @@ class Trainer:
 
     def _log_info(self, message: str) -> None:
         """Log an informational message using the logger if available, otherwise print."""
-        if self.logger is not None and hasattr(self.logger, "info"):
-            self.logger.info(message)
-        else:
-            print(message)
+        if self.logger is not None:
+            info_method = getattr(self.logger, "info", None)
+            if callable(info_method):
+                info_method(message)
+                return
+        print(message)
 
     def _log_metrics(self, metrics: Dict[str, Any]) -> None:
         """
