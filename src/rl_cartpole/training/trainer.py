@@ -79,10 +79,10 @@ class Trainer:
                 return value.item()
             if isinstance(value, dict):
                 return {k: _normalize_value(v) for k, v in value.items()}
-            if isinstance(value, list):
+            if isinstance(value, (list, tuple)):
+                # Normalize list/tuple contents and return as a list to ensure
+                # JSON-native container types for downstream json.dumps usage.
                 return [_normalize_value(v) for v in value]
-            if isinstance(value, tuple):
-                return tuple(_normalize_value(v) for v in value)
             return value
 
         normalized_metrics = _normalize_value(metrics)
