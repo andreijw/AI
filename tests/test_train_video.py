@@ -98,9 +98,7 @@ def test_mutual_exclusion_render_and_record_video(tmp_path, monkeypatch):
     """Passing both --render and --record-video should raise SystemExit."""
     config_path = _minimal_config(tmp_path)
     with pytest.raises(SystemExit):
-        _run_main_with_args(
-            ["--render", "--record-video", "--config", config_path], monkeypatch
-        )
+        _run_main_with_args(["--render", "--record-video", "--config", config_path], monkeypatch)
 
 
 def test_record_video_missing_moviepy_raises_import_error(tmp_path, monkeypatch):
@@ -109,9 +107,7 @@ def test_record_video_missing_moviepy_raises_import_error(tmp_path, monkeypatch)
 
     # Make moviepy unimportable
     with patch.dict(sys.modules, {"moviepy": None}), pytest.raises(ImportError, match="moviepy"):
-        _run_main_with_args(
-            ["--record-video", "--config", config_path], monkeypatch
-        )
+        _run_main_with_args(["--record-video", "--config", config_path], monkeypatch)
 
 
 def test_sdl_env_vars_set_for_headless(tmp_path, monkeypatch):
