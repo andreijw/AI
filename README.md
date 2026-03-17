@@ -92,12 +92,14 @@ pip install -e .
 
 ### Quick Start: Train Your First Agent
 
-The fastest way to try the framework is to run a short training session with the default
-random-agent baseline. Add a small `num_episodes` value so the run completes in seconds:
+The fastest way to try the framework is to run the training script with the default
+random-agent baseline configuration:
 
 ```bash
 python train.py --config configs/cartpole_default.yaml
 ```
+
+By default, `configs/cartpole_default.yaml` uses `num_episodes: 1000`, so this run may take a while to complete.
 
 For a quick smoke-test you can override `num_episodes` by editing
 `configs/cartpole_default.yaml` (change `num_episodes: 1000` to e.g. `50`) or by
