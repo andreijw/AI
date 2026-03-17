@@ -11,7 +11,6 @@ import pytest
 
 from rl_cartpole.utils.visualization import _rolling_average, plot_training_metrics
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

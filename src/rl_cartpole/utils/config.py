@@ -39,16 +39,25 @@ def load_config(config_path: str) -> Dict[str, Any]:
 
 def merge_configs(base_config: Dict[str, Any], override_config: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Merge two configuration dictionaries.
+    Recursively merge two configuration dictionaries.
+
+    Nested dictionaries are merged depth-first so that individual leaf values
+    in *override_config* override their counterparts in *base_config* without
+    discarding sibling keys that are absent from the override.
 
     Args:
         base_config: Base configuration
         override_config: Configuration to override base
 
     Returns:
-        Merged configuration dictionary
+        Merged configuration dictionary (a new dict; inputs are not mutated)
     """
-    merged = {**base_config, **override_config}
+    merged = {**base_config}
+    for key, value in override_config.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = merge_configs(merged[key], value)
+        else:
+            merged[key] = value
     return merged
 
 

@@ -93,6 +93,22 @@ def test_trainer_accepts_logger(env, agent):
     assert trainer.logger is logger
 
 
+def test_log_info_uses_logger_when_available(env, agent):
+    """_log_info should delegate to logger.info when a logger is set."""
+    logger = MagicMock()
+    trainer = Trainer(env=env, agent=agent, config={}, logger=logger)
+    trainer._log_info("test message")
+    logger.info.assert_called_once_with("test message")
+
+
+def test_log_info_falls_back_to_print_without_logger(env, agent, capsys):
+    """_log_info should call print when no logger is provided."""
+    trainer = Trainer(env=env, agent=agent, config={})
+    trainer._log_info("fallback message")
+    captured = capsys.readouterr()
+    assert "fallback message" in captured.out
+
+
 # ---------------------------------------------------------------------------
 # _run_episode
 # ---------------------------------------------------------------------------

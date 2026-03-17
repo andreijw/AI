@@ -125,6 +125,41 @@ def test_merge_configs_empty_base():
     assert merged == override
 
 
+def test_merge_configs_deep_merge_nested_dicts():
+    """Nested dicts should be merged recursively, not replaced wholesale."""
+    base = {"agent": {"lr": 0.001, "gamma": 0.99}, "training": {"episodes": 1000}}
+    override = {"agent": {"lr": 0.003}}  # only change lr; gamma should be preserved
+
+    merged = merge_configs(base, override)
+
+    assert merged["agent"]["lr"] == 0.003
+    assert merged["agent"]["gamma"] == 0.99  # preserved from base
+    assert merged["training"]["episodes"] == 1000  # untouched nested section
+
+
+def test_merge_configs_deep_merge_does_not_mutate_inputs():
+    """Deep merge should not mutate either input dict."""
+    base = {"nested": {"a": 1, "b": 2}}
+    override = {"nested": {"b": 99}}
+
+    base_copy = {"nested": {"a": 1, "b": 2}}
+    override_copy = {"nested": {"b": 99}}
+
+    merge_configs(base, override)
+
+    assert base == base_copy
+    assert override == override_copy
+
+
+def test_merge_configs_override_replaces_non_dict_with_dict():
+    """If override value is a dict but base value is not, override wins."""
+    base = {"key": "scalar"}
+    override = {"key": {"nested": 42}}
+
+    merged = merge_configs(base, override)
+    assert merged["key"] == {"nested": 42}
+
+
 def test_save_config_no_subdir():
     """save_config should work when the target dir already exists (no subdir)."""
     with tempfile.TemporaryDirectory() as tmpdir:

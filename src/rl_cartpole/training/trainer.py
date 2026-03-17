@@ -1,5 +1,6 @@
 """Training pipeline for RL agents."""
 
+import logging
 import os
 from typing import Any, Dict, Optional, Tuple
 
@@ -48,6 +49,74 @@ class Trainer:
         self.episode_rewards: list[float] = []
         self.episode_lengths: list[int] = []
 
+    def _log_info(self, message: str) -> None:
+        """Log an informational message using the logger if available, otherwise print."""
+        if self.logger is not None:
+            info_method = getattr(self.logger, "info", None)
+            if callable(info_method):
+                info_method(message)
+                return
+        print(message)
+
+    def _log_metrics(self, metrics: Dict[str, Any]) -> None:
+        """
+        Log training or evaluation metrics in a logger-agnostic way.
+
+        Supports:
+        - Custom loggers exposing `log(metrics: dict)`
+        - Standard `logging.Logger`-like objects (using `.info(...)`)
+        - Fallback to printing when no compatible logger is provided
+        """
+        def _normalize_value(value: Any) -> Any:
+            """
+            Recursively convert values to JSON-serializable Python built-ins.
+
+            - NumPy scalars (np.generic) -> corresponding Python scalars via .item()
+            - Containers (dict, list, tuple) -> same structure with normalized contents
+            """
+            if isinstance(value, np.generic):
+                # Includes np.floating, np.integer, etc.
+                return value.item()
+            if isinstance(value, dict):
+                return {k: _normalize_value(v) for k, v in value.items()}
+            if isinstance(value, (list, tuple)):
+                # Normalize list/tuple contents and return as a list to ensure
+                # JSON-native container types for downstream json.dumps usage.
+                return [_normalize_value(v) for v in value]
+            return value
+
+        normalized_metrics = _normalize_value(metrics)
+
+        # No logger configured: print metrics
+        if self.logger is None:
+            print(f"METRICS: {normalized_metrics}")
+            return
+
+        # Special handling for standard logging.Logger instances
+        if isinstance(self.logger, logging.Logger):
+            # Use standard logging formatting; avoid calling logger.log with a dict
+            self.logger.info("Metrics: %s", normalized_metrics)
+            return
+
+        # Prefer a custom `log(metrics: dict)` method if available
+        log_method = getattr(self.logger, "log", None)
+        if callable(log_method):
+            try:
+                # Custom logger expected to accept a single dict argument
+                log_method(normalized_metrics)
+                return
+            except TypeError:
+                # Likely a standard logging.Logger.log(level, msg, *args, **kwargs)
+                pass
+
+        # Fallback: use `.info(...)` if available
+        info_method = getattr(self.logger, "info", None)
+        if callable(info_method):
+            info_method(f"Metrics: {normalized_metrics}")
+        else:
+            # Last resort: print metrics
+            print(f"METRICS: {normalized_metrics}")
+
     def train(self) -> Dict[str, Any]:
         """
         Run the training loop.
@@ -55,7 +124,7 @@ class Trainer:
         Returns:
             Dictionary of training statistics
         """
-        print(f"Starting training for {self.num_episodes} episodes...")
+        self._log_info(f"Starting training for {self.num_episodes} episodes...")
 
         for episode in range(self.num_episodes):
             episode_reward, episode_length = self._run_episode(training=True)
@@ -67,34 +136,32 @@ class Trainer:
             if (episode + 1) % 10 == 0:
                 avg_reward = np.mean(self.episode_rewards[-10:])
                 avg_length = np.mean(self.episode_lengths[-10:])
-                print(
+                self._log_info(
                     f"Episode {episode + 1}/{self.num_episodes} | "
                     f"Avg Reward (last 10): {avg_reward:.2f} | "
                     f"Avg Length (last 10): {avg_length:.2f}"
                 )
 
-                if self.logger:
-                    self.logger.log(
-                        {
-                            "episode": episode + 1,
-                            "avg_reward": avg_reward,
-                            "avg_length": avg_length,
-                        }
-                    )
+                self._log_metrics(
+                    {
+                        "episode": episode + 1,
+                        "avg_reward": avg_reward,
+                        "avg_length": avg_length,
+                    }
+                )
 
             # Evaluation
             if (episode + 1) % self.eval_frequency == 0:
                 eval_stats = self._evaluate()
-                print(f"Evaluation at episode {episode + 1}: {eval_stats}")
+                self._log_info(f"Evaluation at episode {episode + 1}: {eval_stats}")
 
-                if self.logger:
-                    self.logger.log({"evaluation": eval_stats})
+                self._log_metrics({"evaluation": eval_stats})
 
             # Save checkpoint
             if (episode + 1) % self.save_frequency == 0:
                 self._save_checkpoint(episode + 1)
 
-        print("Training complete!")
+        self._log_info("Training complete!")
 
         return {
             "total_episodes": self.num_episodes,
@@ -186,4 +253,4 @@ class Trainer:
 
         checkpoint_path = os.path.join(self.checkpoint_dir, f"agent_episode_{episode}.pt")
         self.agent.save(checkpoint_path)
-        print(f"Checkpoint saved to {checkpoint_path}")
+        self._log_info(f"Checkpoint saved to {checkpoint_path}")
