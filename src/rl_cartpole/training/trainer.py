@@ -1,6 +1,7 @@
 """Training pipeline for RL agents."""
 
 import os
+import logging
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -50,10 +51,43 @@ class Trainer:
 
     def _log_info(self, message: str) -> None:
         """Log an informational message using the logger if available, otherwise print."""
-        if self.logger is not None:
+        if self.logger is not None and hasattr(self.logger, "info"):
             self.logger.info(message)
         else:
             print(message)
+
+    def _log_metrics(self, metrics: Dict[str, Any]) -> None:
+        """
+        Log training or evaluation metrics in a logger-agnostic way.
+
+        Supports:
+        - Custom loggers exposing `log(metrics: dict)`
+        - Standard `logging.Logger`-like objects (using `.info(...)`)
+        - Fallback to printing when no compatible logger is provided
+        """
+        # No logger configured: print metrics
+        if self.logger is None:
+            print(f"METRICS: {metrics}")
+            return
+
+        # Prefer a custom `log(metrics: dict)` method if available
+        log_method = getattr(self.logger, "log", None)
+        if callable(log_method):
+            try:
+                # Custom logger expected to accept a single dict argument
+                log_method(metrics)
+                return
+            except TypeError:
+                # Likely a standard logging.Logger.log(level, msg, *args, **kwargs)
+                pass
+
+        # Fallback: use `.info(...)` if available
+        info_method = getattr(self.logger, "info", None)
+        if callable(info_method):
+            info_method(f"Metrics: {metrics}")
+        else:
+            # Last resort: print metrics
+            print(f"METRICS: {metrics}")
 
     def train(self) -> Dict[str, Any]:
         """
@@ -80,22 +114,20 @@ class Trainer:
                     f"Avg Length (last 10): {avg_length:.2f}"
                 )
 
-                if self.logger is not None:
-                    self.logger.log(
-                        {
-                            "episode": episode + 1,
-                            "avg_reward": avg_reward,
-                            "avg_length": avg_length,
-                        }
-                    )
+                self._log_metrics(
+                    {
+                        "episode": episode + 1,
+                        "avg_reward": avg_reward,
+                        "avg_length": avg_length,
+                    }
+                )
 
             # Evaluation
             if (episode + 1) % self.eval_frequency == 0:
                 eval_stats = self._evaluate()
                 self._log_info(f"Evaluation at episode {episode + 1}: {eval_stats}")
 
-                if self.logger is not None:
-                    self.logger.log({"evaluation": eval_stats})
+                self._log_metrics({"evaluation": eval_stats})
 
             # Save checkpoint
             if (episode + 1) % self.save_frequency == 0:
