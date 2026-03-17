@@ -21,8 +21,6 @@ agent:
     # clip_epsilon: 0.2
     # value_coef: 0.5
     # entropy_coef: 0.01
-  # To train REINFORCE, use configs/cartpole_reinforce.yaml
-
 # Training settings
 training:
   num_episodes: 1000
