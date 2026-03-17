@@ -93,7 +93,7 @@ class Trainer:
         # Special handling for standard logging.Logger instances
         if isinstance(self.logger, logging.Logger):
             # Use standard logging formatting; avoid calling logger.log with a dict
-            self.logger.info("Metrics: %s", metrics)
+            self.logger.info("Metrics: %s", normalized_metrics)
             return
 
         # Prefer a custom `log(metrics: dict)` method if available
