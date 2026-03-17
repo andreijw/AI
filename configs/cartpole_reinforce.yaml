@@ -1,0 +1,33 @@
+# CartPole REINFORCE Training Configuration
+# REINFORCE (Monte Carlo Policy Gradient) is the simplest policy-gradient
+# algorithm and the natural next step after the random baseline agent.
+
+# Environment settings
+environment:
+  name: "CartPole-v1"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 500
+  seed: 42
+
+# Agent settings
+agent:
+  type: "reinforce"
+  config:
+    learning_rate: 0.001   # SGD step size
+    gamma: 0.99            # Discount factor
+    hidden_dim: 128        # Hidden layer width
+    seed: 42               # Weight initialisation seed
+
+# Training settings
+training:
+  num_episodes: 2000
+  max_steps_per_episode: 500
+  eval_frequency: 100   # Evaluate every N episodes
+  save_frequency: 200   # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true

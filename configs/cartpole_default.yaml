@@ -9,7 +9,7 @@ environment:
 
 # Agent settings
 agent:
-  type: "random"  # Options: "random", "ppo" (ppo not yet implemented)
+  type: "random"  # Options: "random", "reinforce"
   # Future PPO hyperparameters will go here
   config:
     learning_rate: 0.0003
