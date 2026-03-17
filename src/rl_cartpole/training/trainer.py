@@ -50,7 +50,7 @@ class Trainer:
 
     def _log_info(self, message: str) -> None:
         """Log an informational message using the logger if available, otherwise print."""
-        if self.logger:
+        if self.logger is not None:
             self.logger.info(message)
         else:
             print(message)
@@ -80,7 +80,7 @@ class Trainer:
                     f"Avg Length (last 10): {avg_length:.2f}"
                 )
 
-                if self.logger:
+                if self.logger is not None:
                     self.logger.log(
                         {
                             "episode": episode + 1,
@@ -94,7 +94,7 @@ class Trainer:
                 eval_stats = self._evaluate()
                 self._log_info(f"Evaluation at episode {episode + 1}: {eval_stats}")
 
-                if self.logger:
+                if self.logger is not None:
                     self.logger.log({"evaluation": eval_stats})
 
             # Save checkpoint
