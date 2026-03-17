@@ -1,6 +1,6 @@
 """Random agent for baseline testing."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -12,7 +12,22 @@ class RandomAgent(BaseAgent):
     Simple random agent that selects actions uniformly at random.
 
     Useful as a baseline and for testing the training pipeline.
+    Action selection is reproducible when a seed is provided via config.
     """
+
+    def __init__(self, observation_dim: int, action_dim: int, config: Dict[str, Any]):
+        """
+        Initialize the random agent.
+
+        Args:
+            observation_dim: Dimension of observation space
+            action_dim: Dimension of action space
+            config: Configuration dictionary. Supports optional key:
+                - ``seed`` (int | None): Random seed for reproducible action selection.
+        """
+        super().__init__(observation_dim, action_dim, config)
+        seed: Optional[int] = config.get("seed")
+        self._rng = np.random.default_rng(seed)
 
     def select_action(self, observation: np.ndarray, training: bool = True) -> int:
         """
@@ -25,7 +40,7 @@ class RandomAgent(BaseAgent):
         Returns:
             Random action
         """
-        return np.random.randint(0, self.action_dim)
+        return int(self._rng.integers(0, self.action_dim))
 
     def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
         """
