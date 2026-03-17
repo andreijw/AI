@@ -130,6 +130,9 @@ def test_random_agent_different_seeds_differ():
     assert actions_a1 == actions_a2
     assert actions_b1 == actions_b2
 
+    # Different seeds should, with overwhelming probability, produce different sequences
+    assert actions_a1 != actions_b1
+
 
 def test_random_agent_no_seed_does_not_raise():
     """RandomAgent with no seed (seed=None) should work without raising."""
