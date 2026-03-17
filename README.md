@@ -132,11 +132,14 @@ Then run:
 python train.py --config configs/quick_test.yaml
 ```
 
-After training completes you can view the learning-curve plots:
+To generate and save learning-curve plots during training, include `--plot` on your initial run:
 
 ```bash
 python train.py --config configs/quick_test.yaml --plot --plot-dir ./plots
 ```
+
+> Note: Running `train.py` again with `--plot` will start a new training run and then save plots,
+> it does **not** only load and plot previous results.
 
 ### Basic Training
 
