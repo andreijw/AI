@@ -69,7 +69,7 @@ class Trainer:
         """
         def _normalize_value(value: Any) -> Any:
             """
-            Recursively convert values to JSON-serializable Python built-ins.
+            Recursively convert values to JSON-compatible Python built-in types.
 
             - NumPy scalars (np.generic) -> corresponding Python scalars via .item()
             - Containers (dict, list, tuple) -> same structure with normalized contents
@@ -80,8 +80,8 @@ class Trainer:
             if isinstance(value, dict):
                 return {k: _normalize_value(v) for k, v in value.items()}
             if isinstance(value, (list, tuple)):
-                # Normalize list/tuple contents and return as a list to ensure
-                # JSON-native container types for downstream json.dumps usage.
+                # Convert both lists and tuples to lists to ensure a consistent
+                # JSON-serializable output format.
                 return [_normalize_value(v) for v in value]
             return value
 
