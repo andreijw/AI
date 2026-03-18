@@ -58,15 +58,15 @@ class ReinforceAgent(BaseAgent):
             )
         if self.hidden_dim <= 0:
             raise ValueError(
-                f\"hidden_dim must be a positive integer, got {self.hidden_dim!r}\"
+                f"hidden_dim must be a positive integer, got {self.hidden_dim!r}"
             )
         if self.learning_rate <= 0.0:
             raise ValueError(
-                f\"learning_rate must be positive, got {self.learning_rate!r}\"
+                f"learning_rate must be positive, got {self.learning_rate!r}"
             )
         if not (0.0 < self.gamma <= 1.0):
             raise ValueError(
-                f\"gamma must be in the interval (0, 1], got {self.gamma!r}\"
+                f"gamma must be in the interval (0, 1], got {self.gamma!r}"
             )
 
         # He-initialised weights for ReLU activations
