@@ -9,13 +9,16 @@ env:
   PYTHON_VERSION: '3.11'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   deploy:
     name: Deploy with Copilot
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.actor != 'github-actions[bot]'
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6

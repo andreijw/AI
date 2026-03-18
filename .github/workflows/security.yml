@@ -17,6 +17,7 @@ jobs:
   bandit:
     name: Bandit Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -35,17 +36,11 @@ jobs:
           pip install bandit[toml]
 
       - name: Run Bandit security scanner
-        run: |
-          status=0
-          if ! bandit -r src/ -f json -o bandit-report.json; then
-            status=$?
-            # Bandit exit codes: 0 = no issues, 1 = issues found, >1 = execution error
-            if [ "$status" -gt 1 ]; then
-              echo "Bandit JSON scan failed with exit code $status (execution error)."
-              exit "$status"
-            fi
-          fi
-          bandit -r src/ -ll
+        run: bandit -r src/ -ll
+
+      - name: Generate Bandit JSON report
+        if: always()
+        run: bandit -r src/ -f json -o bandit-report.json || true
 
       - name: Upload Bandit report
         if: always()
