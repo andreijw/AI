@@ -235,10 +235,9 @@ class ReinforceAgent(BaseAgent):
             path: Source file path.
         """
         extension = os.path.splitext(path)[1]
-        if not extension:
-            load_path = path if os.path.exists(path) else f"{path}.npz"
-        else:
-            load_path = path
+        extension_provided = bool(extension)
+        has_exact_path = os.path.exists(path)
+        load_path = path if extension_provided or has_exact_path else f"{path}.npz"
 
         with np.load(load_path) as data:
             self._W1 = data["W1"]
