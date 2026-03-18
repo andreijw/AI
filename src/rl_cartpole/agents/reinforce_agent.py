@@ -205,14 +205,15 @@ class ReinforceAgent(BaseAgent):
         """
         Save policy network weights to disk in NumPy .npz format.
 
-        Note: NumPy appends a ``.npz`` extension when it is absent, so the file
-        on disk will be ``<path>.npz`` unless *path* already ends with ``.npz``.
+        If *path* does not end with ``.npz``, the extension is appended
+        explicitly, so the file on disk will be ``<path>.npz``.
 
         Args:
             path: Destination file path (with or without ``.npz`` extension).
         """
+        save_path = path if path.endswith(".npz") else f"{path}.npz"
         np.savez(
-            path,
+            save_path,
             W1=self._W1,
             b1=self._b1,
             W2=self._W2,
