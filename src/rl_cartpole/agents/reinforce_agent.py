@@ -1,5 +1,6 @@
 """REINFORCE (Monte Carlo Policy Gradient) agent for CartPole."""
 
+import os
 from typing import Any, Dict, Tuple
 
 import numpy as np
@@ -205,33 +206,40 @@ class ReinforceAgent(BaseAgent):
         """
         Save policy network weights to disk in NumPy ``.npz`` format.
 
-        The parameters are written exactly to *path* using :func:`numpy.savez`.
-        Callers are responsible for choosing an appropriate filename and
-        extension (``.npz`` is recommended but not enforced).
+        If *path* has an extension (for example ``.pt``), the parameters are
+        written exactly to that filename. If *path* has no extension, ``.npz``
+        is appended.
 
         Args:
-            path: Destination file path (including desired extension).
+            path: Destination file path.
         """
-        np.savez(
-            path,
-            W1=self._W1,
-            b1=self._b1,
-            W2=self._W2,
-            b2=self._b2,
-        )
+        save_path = path if os.path.splitext(path)[1] else f"{path}.npz"
+        with open(save_path, "wb") as f:
+            np.savez(
+                f,
+                W1=self._W1,
+                b1=self._b1,
+                W2=self._W2,
+                b2=self._b2,
+            )
 
     def load(self, path: str) -> None:
         """
         Load policy network weights from disk.
 
-        The parameters are read from exactly *path* using :func:`numpy.load`.
-        Typically this should be a ``.npz`` file previously created by
-        :meth:`save`.
+        If *path* has no extension and does not exist, ``.npz`` is appended and
+        that file is loaded.
 
         Args:
-            path: Source file path (including extension).
+            path: Source file path.
         """
-        with np.load(path) as data:
+        load_path = path
+        if not os.path.exists(load_path):
+            alt_path = f"{path}.npz"
+            if not os.path.splitext(path)[1] and os.path.exists(alt_path):
+                load_path = alt_path
+
+        with np.load(load_path) as data:
             self._W1 = data["W1"]
             self._b1 = data["b1"]
             self._W2 = data["W2"]
