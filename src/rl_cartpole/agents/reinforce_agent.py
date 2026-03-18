@@ -213,7 +213,8 @@ class ReinforceAgent(BaseAgent):
         Args:
             path: Destination file path.
         """
-        save_path = path if os.path.splitext(path)[1] else f"{path}.npz"
+        extension = os.path.splitext(path)[1]
+        save_path = path if extension else f"{path}.npz"
         with open(save_path, "wb") as f:
             np.savez(
                 f,
@@ -233,11 +234,11 @@ class ReinforceAgent(BaseAgent):
         Args:
             path: Source file path.
         """
-        load_path = path
-        if not os.path.exists(load_path):
-            alt_path = f"{path}.npz"
-            if not os.path.splitext(path)[1] and os.path.exists(alt_path):
-                load_path = alt_path
+        extension = os.path.splitext(path)[1]
+        if not extension:
+            load_path = path if os.path.exists(path) else f"{path}.npz"
+        else:
+            load_path = path
 
         with np.load(load_path) as data:
             self._W1 = data["W1"]
