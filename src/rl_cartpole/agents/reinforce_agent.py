@@ -194,6 +194,14 @@ class ReinforceAgent(BaseAgent):
 
         total_loss = 0.0
 
+        if not (len(observations) == len(actions) == len(returns)):
+            raise ValueError(
+                "Inconsistent trajectory lengths: "
+                f"observations={len(observations)}, "
+                f"actions={len(actions)}, "
+                f"returns={len(returns)}"
+            )
+
         for obs, action, disc_return in zip(observations, actions, returns):
             probs, h = self._policy(obs)
 
