@@ -142,11 +142,10 @@ class ReinforceAgent(BaseAgent):
 
         # Lazily initialize a per-agent RNG to avoid using NumPy's global RNG.
         if not hasattr(self, "_rng"):
-            seed = getattr(self, "seed", None)
-            if seed is None:
-                config = getattr(self, "config", None)
-                if isinstance(config, dict):
-                    seed = config.get("seed")
+            seed = None
+            config = getattr(self, "config", None)
+            if isinstance(config, dict):
+                seed = config.get("seed")
             self._rng = np.random.default_rng(seed)
 
         if training:
