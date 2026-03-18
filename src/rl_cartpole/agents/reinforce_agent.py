@@ -116,8 +116,18 @@ class ReinforceAgent(BaseAgent):
             Selected action index.
         """
         probs, _ = self._policy(observation)
+
+        # Lazily initialize a per-agent RNG to avoid using NumPy's global RNG.
+        if not hasattr(self, "_rng"):
+            seed = getattr(self, "seed", None)
+            if seed is None:
+                config = getattr(self, "config", None)
+                if isinstance(config, dict):
+                    seed = config.get("seed")
+            self._rng = np.random.default_rng(seed)
+
         if training:
-            return int(np.random.choice(self.action_dim, p=probs))
+            return int(self._rng.choice(self.action_dim, p=probs))
         return int(np.argmax(probs))
 
     def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
