@@ -203,17 +203,17 @@ class ReinforceAgent(BaseAgent):
 
     def save(self, path: str) -> None:
         """
-        Save policy network weights to disk in NumPy .npz format.
+        Save policy network weights to disk in NumPy ``.npz`` format.
 
-        If *path* does not end with ``.npz``, the extension is appended
-        explicitly, so the file on disk will be ``<path>.npz``.
+        The parameters are written exactly to *path* using :func:`numpy.savez`.
+        Callers are responsible for choosing an appropriate filename and
+        extension (``.npz`` is recommended but not enforced).
 
         Args:
-            path: Destination file path (with or without ``.npz`` extension).
+            path: Destination file path (including desired extension).
         """
-        save_path = path if path.endswith(".npz") else f"{path}.npz"
         np.savez(
-            save_path,
+            path,
             W1=self._W1,
             b1=self._b1,
             W2=self._W2,
@@ -224,17 +224,14 @@ class ReinforceAgent(BaseAgent):
         """
         Load policy network weights from disk.
 
-        Handles the ``.npz`` extension automatically whether or not it was
-        included in *path*.
+        The parameters are read from exactly *path* using :func:`numpy.load`.
+        Typically this should be a ``.npz`` file previously created by
+        :meth:`save`.
 
         Args:
-            path: Source file path (with or without ``.npz`` extension).
-
-        Raises:
-            FileNotFoundError: If neither *path* nor ``<path>.npz`` exists.
+            path: Source file path (including extension).
         """
-        load_path = path if path.endswith(".npz") else f"{path}.npz"
-        with np.load(load_path) as data:
+        with np.load(path) as data:
             self._W1 = data["W1"]
             self._b1 = data["b1"]
             self._W2 = data["W2"]
