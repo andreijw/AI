@@ -235,14 +235,18 @@ class ReinforceAgent(BaseAgent):
         """
         Save policy network weights to disk in NumPy ``.npz`` format.
 
-        If *path* has an extension (for example ``.pt``), the parameters are
-        written exactly to that filename. If *path* has no extension, ``.npz``
-        is appended.
+        Supported extensions are ``.pt`` and ``.npz``. If *path* has one of
+        these extensions, parameters are written exactly to that filename. If
+        *path* has no extension, ``.npz`` is appended.
 
         Args:
             path: Destination file path.
         """
-        extension = os.path.splitext(path)[1]
+        extension = os.path.splitext(path)[1].lower()
+        if extension not in {"", ".npz", ".pt"}:
+            raise ValueError(
+                f"Unsupported checkpoint extension '{extension}'. Checkpoint files must use '.pt', '.npz', or no extension."
+            )
         save_path = path if extension else f"{path}.npz"
         with open(save_path, "wb") as f:
             np.savez(
@@ -257,16 +261,34 @@ class ReinforceAgent(BaseAgent):
         """
         Load policy network weights from disk.
 
-        If *path* has no extension and does not exist, ``.npz`` is appended and
-        that file is loaded.
+        Supported extensions are ``.pt`` and ``.npz``. If *path* has no
+        extension and does not exist, ``.npz`` is appended and that file is
+        loaded. Loading a ``.pt`` path also supports legacy
+        ``<name>.pt.npz`` checkpoints.
 
         Args:
             path: Source file path.
         """
-        extension = os.path.splitext(path)[1]
-        extension_provided = bool(extension)
+        extension = os.path.splitext(path)[1].lower()
+        if extension not in {"", ".npz", ".pt"}:
+            raise ValueError(
+                f"Unsupported checkpoint extension '{extension}'. Checkpoint files must use '.pt', '.npz', or no extension."
+            )
+
         has_exact_path = os.path.exists(path)
-        load_path = path if extension_provided or has_exact_path else f"{path}.npz"
+        if extension:
+            # Backward-compatible fallback for older checkpoints written as "<name>.pt.npz".
+            legacy_npz_path = f"{path}.npz"
+            if has_exact_path or extension == ".npz":
+                load_path = path
+            elif os.path.exists(legacy_npz_path):
+                load_path = legacy_npz_path
+            else:
+                raise FileNotFoundError(
+                    f"Checkpoint not found at '{path}' (or legacy fallback '{legacy_npz_path}')."
+                )
+        else:
+            load_path = path if has_exact_path else f"{path}.npz"
 
         with np.load(load_path) as data:
             self._W1 = data["W1"]

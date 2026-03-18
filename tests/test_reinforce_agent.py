@@ -120,6 +120,42 @@ def test_reinforce_agent_save_load_pt_extension(tmp_path):
     np.testing.assert_array_equal(agent._b2, agent2._b2)
 
 
+def test_reinforce_agent_save_load_npz_extension(tmp_path):
+    """When an explicit .npz path is provided, save/load should use that exact file."""
+    agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
+
+    save_path = str(tmp_path / "reinforce_test.npz")
+    agent.save(save_path)
+
+    assert os.path.exists(save_path)
+
+    agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
+    agent2._W1 = np.zeros_like(agent2._W1)
+    agent2.load(save_path)
+
+    np.testing.assert_array_equal(agent._W1, agent2._W1)
+    np.testing.assert_array_equal(agent._W2, agent2._W2)
+    np.testing.assert_array_equal(agent._b1, agent2._b1)
+    np.testing.assert_array_equal(agent._b2, agent2._b2)
+
+
+def test_reinforce_agent_load_pt_legacy_npz_fallback(tmp_path):
+    """Loading a .pt path supports legacy '<name>.pt.npz' checkpoints."""
+    agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
+
+    legacy_path = tmp_path / "reinforce_legacy.pt.npz"
+    np.savez(legacy_path, W1=agent._W1, b1=agent._b1, W2=agent._W2, b2=agent._b2)
+
+    agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
+    agent2._W1 = np.zeros_like(agent2._W1)
+    agent2.load(str(tmp_path / "reinforce_legacy.pt"))
+
+    np.testing.assert_array_equal(agent._W1, agent2._W1)
+    np.testing.assert_array_equal(agent._W2, agent2._W2)
+    np.testing.assert_array_equal(agent._b1, agent2._b1)
+    np.testing.assert_array_equal(agent._b2, agent2._b2)
+
+
 def test_reinforce_agent_action_probabilities_sum_to_one():
     """Policy outputs a valid probability distribution."""
     agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
