@@ -47,6 +47,28 @@ class ReinforceAgent(BaseAgent):
         self.gamma: float = float(config.get("gamma", 0.99))
         self.hidden_dim: int = int(config.get("hidden_dim", 128))
 
+        # Validate hyperparameters early to avoid numerical issues later.
+        if observation_dim <= 0:
+            raise ValueError(
+                f"observation_dim must be a positive integer, got {observation_dim!r}"
+            )
+        if action_dim <= 0:
+            raise ValueError(
+                f"action_dim must be a positive integer, got {action_dim!r}"
+            )
+        if self.hidden_dim <= 0:
+            raise ValueError(
+                f\"hidden_dim must be a positive integer, got {self.hidden_dim!r}\"
+            )
+        if self.learning_rate <= 0.0:
+            raise ValueError(
+                f\"learning_rate must be positive, got {self.learning_rate!r}\"
+            )
+        if not (0.0 < self.gamma <= 1.0):
+            raise ValueError(
+                f\"gamma must be in the interval (0, 1], got {self.gamma!r}\"
+            )
+
         # He-initialised weights for ReLU activations
         rng = np.random.default_rng(config.get("seed"))
         scale1 = np.sqrt(2.0 / observation_dim)
