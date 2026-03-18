@@ -234,8 +234,8 @@ class ReinforceAgent(BaseAgent):
             FileNotFoundError: If neither *path* nor ``<path>.npz`` exists.
         """
         load_path = path if path.endswith(".npz") else f"{path}.npz"
-        data = np.load(load_path)
-        self._W1 = data["W1"]
-        self._b1 = data["b1"]
-        self._W2 = data["W2"]
-        self._b2 = data["b2"]
+        with np.load(load_path) as data:
+            self._W1 = data["W1"]
+            self._b1 = data["b1"]
+            self._W2 = data["W2"]
+            self._b2 = data["b2"]
