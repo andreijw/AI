@@ -111,7 +111,7 @@ def test_reinforce_agent_action_probabilities_sum_to_one():
 
 
 def test_reinforce_agent_compute_returns_discounting():
-    """Discounted returns decrease for earlier timesteps with rewards=1 and γ<1."""
+    """Discounted returns are larger for earlier timesteps (decrease over time) with rewards=1 and γ<1."""
     config = {**_REINFORCE_CONFIG, "gamma": 0.99}
     agent = ReinforceAgent(observation_dim=4, action_dim=2, config=config)
     assert agent.gamma < 1.0, "Test requires gamma < 1.0 for strict monotone ordering"
