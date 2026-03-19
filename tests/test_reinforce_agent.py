@@ -174,7 +174,7 @@ def test_reinforce_agent_compute_returns_discounting():
     rewards = np.ones(5)
     returns = agent._compute_returns(rewards)
     for t in range(len(returns) - 1):
-        assert returns[t] > returns[t + 1], f"G[{t}] should be > G[{t+1}]"
+        assert returns[t] > returns[t + 1], f"G[{t}] should be > G[{t + 1}]"
 
 
 def test_reinforce_agent_stores_config():
