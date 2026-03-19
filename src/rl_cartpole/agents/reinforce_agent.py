@@ -49,25 +49,15 @@ class ReinforceAgent(BaseAgent):
 
         # Validate hyperparameters early to avoid numerical issues later.
         if observation_dim <= 0:
-            raise ValueError(
-                f"observation_dim must be a positive integer, got {observation_dim!r}"
-            )
+            raise ValueError(f"observation_dim must be a positive integer, got {observation_dim!r}")
         if action_dim <= 0:
-            raise ValueError(
-                f"action_dim must be a positive integer, got {action_dim!r}"
-            )
+            raise ValueError(f"action_dim must be a positive integer, got {action_dim!r}")
         if self.hidden_dim <= 0:
-            raise ValueError(
-                f"hidden_dim must be a positive integer, got {self.hidden_dim!r}"
-            )
+            raise ValueError(f"hidden_dim must be a positive integer, got {self.hidden_dim!r}")
         if self.learning_rate <= 0.0:
-            raise ValueError(
-                f"learning_rate must be positive, got {self.learning_rate!r}"
-            )
+            raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
         if not (0.0 < self.gamma <= 1.0):
-            raise ValueError(
-                f"gamma must be in the interval (0, 1], got {self.gamma!r}"
-            )
+            raise ValueError(f"gamma must be in the interval (0, 1], got {self.gamma!r}")
 
         # He-initialised weights for ReLU activations
         rng = np.random.default_rng(config.get("seed"))
@@ -181,9 +171,7 @@ class ReinforceAgent(BaseAgent):
         # avoid producing all-zeros or NaN when every return is identical)
         returns = self._compute_returns(rewards)
         std = returns.std()
-        returns = (
-            (returns - returns.mean()) / std if std > 1e-8 else returns - returns.mean()
-        )
+        returns = (returns - returns.mean()) / std if std > 1e-8 else returns - returns.mean()
 
         # Accumulate REINFORCE gradients over the episode
         grad_w1 = np.zeros_like(self._W1)

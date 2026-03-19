@@ -67,6 +67,7 @@ class Trainer:
         - Standard `logging.Logger`-like objects (using `.info(...)`)
         - Fallback to printing when no compatible logger is provided
         """
+
         def _normalize_value(value: Any) -> Any:
             """
             Recursively convert values to JSON-serializable Python built-ins.
