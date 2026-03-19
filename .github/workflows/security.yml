@@ -40,7 +40,13 @@ jobs:
 
       - name: Generate Bandit JSON report
         if: always()
-        run: bandit -r src/ -f json -o bandit-report.json || true
+        run: |
+          bandit -r src/ -f json -o bandit-report.json
+          status=$?
+          if [ "$status" -gt 1 ]; then
+            echo "Bandit failed while generating JSON report (exit code: $status)"
+            exit "$status"
+          fi
 
       - name: Upload Bandit report
         if: always()
