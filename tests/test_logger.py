@@ -258,6 +258,7 @@ def test_logger_close_is_idempotent(log_dir, request):
 # Logger.log error handling
 # ---------------------------------------------------------------------------
 
+
 def test_logger_log_handles_unserializable_metrics(logger, log_dir, caplog):
     """Logger.log should not raise when metrics contain non-JSON-serializable values."""
     # object() is not JSON serializable; the call must succeed without raising
