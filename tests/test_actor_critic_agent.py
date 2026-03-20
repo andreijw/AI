@@ -57,7 +57,7 @@ def test_actor_critic_agent_select_action_greedy():
 
 
 def test_actor_critic_agent_update_returns_metrics():
-    """update() returns a dict with scalar 'policy_loss' and 'value_loss' keys."""
+    """update() returns a dict with scalar 'policy_loss', 'value_loss', and 'entropy_bonus' keys."""
     agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CONFIG)
     batch = {
         "observations": np.random.randn(10, 4),
@@ -68,8 +68,12 @@ def test_actor_critic_agent_update_returns_metrics():
     assert isinstance(metrics, dict)
     assert "policy_loss" in metrics
     assert "value_loss" in metrics
+    assert "entropy_bonus" in metrics
     assert isinstance(metrics["policy_loss"], float)
     assert isinstance(metrics["value_loss"], float)
+    assert isinstance(metrics["entropy_bonus"], float)
+    # Entropy should be non-negative (it's the mean policy entropy, not weighted)
+    assert metrics["entropy_bonus"] >= 0.0
 
 
 def test_actor_critic_agent_update_empty_batch():
@@ -77,7 +81,7 @@ def test_actor_critic_agent_update_empty_batch():
     agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CONFIG)
     batch = {"observations": np.empty((0, 4)), "actions": np.array([]), "rewards": np.array([])}
     metrics = agent.update(batch)
-    assert metrics == {"policy_loss": 0.0, "value_loss": 0.0}
+    assert metrics == {"policy_loss": 0.0, "value_loss": 0.0, "entropy_bonus": 0.0}
 
 
 def test_actor_critic_agent_weights_change_after_update():

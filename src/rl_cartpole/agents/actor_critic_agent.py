@@ -175,10 +175,20 @@ class ActorCriticAgent(BaseAgent):
         """
         Update actor and critic parameters using the collected trajectory.
 
-        The actor is updated with advantage-weighted policy gradients; the
-        critic is updated via MSE regression towards Monte-Carlo returns.
-        An optional entropy bonus (weighted by ``entropy_coef``) is added to
-        encourage exploration by penalising overly-confident policies.
+        The actor is updated with advantage-weighted policy gradients plus an
+        entropy bonus; the critic is updated via MSE regression towards
+        Monte-Carlo returns, scaled by ``value_coef``.
+
+        The returned metrics report each component of the objective separately
+        so that callers can monitor them independently:
+
+        * ``policy_loss``   — mean ``-log π(a|s) · A_t`` (advantage term only,
+                              before entropy regularisation).
+        * ``value_loss``    — mean unscaled critic MSE ``0.5·(V(s)−G)²``
+                              (before ``value_coef`` scaling).
+        * ``entropy_bonus`` — mean policy entropy ``H(π(·|s))`` (higher is
+                              more exploratory; weighted by ``entropy_coef``
+                              in the actual parameter update).
 
         Args:
             batch: Dictionary with keys:
@@ -187,9 +197,8 @@ class ActorCriticAgent(BaseAgent):
                    - "rewards":      float array of shape (T,)
 
         Returns:
-            Dictionary with keys:
-            - "policy_loss": mean actor loss over the episode.
-            - "value_loss":  mean critic loss over the episode.
+            Dictionary with keys ``"policy_loss"``, ``"value_loss"``, and
+            ``"entropy_bonus"``.
         """
         observations: np.ndarray = np.asarray(batch["observations"], dtype=np.float64)
         actions: np.ndarray = np.asarray(batch["actions"], dtype=int)
@@ -197,7 +206,7 @@ class ActorCriticAgent(BaseAgent):
 
         n_steps = len(rewards)
         if n_steps == 0:
-            return {"policy_loss": 0.0, "value_loss": 0.0}
+            return {"policy_loss": 0.0, "value_loss": 0.0, "entropy_bonus": 0.0}
 
         if not (len(observations) == len(actions) == n_steps):
             raise ValueError(
@@ -221,6 +230,7 @@ class ActorCriticAgent(BaseAgent):
 
         total_policy_loss = 0.0
         total_value_loss = 0.0
+        total_entropy = 0.0
 
         for obs, action, g in zip(observations, actions, returns):
             probs, value, h = self._forward(obs)
@@ -228,16 +238,17 @@ class ActorCriticAgent(BaseAgent):
             # Advantage estimate: how much better this action was than expected
             advantage = g - value
 
-            # Actor loss: -log π(a|s) * advantage
+            # Actor loss: -log π(a|s) * advantage  (reported separately)
             log_prob_a = np.log(np.clip(probs[action], 1e-8, 1.0))
             total_policy_loss += -log_prob_a * advantage
 
-            # Critic loss: 0.5 * (V(s) - G)^2
+            # Critic loss: 0.5 * (V(s) - G)^2  (reported unscaled)
             total_value_loss += 0.5 * (value - g) ** 2
 
-            # Entropy: H = -Σ_a π(a) log π(a)
+            # Entropy: H = -Σ_a π(a) log π(a)  (reported separately)
             log_probs = np.log(np.clip(probs, 1e-8, 1.0))
             entropy = -float(np.sum(probs * log_probs))
+            total_entropy += entropy
 
             # Gradient of total loss w.r.t. policy logits (gradient-descent direction):
             #   d(policy_loss)/d(z_j) = advantage * (π(j) - 1[j==a])
@@ -278,6 +289,7 @@ class ActorCriticAgent(BaseAgent):
         return {
             "policy_loss": float(total_policy_loss / n_steps),
             "value_loss": float(total_value_loss / n_steps),
+            "entropy_bonus": float(total_entropy / n_steps),
         }
 
     def save(self, path: str) -> None:
