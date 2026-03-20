@@ -229,3 +229,47 @@ def test_setup_logger_creates_log_directory(tmp_path):
     assert os.path.isdir(new_dir)
 
     _cleanup_logger("setup_dir_test")
+
+
+# ---------------------------------------------------------------------------
+# Logger.close
+# ---------------------------------------------------------------------------
+
+
+def test_logger_close_removes_all_handlers(log_dir, request):
+    """Logger.close() should remove all handlers from the underlying logger."""
+    safe_name = _safe_logger_name(request)
+    lg = Logger(name=safe_name, log_dir=log_dir)
+
+    assert len(lg.logger.handlers) > 0
+    lg.close()
+    assert len(lg.logger.handlers) == 0
+
+
+def test_logger_close_is_idempotent(log_dir, request):
+    """Calling Logger.close() more than once should not raise."""
+    safe_name = _safe_logger_name(request)
+    lg = Logger(name=safe_name, log_dir=log_dir)
+    lg.close()
+    lg.close()  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# Logger.log error handling
+# ---------------------------------------------------------------------------
+
+def test_logger_log_handles_unserializable_metrics(logger, log_dir, caplog):
+    """Logger.log should not raise when metrics contain non-JSON-serializable values."""
+    # object() is not JSON serializable; the call must succeed without raising
+    with caplog.at_level(logging.WARNING, logger=logger.name):
+        logger.log({"bad_value": object()})
+
+    # The metrics file should not contain a broken entry
+    jsonl_files = [f for f in os.listdir(log_dir) if f.endswith(".jsonl")]
+    assert len(jsonl_files) == 1
+    with open(os.path.join(log_dir, jsonl_files[0])) as f:
+        content = f.read()
+    assert content == ""  # nothing written when serialization fails
+
+    # A warning should have been emitted describing the failure
+    assert any("Failed to write metrics" in r.message for r in caplog.records)

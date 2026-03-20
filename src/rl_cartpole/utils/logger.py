@@ -67,9 +67,12 @@ class Logger:
             step: Optional step number
         """
         # Log to structured metrics file
-        with open(self.metrics_file, "a") as f:
-            log_entry = {**metrics, "step": step} if step is not None else metrics
-            f.write(json.dumps(log_entry) + "\n")
+        try:
+            with open(self.metrics_file, "a") as f:
+                log_entry = {**metrics, "step": step} if step is not None else metrics
+                f.write(json.dumps(log_entry) + "\n")
+        except (OSError, TypeError, ValueError) as e:
+            self.logger.warning("Failed to write metrics to %s: %s", self.metrics_file, e)
 
         # Log summary to console
         metrics_str = ", ".join([f"{k}={v}" for k, v in metrics.items()])
@@ -90,6 +93,12 @@ class Logger:
     def debug(self, message: str) -> None:
         """Log debug message."""
         self.logger.debug(message)
+
+    def close(self) -> None:
+        """Close all handlers and release file resources."""
+        for handler in self.logger.handlers[:]:
+            handler.close()
+            self.logger.removeHandler(handler)
 
 
 def setup_logger(
