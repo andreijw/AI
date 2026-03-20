@@ -54,6 +54,7 @@ class Logger:
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
+        self._handlers = [console_handler, file_handler]
 
         # Metrics log file (for structured data)
         self.metrics_file = os.path.join(log_dir, f"metrics_{timestamp}.jsonl")
@@ -95,10 +96,12 @@ class Logger:
         self.logger.debug(message)
 
     def close(self) -> None:
-        """Close all handlers and release file resources."""
-        for handler in self.logger.handlers[:]:
+        """Close handlers created by this Logger instance."""
+        for handler in self._handlers[:]:
             handler.close()
-            self.logger.removeHandler(handler)
+            if handler in self.logger.handlers:
+                self.logger.removeHandler(handler)
+        self._handlers.clear()
 
 
 def setup_logger(

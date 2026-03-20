@@ -67,7 +67,7 @@ class Trainer:
         Supports:
         - Custom loggers exposing `log(metrics: dict)`
         - Standard `logging.Logger`-like objects (using `.info(...)`)
-        - Fallback to printing when no compatible logger is provided
+        - Fallback to module logger when no compatible logger is provided
         """
 
         def _normalize_value(value: Any) -> Any:

@@ -237,7 +237,7 @@ def test_setup_logger_creates_log_directory(tmp_path):
 
 
 def test_logger_close_removes_all_handlers(log_dir, request):
-    """Logger.close() should remove all handlers from the underlying logger."""
+    """Logger.close() should remove handlers created by this instance."""
     safe_name = _safe_logger_name(request)
     lg = Logger(name=safe_name, log_dir=log_dir)
 
@@ -252,6 +252,22 @@ def test_logger_close_is_idempotent(log_dir, request):
     lg = Logger(name=safe_name, log_dir=log_dir)
     lg.close()
     lg.close()  # should not raise
+
+
+def test_logger_close_preserves_external_handlers(log_dir, request):
+    """Logger.close() should not remove handlers not created by this instance."""
+    safe_name = _safe_logger_name(request)
+    py_logger = logging.getLogger(safe_name)
+    external = logging.NullHandler()
+    py_logger.addHandler(external)
+
+    lg = Logger(name=safe_name, log_dir=log_dir)
+    lg.close()
+
+    assert external in py_logger.handlers
+
+    py_logger.removeHandler(external)
+    external.close()
 
 
 # ---------------------------------------------------------------------------
