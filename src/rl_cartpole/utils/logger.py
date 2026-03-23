@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class Logger:
@@ -54,7 +54,7 @@ class Logger:
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
-        self._handlers = [console_handler, file_handler]
+        self._handlers: List[logging.Handler] = [console_handler, file_handler]
 
         # Metrics log file (for structured data)
         self.metrics_file = os.path.join(log_dir, f"metrics_{timestamp}.jsonl")
