@@ -1,5 +1,6 @@
 """Tests for the Trainer class."""
 
+import logging
 import os
 import sys
 
@@ -101,12 +102,12 @@ def test_log_info_uses_logger_when_available(env, agent):
     logger.info.assert_called_once_with("test message")
 
 
-def test_log_info_falls_back_to_print_without_logger(env, agent, capsys):
-    """_log_info should call print when no logger is provided."""
+def test_log_info_falls_back_to_logging_without_logger(env, agent, caplog):
+    """_log_info should emit via the module logger when no logger is provided."""
     trainer = Trainer(env=env, agent=agent, config={})
-    trainer._log_info("fallback message")
-    captured = capsys.readouterr()
-    assert "fallback message" in captured.out
+    with caplog.at_level(logging.INFO, logger="rl_cartpole.training.trainer"):
+        trainer._log_info("fallback message")
+    assert "fallback message" in caplog.text
 
 
 # ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class Logger:
@@ -54,6 +54,7 @@ class Logger:
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
+        self._handlers: List[logging.Handler] = [console_handler, file_handler]
 
         # Metrics log file (for structured data)
         self.metrics_file = os.path.join(log_dir, f"metrics_{timestamp}.jsonl")
@@ -67,9 +68,12 @@ class Logger:
             step: Optional step number
         """
         # Log to structured metrics file
-        with open(self.metrics_file, "a") as f:
-            log_entry = {**metrics, "step": step} if step is not None else metrics
-            f.write(json.dumps(log_entry) + "\n")
+        try:
+            with open(self.metrics_file, "a") as f:
+                log_entry = {**metrics, "step": step} if step is not None else metrics
+                f.write(json.dumps(log_entry) + "\n")
+        except (OSError, TypeError, ValueError) as e:
+            self.logger.warning("Failed to write metrics to %s: %s", self.metrics_file, e)
 
         # Log summary to console
         metrics_str = ", ".join([f"{k}={v}" for k, v in metrics.items()])
@@ -90,6 +94,14 @@ class Logger:
     def debug(self, message: str) -> None:
         """Log debug message."""
         self.logger.debug(message)
+
+    def close(self) -> None:
+        """Close handlers created by this Logger instance."""
+        for handler in self._handlers[:]:
+            handler.close()
+            if handler in self.logger.handlers:
+                self.logger.removeHandler(handler)
+        self._handlers.clear()
 
 
 def setup_logger(

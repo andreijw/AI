@@ -2,12 +2,14 @@
 
 import logging
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from ..agents.base_agent import BaseAgent
 from ..environments.cartpole_env import CartPoleEnv
+
+_logger = logging.getLogger(__name__)
 
 
 class Trainer:
@@ -46,17 +48,17 @@ class Trainer:
         self.checkpoint_dir = config.get("checkpoint_dir", "./checkpoints")
 
         # Metrics tracking
-        self.episode_rewards: list[float] = []
-        self.episode_lengths: list[int] = []
+        self.episode_rewards: List[float] = []
+        self.episode_lengths: List[int] = []
 
     def _log_info(self, message: str) -> None:
-        """Log an informational message using the logger if available, otherwise print."""
+        """Log an informational message using the logger if available, otherwise the module logger."""
         if self.logger is not None:
             info_method = getattr(self.logger, "info", None)
             if callable(info_method):
                 info_method(message)
                 return
-        print(message)
+        _logger.info(message)
 
     def _log_metrics(self, metrics: Dict[str, Any]) -> None:
         """
@@ -65,7 +67,7 @@ class Trainer:
         Supports:
         - Custom loggers exposing `log(metrics: dict)`
         - Standard `logging.Logger`-like objects (using `.info(...)`)
-        - Fallback to printing when no compatible logger is provided
+        - Fallback to module logger when no compatible logger is provided
         """
 
         def _normalize_value(value: Any) -> Any:
@@ -88,9 +90,9 @@ class Trainer:
 
         normalized_metrics = _normalize_value(metrics)
 
-        # No logger configured: print metrics
+        # No logger configured: emit via module logger
         if self.logger is None:
-            print(f"METRICS: {normalized_metrics}")
+            _logger.info("METRICS: %s", normalized_metrics)
             return
 
         # Special handling for standard logging.Logger instances
@@ -115,8 +117,8 @@ class Trainer:
         if callable(info_method):
             info_method(f"Metrics: {normalized_metrics}")
         else:
-            # Last resort: print metrics
-            print(f"METRICS: {normalized_metrics}")
+            # Last resort: emit via module logger
+            _logger.info("METRICS: %s", normalized_metrics)
 
     def train(self) -> Dict[str, Any]:
         """
