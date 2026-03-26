@@ -39,7 +39,7 @@ decisions and how the components interact.
     │   Gymnasium       │      │  Agent Impls      │
     │   CartPole-v1     │      │ - RandomAgent     │
     │                   │      │ - ReinforceAgent  │
-    │                   │      │ - ActorCriticAgent│
+    │                   │      │ - ActorCriticAgent │
     └───────────────────┘      └───────────────────┘
 
     ┌────────────────────────────────────────────────┐
