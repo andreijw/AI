@@ -41,15 +41,71 @@ class Trainer:
         self.logger = logger
 
         # Training parameters
-        self.num_episodes = config.get("num_episodes", 1000)
-        self.max_steps_per_episode = config.get("max_steps_per_episode", 500)
-        self.eval_frequency = config.get("eval_frequency", 100)
-        self.save_frequency = config.get("save_frequency", 100)
+        self.num_episodes = self._get_int_config("num_episodes", 1000)
+        self.max_steps_per_episode = self._get_int_config("max_steps_per_episode", 500)
+        self.eval_frequency = self._get_int_config("eval_frequency", 100)
+        self.save_frequency = self._get_int_config("save_frequency", 100)
         self.checkpoint_dir = config.get("checkpoint_dir", "./checkpoints")
+
+        if self.num_episodes <= 0:
+            raise ValueError(f"num_episodes must be a positive integer, got {self.num_episodes!r}")
+        if self.max_steps_per_episode <= 0:
+            raise ValueError(
+                "max_steps_per_episode must be a positive integer, "
+                f"got {self.max_steps_per_episode!r}"
+            )
+        if self.eval_frequency <= 0:
+            raise ValueError(
+                f"eval_frequency must be a positive integer, got {self.eval_frequency!r}"
+            )
+        if self.save_frequency <= 0:
+            raise ValueError(
+                f"save_frequency must be a positive integer, got {self.save_frequency!r}"
+            )
 
         # Metrics tracking
         self.episode_rewards: List[float] = []
         self.episode_lengths: List[int] = []
+
+    def _get_int_config(self, name: str, default: int) -> int:
+        """Get an integer config value without lossy coercion."""
+        raw_value = self.config.get(name, default)
+
+        if isinstance(raw_value, bool):
+            raise ValueError(
+                f"Configuration value for '{name}' must be a positive integer, "
+                f"got boolean {raw_value!r}"
+            )
+
+        if isinstance(raw_value, int):
+            return raw_value
+
+        if isinstance(raw_value, float):
+            if not raw_value.is_integer():
+                raise ValueError(
+                    f"Configuration value for '{name}' must be a positive integer, "
+                    f"got non-integer float {raw_value!r}"
+                )
+            return int(raw_value)
+
+        if isinstance(raw_value, str):
+            value = raw_value.strip()
+            if not value:
+                raise ValueError(
+                    f"Configuration value for '{name}' must be a positive integer, got empty string"
+                )
+            try:
+                return int(value)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Configuration value for '{name}' must be a positive integer, "
+                    f"got string {raw_value!r}"
+                ) from exc
+
+        raise ValueError(
+            f"Configuration value for '{name}' must be a positive integer, "
+            f"got {type(raw_value).__name__}: {raw_value!r}"
+        )
 
     def _log_info(self, message: str) -> None:
         """Log an informational message using the logger if available, otherwise the module logger."""

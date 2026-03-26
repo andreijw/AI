@@ -447,6 +447,38 @@ def test_partial_action_noise_may_not_flip():
     assert 0 in results
 
 
+def test_observation_noise_validation_error():
+    """obs_noise_std must be non-negative."""
+    with pytest.raises(ValueError, match="obs_noise_std must be a finite, non-negative number"):
+        CartPoleEnv(obs_noise_std=-0.1)
+
+
+@pytest.mark.parametrize("bad_std", [np.nan, np.inf, -np.inf])
+def test_observation_noise_validation_rejects_non_finite_values(bad_std):
+    """obs_noise_std must be finite."""
+    with pytest.raises(ValueError, match="obs_noise_std must be a finite, non-negative number"):
+        CartPoleEnv(obs_noise_std=bad_std)
+
+
+def test_action_noise_probability_validation_error():
+    """action_noise_prob must be in [0, 1]."""
+    with pytest.raises(ValueError, match="action_noise_prob must be in the interval \\[0, 1\\]"):
+        CartPoleEnv(action_noise_prob=1.1)
+
+
+def test_domain_randomization_unsupported_param_raises():
+    """Unsupported domain randomization keys should fail fast."""
+    with pytest.raises(ValueError, match="Unsupported domain randomization parameter"):
+        CartPoleEnv(domain_randomization={"friction": (0.1, 0.2)})
+
+
+@pytest.mark.parametrize("bad_range", [(np.nan, 1.0), (1.0, np.inf), (-np.inf, 1.0)])
+def test_domain_randomization_range_rejects_non_finite_endpoints(bad_range):
+    """Domain-randomization ranges must use finite numeric endpoints."""
+    with pytest.raises(ValueError, match="must use finite values"):
+        CartPoleEnv(domain_randomization={"gravity": bad_range})
+
+
 def test_env_render_delegates_to_gym_env():
     """render() should delegate to the underlying gym environment."""
     from unittest.mock import patch
