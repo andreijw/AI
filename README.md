@@ -12,7 +12,7 @@ control loops and can be extended later.
 
 The architecture is designed to support:
 
-- Multiple RL algorithms (currently includes baseline random agent, PPO coming soon)
+- Multiple RL algorithms (currently includes random, REINFORCE, and actor-critic agents)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -33,27 +33,36 @@ AI/
 ├── src/
 │   └── rl_cartpole/
 │       ├── __init__.py
-│       ├── environments/        # Environment wrappers
+│       ├── environments/        # Environment wrappers and factories
 │       │   ├── __init__.py
-│       │   └── cartpole_env.py
+│       │   ├── cartpole_env.py
+│       │   └── make_env.py
 │       ├── agents/              # Agent implementations
 │       │   ├── __init__.py
-│       │   ├── base_agent.py    # Abstract base class
-│       │   └── random_agent.py  # Random baseline agent
+│       │   ├── base_agent.py
+│       │   ├── random_agent.py
+│       │   ├── reinforce_agent.py
+│       │   └── actor_critic_agent.py
 │       ├── training/            # Training pipeline
 │       │   ├── __init__.py
 │       │   └── trainer.py
 │       └── utils/               # Utilities
 │           ├── __init__.py
 │           ├── config.py        # Configuration loading
-│           └── logger.py        # Logging utilities
+│           ├── logger.py        # Logging utilities
+│           └── visualization.py # Plotting utilities
 ├── tests/                       # Unit tests
 │   ├── __init__.py
 │   ├── test_environment.py
 │   ├── test_agents.py
-│   └── test_config.py
+│   ├── test_reinforce_agent.py
+│   ├── test_actor_critic_agent.py
+│   ├── test_trainer.py
+│   └── ...
 ├── configs/                     # Configuration files
-│   └── cartpole_default.yaml
+│   ├── cartpole_default.yaml
+│   ├── cartpole_reinforce.yaml
+│   └── cartpole_actor_critic.yaml
 ├── train.py                     # Main training script
 ├── pyproject.toml              # Project configuration
 ├── requirements.txt            # Dependencies
@@ -141,6 +150,19 @@ python train.py --config configs/quick_test.yaml --plot --plot-dir ./plots
 > Note: Running `train.py` again with `--plot` will start a new training run and then save plots,
 > it does **not** only load and plot previous results.
 
+### Train specific agent configurations
+
+```bash
+# Random baseline
+python train.py --config configs/cartpole_default.yaml
+
+# REINFORCE
+python train.py --config configs/cartpole_reinforce.yaml
+
+# Actor-Critic
+python train.py --config configs/cartpole_actor_critic.yaml
+```
+
 ### Basic Training
 
 Run training with the default configuration:
@@ -212,10 +234,9 @@ environment:
 
 # Agent settings
 agent:
-  type: "random"
+  type: "random"  # Options: "random", "reinforce", "actor_critic"
   config:
-    learning_rate: 0.0003
-    gamma: 0.99
+    seed: 42
 
 # Training settings
 training:
@@ -348,6 +369,12 @@ The `BaseAgent` abstract class defines the interface for all RL agents:
 - `select_action()`: Choose actions based on observations
 - `update()`: Update policy based on collected experience
 - `save()` / `load()`: Checkpoint management
+
+Implemented agents:
+
+- `RandomAgent`: Random baseline policy
+- `ReinforceAgent`: Monte Carlo policy-gradient agent
+- `ActorCriticAgent`: Policy + value network agent with entropy regularization
 
 ### Training Pipeline
 
