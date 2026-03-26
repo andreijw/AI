@@ -1,5 +1,6 @@
 """CartPole environment wrapper for reinforcement learning."""
 
+from collections.abc import Mapping, Sequence
 from typing import Any, Dict, Optional, Tuple
 
 import gymnasium as gym
@@ -39,7 +40,7 @@ class CartPoleEnv:
         seed: Optional[int] = None,
         obs_noise_std: float = 0.0,
         action_noise_prob: float = 0.0,
-        domain_randomization: Optional[Dict[str, Tuple[float, float]]] = None,
+        domain_randomization: Optional[Mapping[str, Sequence[float] | Tuple[float, float]]] = None,
     ):
         """
         Initialize the environment wrapper.
@@ -68,8 +69,10 @@ class CartPoleEnv:
         self.render_mode = render_mode
 
         # Noise parameters
-        if obs_noise_std < 0.0:
-            raise ValueError(f"obs_noise_std must be non-negative, got {obs_noise_std!r}")
+        if not np.isfinite(obs_noise_std) or obs_noise_std < 0.0:
+            raise ValueError(
+                f"obs_noise_std must be a finite, non-negative number, got {obs_noise_std!r}"
+            )
         if not (0.0 <= action_noise_prob <= 1.0):
             raise ValueError(
                 f"action_noise_prob must be in the interval [0, 1], got {action_noise_prob!r}"
@@ -126,7 +129,8 @@ class CartPoleEnv:
         self._np_random, _ = seeding.np_random(seed)
 
     def _validate_domain_randomization(
-        self, domain_randomization: Optional[Dict[str, Tuple[float, float]]]
+        self,
+        domain_randomization: Optional[Mapping[str, Sequence[float] | Tuple[float, float]]],
     ) -> Dict[str, Tuple[float, float]]:
         """Validate and normalize domain randomization configuration."""
         if not domain_randomization:
@@ -155,6 +159,11 @@ class CartPoleEnv:
             if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
                 raise ValueError(
                     f"Domain randomization range for '{param}' must contain numeric values, "
+                    f"got: [{min_val!r}, {max_val!r}]"
+                )
+            if not (np.isfinite(min_val) and np.isfinite(max_val)):
+                raise ValueError(
+                    f"Domain randomization range for '{param}' must use finite values, "
                     f"got: [{min_val!r}, {max_val!r}]"
                 )
             if min_val > max_val:

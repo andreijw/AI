@@ -94,6 +94,18 @@ def test_trainer_default_config_values(env, agent):
         ({"max_steps_per_episode": 0}, "max_steps_per_episode must be a positive integer"),
         ({"eval_frequency": 0}, "eval_frequency must be a positive integer"),
         ({"save_frequency": 0}, "save_frequency must be a positive integer"),
+        (
+            {"num_episodes": True},
+            "Configuration value for 'num_episodes' must be a positive integer",
+        ),
+        (
+            {"max_steps_per_episode": 1.9},
+            "Configuration value for 'max_steps_per_episode' must be a positive integer",
+        ),
+        (
+            {"eval_frequency": "abc"},
+            "Configuration value for 'eval_frequency' must be a positive integer",
+        ),
     ],
 )
 def test_trainer_invalid_config_values_raise(env, agent, config, expected_error):
