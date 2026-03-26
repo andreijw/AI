@@ -447,6 +447,24 @@ def test_partial_action_noise_may_not_flip():
     assert 0 in results
 
 
+def test_observation_noise_validation_error():
+    """obs_noise_std must be non-negative."""
+    with pytest.raises(ValueError, match="obs_noise_std must be non-negative"):
+        CartPoleEnv(obs_noise_std=-0.1)
+
+
+def test_action_noise_probability_validation_error():
+    """action_noise_prob must be in [0, 1]."""
+    with pytest.raises(ValueError, match="action_noise_prob must be in the interval \\[0, 1\\]"):
+        CartPoleEnv(action_noise_prob=1.1)
+
+
+def test_domain_randomization_unsupported_param_raises():
+    """Unsupported domain randomization keys should fail fast."""
+    with pytest.raises(ValueError, match="Unsupported domain randomization parameter"):
+        CartPoleEnv(domain_randomization={"friction": (0.1, 0.2)})
+
+
 def test_env_render_delegates_to_gym_env():
     """render() should delegate to the underlying gym environment."""
     from unittest.mock import patch

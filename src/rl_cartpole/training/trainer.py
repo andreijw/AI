@@ -41,11 +41,27 @@ class Trainer:
         self.logger = logger
 
         # Training parameters
-        self.num_episodes = config.get("num_episodes", 1000)
-        self.max_steps_per_episode = config.get("max_steps_per_episode", 500)
-        self.eval_frequency = config.get("eval_frequency", 100)
-        self.save_frequency = config.get("save_frequency", 100)
+        self.num_episodes = int(config.get("num_episodes", 1000))
+        self.max_steps_per_episode = int(config.get("max_steps_per_episode", 500))
+        self.eval_frequency = int(config.get("eval_frequency", 100))
+        self.save_frequency = int(config.get("save_frequency", 100))
         self.checkpoint_dir = config.get("checkpoint_dir", "./checkpoints")
+
+        if self.num_episodes <= 0:
+            raise ValueError(f"num_episodes must be a positive integer, got {self.num_episodes!r}")
+        if self.max_steps_per_episode <= 0:
+            raise ValueError(
+                "max_steps_per_episode must be a positive integer, "
+                f"got {self.max_steps_per_episode!r}"
+            )
+        if self.eval_frequency <= 0:
+            raise ValueError(
+                f"eval_frequency must be a positive integer, got {self.eval_frequency!r}"
+            )
+        if self.save_frequency <= 0:
+            raise ValueError(
+                f"save_frequency must be a positive integer, got {self.save_frequency!r}"
+            )
 
         # Metrics tracking
         self.episode_rewards: List[float] = []

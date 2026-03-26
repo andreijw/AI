@@ -68,11 +68,18 @@ class CartPoleEnv:
         self.render_mode = render_mode
 
         # Noise parameters
+        if obs_noise_std < 0.0:
+            raise ValueError(f"obs_noise_std must be non-negative, got {obs_noise_std!r}")
+        if not (0.0 <= action_noise_prob <= 1.0):
+            raise ValueError(
+                f"action_noise_prob must be in the interval [0, 1], got {action_noise_prob!r}"
+            )
+
         self.obs_noise_std = obs_noise_std
         self.action_noise_prob = action_noise_prob
 
         # Domain randomization parameters
-        self.domain_randomization = domain_randomization or {}
+        self.domain_randomization = self._validate_domain_randomization(domain_randomization)
 
         # Validate CartPole-specific features early
         is_cartpole = "cartpole" in env_name.lower()
@@ -117,6 +124,48 @@ class CartPoleEnv:
         # Per-environment RNG for noise and domain randomization
         # Initialize with a default RNG; will be synced with env RNG on reset()
         self._np_random, _ = seeding.np_random(seed)
+
+    def _validate_domain_randomization(
+        self, domain_randomization: Optional[Dict[str, Tuple[float, float]]]
+    ) -> Dict[str, Tuple[float, float]]:
+        """Validate and normalize domain randomization configuration."""
+        if not domain_randomization:
+            return {}
+        if not isinstance(domain_randomization, dict):
+            raise ValueError("domain_randomization must be a dictionary of parameter ranges.")
+
+        supported_params = {"gravity", "masscart", "masspole", "length"}
+        validated: Dict[str, Tuple[float, float]] = {}
+        for param, value in domain_randomization.items():
+            if param not in supported_params:
+                raise ValueError(
+                    f"Unsupported domain randomization parameter '{param}'. "
+                    f"Supported parameters: {sorted(supported_params)}."
+                )
+
+            if isinstance(value, list):
+                value = tuple(value)
+            if not isinstance(value, tuple) or len(value) != 2:
+                raise ValueError(
+                    f"Domain randomization range for '{param}' must be a 2-element list/tuple "
+                    f"[min, max], got: {value!r}"
+                )
+
+            min_val, max_val = value
+            if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
+                raise ValueError(
+                    f"Domain randomization range for '{param}' must contain numeric values, "
+                    f"got: [{min_val!r}, {max_val!r}]"
+                )
+            if min_val > max_val:
+                raise ValueError(
+                    f"Domain randomization range for '{param}' has min > max: "
+                    f"[{min_val}, {max_val}]"
+                )
+
+            validated[param] = (float(min_val), float(max_val))
+
+        return validated
 
     def _apply_domain_randomization(self) -> None:
         """Apply domain randomization to environment parameters.

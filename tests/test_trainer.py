@@ -87,6 +87,21 @@ def test_trainer_default_config_values(env, agent):
     assert trainer.checkpoint_dir == "./checkpoints"
 
 
+@pytest.mark.parametrize(
+    ("config", "expected_error"),
+    [
+        ({"num_episodes": 0}, "num_episodes must be a positive integer"),
+        ({"max_steps_per_episode": 0}, "max_steps_per_episode must be a positive integer"),
+        ({"eval_frequency": 0}, "eval_frequency must be a positive integer"),
+        ({"save_frequency": 0}, "save_frequency must be a positive integer"),
+    ],
+)
+def test_trainer_invalid_config_values_raise(env, agent, config, expected_error):
+    """Trainer should fail fast on invalid non-positive training config values."""
+    with pytest.raises(ValueError, match=expected_error):
+        Trainer(env=env, agent=agent, config=config)
+
+
 def test_trainer_accepts_logger(env, agent):
     """Trainer should store an optional logger."""
     logger = MagicMock()
