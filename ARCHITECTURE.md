@@ -38,7 +38,8 @@ decisions and how the components interact.
     ┌───────────────────┐      ┌───────────────────┐
     │   Gymnasium       │      │  Agent Impls      │
     │   CartPole-v1     │      │ - RandomAgent     │
-    │                   │      │ - (PPO - future)  │
+    │                   │      │ - ReinforceAgent  │
+    │                   │      │ - ActorCriticAgent │
     └───────────────────┘      └───────────────────┘
 
     ┌────────────────────────────────────────────────┐
@@ -60,6 +61,10 @@ decisions and how the components interact.
   - Manages episode lifecycle
   - Tracks episode statistics (steps, rewards)
   - Provides consistent API for training pipeline
+- `make_env.py`: Factory helpers
+  - `make_env` / `make_env_from_config` for single environments
+  - `make_vec_env` / `make_vec_env_from_config` for vectorized environments
+  - Optional observation noise, action noise, and CartPole domain randomization
 
 **Design Decisions**:
 
@@ -78,6 +83,8 @@ decisions and how the components interact.
   - `update()`: Learning/optimization step
   - `save()`/`load()`: Persistence
 - `RandomAgent`: Baseline implementation for testing
+- `ReinforceAgent`: Monte Carlo policy-gradient implementation
+- `ActorCriticAgent`: Actor-critic implementation with shared trunk and value head
 
 **Design Decisions**:
 
