@@ -255,27 +255,21 @@ training:
 Run the test suite:
 
 ```bash
-pytest tests/
+pytest -q
 ```
 
-Run tests with coverage:
+Run tests with coverage (CI-aligned):
 
 ```bash
-pytest tests/ --cov=src/rl_cartpole --cov-report=term-missing
+pytest --cov-report=xml --cov-fail-under=50
 ```
 
 ### Code Formatting
 
-Format code with Ruff (recommended):
+Format code with Ruff:
 
 ```bash
 ruff format .
-```
-
-Or use Black (also supported):
-
-```bash
-black src/ tests/
 ```
 
 ### Linting
@@ -308,6 +302,14 @@ Run security checks with Bandit:
 bandit -r src/ -ll
 ```
 
+### Markdown Linting
+
+Lint markdown documentation:
+
+```bash
+npx --yes markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules
+```
+
 ## CI/CD
 
 This repository includes comprehensive GitHub Actions workflows for maintaining code quality and security:
@@ -337,6 +339,7 @@ The pre-commit hooks will automatically run:
 - Linting checks (Ruff)
 - Type checking (MyPy)
 - Security scanning (Bandit)
+- Markdown linting (markdownlint)
 - File validation (trailing whitespace, YAML/JSON syntax, etc.)
 
 ### Workflows
