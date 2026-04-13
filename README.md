@@ -261,7 +261,7 @@ pytest -q
 Run tests with coverage (CI-aligned):
 
 ```bash
-pytest --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=50
+pytest --cov-report=xml --cov-fail-under=50
 ```
 
 ### Code Formatting
