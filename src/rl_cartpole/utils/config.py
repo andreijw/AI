@@ -30,10 +30,7 @@ def load_config(config_path: str) -> Dict[str, Any]:
 
     try:
         with open(config_path, encoding="utf-8") as f:
-            if file_ext in {".yaml", ".yml"}:
-                config = yaml.safe_load(f)
-            else:
-                config = json.load(f)
+            config = yaml.safe_load(f) if file_ext in {".yaml", ".yml"} else json.load(f)
     except (yaml.YAMLError, json.JSONDecodeError) as exc:
         raise ValueError(f"Invalid configuration file '{config_path}': {exc}") from exc
     except OSError as exc:
