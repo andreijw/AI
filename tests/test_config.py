@@ -62,6 +62,45 @@ def test_load_config_unsupported_format():
         os.unlink(temp_path)
 
 
+def test_load_config_invalid_yaml_raises_value_error():
+    """Invalid YAML content should raise ValueError with context."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        f.write("foo: [1, 2")
+        temp_path = f.name
+
+    try:
+        with pytest.raises(ValueError, match="Invalid configuration file"):
+            load_config(temp_path)
+    finally:
+        os.unlink(temp_path)
+
+
+def test_load_config_invalid_json_raises_value_error():
+    """Invalid JSON content should raise ValueError with context."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        f.write('{"foo": 1,,}')
+        temp_path = f.name
+
+    try:
+        with pytest.raises(ValueError, match="Invalid configuration file"):
+            load_config(temp_path)
+    finally:
+        os.unlink(temp_path)
+
+
+def test_load_config_requires_top_level_mapping():
+    """Top-level config should be an object/mapping."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.dump(["not", "a", "mapping"], f)
+        temp_path = f.name
+
+    try:
+        with pytest.raises(ValueError, match="top-level mapping/object"):
+            load_config(temp_path)
+    finally:
+        os.unlink(temp_path)
+
+
 def test_merge_configs():
     """Test merging configurations."""
     base = {"a": 1, "b": 2, "c": 3}

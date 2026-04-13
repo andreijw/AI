@@ -149,6 +149,8 @@ def test_sdl_env_vars_set_for_headless(tmp_path, monkeypatch):
     assert captured.get("SDL_AUDIODRIVER") == "dummy", (
         "SDL_AUDIODRIVER was not set to 'dummy' before CartPoleEnv creation"
     )
+    assert os.environ.get("SDL_VIDEODRIVER") is None
+    assert os.environ.get("SDL_AUDIODRIVER") is None
 
 
 def test_record_video_creates_videos(tmp_path, monkeypatch):
