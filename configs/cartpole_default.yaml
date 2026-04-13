@@ -9,7 +9,7 @@ environment:
 
 # Agent settings
 agent:
-  type: "random"  # Options: "random", "ppo" (ppo not yet implemented)
+  type: "random"  # Options: "random", "reinforce", "actor_critic"
   config:
     # seed: makes RandomAgent action selection reproducible across runs.
     # Remove or set to null for non-deterministic behaviour.

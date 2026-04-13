@@ -86,11 +86,17 @@ def main():
     else:
         render_mode = config["environment"].get("render_mode")
 
+    env_config = config["environment"]
+
     # Create environment
     env = CartPoleEnv(
+        env_name=env_config.get("name", "CartPole-v1"),
         render_mode=render_mode,
-        max_episode_steps=config["environment"]["max_episode_steps"],
-        seed=config["environment"]["seed"],
+        max_episode_steps=env_config["max_episode_steps"],
+        seed=env_config["seed"],
+        obs_noise_std=env_config.get("obs_noise_std", 0.0),
+        action_noise_prob=env_config.get("action_noise_prob", 0.0),
+        domain_randomization=env_config.get("domain_randomization"),
     )
 
     # Wrap with RecordVideo when --record-video is set.

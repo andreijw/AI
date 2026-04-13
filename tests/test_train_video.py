@@ -204,3 +204,59 @@ def test_episode_trigger_skips_episode_zero(tmp_path, monkeypatch):
     assert trigger(0) is False
     # Episode equal to eval_frequency (2 in the test config) SHOULD be recorded
     assert trigger(2) is True
+
+
+def test_environment_config_is_forwarded_to_cartpole_env(tmp_path, monkeypatch):
+    """train.py should forward environment config fields into CartPoleEnv."""
+    import yaml
+
+    config = {
+        "environment": {
+            "name": "CartPole-v1",
+            "render_mode": None,
+            "max_episode_steps": 20,
+            "seed": 123,
+            "obs_noise_std": 0.05,
+            "action_noise_prob": 0.1,
+            "domain_randomization": {"gravity": [8.0, 12.0]},
+        },
+        "agent": {
+            "type": "random",
+            "config": {"seed": 42},
+        },
+        "training": {
+            "num_episodes": 1,
+            "max_steps_per_episode": 10,
+            "eval_frequency": 10,
+            "save_frequency": 10,
+            "checkpoint_dir": str(tmp_path / "checkpoints"),
+            "log_dir": str(tmp_path / "logs"),
+        },
+        "logging": {"level": "INFO", "log_metrics": True},
+    }
+    config_path = str(tmp_path / "config_env_forwarding.yaml")
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    captured = {}
+
+    class _StopAfterCaptureError(Exception):
+        pass
+
+    def patched_init(self, *args, **kwargs):
+        captured.update(kwargs)
+        raise _StopAfterCaptureError()
+
+    import rl_cartpole.environments.cartpole_env as _ce_mod
+
+    monkeypatch.setattr(_ce_mod.CartPoleEnv, "__init__", patched_init)
+
+    with pytest.raises(_StopAfterCaptureError):
+        _run_main_with_args(["--config", config_path], monkeypatch)
+
+    assert captured["env_name"] == "CartPole-v1"
+    assert captured["max_episode_steps"] == 20
+    assert captured["seed"] == 123
+    assert captured["obs_noise_std"] == pytest.approx(0.05)
+    assert captured["action_noise_prob"] == pytest.approx(0.1)
+    assert captured["domain_randomization"] == {"gravity": [8.0, 12.0]}
