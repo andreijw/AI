@@ -223,4 +223,4 @@ As the project evolves toward more advanced robotics/AI capabilities:
 - Configuration over hard-coding
 - Minimal dependencies
 - Clear variable names
-- Consistent formatting (Black)
+- Consistent formatting (Ruff)
