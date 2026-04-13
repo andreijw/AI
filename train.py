@@ -87,15 +87,18 @@ def main():
         render_mode = config["environment"].get("render_mode")
 
     env_config = config["environment"]
+    env_name = env_config.get("name")
+    obs_noise_std = env_config.get("obs_noise_std")
+    action_noise_prob = env_config.get("action_noise_prob")
 
     # Create environment
     env = CartPoleEnv(
-        env_name=env_config.get("name", "CartPole-v1"),
+        env_name="CartPole-v1" if env_name is None else env_name,
         render_mode=render_mode,
         max_episode_steps=env_config["max_episode_steps"],
         seed=env_config["seed"],
-        obs_noise_std=env_config.get("obs_noise_std", 0.0),
-        action_noise_prob=env_config.get("action_noise_prob", 0.0),
+        obs_noise_std=0.0 if obs_noise_std is None else obs_noise_std,
+        action_noise_prob=0.0 if action_noise_prob is None else action_noise_prob,
         domain_randomization=env_config.get("domain_randomization"),
     )
 
