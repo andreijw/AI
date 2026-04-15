@@ -153,6 +153,45 @@ def test_sdl_env_vars_set_for_headless(tmp_path, monkeypatch):
     assert os.environ.get("SDL_AUDIODRIVER") is None
 
 
+def test_sdl_env_vars_restored_for_headless_when_preexisting(tmp_path, monkeypatch):
+    """--record-video must restore pre-existing SDL env vars after temporary override."""
+    config_path = _minimal_config(tmp_path)
+    video_dir = str(tmp_path / "videos")
+
+    original_video_driver = "already-set-video"
+    original_audio_driver = "already-set-audio"
+    monkeypatch.setenv("SDL_VIDEODRIVER", original_video_driver)
+    monkeypatch.setenv("SDL_AUDIODRIVER", original_audio_driver)
+
+    captured = {}
+
+    class _StopAfterCaptureError(Exception):
+        pass
+
+    def patched_init(self, *a, **kw):
+        # Capture env vars at CartPoleEnv initialization time
+        captured["SDL_VIDEODRIVER"] = os.environ.get("SDL_VIDEODRIVER")
+        captured["SDL_AUDIODRIVER"] = os.environ.get("SDL_AUDIODRIVER")
+        raise _StopAfterCaptureError()
+
+    import rl_cartpole.environments.cartpole_env as _ce_mod
+
+    monkeypatch.setattr(_ce_mod.CartPoleEnv, "__init__", patched_init)
+
+    fake_moviepy = types.ModuleType("moviepy")
+
+    with patch.dict(sys.modules, {"moviepy": fake_moviepy}), pytest.raises(_StopAfterCaptureError):
+        _run_main_with_args(
+            ["--record-video", "--video-dir", video_dir, "--config", config_path],
+            monkeypatch,
+        )
+
+    assert captured.get("SDL_VIDEODRIVER") == original_video_driver
+    assert captured.get("SDL_AUDIODRIVER") == original_audio_driver
+    assert os.environ.get("SDL_VIDEODRIVER") == original_video_driver
+    assert os.environ.get("SDL_AUDIODRIVER") == original_audio_driver
+
+
 def test_record_video_creates_videos(tmp_path, monkeypatch):
     """--record-video should produce MP4 files in the specified directory."""
     pytest.importorskip("moviepy")

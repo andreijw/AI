@@ -8,6 +8,7 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import json
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -99,6 +100,24 @@ def test_load_config_requires_top_level_mapping():
             load_config(temp_path)
     finally:
         os.unlink(temp_path)
+
+
+def test_load_config_preserves_oserror_subclass_and_errno(tmp_path):
+    """Read failures should keep the original OSError subclass and metadata."""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("foo: bar", encoding="utf-8")
+
+    with patch(
+        "builtins.open",
+        side_effect=PermissionError(13, "Permission denied", str(config_path)),
+    ), pytest.raises(PermissionError) as exc_info:
+        load_config(str(config_path))
+
+    exc = exc_info.value
+    assert exc.errno == 13
+    assert exc.filename == str(config_path)
+    assert exc.__notes__
+    assert f"Failed to read config file '{config_path}'." in exc.__notes__
 
 
 def test_merge_configs():

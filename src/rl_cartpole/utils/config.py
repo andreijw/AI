@@ -20,6 +20,7 @@ def load_config(config_path: str) -> Dict[str, Any]:
     Raises:
         FileNotFoundError: If config file doesn't exist
         ValueError: If config file format is not supported
+        OSError: If config file cannot be read
     """
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Config file not found: {config_path}")
@@ -34,7 +35,8 @@ def load_config(config_path: str) -> Dict[str, Any]:
     except (yaml.YAMLError, json.JSONDecodeError) as exc:
         raise ValueError(f"Invalid configuration file '{config_path}': {exc}") from exc
     except OSError as exc:
-        raise OSError(f"Failed to read config file '{config_path}': {exc}") from exc
+        exc.add_note(f"Failed to read config file '{config_path}'.")
+        raise
 
     if not isinstance(config, dict):
         raise ValueError(

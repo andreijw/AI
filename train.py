@@ -187,14 +187,20 @@ def main():
         except KeyboardInterrupt:
             logger.info("Training interrupted by user")
     finally:
-        if env is not None:
-            env.close()
-            logger.info("Environment closed")
-        for key, previous in sdl_env_backup.items():
-            if previous is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = previous
+        try:
+            if env is not None:
+                try:
+                    env.close()
+                except Exception:
+                    logger.exception("Failed to close environment")
+                else:
+                    logger.info("Environment closed")
+        finally:
+            for key, previous in sdl_env_backup.items():
+                if previous is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = previous
 
 
 if __name__ == "__main__":
