@@ -344,14 +344,20 @@ The pre-commit hooks will automatically run:
 
 ### Workflows
 
-All workflows run on push/PR to `main` and `develop` branches:
+Workflows are automatically synchronized from `.github/workflows` by
+`scripts/sync_workflow_docs.py` (executed by the nightly maintenance workflow).
 
-1. **lint.yml** - Ruff linting and formatting checks
-2. **type-check.yml** - MyPy type checking (informational)
-3. **test.yml** - Pytest with coverage enforcement and Codecov integration
-4. **security.yml** - Bandit security scanning (also runs weekly)
-5. **codeql.yml** - CodeQL security analysis (also runs weekly)
-6. **copilot-deploy.yml** - Automated deployment with signed commits (manual trigger)
+<!-- WORKFLOWS:START -->
+
+- **codeql.yml** - CodeQL Advanced
+- **copilot-deploy.yml** - Copilot Deployment
+- **lint.yml** - Lint
+- **nightly-maintenance.yml** - Nightly Maintenance
+- **security.yml** - Security Check
+- **test.yml** - Tests
+- **type-check.yml** - Type Check
+
+<!-- WORKFLOWS:END -->
 
 For more information about the Copilot deployment workflow and GPG signing setup, see [.github/COPILOT_DEPLOYMENT.md](.github/COPILOT_DEPLOYMENT.md).
 
