@@ -7,7 +7,7 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from rl_cartpole.agents import ActorCriticAgent, RandomAgent, ReinforceAgent
+from rl_cartpole.agents import ActorCriticAgent, PPOAgent, RandomAgent, ReinforceAgent
 from rl_cartpole.environments import CartPoleEnv
 from rl_cartpole.training import Trainer
 from rl_cartpole.utils import load_config, plot_training_metrics, setup_logger
@@ -153,6 +153,12 @@ def main():
             )
         elif agent_type == "actor_critic":
             agent = ActorCriticAgent(
+                observation_dim=env.observation_space.shape[0],
+                action_dim=env.action_space.n,
+                config=config["agent"]["config"],
+            )
+        elif agent_type == "ppo":
+            agent = PPOAgent(
                 observation_dim=env.observation_space.shape[0],
                 action_dim=env.action_space.n,
                 config=config["agent"]["config"],
