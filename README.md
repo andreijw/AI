@@ -12,7 +12,7 @@ control loops and can be extended later.
 
 The architecture is designed to support:
 
-- Multiple RL algorithms (currently includes random, REINFORCE, and actor-critic agents)
+- Multiple RL algorithms (currently includes random, REINFORCE, actor-critic, and PPO agents)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -42,7 +42,8 @@ AI/
 │       │   ├── base_agent.py
 │       │   ├── random_agent.py
 │       │   ├── reinforce_agent.py
-│       │   └── actor_critic_agent.py
+│       │   ├── actor_critic_agent.py
+│       │   └── ppo_agent.py
 │       ├── training/            # Training pipeline
 │       │   ├── __init__.py
 │       │   └── trainer.py
@@ -62,7 +63,8 @@ AI/
 ├── configs/                     # Configuration files
 │   ├── cartpole_default.yaml
 │   ├── cartpole_reinforce.yaml
-│   └── cartpole_actor_critic.yaml
+│   ├── cartpole_actor_critic.yaml
+│   └── cartpole_ppo.yaml
 ├── train.py                     # Main training script
 ├── pyproject.toml              # Project configuration
 ├── requirements.txt            # Dependencies
@@ -161,6 +163,29 @@ python train.py --config configs/cartpole_reinforce.yaml
 
 # Actor-Critic
 python train.py --config configs/cartpole_actor_critic.yaml
+
+# PPO
+python train.py --config configs/cartpole_ppo.yaml
+```
+
+### PPO Training with Visualization
+
+For a full PPO run with saved learning-curve plots:
+
+```bash
+python train.py --config configs/cartpole_ppo.yaml --plot --plot-dir ./plots
+```
+
+To visualize live training locally:
+
+```bash
+python train.py --config configs/cartpole_ppo.yaml --render
+```
+
+For headless visualization (saved MP4 videos):
+
+```bash
+python train.py --config configs/cartpole_ppo.yaml --record-video --video-dir ./videos
 ```
 
 ### Basic Training
@@ -234,7 +259,7 @@ environment:
 
 # Agent settings
 agent:
-  type: "random"  # Options: "random", "reinforce", "actor_critic"
+  type: "random"  # Options: "random", "reinforce", "actor_critic", "ppo"
   config:
     seed: 42
 
@@ -384,6 +409,7 @@ Implemented agents:
 - `RandomAgent`: Random baseline policy
 - `ReinforceAgent`: Monte Carlo policy-gradient agent
 - `ActorCriticAgent`: Policy + value network agent with entropy regularization
+- `PPOAgent`: Clipped-policy actor-critic agent for more stable updates
 
 ### Training Pipeline
 
@@ -398,7 +424,6 @@ The `Trainer` class orchestrates the training process:
 
 This initial structure sets the foundation for:
 
-- **PPO Implementation**: Full Proximal Policy Optimization algorithm
 - **Additional Algorithms**: DQN, A3C, SAC, etc.
 - **Advanced Environments**: More complex physics simulations
 - **Vision Integration**: Camera-based observations
