@@ -122,7 +122,12 @@ class PPOAgent(BaseAgent):
 
         n_steps = len(rewards)
         if n_steps == 0:
-            return {"policy_loss": 0.0, "value_loss": 0.0, "entropy_bonus": 0.0, "clip_fraction": 0.0}
+            return {
+                "policy_loss": 0.0,
+                "value_loss": 0.0,
+                "entropy_bonus": 0.0,
+                "clip_fraction": 0.0,
+            }
         if not (len(observations) == len(actions) == n_steps):
             raise ValueError(
                 "Inconsistent trajectory lengths: "
