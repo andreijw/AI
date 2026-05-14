@@ -23,7 +23,6 @@ class PPOAgent(BaseAgent):
         entropy_coef (float): Entropy-bonus weight. Default: 0.01.
         clip_epsilon (float): PPO clip range. Default: 0.2.
         ppo_epochs (int): Number of PPO epochs per update. Default: 4.
-        gae_lambda (float): Reserved for future GAE support. Default: 0.95.
         seed (int): RNG seed. Default: None.
     """
 
@@ -38,7 +37,6 @@ class PPOAgent(BaseAgent):
         self.entropy_coef: float = float(config.get("entropy_coef", 0.01))
         self.clip_epsilon: float = float(config.get("clip_epsilon", 0.2))
         self.ppo_epochs: int = int(config.get("ppo_epochs", 4))
-        self.gae_lambda: float = float(config.get("gae_lambda", 0.95))
 
         if observation_dim <= 0:
             raise ValueError(f"observation_dim must be a positive integer, got {observation_dim!r}")
@@ -58,8 +56,6 @@ class PPOAgent(BaseAgent):
             raise ValueError(f"clip_epsilon must be positive, got {self.clip_epsilon!r}")
         if self.ppo_epochs <= 0:
             raise ValueError(f"ppo_epochs must be a positive integer, got {self.ppo_epochs!r}")
-        if not (0.0 < self.gae_lambda <= 1.0):
-            raise ValueError(f"gae_lambda must be in the interval (0, 1], got {self.gae_lambda!r}")
 
         rng = np.random.default_rng(config.get("seed"))
         scale1 = np.sqrt(2.0 / observation_dim)
@@ -195,7 +191,7 @@ class PPOAgent(BaseAgent):
 
                 d_pi_logits = np.zeros(self.action_dim, dtype=np.float64)
                 if not use_clipped:
-                    # d(log π(a|s))/d(logits) = one_hot(a) - π
+                    # d(log probs[action])/d(logits) = one_hot(action) - probs
                     one_hot = np.zeros(self.action_dim, dtype=np.float64)
                     one_hot[action] = 1.0
                     d_log_pi = one_hot - probs

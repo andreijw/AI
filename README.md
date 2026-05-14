@@ -168,7 +168,7 @@ python train.py --config configs/cartpole_actor_critic.yaml
 python train.py --config configs/cartpole_ppo.yaml
 ```
 
-### Run PPO and visualize training
+### PPO Training with Visualization
 
 For a full PPO run with saved learning-curve plots:
 

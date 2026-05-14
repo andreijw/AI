@@ -19,7 +19,6 @@ _PPO_CONFIG = {
     "entropy_coef": 0.01,
     "clip_epsilon": 0.2,
     "ppo_epochs": 3,
-    "gae_lambda": 0.95,
     "seed": 0,
 }
 
@@ -36,7 +35,6 @@ def test_ppo_agent_creation():
     assert agent.entropy_coef == 0.01
     assert agent.clip_epsilon == 0.2
     assert agent.ppo_epochs == 3
-    assert agent.gae_lambda == 0.95
 
 
 def test_ppo_agent_select_action_valid():
