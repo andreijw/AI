@@ -1,6 +1,5 @@
 """Shared base class for actor-critic style agents."""
 
-import os
 from abc import abstractmethod
 from typing import Any, Dict, Tuple
 
@@ -36,12 +35,7 @@ class ActorCriticBase(BaseAgent):
         self.value_coef: float = float(config.get("value_coef", 0.5))
         self.entropy_coef: float = float(config.get("entropy_coef", 0.01))
 
-        if observation_dim <= 0:
-            raise ValueError(f"observation_dim must be a positive integer, got {observation_dim!r}")
-        if action_dim <= 0:
-            raise ValueError(f"action_dim must be a positive integer, got {action_dim!r}")
-        if self.hidden_dim <= 0:
-            raise ValueError(f"hidden_dim must be a positive integer, got {self.hidden_dim!r}")
+        self._validate_dims(observation_dim, action_dim, self.hidden_dim)
         if not (0.0 < self.gamma <= 1.0):
             raise ValueError(f"gamma must be in the interval (0, 1], got {self.gamma!r}")
         if self.value_coef < 0.0:
@@ -93,23 +87,84 @@ class ActorCriticBase(BaseAgent):
 
         return probs, value, h
 
-    def _compute_returns(self, rewards: np.ndarray) -> np.ndarray:
+    def _parse_trajectory(
+        self, batch: Dict[str, Any]
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
         """
-        Compute discounted returns G_t = Σ_{k≥t} γ^(k-t) r_k for each step t.
+        Extract and validate a trajectory batch into typed arrays.
 
         Args:
-            rewards: 1-D array of per-step rewards for one episode.
+            batch: Dictionary with keys "observations", "actions", "rewards".
 
         Returns:
-            1-D array of discounted returns, same length as *rewards*.
+            Tuple of (observations, actions, rewards, n_steps).
         """
-        n_steps = len(rewards)
-        returns = np.empty(n_steps, dtype=np.float64)
-        cumulative = 0.0
-        for t in range(n_steps - 1, -1, -1):
-            cumulative = float(rewards[t]) + self.gamma * cumulative
-            returns[t] = cumulative
-        return returns
+        observations = np.asarray(batch["observations"], dtype=np.float64)
+        actions = np.asarray(batch["actions"], dtype=int)
+        rewards = np.asarray(batch["rewards"], dtype=np.float64)
+        return observations, actions, rewards, len(rewards)
+
+    def _zero_ac_gradients(self) -> Dict[str, Any]:
+        """
+        Return a zeroed gradient dictionary matching the network parameters.
+
+        Returns:
+            Dict with keys ``W1``, ``b1``, ``W_pi``, ``b_pi``, ``W_v``, ``b_v``.
+        """
+        return {
+            "W1": np.zeros_like(self._W1),
+            "b1": np.zeros_like(self._b1),
+            "W_pi": np.zeros_like(self._W_pi),
+            "b_pi": np.zeros_like(self._b_pi),
+            "W_v": np.zeros_like(self._W_v),
+            "b_v": 0.0,
+        }
+
+    def _accumulate_ac_gradients(
+        self,
+        grads: Dict[str, Any],
+        obs: np.ndarray,
+        h: np.ndarray,
+        d_pi_logits: np.ndarray,
+        d_v_out: float,
+    ) -> None:
+        """
+        Accumulate actor-critic gradients for one time-step in-place.
+
+        Args:
+            grads:       Gradient accumulator dict (modified in-place).
+            obs:         Observation vector for this step.
+            h:           Hidden activations from the forward pass.
+            d_pi_logits: Gradient w.r.t. policy logits.
+            d_v_out:     Gradient w.r.t. value head output.
+        """
+        grads["W_pi"] += np.outer(h, d_pi_logits)
+        grads["b_pi"] += d_pi_logits
+        grads["W_v"] += d_v_out * h
+        grads["b_v"] += d_v_out
+
+        # Backpropagate through the shared trunk
+        d_h = self._W_pi @ d_pi_logits + d_v_out * self._W_v
+        d_pre_h = d_h * (h > 0)  # ReLU derivative
+
+        grads["W1"] += np.outer(obs, d_pre_h)
+        grads["b1"] += d_pre_h
+
+    def _apply_ac_gradients(self, grads: Dict[str, Any], scale: float) -> None:
+        """
+        Apply accumulated gradients to the network parameters.
+
+        Args:
+            grads: Gradient accumulator dict (from :meth:`_zero_ac_gradients`).
+            scale: Multiplier applied to each gradient before subtraction
+                   (typically ``learning_rate / n_steps``).
+        """
+        self._W1 -= scale * grads["W1"]
+        self._b1 -= scale * grads["b1"]
+        self._W_pi -= scale * grads["W_pi"]
+        self._b_pi -= scale * grads["b_pi"]
+        self._W_v -= scale * grads["W_v"]
+        self._b_v -= scale * grads["b_v"]
 
     # ------------------------------------------------------------------
     # BaseAgent interface
@@ -130,17 +185,7 @@ class ActorCriticBase(BaseAgent):
             Selected action index.
         """
         probs, _, _ = self._forward(observation)
-
-        # Lazily initialize a per-agent RNG to avoid using NumPy's global RNG.
-        if not hasattr(self, "_rng"):
-            seed = None
-            if isinstance(self.config, dict):
-                seed = self.config.get("seed")
-            self._rng = np.random.default_rng(seed)
-
-        if training:
-            return int(self._rng.choice(self.action_dim, p=probs))
-        return int(np.argmax(probs))
+        return self._select_action_from_probs(probs, training)
 
     @abstractmethod
     def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
@@ -157,13 +202,7 @@ class ActorCriticBase(BaseAgent):
         Args:
             path: Destination file path.
         """
-        extension = os.path.splitext(path)[1].lower()
-        if extension not in {"", ".npz", ".pt"}:
-            raise ValueError(
-                f"Unsupported checkpoint extension '{extension}'. "
-                "Checkpoint files must use '.pt', '.npz', or no extension."
-            )
-        save_path = path if extension else f"{path}.npz"
+        save_path = self._resolve_save_path(path)
         with open(save_path, "wb") as f:
             np.savez(
                 f,
@@ -187,27 +226,7 @@ class ActorCriticBase(BaseAgent):
         Args:
             path: Source file path.
         """
-        extension = os.path.splitext(path)[1].lower()
-        if extension not in {"", ".npz", ".pt"}:
-            raise ValueError(
-                f"Unsupported checkpoint extension '{extension}'. "
-                "Checkpoint files must use '.pt', '.npz', or no extension."
-            )
-
-        has_exact_path = os.path.exists(path)
-        if extension:
-            legacy_npz_path = f"{path}.npz"
-            if has_exact_path or extension == ".npz":
-                load_path = path
-            elif os.path.exists(legacy_npz_path):
-                load_path = legacy_npz_path
-            else:
-                raise FileNotFoundError(
-                    f"Checkpoint not found at '{path}' (or legacy fallback '{legacy_npz_path}')."
-                )
-        else:
-            load_path = path if has_exact_path else f"{path}.npz"
-
+        load_path = self._resolve_load_path(path)
         with np.load(load_path) as data:
             self._W1 = data["W1"]
             self._b1 = data["b1"]

@@ -1,6 +1,5 @@
 """REINFORCE (Monte Carlo Policy Gradient) agent for CartPole."""
 
-import os
 from typing import Any, Dict, Tuple
 
 import numpy as np
@@ -48,12 +47,7 @@ class ReinforceAgent(BaseAgent):
         self.hidden_dim: int = int(config.get("hidden_dim", 128))
 
         # Validate hyperparameters early to avoid numerical issues later.
-        if observation_dim <= 0:
-            raise ValueError(f"observation_dim must be a positive integer, got {observation_dim!r}")
-        if action_dim <= 0:
-            raise ValueError(f"action_dim must be a positive integer, got {action_dim!r}")
-        if self.hidden_dim <= 0:
-            raise ValueError(f"hidden_dim must be a positive integer, got {self.hidden_dim!r}")
+        self._validate_dims(observation_dim, action_dim, self.hidden_dim)
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
         if not (0.0 < self.gamma <= 1.0):
@@ -91,24 +85,6 @@ class ReinforceAgent(BaseAgent):
         probs = exp_logits / exp_logits.sum()
         return probs, h
 
-    def _compute_returns(self, rewards: np.ndarray) -> np.ndarray:
-        """
-        Compute discounted returns G_t = Σ_{k≥t} γ^(k-t) r_k for each step t.
-
-        Args:
-            rewards: 1-D array of per-step rewards for one episode.
-
-        Returns:
-            1-D array of discounted returns, same length as *rewards*.
-        """
-        n_steps = len(rewards)
-        returns = np.empty(n_steps, dtype=np.float64)
-        cumulative = 0.0
-        for t in range(n_steps - 1, -1, -1):
-            cumulative = float(rewards[t]) + self.gamma * cumulative
-            returns[t] = cumulative
-        return returns
-
     # ------------------------------------------------------------------
     # BaseAgent interface
     # ------------------------------------------------------------------
@@ -129,18 +105,7 @@ class ReinforceAgent(BaseAgent):
             Selected action index.
         """
         probs, _ = self._policy(observation)
-
-        # Lazily initialize a per-agent RNG to avoid using NumPy's global RNG.
-        if not hasattr(self, "_rng"):
-            seed = None
-            config = getattr(self, "config", None)
-            if isinstance(config, dict):
-                seed = config.get("seed")
-            self._rng = np.random.default_rng(seed)
-
-        if training:
-            return int(self._rng.choice(self.action_dim, p=probs))
-        return int(np.argmax(probs))
+        return self._select_action_from_probs(probs, training)
 
     def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
         """
@@ -230,20 +195,9 @@ class ReinforceAgent(BaseAgent):
         Args:
             path: Destination file path.
         """
-        extension = os.path.splitext(path)[1].lower()
-        if extension not in {"", ".npz", ".pt"}:
-            raise ValueError(
-                f"Unsupported checkpoint extension '{extension}'. Checkpoint files must use '.pt', '.npz', or no extension."
-            )
-        save_path = path if extension else f"{path}.npz"
+        save_path = self._resolve_save_path(path)
         with open(save_path, "wb") as f:
-            np.savez(
-                f,
-                W1=self._W1,
-                b1=self._b1,
-                W2=self._W2,
-                b2=self._b2,
-            )
+            np.savez(f, W1=self._W1, b1=self._b1, W2=self._W2, b2=self._b2)
 
     def load(self, path: str) -> None:
         """
@@ -257,27 +211,7 @@ class ReinforceAgent(BaseAgent):
         Args:
             path: Source file path.
         """
-        extension = os.path.splitext(path)[1].lower()
-        if extension not in {"", ".npz", ".pt"}:
-            raise ValueError(
-                f"Unsupported checkpoint extension '{extension}'. Checkpoint files must use '.pt', '.npz', or no extension."
-            )
-
-        has_exact_path = os.path.exists(path)
-        if extension:
-            # Backward-compatible fallback for older checkpoints written as "<name>.pt.npz".
-            legacy_npz_path = f"{path}.npz"
-            if has_exact_path or extension == ".npz":
-                load_path = path
-            elif os.path.exists(legacy_npz_path):
-                load_path = legacy_npz_path
-            else:
-                raise FileNotFoundError(
-                    f"Checkpoint not found at '{path}' (or legacy fallback '{legacy_npz_path}')."
-                )
-        else:
-            load_path = path if has_exact_path else f"{path}.npz"
-
+        load_path = self._resolve_load_path(path)
         with np.load(load_path) as data:
             self._W1 = data["W1"]
             self._b1 = data["b1"]

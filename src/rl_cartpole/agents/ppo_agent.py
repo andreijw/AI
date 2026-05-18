@@ -50,11 +50,7 @@ class PPOAgent(ActorCriticBase):
         Returns:
             Dict with mean policy, value, entropy, and clipping statistics.
         """
-        observations: np.ndarray = np.asarray(batch["observations"], dtype=np.float64)
-        actions: np.ndarray = np.asarray(batch["actions"], dtype=int)
-        rewards: np.ndarray = np.asarray(batch["rewards"], dtype=np.float64)
-
-        n_steps = len(rewards)
+        observations, actions, rewards, n_steps = self._parse_trajectory(batch)
         if n_steps == 0:
             return {
                 "policy_loss": 0.0,
@@ -90,13 +86,7 @@ class PPOAgent(ActorCriticBase):
         clip_fraction = 0.0
 
         for _ in range(self.ppo_epochs):
-            grad_w1 = np.zeros_like(self._W1)
-            grad_b1 = np.zeros_like(self._b1)
-            grad_w_pi = np.zeros_like(self._W_pi)
-            grad_b_pi = np.zeros_like(self._b_pi)
-            grad_w_v = np.zeros_like(self._W_v)
-            grad_b_v = 0.0
-
+            grads = self._zero_ac_gradients()
             epoch_policy_loss = 0.0
             epoch_value_loss = 0.0
             epoch_entropy = 0.0
@@ -141,24 +131,9 @@ class PPOAgent(ActorCriticBase):
 
                 d_v_out = self.value_coef * (value - ret)
 
-                grad_w_pi += np.outer(h, d_pi_logits)
-                grad_b_pi += d_pi_logits
-                grad_w_v += d_v_out * h
-                grad_b_v += d_v_out
+                self._accumulate_ac_gradients(grads, obs, h, d_pi_logits, d_v_out)
 
-                d_h = self._W_pi @ d_pi_logits + d_v_out * self._W_v
-                d_pre_h = d_h * (h > 0)
-
-                grad_w1 += np.outer(obs, d_pre_h)
-                grad_b1 += d_pre_h
-
-            scale = self.learning_rate / n_steps
-            self._W1 -= scale * grad_w1
-            self._b1 -= scale * grad_b1
-            self._W_pi -= scale * grad_w_pi
-            self._b_pi -= scale * grad_b_pi
-            self._W_v -= scale * grad_w_v
-            self._b_v -= scale * grad_b_v
+            self._apply_ac_gradients(grads, self.learning_rate / n_steps)
 
             policy_loss = epoch_policy_loss / n_steps
             value_loss = epoch_value_loss / n_steps

@@ -88,11 +88,7 @@ class ActorCriticAgent(ActorCriticBase):
             Dictionary with keys ``"policy_loss"``, ``"value_loss"``, and
             ``"entropy_bonus"``.
         """
-        observations: np.ndarray = np.asarray(batch["observations"], dtype=np.float64)
-        actions: np.ndarray = np.asarray(batch["actions"], dtype=int)
-        rewards: np.ndarray = np.asarray(batch["rewards"], dtype=np.float64)
-
-        n_steps = len(rewards)
+        observations, actions, rewards, n_steps = self._parse_trajectory(batch)
         if n_steps == 0:
             return {"policy_loss": 0.0, "value_loss": 0.0, "entropy_bonus": 0.0}
 
@@ -108,14 +104,7 @@ class ActorCriticAgent(ActorCriticBase):
         # value function retains scale information)
         returns = self._compute_returns(rewards)
 
-        # Gradient accumulators
-        grad_w1 = np.zeros_like(self._W1)
-        grad_b1 = np.zeros_like(self._b1)
-        grad_w_pi = np.zeros_like(self._W_pi)
-        grad_b_pi = np.zeros_like(self._b_pi)
-        grad_w_v = np.zeros_like(self._W_v)
-        grad_b_v = 0.0
-
+        grads = self._zero_ac_gradients()
         total_policy_loss = 0.0
         total_value_loss = 0.0
         total_entropy = 0.0
@@ -149,30 +138,10 @@ class ActorCriticAgent(ActorCriticBase):
             #   d(value_coef * 0.5*(V-G)^2)/d(V) = value_coef * (V - G)
             d_v_out = self.value_coef * (value - g)
 
-            # Policy-head parameter gradients
-            grad_w_pi += np.outer(h, d_pi_logits)
-            grad_b_pi += d_pi_logits
-
-            # Value-head parameter gradients
-            grad_w_v += d_v_out * h
-            grad_b_v += d_v_out
-
-            # Backpropagate to shared trunk
-            # z = h @ W_pi + b_pi  =>  d(L)/d(h) = W_pi @ d_pi_logits
-            # v = h @ W_v  + b_v   =>  d(L)/d(h) += d_v_out * W_v
-            d_h = self._W_pi @ d_pi_logits + d_v_out * self._W_v
-            d_pre_h = d_h * (h > 0)  # ReLU derivative
-
-            grad_w1 += np.outer(obs, d_pre_h)
-            grad_b1 += d_pre_h
+            self._accumulate_ac_gradients(grads, obs, h, d_pi_logits, d_v_out)
 
         # SGD update averaged over episode length
-        self._W1 -= self.learning_rate * grad_w1 / n_steps
-        self._b1 -= self.learning_rate * grad_b1 / n_steps
-        self._W_pi -= self.learning_rate * grad_w_pi / n_steps
-        self._b_pi -= self.learning_rate * grad_b_pi / n_steps
-        self._W_v -= self.learning_rate * grad_w_v / n_steps
-        self._b_v -= self.learning_rate * grad_b_v / n_steps
+        self._apply_ac_gradients(grads, self.learning_rate / n_steps)
 
         return {
             "policy_loss": float(total_policy_loss / n_steps),
