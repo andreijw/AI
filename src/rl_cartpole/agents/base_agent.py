@@ -32,24 +32,6 @@ class BaseAgent(ABC):
     # Shared utility helpers
     # ------------------------------------------------------------------
 
-    def _compute_returns(self, rewards: np.ndarray) -> np.ndarray:
-        """
-        Compute discounted returns G_t = Σ_{k≥t} γ^(k-t) r_k for each step t.
-
-        Args:
-            rewards: 1-D array of per-step rewards for one episode.
-
-        Returns:
-            1-D array of discounted returns, same length as *rewards*.
-        """
-        n_steps = len(rewards)
-        returns = np.empty(n_steps, dtype=np.float64)
-        cumulative = 0.0
-        for t in range(n_steps - 1, -1, -1):
-            cumulative = float(rewards[t]) + self.gamma * cumulative  # type: ignore[attr-defined]
-            returns[t] = cumulative
-        return returns
-
     def _select_action_from_probs(self, probs: np.ndarray, training: bool) -> int:
         """
         Sample or greedily select an action from a probability distribution.
@@ -67,7 +49,7 @@ class BaseAgent(ABC):
             seed = self.config.get("seed") if isinstance(self.config, dict) else None
             self._rng = np.random.default_rng(seed)
         if training:
-            return int(self._rng.choice(self.action_dim, p=probs))  # type: ignore[attr-defined]
+            return int(self._rng.choice(self.action_dim, p=probs))
         return int(np.argmax(probs))
 
     @staticmethod

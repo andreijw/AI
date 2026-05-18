@@ -64,6 +64,24 @@ class ActorCriticBase(BaseAgent):
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _compute_returns(self, rewards: np.ndarray) -> np.ndarray:
+        """
+        Compute discounted returns G_t = Σ_{k≥t} γ^(k-t) r_k for each step t.
+
+        Args:
+            rewards: 1-D array of per-step rewards for one episode.
+
+        Returns:
+            1-D array of discounted returns, same length as *rewards*.
+        """
+        n_steps = len(rewards)
+        returns = np.empty(n_steps, dtype=np.float64)
+        cumulative = 0.0
+        for t in range(n_steps - 1, -1, -1):
+            cumulative = float(rewards[t]) + self.gamma * cumulative
+            returns[t] = cumulative
+        return returns
+
     def _forward(self, obs: np.ndarray) -> Tuple[np.ndarray, float, np.ndarray]:
         """
         Forward pass through the shared trunk and both heads.
