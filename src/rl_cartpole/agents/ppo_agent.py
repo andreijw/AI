@@ -58,11 +58,6 @@ class PPOAgent(ActorCriticBase):
                 "entropy_bonus": 0.0,
                 "clip_fraction": 0.0,
             }
-        if not (len(observations) == len(actions) == n_steps):
-            raise ValueError(
-                "Inconsistent trajectory lengths: "
-                f"observations={len(observations)}, actions={len(actions)}, rewards={n_steps}"
-            )
 
         returns = self._compute_returns(rewards)
 

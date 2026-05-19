@@ -92,14 +92,6 @@ class ActorCriticAgent(ActorCriticBase):
         if n_steps == 0:
             return {"policy_loss": 0.0, "value_loss": 0.0, "entropy_bonus": 0.0}
 
-        if not (len(observations) == len(actions) == n_steps):
-            raise ValueError(
-                "Inconsistent trajectory lengths: "
-                f"observations={len(observations)}, "
-                f"actions={len(actions)}, "
-                f"rewards={n_steps}"
-            )
-
         # Monte-Carlo returns (same as REINFORCE, no normalisation here so the
         # value function retains scale information)
         returns = self._compute_returns(rewards)

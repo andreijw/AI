@@ -111,6 +111,9 @@ class ActorCriticBase(BaseAgent):
         """
         Extract and validate a trajectory batch into typed arrays.
 
+        Raises ``ValueError`` if the lengths of observations, actions, and
+        rewards do not all match.
+
         Args:
             batch: Dictionary with keys "observations", "actions", "rewards".
 
@@ -120,7 +123,15 @@ class ActorCriticBase(BaseAgent):
         observations = np.asarray(batch["observations"], dtype=np.float64)
         actions = np.asarray(batch["actions"], dtype=int)
         rewards = np.asarray(batch["rewards"], dtype=np.float64)
-        return observations, actions, rewards, len(rewards)
+        n_steps = len(rewards)
+        if not (len(observations) == len(actions) == n_steps):
+            raise ValueError(
+                "Inconsistent trajectory lengths: "
+                f"observations={len(observations)}, "
+                f"actions={len(actions)}, "
+                f"rewards={n_steps}"
+            )
+        return observations, actions, rewards, n_steps
 
     def _zero_ac_gradients(self) -> Dict[str, Any]:
         """
