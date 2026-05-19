@@ -111,9 +111,7 @@ class BaseAgent(ABC):
         npz_path = f"{path}.npz"
         if os.path.exists(npz_path):
             return npz_path
-        raise FileNotFoundError(
-            f"Checkpoint not found at '{path}' (or fallback '{npz_path}')."
-        )
+        raise FileNotFoundError(f"Checkpoint not found at '{path}' (or fallback '{npz_path}').")
 
     @staticmethod
     def _validate_dims(observation_dim: int, action_dim: int, hidden_dim: int) -> None:
