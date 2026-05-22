@@ -1077,6 +1077,7 @@ class TestActorCriticAgentExtended:
         np.testing.assert_array_equal(agent._W_pi, agent2._W_pi)
         np.testing.assert_array_equal(agent._W_v, agent2._W_v)
         assert agent._b_v == agent2._b_v
+
     def test_invalid_observation_dim_raises(self):
         with pytest.raises(ValueError, match="observation_dim"):
             RandomAgent(observation_dim=0, action_dim=2, config={})

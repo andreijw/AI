@@ -85,7 +85,12 @@ class RandomAgent(BaseAgent):
                     f"agent(observation_dim={self.observation_dim}, action_dim={self.action_dim})."
                 )
             rng_state_raw = data["rng_state"]
-            rng_state = json.loads(str(rng_state_raw.item() if hasattr(rng_state_raw, "item") else rng_state_raw))
+            rng_state_text = np.asarray(rng_state_raw).item()
+            if not isinstance(rng_state_text, str):
+                raise ValueError(
+                    "RandomAgent checkpoint rng_state must be stored as a JSON string."
+                )
+            rng_state = json.loads(rng_state_text)
 
         self._rng = np.random.default_rng()
         self._rng.bit_generator.state = rng_state

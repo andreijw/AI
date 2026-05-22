@@ -174,16 +174,16 @@ You can override both the agent type and number of episodes directly from CLI wi
 editing YAML files:
 
 ```bash
-# quick random smoke test
+# quick random agent run
 python train.py --config configs/cartpole_default.yaml --agent-type random --num-episodes 50
 
-# quick REINFORCE smoke test
+# quick REINFORCE run
 python train.py --config configs/cartpole_default.yaml --agent-type reinforce --num-episodes 200
 
-# quick Actor-Critic smoke test
+# quick Actor-Critic run
 python train.py --config configs/cartpole_default.yaml --agent-type actor_critic --num-episodes 200
 
-# quick PPO smoke test
+# quick PPO run
 python train.py --config configs/cartpole_default.yaml --agent-type ppo --num-episodes 200
 ```
 

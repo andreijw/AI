@@ -81,8 +81,18 @@ def main():
     # Load configuration
     print(f"Loading configuration from {args.config}")
     config = load_config(args.config)
-    config.setdefault("agent", {}).setdefault("config", {})
-    config.setdefault("training", {})
+    for section in ("environment", "agent", "training"):
+        section_value = config.get(section)
+        if not isinstance(section_value, dict):
+            raise ValueError(
+                f"Config file '{args.config}' must define a '{section}' mapping section."
+            )
+    if config["agent"].get("config") is None:
+        config["agent"]["config"] = {}
+    elif not isinstance(config["agent"].get("config"), dict):
+        raise ValueError(
+            f"Config file '{args.config}' must define 'agent.config' as a mapping section."
+        )
 
     if args.agent_type is not None:
         config["agent"]["type"] = args.agent_type
