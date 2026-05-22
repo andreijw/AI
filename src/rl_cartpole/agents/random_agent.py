@@ -1,5 +1,6 @@
 """Random agent for baseline testing."""
 
+import json
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -26,6 +27,11 @@ class RandomAgent(BaseAgent):
                 - ``seed`` (int | None): Random seed for reproducible action selection.
         """
         super().__init__(observation_dim, action_dim, config)
+        if observation_dim <= 0:
+            raise ValueError(f"observation_dim must be a positive integer, got {observation_dim!r}")
+        if action_dim <= 0:
+            raise ValueError(f"action_dim must be a positive integer, got {action_dim!r}")
+
         seed: Optional[int] = config.get("seed")
         self._rng = np.random.default_rng(seed)
 
@@ -55,19 +61,31 @@ class RandomAgent(BaseAgent):
         return {}
 
     def save(self, path: str) -> None:
-        """
-        No-op save for random agent.
-
-        Args:
-            path: Path to save (ignored)
-        """
-        pass
+        """Save random-agent metadata and RNG state to a NumPy ``.npz`` checkpoint."""
+        save_path = self._resolve_save_path(path)
+        state_json = json.dumps(self._rng.bit_generator.state)
+        np.savez(
+            save_path,
+            observation_dim=np.int64(self.observation_dim),
+            action_dim=np.int64(self.action_dim),
+            rng_state=state_json,
+        )
 
     def load(self, path: str) -> None:
-        """
-        No-op load for random agent.
+        """Load random-agent metadata and RNG state from a NumPy ``.npz`` checkpoint."""
+        load_path = self._resolve_load_path(path)
+        with np.load(load_path) as data:
+            saved_observation_dim = int(data["observation_dim"])
+            saved_action_dim = int(data["action_dim"])
+            if saved_observation_dim != self.observation_dim or saved_action_dim != self.action_dim:
+                raise ValueError(
+                    "Checkpoint dimensions do not match this agent instance: "
+                    f"checkpoint(observation_dim={saved_observation_dim}, "
+                    f"action_dim={saved_action_dim}) vs "
+                    f"agent(observation_dim={self.observation_dim}, action_dim={self.action_dim})."
+                )
+            rng_state_raw = data["rng_state"]
+            rng_state = json.loads(str(rng_state_raw.item() if hasattr(rng_state_raw, "item") else rng_state_raw))
 
-        Args:
-            path: Path to load (ignored)
-        """
-        pass
+        self._rng = np.random.default_rng()
+        self._rng.bit_generator.state = rng_state

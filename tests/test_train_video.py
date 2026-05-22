@@ -101,6 +101,62 @@ def test_mutual_exclusion_render_and_record_video(tmp_path, monkeypatch):
         _run_main_with_args(["--render", "--record-video", "--config", config_path], monkeypatch)
 
 
+def test_num_episodes_override_requires_positive_int(tmp_path, monkeypatch):
+    """--num-episodes must be a positive integer."""
+    config_path = _minimal_config(tmp_path)
+    with pytest.raises(SystemExit):
+        _run_main_with_args(["--num-episodes", "0", "--config", config_path], monkeypatch)
+
+
+def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
+    """CLI overrides should select the requested agent and training length."""
+    config_path = _minimal_config(tmp_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train.py",
+            "--config",
+            config_path,
+            "--agent-type",
+            "reinforce",
+            "--num-episodes",
+            "1",
+        ],
+    )
+    if "train" in sys.modules:
+        del sys.modules["train"]
+    import train  # noqa: PLC0415
+
+    captured = {}
+
+    class _StubReinforce:
+        def __init__(self, observation_dim, action_dim, config):
+            captured["agent_observation_dim"] = observation_dim
+            captured["agent_action_dim"] = action_dim
+            captured["agent_config"] = dict(config)
+
+    class _StubTrainer:
+        def __init__(self, env, agent, config, logger=None):
+            captured["trainer_agent_type"] = type(agent).__name__
+            captured["trainer_num_episodes"] = config.get("num_episodes")
+            self.episode_rewards = []
+            self.episode_lengths = []
+
+        def train(self):
+            return {"ok": True}
+
+    monkeypatch.setitem(train.AGENT_CLASSES, "reinforce", _StubReinforce)
+    monkeypatch.setattr(train, "Trainer", _StubTrainer)
+
+    train.main()
+
+    assert captured["trainer_agent_type"] == "_StubReinforce"
+    assert captured["trainer_num_episodes"] == 1
+    assert captured["agent_observation_dim"] == 4
+    assert captured["agent_action_dim"] == 2
+
+
 def test_record_video_missing_moviepy_raises_import_error(tmp_path, monkeypatch):
     """--record-video should raise ImportError with install instructions when moviepy is absent."""
     config_path = _minimal_config(tmp_path)

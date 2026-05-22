@@ -7,6 +7,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import numpy as np
+import pytest
 
 from rl_cartpole.agents import RandomAgent
 
@@ -48,13 +49,22 @@ def test_random_agent_update():
     assert len(metrics) == 0  # No metrics for random agent
 
 
-def test_random_agent_save_load():
-    """Test random agent save/load (should be no-op)."""
-    agent = RandomAgent(observation_dim=4, action_dim=2, config={})
+def test_random_agent_save_load(tmp_path):
+    """Test random agent save/load preserves RNG progression."""
+    obs = np.zeros(4)
+    agent = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 123})
 
-    # These should not raise errors
-    agent.save("/tmp/test_agent.pt")
-    agent.load("/tmp/test_agent.pt")
+    _ = [agent.select_action(obs) for _ in range(10)]
+    checkpoint_path = str(tmp_path / "random_agent")
+    agent.save(checkpoint_path)
+    assert os.path.exists(f"{checkpoint_path}.npz")
+
+    expected_future = [agent.select_action(obs) for _ in range(10)]
+    restored = RandomAgent(observation_dim=4, action_dim=2, config={})
+    restored.load(checkpoint_path)
+    restored_future = [restored.select_action(obs) for _ in range(10)]
+
+    assert restored_future == expected_future
 
 
 def test_random_agent_select_action_training_false():
@@ -140,3 +150,14 @@ def test_random_agent_no_seed_does_not_raise():
     obs = np.zeros(4)
     action = agent.select_action(obs)
     assert action in [0, 1]
+
+
+def test_random_agent_load_dimension_mismatch_raises(tmp_path):
+    """Loading checkpoint with mismatched dimensions should fail fast."""
+    path = str(tmp_path / "random_checkpoint")
+    source = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 1})
+    source.save(path)
+
+    target = RandomAgent(observation_dim=4, action_dim=3, config={})
+    with pytest.raises(ValueError, match="Checkpoint dimensions do not match"):
+        target.load(path)
