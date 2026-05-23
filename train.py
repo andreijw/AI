@@ -98,6 +98,17 @@ def main():
         config["agent"]["type"] = args.agent_type
     if args.num_episodes is not None:
         config["training"]["num_episodes"] = args.num_episodes
+    agent_type = config["agent"].get("type")
+    if not isinstance(agent_type, str):
+        raise ValueError(
+            f"Config file '{args.config}' must define 'agent.type' as a string "
+            f"in {sorted(AGENT_CLASSES)}."
+        )
+    if agent_type not in AGENT_CLASSES:
+        raise ValueError(
+            f"Config file '{args.config}' has unsupported 'agent.type': {agent_type!r}. "
+            f"Expected one of {sorted(AGENT_CLASSES)}."
+        )
 
     # Setup logger
     logger = setup_logger(
@@ -175,10 +186,7 @@ def main():
         logger.info("Environment created")
 
         # Create agent
-        agent_type = config["agent"]["type"]
-        agent_cls = AGENT_CLASSES.get(agent_type)
-        if agent_cls is None:
-            raise ValueError(f"Unknown agent type: {agent_type}")
+        agent_cls = AGENT_CLASSES[agent_type]
         agent = agent_cls(
             observation_dim=env.observation_space.shape[0],
             action_dim=env.action_space.n,

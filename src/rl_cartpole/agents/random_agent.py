@@ -64,12 +64,13 @@ class RandomAgent(BaseAgent):
         """Save random-agent metadata and RNG state to a NumPy ``.npz`` checkpoint."""
         save_path = self._resolve_save_path(path)
         state_json = json.dumps(self._rng.bit_generator.state)
-        np.savez(
-            save_path,
-            observation_dim=np.int64(self.observation_dim),
-            action_dim=np.int64(self.action_dim),
-            rng_state=state_json,
-        )
+        with open(save_path, "wb") as checkpoint_file:
+            np.savez(
+                checkpoint_file,
+                observation_dim=np.int64(self.observation_dim),
+                action_dim=np.int64(self.action_dim),
+                rng_state=state_json,
+            )
 
     def load(self, path: str) -> None:
         """Load random-agent metadata and RNG state from a NumPy ``.npz`` checkpoint."""
