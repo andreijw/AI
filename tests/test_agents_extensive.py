@@ -197,11 +197,20 @@ class TestRandomAgentExtended:
         ]:
             assert agent.update(batch) == {}
 
-    def test_save_load_no_op_never_raises(self, tmp_path):
-        agent = RandomAgent(observation_dim=4, action_dim=2, config={})
+    def test_save_load_roundtrip_restores_rng_state(self, tmp_path):
+        obs = np.zeros(4)
+        agent = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 99})
+        _ = [agent.select_action(obs) for _ in range(25)]
+
         p = str(tmp_path / "random")
         agent.save(p)
-        agent.load(p)
+        assert os.path.exists(f"{p}.npz")
+
+        expected = [agent.select_action(obs) for _ in range(20)]
+        loaded = RandomAgent(observation_dim=4, action_dim=2, config={})
+        loaded.load(p)
+        actual = [loaded.select_action(obs) for _ in range(20)]
+        assert actual == expected
 
     def test_config_stored_unchanged(self):
         config = {"seed": 123, "extra": "value"}
@@ -1068,3 +1077,11 @@ class TestActorCriticAgentExtended:
         np.testing.assert_array_equal(agent._W_pi, agent2._W_pi)
         np.testing.assert_array_equal(agent._W_v, agent2._W_v)
         assert agent._b_v == agent2._b_v
+
+    def test_invalid_observation_dim_raises(self):
+        with pytest.raises(ValueError, match="observation_dim"):
+            RandomAgent(observation_dim=0, action_dim=2, config={})
+
+    def test_invalid_action_dim_raises(self):
+        with pytest.raises(ValueError, match="action_dim"):
+            RandomAgent(observation_dim=4, action_dim=0, config={})

@@ -168,15 +168,34 @@ python train.py --config configs/cartpole_actor_critic.yaml
 python train.py --config configs/cartpole_ppo.yaml
 ```
 
-### PPO Training with Visualization
+### Run any agent from one base config (quick overrides)
 
-For a full PPO run with saved learning-curve plots:
+You can override both the agent type and number of episodes directly from CLI without
+editing YAML files:
+
+```bash
+# quick random agent run
+python train.py --config configs/cartpole_default.yaml --agent-type random --num-episodes 50
+
+# quick REINFORCE run
+python train.py --config configs/cartpole_default.yaml --agent-type reinforce --num-episodes 200
+
+# quick Actor-Critic run
+python train.py --config configs/cartpole_default.yaml --agent-type actor_critic --num-episodes 200
+
+# quick PPO run
+python train.py --config configs/cartpole_default.yaml --agent-type ppo --num-episodes 200
+```
+
+### Visualization and video recording
+
+For a full run with saved learning-curve plots:
 
 ```bash
 python train.py --config configs/cartpole_ppo.yaml --plot --plot-dir ./plots
 ```
 
-To visualize live training locally:
+To visualize live training locally (requires display):
 
 ```bash
 python train.py --config configs/cartpole_ppo.yaml --render
@@ -188,28 +207,12 @@ For headless visualization (saved MP4 videos):
 python train.py --config configs/cartpole_ppo.yaml --record-video --video-dir ./videos
 ```
 
-### Basic Training
+### Basic/default run
 
-Run training with the default configuration:
+Run training with defaults (`configs/cartpole_default.yaml`):
 
 ```bash
 python train.py
-```
-
-### Custom Configuration
-
-Use a custom configuration file:
-
-```bash
-python train.py --config configs/cartpole_default.yaml
-```
-
-### Render Environment
-
-Visualize the training process (requires a local display):
-
-```bash
-python train.py --render
 ```
 
 ### Record Training Videos (Headless / SSH)

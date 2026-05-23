@@ -12,6 +12,13 @@ from rl_cartpole.environments import CartPoleEnv
 from rl_cartpole.training import Trainer
 from rl_cartpole.utils import load_config, plot_training_metrics, setup_logger
 
+AGENT_CLASSES = {
+    "random": RandomAgent,
+    "reinforce": ReinforceAgent,
+    "actor_critic": ActorCriticAgent,
+    "ppo": PPOAgent,
+}
+
 
 def main():
     """Main training function."""
@@ -53,14 +60,55 @@ def main():
         default="./plots",
         help="Directory to save the training metrics plot (default: ./plots)",
     )
+    parser.add_argument(
+        "--agent-type",
+        type=str,
+        choices=sorted(AGENT_CLASSES),
+        help="Override the agent type from config (random, reinforce, actor_critic, ppo).",
+    )
+    parser.add_argument(
+        "--num-episodes",
+        type=int,
+        help="Override training.num_episodes from config (must be > 0).",
+    )
     args = parser.parse_args()
 
     if args.render and args.record_video:
         parser.error("--render and --record-video are mutually exclusive. Use one or the other.")
+    if args.num_episodes is not None and args.num_episodes <= 0:
+        parser.error("--num-episodes must be a positive integer.")
 
     # Load configuration
     print(f"Loading configuration from {args.config}")
     config = load_config(args.config)
+    for section in ("environment", "agent", "training"):
+        section_value = config.get(section)
+        if not isinstance(section_value, dict):
+            raise ValueError(
+                f"Config file '{args.config}' must define a '{section}' mapping section."
+            )
+    if config["agent"].get("config") is None:
+        config["agent"]["config"] = {}
+    elif not isinstance(config["agent"].get("config"), dict):
+        raise ValueError(
+            f"Config file '{args.config}' must define 'agent.config' as a mapping section."
+        )
+
+    if args.agent_type is not None:
+        config["agent"]["type"] = args.agent_type
+    if args.num_episodes is not None:
+        config["training"]["num_episodes"] = args.num_episodes
+    agent_type = config["agent"].get("type")
+    if not isinstance(agent_type, str):
+        raise ValueError(
+            f"Config file '{args.config}' must define 'agent.type' as a string "
+            f"in {sorted(AGENT_CLASSES)}."
+        )
+    if agent_type not in AGENT_CLASSES:
+        raise ValueError(
+            f"Config file '{args.config}' has unsupported 'agent.type': {agent_type!r}. "
+            f"Expected one of {sorted(AGENT_CLASSES)}."
+        )
 
     # Setup logger
     logger = setup_logger(
@@ -138,33 +186,12 @@ def main():
         logger.info("Environment created")
 
         # Create agent
-        agent_type = config["agent"]["type"]
-        if agent_type == "random":
-            agent = RandomAgent(
-                observation_dim=env.observation_space.shape[0],
-                action_dim=env.action_space.n,
-                config=config["agent"]["config"],
-            )
-        elif agent_type == "reinforce":
-            agent = ReinforceAgent(
-                observation_dim=env.observation_space.shape[0],
-                action_dim=env.action_space.n,
-                config=config["agent"]["config"],
-            )
-        elif agent_type == "actor_critic":
-            agent = ActorCriticAgent(
-                observation_dim=env.observation_space.shape[0],
-                action_dim=env.action_space.n,
-                config=config["agent"]["config"],
-            )
-        elif agent_type == "ppo":
-            agent = PPOAgent(
-                observation_dim=env.observation_space.shape[0],
-                action_dim=env.action_space.n,
-                config=config["agent"]["config"],
-            )
-        else:
-            raise ValueError(f"Unknown agent type: {agent_type}")
+        agent_cls = AGENT_CLASSES[agent_type]
+        agent = agent_cls(
+            observation_dim=env.observation_space.shape[0],
+            action_dim=env.action_space.n,
+            config=config["agent"]["config"],
+        )
 
         logger.info(f"Agent created: {agent_type}")
 
