@@ -423,11 +423,25 @@ The `Trainer` class orchestrates the training process:
 - Evaluation and checkpointing
 - Metrics logging
 
+## Next AI Progression
+
+With random, REINFORCE, actor-critic, and PPO in place, the next natural step is to add a
+value-based baseline so policy-gradient and value-learning approaches can be compared directly.
+
+### Immediate target: `DQNAgent`
+
+1. Add a `DQNAgent` implementation that follows the same `BaseAgent` lifecycle (`select_action`,
+   `update`, `save`, `load`).
+2. Extend `train.py` dispatch and config options so DQN can run through the same CLI flow used by
+   existing agents.
+3. Add focused tests for replay handling, target updates, and epsilon-greedy behavior.
+4. Benchmark DQN against PPO on CartPole with the existing metrics and plotting pipeline.
+
 ## Future Enhancements
 
-This initial structure sets the foundation for:
+After DQN, the current structure also supports:
 
-- **Additional Algorithms**: DQN, A3C, SAC, etc.
+- **Additional Algorithms**: A3C, SAC, etc.
 - **Advanced Environments**: More complex physics simulations
 - **Vision Integration**: Camera-based observations
 - **SLAM Integration**: Simultaneous localization and mapping
