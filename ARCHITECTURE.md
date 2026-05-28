@@ -94,9 +94,9 @@ decisions and how the components interact.
 
 **Future Extensions**:
 
-- `PPOAgent`: Proximal Policy Optimization
 - `DQNAgent`: Deep Q-Network
 - `A3CAgent`: Asynchronous Advantage Actor-Critic
+- `SACAgent`: Soft Actor-Critic
 
 ### 3. Training Module (`training/`)
 
@@ -209,12 +209,14 @@ decisions and how the components interact.
 
 As the project evolves toward more advanced robotics/AI capabilities:
 
-1. **Vision Integration**: Add observation preprocessing pipeline
-2. **SLAM**: Integrate localization and mapping modules
-3. **ROS2**: Add ROS2 nodes for real robot deployment
-4. **Embedded Inference**: Add model optimization for edge devices
-5. **Multi-Agent**: Extend to support multiple agents
-6. **Curriculum Learning**: Progressive environment difficulty
+1. **Next RL Milestone (DQN)**: Add replay-buffer-backed value learning for direct comparison with
+   PPO and actor-critic.
+2. **Vision Integration**: Add observation preprocessing pipeline
+3. **SLAM**: Integrate localization and mapping modules
+4. **ROS2**: Add ROS2 nodes for real robot deployment
+5. **Embedded Inference**: Add model optimization for edge devices
+6. **Multi-Agent**: Extend to support multiple agents
+7. **Curriculum Learning**: Progressive environment difficulty
 
 ## Code Style Guidelines
 
