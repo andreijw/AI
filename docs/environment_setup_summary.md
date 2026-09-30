@@ -91,10 +91,10 @@ env = make_env(action_noise_prob=0.05)
 
 ```python
 domain_rand = {
-    'gravity': (9.0, 10.0),
-    'masscart': (0.9, 1.1),
-    'masspole': (0.09, 0.11),
-    'length': (0.45, 0.55),
+    "gravity": (9.0, 10.0),
+    "masscart": (0.9, 1.1),
+    "masspole": (0.09, 0.11),
+    "length": (0.45, 0.55),
 }
 env = make_env(domain_randomization=domain_rand)
 ```
@@ -133,14 +133,14 @@ vec_env = make_vec_env(num_envs=4, seed=42, async_envs=False)
 
 ```python
 config = {
-    'max_episode_steps': 500,
-    'seed': 42,
-    'obs_noise_std': 0.01,
-    'action_noise_prob': 0.05,
-    'domain_randomization': {
-        'gravity': [9.0, 10.0],
-        'length': [0.4, 0.6],
-    }
+    "max_episode_steps": 500,
+    "seed": 42,
+    "obs_noise_std": 0.01,
+    "action_noise_prob": 0.05,
+    "domain_randomization": {
+        "gravity": [9.0, 10.0],
+        "length": [0.4, 0.6],
+    },
 }
 env = make_env_from_config(config)
 ```
@@ -229,7 +229,7 @@ for episode in range(100):
         action = policy(obs)  # Your policy
         obs, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
-    
+
     obs, info = env.reset()
 
 env.close()
@@ -247,12 +247,12 @@ vec_env = make_vec_env(
     obs_noise_std=0.02,
     action_noise_prob=0.05,
     domain_randomization={
-        'gravity': (9.0, 10.0),
-        'masscart': (0.9, 1.1),
-        'masspole': (0.09, 0.11),
-        'length': (0.45, 0.55),
+        "gravity": (9.0, 10.0),
+        "masscart": (0.9, 1.1),
+        "masspole": (0.09, 0.11),
+        "length": (0.45, 0.55),
     },
-    async_envs=True
+    async_envs=True,
 )
 
 obs, info = vec_env.reset()
@@ -270,7 +270,7 @@ import yaml
 from rl_cartpole.environments import make_env_from_config
 
 # Load from YAML file
-with open('configs/env.yaml', 'r') as f:
+with open("configs/env.yaml", "r") as f:
     config = yaml.safe_load(f)
 
 env = make_env_from_config(config)
