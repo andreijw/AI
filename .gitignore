@@ -213,3 +213,6 @@ test_logs/
 test_checkpoints/
 *.pt
 *.pth
+
+# Claude Code personal settings (local MCP overrides, approvals, permissions)
+.claude/settings.local.json

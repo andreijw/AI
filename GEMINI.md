@@ -35,8 +35,9 @@ To optimize token usage and context window limits:
     [environments/](file:///D:/Documents/Code/AI/src/rl_cartpole/environments/)): Gymnasium wrapper implementations,
     observation/action noise injections, domain randomization configurations, and vectorized environment factories.
   * `src/rl_cartpole/agents/` (located at [agents/](file:///D:/Documents/Code/AI/src/rl_cartpole/agents/)): RL agent
-    policy implementations, including abstract `BaseAgent`, baseline `RandomAgent`, and deep/policy-gradient agents:
-    `ReinforceAgent`, `ActorCriticAgent`, and `PpoAgent`.
+    policy implementations, including abstract `BaseAgent`, baseline `RandomAgent`, the shared actor/critic network
+    base `ActorCriticBase` (`actor_critic_base.py`), and deep/policy-gradient agents: `ReinforceAgent`,
+    `ActorCriticAgent`, and `PPOAgent`.
   * `src/rl_cartpole/training/` (located at [training/](file:///D:/Documents/Code/AI/src/rl_cartpole/training/)):
     Training pipelines and loop management orchestration (`trainer.py`).
   * `src/rl_cartpole/utils/` (located at [utils/](file:///D:/Documents/Code/AI/src/rl_cartpole/utils/)): Common
@@ -54,6 +55,9 @@ To optimize token usage and context window limits:
   features (e.g., [demo_env_features.py](file:///D:/Documents/Code/AI/examples/demo_env_features.py)).
 * **`train.py`** (located at [train.py](file:///D:/Documents/Code/AI/train.py)): The main command-line entrypoint for
   initiating RL agent training runs.
+* **`example.py`**: Minimal standalone usage example of the framework.
+* **`ARCHITECTURE.md`** / **`TESTING.md`**: Component architecture reference and manual test procedures.
+* **`setup.ps1`**: Windows developer setup (installs Python 3.11, creates `.venv`, runs CI checks).
 * **`pyproject.toml`**: Packaging metadata, dependencies, and tool settings (Ruff, Mypy, Pytest, Bandit).
 * **`.github/workflows/`**: CI/CD automation workflows (linting, tests, type checking, security, nightly maintenance).
 
@@ -93,7 +97,10 @@ Always verify compilation and tests locally before finishing a task.
 Run these commands in the root workspace directory:
 
 ```bash
-# Install dependencies in editable development mode
+# Windows: one-shot setup (Python 3.11 + .venv + dependencies + CI checks)
+.\setup.ps1
+
+# Any OS: install dependencies in editable development mode inside an activated venv
 pip install -e ".[dev,video]"
 ```
 
@@ -149,89 +156,15 @@ python scripts/sync_workflow_docs.py
 
 ## 5. Feature & Bug Workflow
 
-Follow these steps **in order** for every new feature or bug fix. Do not skip or reorder steps.
-
-### Step 1 — Update the roadmap
-
-* Find the matching item in `docs/roadmap.md`. If none exists, add it under the appropriate phase.
-* Flesh out the item: write a clear description, acceptance criteria, and known edge cases.
-* Mark the item **In Progress**.
-* **Stop here and ask the user to confirm the roadmap item** before continuing. Do not proceed until confirmed.
-
-### Step 2 — Finalize the work item
-
-* Incorporate any feedback from the confirmation step into `docs/roadmap.md`.
-* Clarify scope, algorithmic constraints (pure NumPy, Gymnasium v0.29+ API), and explicit out-of-scope items with the
-  user.
-* The work item is now locked — no scope changes without repeating steps 1–2.
-
-### Step 3 — Plan the solution
-
-* Identify every file, class, function, and configuration that needs to change.
-* **Check existing components first** — search for similar logic in `src/rl_cartpole/` (e.g. `agents/BaseAgent`,
-  `environments/`, `utils/`) before writing anything new. Plan to reuse or extend rather than duplicate.
-* Design clean abstractions; avoid one-off inline logic for anything with a natural architectural boundary.
-* Write a short implementation plan and share it with the user before touching any code.
-* Highlight any breaking changes, config schema updates, or numerical stability considerations.
-
-### Step 4 — Write tests first (ATDD)
-
-* Add or update unit tests in `tests/` that encode the **expected behavior** defined in step 2.
-* Cover happy paths **and** edge cases (e.g., state bounds, action masking/clamping, terminal states, reproducibility).
-* Tests must fail at this point — that is the goal of this step.
-* Pytest tests → `tests/test_*.py`.
-
-### Step 5 — Implement the code changes
-
-* Write only the code needed to make the failing tests pass.
-* Follow the coding standards in section 3 and [CONTRIBUTING.md](CONTRIBUTING.md).
-* Run validation commands from section 4 after each logical chunk of work (`ruff check .`, `ruff format --check .`,
-  `mypy src`).
-
-### Step 6 — Fix regressions and check for duplication
-
-* Run the full test suite: `pytest`.
-* Fix any failures caused by changes by updating the **implementation**, not the tests.
-* Only change a test if it was demonstrably incorrect — document why in the PR description.
-* **Scan for code duplication** introduced or exposed:
-  * Check for repeated patterns across agents, environment wrappers, or training loops.
-  * If duplication is found, extract it into a shared utility or helper before marking the step done.
-
-### Step 7 — Request manual testing
-
-* Ask the user to manually verify or test the feature before it is considered done.
-* Provide specific, actionable testing instructions: runnable commands (e.g. `python train.py --config ...`,
-  `python examples/demo_env_features.py`), expected metrics (rewards, episode lengths, convergence thresholds), and log
-  outputs.
-* Reference the relevant rows in [TESTING.md](TESTING.md).
-* **Wait for the user's sign-off** before proceeding to step 8.
-
-### Step 8 — Mark the feature complete
-
-* Once the user confirms the feature is working as expected, update `docs/roadmap.md`:
-  * Move the item to its completed milestone section (or mark `[x]`).
-  * Remove the **In Progress** label.
-* If the feature introduced new manual test procedures, document them in [TESTING.md](TESTING.md).
-* Run `python scripts/sync_workflow_docs.py` if workflows or documentation markers were modified.
-
-### Step 9 — Output Pull Request changes
-
-* Prepare and output a complete Pull Request description formatted exactly according to the template in
-  [.github/pull_request_template.md](.github/pull_request_template.md).
-* Summarize the changes clearly, verify the checklist confirmations, detail verification steps, and list all files
-  modified.
+The 10-step feature & bug workflow (branch → roadmap → plan → TDD red/green/refactor → manual test → complete → PR)
+now lives in **[CONTRIBUTING.md §4](CONTRIBUTING.md#4-feature--bug-workflow)** so humans and every AI assistant share
+one source of truth. Follow it **in order** for every new feature or bug fix, starting with Step 0: create a
+`feature/<name>` (or `fix/<name>`) branch off `develop`.
 
 ---
 
 ## 6. Checkpoints, Logs & Outputs Management
 
-To manage local storage growth and prevent checking binary artifacts or bulky tracking files into git, directory gates
-and cleanup policies are set up.
-
-* **Gitignored Artifact Directories**: Do not commit training logs or model checkpoints to the repository. The
-  following folders are strictly blocked in `.gitignore`:
-  * `logs/` (tensorboard and raw metrics logs)
-  * `checkpoints/` (serialized numpy agent weights)
-  * `test_logs/` & `test_checkpoints/` (temporary test suite outputs)
-* **Checkpoints Saving**: Model weights are typically persisted using NumPy `.npz` files or generic state dicts. Keep
-  checkpointing frequencies balanced to avoid excessive local disk write/usage.
+The policy for gitignored training artifacts (`logs/`, `checkpoints/`, `test_logs/`, `test_checkpoints/`) and `.npz`
+checkpoint guidance lives in **[CONTRIBUTING.md §5](CONTRIBUTING.md#5-generated-artifacts-logs--checkpoints)**. Never
+commit training logs or model checkpoints.
