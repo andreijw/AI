@@ -50,6 +50,31 @@ Status labels: `[ ]` Not Started · `[~]` In Progress · `[x]` Complete
 
 ## Upcoming Milestones
 
+### Training Tooling
+
+- [x] **Training Video Interval & Trained-Agent Recording**
+  - **Description**: Let `train.py --record-video` choose how often training episodes are recorded, and add
+    `record.py` to record a trained agent from a checkpoint into a single MP4.
+  - **Acceptance criteria**:
+    - `--video-every N` (positive int) records every Nth **training** episode as its own clip. When omitted, the
+      current behavior is kept (every `training.eval_frequency` episodes).
+    - Evaluation episodes are never recorded during training, and clip numbers match training episode numbers
+      (fixes the drift where `Trainer.evaluate()` advanced `RecordVideo`'s episode counter by 10 per evaluation).
+    - `--video-every` without `--record-video` is a usage error; `--video-every` <= 0 is rejected.
+    - `record.py --checkpoint PATH [--episodes N]` loads the agent from the config, plays N evaluation episodes
+      (default 5) and writes them to one `cartpole-playback-full.mp4` in `--video-dir`.
+    - `record.py` reuses `train.py`'s config, environment, agent and headless setup and `Trainer.evaluate()`;
+      no setup code is duplicated.
+    - Memory stays bounded to one episode's frames: clips are written per episode and concatenated on disk
+      with ffmpeg stream copy.
+    - `plots/` and `videos/` are added to `.gitignore`.
+    - Tests in `tests/test_train_video.py`, `tests/test_record.py` and `tests/test_video.py`; README and
+      TESTING.md updated.
+  - **Known edge cases**: Missing checkpoint file; checkpoint saved by a different agent type than the config;
+    `--episodes` <= 0; training interrupted (clips already written are kept).
+  - **Out of scope**: Recording every training episode into one video (too slow: ~6 min instead of ~8 s for
+    1000 random-agent episodes); a config-file key for the video interval; changes to `--render`.
+
 ### Phase 4 — Value-Based Learning: Deep Q-Network (DQN)
 
 Targeting value-learning baseline for direct comparison against policy-gradient methods (A2C/PPO).

@@ -66,6 +66,7 @@ AI/
 │   ├── cartpole_actor_critic.yaml
 │   └── cartpole_ppo.yaml
 ├── train.py                     # Main training script
+├── record.py                    # Record a trained agent from a checkpoint
 ├── setup.ps1                   # Windows developer setup (Python 3.12 + .venv + CI checks)
 ├── .mcp.json                   # Shared MCP servers for AI assistants (context7)
 ├── pyproject.toml              # Project configuration
@@ -259,8 +260,34 @@ Videos are saved to `./videos/` by default. Use `--video-dir` to choose a differ
 python train.py --record-video --video-dir /path/to/videos
 ```
 
-A new video is recorded every `eval_frequency` episodes (configured in the YAML file, default
-100). After training, copy the videos to your local machine and open them in any video player:
+By default a clip is recorded every `eval_frequency` training episodes (configured in the YAML
+file, default 100). Clips are named after the training episode they show
+(`cartpole-training-episode-<N>.mp4`); evaluation episodes are never recorded. Use
+`--video-every` to change the interval:
+
+```bash
+# Record every 25th training episode as its own clip
+python train.py --record-video --video-every 25
+```
+
+Every recorded episode is rendered and encoded frame by frame, so small intervals slow training
+down (recording all 1000 random-agent episodes takes ~6 minutes instead of ~8 seconds).
+
+### Record a Trained Agent
+
+To get one longer video of a trained agent, record it from a checkpoint after training. This
+does not slow training down:
+
+```bash
+python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/agent_episode_1500.pt --episodes 5
+```
+
+`record.py` loads the agent type from the config (or `--agent-type`), plays `--episodes`
+evaluation episodes (default 5) and saves them as one `videos/cartpole-playback-full.mp4`
+(`--video-dir` to change). A well-trained agent balances for the full 500 steps, i.e. 10 seconds
+per episode.
+
+After training, copy the videos to your local machine and open them in any video player:
 
 ```bash
 # From your local machine
