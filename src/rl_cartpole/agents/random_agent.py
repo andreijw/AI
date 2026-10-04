@@ -1,7 +1,7 @@
 """Random agent for baseline testing."""
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -16,7 +16,7 @@ class RandomAgent(BaseAgent):
     Action selection is reproducible when a seed is provided via config.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, config: Dict[str, Any]):
+    def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         """
         Initialize the random agent.
 
@@ -32,7 +32,7 @@ class RandomAgent(BaseAgent):
         if action_dim <= 0:
             raise ValueError(f"action_dim must be a positive integer, got {action_dim!r}")
 
-        seed: Optional[int] = config.get("seed")
+        seed: int | None = config.get("seed")
         self._rng = np.random.default_rng(seed)
 
     def select_action(self, observation: np.ndarray, training: bool = True) -> int:
@@ -48,7 +48,7 @@ class RandomAgent(BaseAgent):
         """
         return int(self._rng.integers(0, self.action_dim))
 
-    def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
+    def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         No-op update for random agent.
 

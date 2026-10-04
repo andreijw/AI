@@ -1,6 +1,6 @@
 """Actor-Critic (A2C) agent for CartPole."""
 
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 
@@ -43,7 +43,7 @@ class ActorCriticAgent(ActorCriticBase):
         seed          (int):   RNG seed for weight initialisation. Default: None.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, config: Dict[str, Any]):
+    def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         """
         Initialise the Actor-Critic agent.
 
@@ -59,7 +59,7 @@ class ActorCriticAgent(ActorCriticBase):
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
 
-    def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
+    def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         Update actor and critic parameters using the collected trajectory.
 
@@ -101,7 +101,7 @@ class ActorCriticAgent(ActorCriticBase):
         total_value_loss = 0.0
         total_entropy = 0.0
 
-        for obs, action, g in zip(observations, actions, returns):
+        for obs, action, g in zip(observations, actions, returns, strict=True):
             probs, value, h = self._forward(obs)
 
             # Advantage estimate: how much better this action was than expected
