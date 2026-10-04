@@ -2,7 +2,7 @@
 
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 
@@ -15,7 +15,7 @@ class BaseAgent(ABC):
     This allows for easy swapping of different RL algorithms.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, config: Dict[str, Any]):
+    def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         """
         Initialize the agent.
 
@@ -151,7 +151,7 @@ class BaseAgent(ABC):
         """
 
     @abstractmethod
-    def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
+    def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         Update the agent's policy based on collected experience.
 

@@ -9,8 +9,8 @@ contributing, writing code, refactoring components, or submitting pull requests.
 
 ### Python Version & Type Safety
 
-- **Python Compatibility**: Target Python 3.8 through 3.11+. Use `from __future__ import annotations` when modern type
-  union syntax (`X | Y`) or deferred annotations are utilized in older Python runtimes.
+- **Python Compatibility**: Target Python 3.12+ (the version CI tests). Modern syntax such as `X | Y` unions and
+  built-in generics (`list[int]`) is available natively.
 - **Explicit Type Hinting**: All public classes, methods, and functions must declare explicit argument and return types
   using `typing` (`Dict`, `List`, `Tuple`, `Optional`, `Union`, `Callable`, `Any`) and `numpy.typing` (`NDArray`).
 - **Type Checking**: Code must pass `mypy src/` without errors before submission.

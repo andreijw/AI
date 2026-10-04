@@ -7,7 +7,8 @@ certain features are environment-specific:
 - Action noise currently only supports Discrete(2) action spaces
 """
 
-from typing import Any, Callable, Dict, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
@@ -17,12 +18,12 @@ from .cartpole_env import CartPoleEnv
 
 def make_env(
     env_name: str = "CartPole-v1",
-    render_mode: Optional[str] = None,
+    render_mode: str | None = None,
     max_episode_steps: int = 500,
-    seed: Optional[int] = None,
+    seed: int | None = None,
     obs_noise_std: float = 0.0,
     action_noise_prob: float = 0.0,
-    domain_randomization: Optional[Dict[str, Tuple[float, float]]] = None,
+    domain_randomization: dict[str, tuple[float, float]] | None = None,
 ) -> CartPoleEnv:
     """
     Create a Gymnasium environment with optional noise and domain randomization.
@@ -61,12 +62,12 @@ def make_env(
 def make_vec_env(
     num_envs: int = 4,
     env_name: str = "CartPole-v1",
-    render_mode: Optional[str] = None,
+    render_mode: str | None = None,
     max_episode_steps: int = 500,
-    seed: Optional[int] = None,
+    seed: int | None = None,
     obs_noise_std: float = 0.0,
     action_noise_prob: float = 0.0,
-    domain_randomization: Optional[Dict[str, Tuple[float, float]]] = None,
+    domain_randomization: dict[str, tuple[float, float]] | None = None,
     async_envs: bool = True,
 ) -> gym.vector.VectorEnv:
     """
@@ -100,7 +101,7 @@ def make_vec_env(
         ... )
     """
 
-    def _make_env(env_seed: Optional[int]) -> Callable[[], CartPoleEnv]:
+    def _make_env(env_seed: int | None) -> Callable[[], CartPoleEnv]:
         """Create a function that returns an environment with specific seed."""
 
         def _init() -> CartPoleEnv:
@@ -127,8 +128,8 @@ def make_vec_env(
 
 
 def _validate_domain_randomization(
-    domain_rand: Optional[Dict[str, Any]],
-) -> Optional[Dict[str, Tuple[float, float]]]:
+    domain_rand: dict[str, Any] | None,
+) -> dict[str, tuple[float, float]] | None:
     """
     Validate and normalize domain randomization configuration.
 
@@ -176,7 +177,7 @@ def _validate_domain_randomization(
     return validated_domain_rand
 
 
-def make_env_from_config(config: Dict) -> CartPoleEnv:
+def make_env_from_config(config: dict) -> CartPoleEnv:
     """
     Create a CartPole environment from a configuration dictionary.
 
@@ -218,7 +219,7 @@ def make_env_from_config(config: Dict) -> CartPoleEnv:
     )
 
 
-def make_vec_env_from_config(config: Dict, num_envs: int = 4) -> gym.vector.VectorEnv:
+def make_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.VectorEnv:
     """
     Create vectorized CartPole environments from a configuration dictionary.
 

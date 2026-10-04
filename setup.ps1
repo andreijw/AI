@@ -1,7 +1,7 @@
 # ── RL CartPole Developer Setup Script (Windows Edition) ───────────────────
 #
 # This script automates environment verification and installation from scratch.
-# It checks/installs Git and Python 3.11 (the version CI uses), creates the
+# It checks/installs Git and Python 3.12 (the version CI uses), creates the
 # .venv virtual environment, installs the package with dev/video extras, and
 # runs the same checks as CI (ruff, mypy, pytest).
 #
@@ -25,8 +25,8 @@ param (
 
 $ErrorActionPreference = "Stop"
 
-$PythonVersion = "3.11"
-$PythonWingetId = "Python.Python.3.11"
+$PythonVersion = "3.12"
+$PythonWingetId = "Python.Python.3.12"
 $RepoRoot = $PSScriptRoot
 $VenvDir = Join-Path $RepoRoot ".venv"
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"

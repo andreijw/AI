@@ -1,7 +1,6 @@
 """Visualization utilities for training metrics."""
 
 import os
-from typing import List, Optional
 
 import matplotlib
 
@@ -25,7 +24,7 @@ __all__ = ["plot_training_metrics"]
 _PLOT_FILENAME = "training_metrics.png"
 
 
-def _rolling_average(data: List[float], window: int) -> List[float]:
+def _rolling_average(data: list[float], window: int) -> list[float]:
     """
     Compute a trailing rolling average.
 
@@ -36,7 +35,7 @@ def _rolling_average(data: List[float], window: int) -> List[float]:
     Returns:
         List of rolling-average values the same length as *data*.
     """
-    result: List[float] = []
+    result: list[float] = []
     for i in range(len(data)):
         start = max(0, i - window + 1)
         result.append(float(np.mean(data[start : i + 1])))
@@ -44,13 +43,13 @@ def _rolling_average(data: List[float], window: int) -> List[float]:
 
 
 def plot_training_metrics(
-    episode_rewards: List[float],
-    episode_lengths: List[int],
+    episode_rewards: list[float],
+    episode_lengths: list[int],
     window: int = 10,
-    save_dir: Optional[str] = None,
+    save_dir: str | None = None,
     show: bool = False,
     title: str = "CartPole Random Agent – Training Metrics",
-) -> Optional[str]:
+) -> str | None:
     """
     Plot training metrics: episode rewards and episode lengths over time.
 
@@ -125,7 +124,7 @@ def plot_training_metrics(
 
     plt.tight_layout()
 
-    saved_path: Optional[str] = None
+    saved_path: str | None = None
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
         saved_path = os.path.abspath(os.path.join(save_dir, _PLOT_FILENAME))

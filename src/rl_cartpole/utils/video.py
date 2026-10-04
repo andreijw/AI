@@ -10,7 +10,7 @@ import os
 import re
 import subprocess  # nosec B404
 import tempfile
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from gymnasium.wrappers import RecordVideo
 
@@ -73,7 +73,7 @@ class TrainingVideoRecorder(RecordVideo):
         super().start_recording(f"{self.name_prefix}-episode-{self._progress.current_episode}")
 
 
-def merge_episode_clips(video_dir: str, name_prefix: str) -> Optional[str]:
+def merge_episode_clips(video_dir: str, name_prefix: str) -> str | None:
     """
     Join the episode clips in ``video_dir`` into ``<name_prefix>-full.mp4`` and delete them.
 

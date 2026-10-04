@@ -2,12 +2,12 @@
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
 
-def load_config(config_path: str) -> Dict[str, Any]:
+def load_config(config_path: str) -> dict[str, Any]:
     """
     Load configuration from a YAML or JSON file.
 
@@ -46,7 +46,7 @@ def load_config(config_path: str) -> Dict[str, Any]:
     return config
 
 
-def merge_configs(base_config: Dict[str, Any], override_config: Dict[str, Any]) -> Dict[str, Any]:
+def merge_configs(base_config: dict[str, Any], override_config: dict[str, Any]) -> dict[str, Any]:
     """
     Recursively merge two configuration dictionaries.
 
@@ -70,7 +70,7 @@ def merge_configs(base_config: Dict[str, Any], override_config: Dict[str, Any]) 
     return merged
 
 
-def save_config(config: Dict[str, Any], save_path: str) -> None:
+def save_config(config: dict[str, Any], save_path: str) -> None:
     """
     Save configuration to a YAML file.
 

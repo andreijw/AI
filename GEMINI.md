@@ -58,7 +58,7 @@ To optimize token usage and context window limits:
 * **`record.py`**: Records a trained agent from a checkpoint into one MP4 (reuses `train.py` setup helpers).
 * **`example.py`**: Minimal standalone usage example of the framework.
 * **`ARCHITECTURE.md`** / **`TESTING.md`**: Component architecture reference and manual test procedures.
-* **`setup.ps1`**: Windows developer setup (installs Python 3.11, creates `.venv`, runs CI checks).
+* **`setup.ps1`**: Windows developer setup (installs Python 3.12, creates `.venv`, runs CI checks).
 * **`pyproject.toml`**: Packaging metadata, dependencies, and tool settings (Ruff, Mypy, Pytest, Bandit).
 * **`.github/workflows/`**: CI/CD automation workflows (linting, tests, type checking, security, nightly maintenance).
 
@@ -98,7 +98,7 @@ Always verify compilation and tests locally before finishing a task.
 Run these commands in the root workspace directory:
 
 ```bash
-# Windows: one-shot setup (Python 3.11 + .venv + dependencies + CI checks)
+# Windows: one-shot setup (Python 3.12 + .venv + dependencies + CI checks)
 .\setup.ps1
 
 # Any OS: install dependencies in editable development mode inside an activated venv

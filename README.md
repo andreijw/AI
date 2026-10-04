@@ -67,7 +67,7 @@ AI/
 │   └── cartpole_ppo.yaml
 ├── train.py                     # Main training script
 ├── record.py                    # Record a trained agent from a checkpoint
-├── setup.ps1                   # Windows developer setup (Python 3.11 + .venv + CI checks)
+├── setup.ps1                   # Windows developer setup (Python 3.12 + .venv + CI checks)
 ├── .mcp.json                   # Shared MCP servers for AI assistants (context7)
 ├── pyproject.toml              # Project configuration
 ├── requirements.txt            # Dependencies
@@ -80,7 +80,7 @@ AI/
 
 ### Prerequisites
 
-- Python 3.11 (the version CI tests; dependencies require 3.9+)
+- Python 3.12+ (the version CI tests)
 - pip or conda package manager
 
 ### Windows Quick Setup
@@ -91,7 +91,7 @@ From PowerShell in the repository root, run:
 .\setup.ps1
 ```
 
-The script installs Git and Python 3.11 via `winget` if they are missing, creates a `.venv` virtual environment,
+The script installs Git and Python 3.12 via `winget` if they are missing, creates a `.venv` virtual environment,
 installs the package with `[dev,video]` extras, and runs the same checks as CI (Ruff, mypy, pytest). Flags:
 `-NonInteractive` (no prompts), `-SkipChecks`, `-Update` (upgrade tools and packages), and `-InstallHooks`
 (`pre-commit install`). Activate the environment afterwards with `.\.venv\Scripts\Activate.ps1`.

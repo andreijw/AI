@@ -1,7 +1,7 @@
 """Shared base class for actor-critic style agents."""
 
 from abc import abstractmethod
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -27,7 +27,7 @@ class ActorCriticBase(BaseAgent):
         seed         (int):   RNG seed for weight initialisation. Default: None.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, config: Dict[str, Any]):
+    def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         super().__init__(observation_dim, action_dim, config)
 
         self.gamma: float = float(config.get("gamma", 0.99))
@@ -82,7 +82,7 @@ class ActorCriticBase(BaseAgent):
             returns[t] = cumulative
         return returns
 
-    def _forward(self, obs: np.ndarray) -> Tuple[np.ndarray, float, np.ndarray]:
+    def _forward(self, obs: np.ndarray) -> tuple[np.ndarray, float, np.ndarray]:
         """
         Forward pass through the shared trunk and both heads.
 
@@ -106,8 +106,8 @@ class ActorCriticBase(BaseAgent):
         return probs, value, h
 
     def _parse_trajectory(
-        self, batch: Dict[str, Any]
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+        self, batch: dict[str, Any]
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
         """
         Extract and validate a trajectory batch into typed arrays.
 
@@ -133,7 +133,7 @@ class ActorCriticBase(BaseAgent):
             )
         return observations, actions, rewards, n_steps
 
-    def _zero_ac_gradients(self) -> Dict[str, Any]:
+    def _zero_ac_gradients(self) -> dict[str, Any]:
         """
         Return a zeroed gradient dictionary matching the network parameters.
 
@@ -151,7 +151,7 @@ class ActorCriticBase(BaseAgent):
 
     def _accumulate_ac_gradients(
         self,
-        grads: Dict[str, Any],
+        grads: dict[str, Any],
         obs: np.ndarray,
         h: np.ndarray,
         d_pi_logits: np.ndarray,
@@ -179,7 +179,7 @@ class ActorCriticBase(BaseAgent):
         grads["W1"] += np.outer(obs, d_pre_h)
         grads["b1"] += d_pre_h
 
-    def _apply_ac_gradients(self, grads: Dict[str, Any], scale: float) -> None:
+    def _apply_ac_gradients(self, grads: dict[str, Any], scale: float) -> None:
         """
         Apply accumulated gradients to the network parameters.
 
@@ -217,7 +217,7 @@ class ActorCriticBase(BaseAgent):
         return self._select_action_from_probs(probs, training)
 
     @abstractmethod
-    def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
+    def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """Update agent parameters using collected trajectory data."""
 
     def save(self, path: str) -> None:

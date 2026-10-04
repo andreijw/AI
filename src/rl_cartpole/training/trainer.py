@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -23,8 +23,8 @@ class Trainer:
         self,
         env: CartPoleEnv,
         agent: BaseAgent,
-        config: Dict[str, Any],
-        logger: Optional[Any] = None,
+        config: dict[str, Any],
+        logger: Any | None = None,
     ):
         """
         Initialize the trainer.
@@ -64,8 +64,8 @@ class Trainer:
             )
 
         # Metrics tracking
-        self.episode_rewards: List[float] = []
-        self.episode_lengths: List[int] = []
+        self.episode_rewards: list[float] = []
+        self.episode_lengths: list[int] = []
 
         # Training progress, read by env wrappers such as TrainingVideoRecorder.
         # current_episode is the 1-based training episode in progress (0 before training).
@@ -121,7 +121,7 @@ class Trainer:
                 return
         _logger.info(message)
 
-    def _log_metrics(self, metrics: Dict[str, Any]) -> None:
+    def _log_metrics(self, metrics: dict[str, Any]) -> None:
         """
         Log training or evaluation metrics in a logger-agnostic way.
 
@@ -181,7 +181,7 @@ class Trainer:
             # Last resort: emit via module logger
             _logger.info("METRICS: %s", normalized_metrics)
 
-    def train(self) -> Dict[str, Any]:
+    def train(self) -> dict[str, Any]:
         """
         Run the training loop.
 
@@ -235,7 +235,7 @@ class Trainer:
             "final_avg_reward": np.mean(self.episode_rewards[-100:]),
         }
 
-    def _run_episode(self, training: bool = True) -> Tuple[float, int]:
+    def _run_episode(self, training: bool = True) -> tuple[float, int]:
         """
         Run a single episode.
 
@@ -283,7 +283,7 @@ class Trainer:
 
         return episode_reward, episode_length
 
-    def evaluate(self, num_episodes: int = 10) -> Dict[str, float]:
+    def evaluate(self, num_episodes: int = 10) -> dict[str, float]:
         """
         Evaluate the agent.
 
