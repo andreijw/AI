@@ -11,7 +11,7 @@
 
 ## Project Standards
 
-Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.11** · **Gymnasium ≥0.29**
+Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥0.29**
 · **pure NumPy** agents (no PyTorch/TensorFlow) · **pytest** · **Ruff** (line length 100) · **mypy**.
 
 - **Coding standards** → **[CONTRIBUTING.md](CONTRIBUTING.md)** §1–3.
@@ -37,7 +37,7 @@ Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI o
 
 ## Environment
 
-- First-time setup on Windows: `.\setup.ps1` (installs Python 3.11 via winget, creates `.venv`, installs
+- First-time setup on Windows: `.\setup.ps1` (installs Python 3.12 via winget, creates `.venv`, installs
   `.[dev,video]`, runs the CI checks). Flags: `-Update`, `-NonInteractive`, `-SkipChecks`, `-InstallHooks`.
 - **Run every Python tool from `.venv`**: `.venv/Scripts/python -m pytest`, `.venv/Scripts/python -m ruff check .`,
   `.venv/Scripts/python -m mypy src`. Never use bare `python` — on this machine it is the Microsoft Store stub.
@@ -92,8 +92,6 @@ eternal-descent repo). Setup and troubleshooting: [README → AI Assistant MCP S
 
 Treat the repository as the source of truth when docs disagree:
 
-- `pyproject.toml` says `requires-python = ">=3.8"` (Ruff `target-version = "py38"`), and CONTRIBUTING.md says
-  "Python 3.8 through 3.11+", but `matplotlib>=3.9.4` and `setuptools>=82` require Python ≥3.9. CI tests only 3.11.
 - CONTRIBUTING.md asks for ≥80% **branch** coverage; CI enforces 50% **line** coverage (`--cov-fail-under=50`, no
   `--cov-branch`).
 - `.pre-commit-config.yaml` pins Ruff `v0.1.15` while CI installs the latest Ruff, so the two formatters can disagree

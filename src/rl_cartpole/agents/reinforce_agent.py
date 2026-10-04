@@ -1,6 +1,6 @@
 """REINFORCE (Monte Carlo Policy Gradient) agent for CartPole."""
 
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -31,7 +31,7 @@ class ReinforceAgent(BaseAgent):
         seed         (int):   RNG seed for weight initialisation. Default: None.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, config: Dict[str, Any]):
+    def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         """
         Initialise the REINFORCE agent.
 
@@ -85,7 +85,7 @@ class ReinforceAgent(BaseAgent):
             returns[t] = cumulative
         return returns
 
-    def _policy(self, obs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _policy(self, obs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
         Forward pass through the policy network.
 
@@ -125,7 +125,7 @@ class ReinforceAgent(BaseAgent):
         probs, _ = self._policy(observation)
         return self._select_action_from_probs(probs, training)
 
-    def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
+    def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         Update policy parameters using the REINFORCE gradient estimate.
 
@@ -172,7 +172,7 @@ class ReinforceAgent(BaseAgent):
                 f"returns={len(returns)}"
             )
 
-        for obs, action, disc_return in zip(observations, actions, returns):
+        for obs, action, disc_return in zip(observations, actions, returns, strict=True):
             probs, h = self._policy(obs)
 
             # d/d_logits log π(a|s) = one_hot(a) - π(·|s)

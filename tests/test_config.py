@@ -107,10 +107,13 @@ def test_load_config_preserves_oserror_subclass_and_errno(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text("foo: bar", encoding="utf-8")
 
-    with patch(
-        "builtins.open",
-        side_effect=PermissionError(13, "Permission denied", str(config_path)),
-    ), pytest.raises(PermissionError) as exc_info:
+    with (
+        patch(
+            "builtins.open",
+            side_effect=PermissionError(13, "Permission denied", str(config_path)),
+        ),
+        pytest.raises(PermissionError) as exc_info,
+    ):
         load_config(str(config_path))
 
     exc = exc_info.value

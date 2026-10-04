@@ -1,6 +1,6 @@
 """Proximal Policy Optimization (PPO) agent for CartPole."""
 
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 
@@ -25,7 +25,7 @@ class PPOAgent(ActorCriticBase):
         seed (int): RNG seed. Default: None.
     """
 
-    def __init__(self, observation_dim: int, action_dim: int, config: Dict[str, Any]):
+    def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         """Initialise the PPO agent."""
         super().__init__(observation_dim, action_dim, config)
 
@@ -40,7 +40,7 @@ class PPOAgent(ActorCriticBase):
         if self.ppo_epochs <= 0:
             raise ValueError(f"ppo_epochs must be a positive integer, got {self.ppo_epochs!r}")
 
-    def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
+    def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         Update policy/value parameters with PPO clipped objective.
 
@@ -63,7 +63,7 @@ class PPOAgent(ActorCriticBase):
 
         old_log_probs = np.empty(n_steps, dtype=np.float64)
         old_values = np.empty(n_steps, dtype=np.float64)
-        for i, (obs, action) in enumerate(zip(observations, actions)):
+        for i, (obs, action) in enumerate(zip(observations, actions, strict=True)):
             old_probs, old_value, _ = self._forward(obs)
             old_log_probs[i] = float(np.log(np.clip(old_probs[action], 1e-8, 1.0)))
             old_values[i] = old_value
@@ -88,7 +88,7 @@ class PPOAgent(ActorCriticBase):
             clipped_count = 0
 
             for obs, action, ret, advantage, old_log_prob in zip(
-                observations, actions, returns, advantages, old_log_probs
+                observations, actions, returns, advantages, old_log_probs, strict=True
             ):
                 probs, value, h = self._forward(obs)
 

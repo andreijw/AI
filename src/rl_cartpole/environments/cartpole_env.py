@@ -1,7 +1,7 @@
 """CartPole environment wrapper for reinforcement learning."""
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
@@ -35,12 +35,12 @@ class CartPoleEnv:
     def __init__(
         self,
         env_name: str = "CartPole-v1",
-        render_mode: Optional[str] = None,
+        render_mode: str | None = None,
         max_episode_steps: int = 500,
-        seed: Optional[int] = None,
+        seed: int | None = None,
         obs_noise_std: float = 0.0,
         action_noise_prob: float = 0.0,
-        domain_randomization: Optional[Mapping[str, Sequence[float] | Tuple[float, float]]] = None,
+        domain_randomization: Mapping[str, Sequence[float] | tuple[float, float]] | None = None,
     ):
         """
         Initialize the environment wrapper.
@@ -130,8 +130,8 @@ class CartPoleEnv:
 
     def _validate_domain_randomization(
         self,
-        domain_randomization: Optional[Mapping[str, Sequence[float] | Tuple[float, float]]],
-    ) -> Dict[str, Tuple[float, float]]:
+        domain_randomization: Mapping[str, Sequence[float] | tuple[float, float]] | None,
+    ) -> dict[str, tuple[float, float]]:
         """Validate and normalize domain randomization configuration."""
         if not domain_randomization:
             return {}
@@ -139,7 +139,7 @@ class CartPoleEnv:
             raise ValueError("domain_randomization must be a dictionary of parameter ranges.")
 
         supported_params = {"gravity", "masscart", "masspole", "length"}
-        validated: Dict[str, Tuple[float, float]] = {}
+        validated: dict[str, tuple[float, float]] = {}
         for param, value in domain_randomization.items():
             if param not in supported_params:
                 raise ValueError(
@@ -257,8 +257,8 @@ class CartPoleEnv:
         return action
 
     def reset(
-        self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        self, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[np.ndarray, dict[str, Any]]:
         """
         Reset the environment to initial state.
 
@@ -289,7 +289,7 @@ class CartPoleEnv:
 
         return obs, info
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         """
         Execute one step in the environment.
 
