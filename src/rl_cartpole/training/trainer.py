@@ -67,6 +67,11 @@ class Trainer:
         self.episode_rewards: List[float] = []
         self.episode_lengths: List[int] = []
 
+        # Training progress, read by env wrappers such as TrainingVideoRecorder.
+        # current_episode is the 1-based training episode in progress (0 before training).
+        self.current_episode = 0
+        self.evaluating = False
+
     def _get_int_config(self, name: str, default: int) -> int:
         """Get an integer config value without lossy coercion."""
         raw_value = self.config.get(name, default)
@@ -186,6 +191,7 @@ class Trainer:
         self._log_info(f"Starting training for {self.num_episodes} episodes...")
 
         for episode in range(self.num_episodes):
+            self.current_episode = episode + 1
             episode_reward, episode_length = self._run_episode(training=True)
 
             self.episode_rewards.append(episode_reward)
@@ -211,7 +217,7 @@ class Trainer:
 
             # Evaluation
             if (episode + 1) % self.eval_frequency == 0:
-                eval_stats = self._evaluate()
+                eval_stats = self.evaluate()
                 self._log_info(f"Evaluation at episode {episode + 1}: {eval_stats}")
 
                 self._log_metrics({"evaluation": eval_stats})
@@ -277,7 +283,7 @@ class Trainer:
 
         return episode_reward, episode_length
 
-    def _evaluate(self, num_episodes: int = 10) -> Dict[str, float]:
+    def evaluate(self, num_episodes: int = 10) -> Dict[str, float]:
         """
         Evaluate the agent.
 
@@ -290,10 +296,14 @@ class Trainer:
         eval_rewards = []
         eval_lengths = []
 
-        for _ in range(num_episodes):
-            episode_reward, episode_length = self._run_episode(training=False)
-            eval_rewards.append(episode_reward)
-            eval_lengths.append(episode_length)
+        self.evaluating = True
+        try:
+            for _ in range(num_episodes):
+                episode_reward, episode_length = self._run_episode(training=False)
+                eval_rewards.append(episode_reward)
+                eval_lengths.append(episode_length)
+        finally:
+            self.evaluating = False
 
         return {
             "mean_reward": float(np.mean(eval_rewards)),

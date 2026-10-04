@@ -211,6 +211,10 @@ logs/
 checkpoints/
 test_logs/
 test_checkpoints/
+plots/
+videos/
+plots/
+videos/
 *.pt
 *.pth
 

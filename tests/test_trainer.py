@@ -169,13 +169,13 @@ def test_run_episode_respects_max_steps(env, agent):
 
 
 # ---------------------------------------------------------------------------
-# _evaluate
+# evaluate
 # ---------------------------------------------------------------------------
 
 
 def test_evaluate_returns_metrics(trainer):
-    """_evaluate should return a dict with mean/std reward and mean length."""
-    stats = trainer._evaluate(num_episodes=3)
+    """evaluate should return a dict with mean/std reward and mean length."""
+    stats = trainer.evaluate(num_episodes=3)
 
     assert isinstance(stats, dict)
     assert "mean_reward" in stats
@@ -188,7 +188,7 @@ def test_evaluate_returns_metrics(trainer):
 
 def test_evaluate_std_for_single_episode(trainer):
     """std_reward is zero for a single-episode evaluation."""
-    stats = trainer._evaluate(num_episodes=1)
+    stats = trainer.evaluate(num_episodes=1)
     assert stats["std_reward"] == pytest.approx(0.0)
 
 
@@ -252,6 +252,38 @@ def test_train_accumulates_metrics(trainer):
     assert all(isinstance(ep_len, int) for ep_len in trainer.episode_lengths)
 
 
+def test_train_exposes_training_progress(trainer):
+    """current_episode tracks the 1-based training episode; evaluating is set only during eval."""
+    assert trainer.current_episode == 0
+    assert trainer.evaluating is False
+
+    seen = []
+    original_run_episode = trainer._run_episode
+
+    def spy_run_episode(training=True):
+        seen.append((training, trainer.current_episode, trainer.evaluating))
+        return original_run_episode(training=training)
+
+    with patch.object(trainer, "_run_episode", side_effect=spy_run_episode):
+        trainer.train()
+
+    training_calls = [(ep, ev) for training, ep, ev in seen if training]
+    eval_calls = [(ep, ev) for training, ep, ev in seen if not training]
+    assert training_calls == [(1, False), (2, False), (3, False)]
+    # eval_frequency=2 -> one evaluation of 10 episodes after training episode 2
+    assert eval_calls == [(2, True)] * 10
+    assert trainer.evaluating is False
+
+
+def test_evaluating_flag_reset_when_evaluation_fails(trainer):
+    """evaluating must be cleared even if an evaluation episode raises."""
+    failing_episode = patch.object(trainer, "_run_episode", side_effect=RuntimeError("boom"))
+    with failing_episode, pytest.raises(RuntimeError):
+        trainer.evaluate()
+
+    assert trainer.evaluating is False
+
+
 def test_train_with_logger_calls_log(env, agent, tmp_path):
     """Trainer should call logger.log when a logger is provided."""
     logger = MagicMock()
@@ -287,7 +319,7 @@ def test_train_triggers_checkpoint_save(env, agent, tmp_path):
 
 
 def test_train_triggers_evaluation(env, agent, tmp_path):
-    """Trainer should call _evaluate when episode reaches eval_frequency."""
+    """Trainer should call evaluate when episode reaches eval_frequency."""
     config = {
         "num_episodes": 2,
         "max_steps_per_episode": 20,
@@ -297,7 +329,7 @@ def test_train_triggers_evaluation(env, agent, tmp_path):
     }
     trainer = Trainer(env=env, agent=agent, config=config)
 
-    with patch.object(trainer, "_evaluate", wraps=trainer._evaluate) as mock_eval:
+    with patch.object(trainer, "evaluate", wraps=trainer.evaluate) as mock_eval:
         trainer.train()
         assert mock_eval.called
 

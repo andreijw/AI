@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_cartpole.environments import CartPoleEnv
+from tests.helpers import minimal_config, run_main
 
 # ---------------------------------------------------------------------------
 # CartPoleEnv.wrap_env
@@ -52,65 +53,23 @@ def test_wrap_env_with_record_video(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _run_main_with_args(args, monkeypatch):
-    """Import train.main() fresh and run it with the given sys.argv."""
-    monkeypatch.setattr(sys, "argv", ["train.py"] + args)
-    # Force re-import so the module-level code runs with the patched argv.
-    if "train" in sys.modules:
-        del sys.modules["train"]
-    import train  # noqa: PLC0415
-
-    train.main()
-
-
-def _minimal_config(tmp_path):
-    """Write a minimal YAML config to tmp_path and return its path."""
-    import yaml
-
-    config = {
-        "environment": {
-            "name": "CartPole-v1",
-            "render_mode": None,
-            "max_episode_steps": 20,
-            "seed": 42,
-        },
-        "agent": {
-            "type": "random",
-            "config": {"learning_rate": 0.0003, "gamma": 0.99},
-        },
-        "training": {
-            "num_episodes": 4,
-            "max_steps_per_episode": 20,
-            "eval_frequency": 2,
-            "save_frequency": 10,
-            "checkpoint_dir": str(tmp_path / "checkpoints"),
-            "log_dir": str(tmp_path / "logs"),
-        },
-        "logging": {"level": "INFO", "log_metrics": True},
-    }
-    config_path = str(tmp_path / "config.yaml")
-    with open(config_path, "w") as f:
-        yaml.dump(config, f)
-    return config_path
-
-
 def test_mutual_exclusion_render_and_record_video(tmp_path, monkeypatch):
     """Passing both --render and --record-video should raise SystemExit."""
-    config_path = _minimal_config(tmp_path)
+    config_path = minimal_config(tmp_path)
     with pytest.raises(SystemExit):
-        _run_main_with_args(["--render", "--record-video", "--config", config_path], monkeypatch)
+        run_main(["--render", "--record-video", "--config", config_path], monkeypatch)
 
 
 def test_num_episodes_override_requires_positive_int(tmp_path, monkeypatch):
     """--num-episodes must be a positive integer."""
-    config_path = _minimal_config(tmp_path)
+    config_path = minimal_config(tmp_path)
     with pytest.raises(SystemExit):
-        _run_main_with_args(["--num-episodes", "0", "--config", config_path], monkeypatch)
+        run_main(["--num-episodes", "0", "--config", config_path], monkeypatch)
 
 
 def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
     """CLI overrides should select the requested agent and training length."""
-    config_path = _minimal_config(tmp_path)
+    config_path = minimal_config(tmp_path)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -159,16 +118,16 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
 
 def test_record_video_missing_moviepy_raises_import_error(tmp_path, monkeypatch):
     """--record-video should raise ImportError with install instructions when moviepy is absent."""
-    config_path = _minimal_config(tmp_path)
+    config_path = minimal_config(tmp_path)
 
     # Make moviepy unimportable
     with patch.dict(sys.modules, {"moviepy": None}), pytest.raises(ImportError, match="moviepy"):
-        _run_main_with_args(["--record-video", "--config", config_path], monkeypatch)
+        run_main(["--record-video", "--config", config_path], monkeypatch)
 
 
 def test_sdl_env_vars_set_for_headless(tmp_path, monkeypatch):
     """--record-video must set SDL_VIDEODRIVER=offscreen before CartPoleEnv creation."""
-    config_path = _minimal_config(tmp_path)
+    config_path = minimal_config(tmp_path)
     video_dir = str(tmp_path / "videos")
 
     # Clear any existing SDL vars so setdefault() picks them up
@@ -194,7 +153,7 @@ def test_sdl_env_vars_set_for_headless(tmp_path, monkeypatch):
     fake_moviepy = types.ModuleType("moviepy")
 
     with patch.dict(sys.modules, {"moviepy": fake_moviepy}), pytest.raises(_StopAfterCaptureError):
-        _run_main_with_args(
+        run_main(
             ["--record-video", "--video-dir", video_dir, "--config", config_path],
             monkeypatch,
         )
@@ -211,7 +170,7 @@ def test_sdl_env_vars_set_for_headless(tmp_path, monkeypatch):
 
 def test_sdl_env_vars_restored_for_headless_when_preexisting(tmp_path, monkeypatch):
     """--record-video must restore pre-existing SDL env vars after temporary override."""
-    config_path = _minimal_config(tmp_path)
+    config_path = minimal_config(tmp_path)
     video_dir = str(tmp_path / "videos")
 
     original_video_driver = "already-set-video"
@@ -237,7 +196,7 @@ def test_sdl_env_vars_restored_for_headless_when_preexisting(tmp_path, monkeypat
     fake_moviepy = types.ModuleType("moviepy")
 
     with patch.dict(sys.modules, {"moviepy": fake_moviepy}), pytest.raises(_StopAfterCaptureError):
-        _run_main_with_args(
+        run_main(
             ["--record-video", "--video-dir", video_dir, "--config", config_path],
             monkeypatch,
         )
@@ -252,13 +211,13 @@ def test_record_video_creates_videos(tmp_path, monkeypatch):
     """--record-video should produce MP4 files in the specified directory."""
     pytest.importorskip("moviepy")
 
-    config_path = _minimal_config(tmp_path)
+    config_path = minimal_config(tmp_path)
     video_dir = str(tmp_path / "videos")
 
     monkeypatch.delenv("SDL_VIDEODRIVER", raising=False)
     monkeypatch.delenv("SDL_AUDIODRIVER", raising=False)
 
-    _run_main_with_args(
+    run_main(
         ["--record-video", "--video-dir", video_dir, "--config", config_path],
         monkeypatch,
     )
@@ -267,40 +226,56 @@ def test_record_video_creates_videos(tmp_path, monkeypatch):
     assert len(mp4_files) > 0, "Expected at least one MP4 file to be recorded"
 
 
-def test_episode_trigger_skips_episode_zero(tmp_path, monkeypatch):
-    """episode_trigger must not record episode 0 (untrained initial state)."""
+def _record_with_args(extra_args, tmp_path, monkeypatch):
+    """Run train.py with --record-video plus extra_args; return the sorted MP4 names produced."""
     pytest.importorskip("moviepy")
 
-    config_path = _minimal_config(tmp_path)
-    video_dir = str(tmp_path / "videos")
+    config_path = minimal_config(tmp_path)
+    video_dir = tmp_path / "videos"
 
     monkeypatch.delenv("SDL_VIDEODRIVER", raising=False)
     monkeypatch.delenv("SDL_AUDIODRIVER", raising=False)
 
-    captured_triggers = []
+    run_main(
+        ["--record-video", "--video-dir", str(video_dir), "--config", config_path] + extra_args,
+        monkeypatch,
+    )
+    return sorted(f for f in os.listdir(video_dir) if f.endswith(".mp4"))
 
-    from gymnasium.wrappers import RecordVideo
 
-    original_record_video = RecordVideo
+def test_record_video_default_interval_matches_training_episodes(tmp_path, monkeypatch):
+    """Default interval is eval_frequency (2): only training episodes 2 and 4 are recorded.
 
-    def patching_record_video(env, video_folder, episode_trigger, **kwargs):
-        captured_triggers.append(episode_trigger)
-        return original_record_video(
-            env, video_folder=video_folder, episode_trigger=episode_trigger, **kwargs
-        )
+    Evaluation runs 10 episodes on the same env after episodes 2 and 4; they must neither be
+    recorded nor shift the clip numbering.
+    """
+    assert _record_with_args([], tmp_path, monkeypatch) == [
+        "cartpole-training-episode-2.mp4",
+        "cartpole-training-episode-4.mp4",
+    ]
 
-    with patch("gymnasium.wrappers.RecordVideo", side_effect=patching_record_video):
-        _run_main_with_args(
-            ["--record-video", "--video-dir", video_dir, "--config", config_path],
-            monkeypatch,
-        )
 
-    assert captured_triggers, "RecordVideo was not constructed"
-    trigger = captured_triggers[0]
-    # Episode 0 should NOT be recorded
-    assert trigger(0) is False
-    # Episode equal to eval_frequency (2 in the test config) SHOULD be recorded
-    assert trigger(2) is True
+def test_video_every_sets_recording_interval(tmp_path, monkeypatch):
+    """--video-every 1 records each of the 4 training episodes."""
+    assert _record_with_args(["--video-every", "1"], tmp_path, monkeypatch) == [
+        f"cartpole-training-episode-{n}.mp4" for n in (1, 2, 3, 4)
+    ]
+
+
+def test_video_every_requires_record_video(tmp_path, monkeypatch, capsys):
+    """--video-every without --record-video is a usage error."""
+    config_path = minimal_config(tmp_path)
+    with pytest.raises(SystemExit):
+        run_main(["--video-every", "5", "--config", config_path], monkeypatch)
+    assert "--video-every requires --record-video" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("value", ["0", "-3"])
+def test_video_every_must_be_positive(tmp_path, monkeypatch, capsys, value):
+    config_path = minimal_config(tmp_path)
+    with pytest.raises(SystemExit):
+        run_main(["--record-video", "--video-every", value, "--config", config_path], monkeypatch)
+    assert "--video-every must be a positive integer" in capsys.readouterr().err
 
 
 def test_environment_config_is_forwarded_to_cartpole_env(tmp_path, monkeypatch):
@@ -349,7 +324,7 @@ def test_environment_config_is_forwarded_to_cartpole_env(tmp_path, monkeypatch):
     monkeypatch.setattr(_ce_mod.CartPoleEnv, "__init__", patched_init)
 
     with pytest.raises(_StopAfterCaptureError):
-        _run_main_with_args(["--config", config_path], monkeypatch)
+        run_main(["--config", config_path], monkeypatch)
 
     assert captured["env_name"] == "CartPole-v1"
     assert captured["max_episode_steps"] == 20
@@ -404,7 +379,7 @@ def test_environment_null_values_fall_back_to_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(_ce_mod.CartPoleEnv, "__init__", patched_init)
 
     with pytest.raises(_StopAfterCaptureError):
-        _run_main_with_args(["--config", config_path], monkeypatch)
+        run_main(["--config", config_path], monkeypatch)
 
     assert captured["env_name"] == "CartPole-v1"
     assert captured["obs_noise_std"] == pytest.approx(0.0)

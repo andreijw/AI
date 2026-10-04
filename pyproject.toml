@@ -36,6 +36,7 @@ dependencies = [
 [project.optional-dependencies]
 video = [
     "moviepy>=1.0.0",
+    "imageio-ffmpeg>=0.4.0",
     "gymnasium[classic-control]>=0.29.0",
 ]
 dev = [
