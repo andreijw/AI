@@ -56,7 +56,7 @@ def main():
         "--agent-type",
         type=str,
         choices=sorted(AGENT_CLASSES),
-        help="Override the agent type from config (random, reinforce, actor_critic, ppo).",
+        help="Override the agent type from config (random, reinforce, actor_critic, ppo, dqn).",
     )
     args = parser.parse_args()
 

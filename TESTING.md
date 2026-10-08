@@ -31,6 +31,7 @@ This document outlines manual verification and testing procedures for the RL fra
 | TR-1 | **REINFORCE** | `python train.py --config configs/cartpole_reinforce.yaml` | Completes training loop, outputs episode rewards and losses, saves final checkpoint. |
 | TR-2 | **Actor-Critic** | `python train.py --config configs/cartpole_actor_critic.yaml` | Actor policy and Critic value updates succeed; TD errors decrease over time. |
 | TR-3 | **PPO** | `python train.py --config configs/cartpole_ppo.yaml` | Rollouts collect trajectory batches, surrogate loss clips, average reward improves. |
+| TR-4 | **DQN** | `python train.py --config configs/cartpole_dqn.yaml` | Completes training loop, replay buffer samples mini-batches, Q-values converge. |
 
 ### Video Recording Checks
 

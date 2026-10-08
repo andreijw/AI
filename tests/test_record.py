@@ -8,7 +8,7 @@ import pytest
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from rl_cartpole.agents import ReinforceAgent
+from rl_cartpole.agents import DQNAgent, ReinforceAgent
 from tests.helpers import minimal_config, run_main
 
 
@@ -96,3 +96,29 @@ def test_record_episodes_must_be_positive(tmp_path, monkeypatch, capsys, value):
     with pytest.raises(SystemExit):
         _record(["--checkpoint", "x.pt", "--episodes", value], tmp_path, monkeypatch)
     assert "--episodes must be a positive integer" in capsys.readouterr().err
+
+
+def test_record_with_dqn_agent(tmp_path, monkeypatch):
+    """Verify record.py works with a DQN agent checkpoint."""
+    pytest.importorskip("moviepy")
+    ckpt_path = str(tmp_path / "dqn_agent.pt")
+    DQNAgent(observation_dim=4, action_dim=2, config={}).save(ckpt_path)
+
+    video_dir = tmp_path / "dqn_videos"
+    run_main(
+        [
+            "--config",
+            minimal_config(tmp_path),
+            "--agent-type",
+            "dqn",
+            "--checkpoint",
+            ckpt_path,
+            "--episodes",
+            "1",
+            "--video-dir",
+            str(video_dir),
+        ],
+        monkeypatch,
+        module="record",
+    )
+    assert os.path.exists(video_dir / "cartpole-playback-full.mp4")

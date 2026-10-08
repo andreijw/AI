@@ -8,7 +8,13 @@ from contextlib import contextmanager
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from rl_cartpole.agents import ActorCriticAgent, PPOAgent, RandomAgent, ReinforceAgent
+from rl_cartpole.agents import (
+    ActorCriticAgent,
+    DQNAgent,
+    PPOAgent,
+    RandomAgent,
+    ReinforceAgent,
+)
 from rl_cartpole.environments import CartPoleEnv
 from rl_cartpole.training import Trainer
 from rl_cartpole.utils import load_config, plot_training_metrics, setup_logger
@@ -19,6 +25,7 @@ AGENT_CLASSES = {
     "reinforce": ReinforceAgent,
     "actor_critic": ActorCriticAgent,
     "ppo": PPOAgent,
+    "dqn": DQNAgent,
 }
 
 
@@ -182,7 +189,7 @@ def main():
         "--agent-type",
         type=str,
         choices=sorted(AGENT_CLASSES),
-        help="Override the agent type from config (random, reinforce, actor_critic, ppo).",
+        help="Override the agent type from config (random, reinforce, actor_critic, ppo, dqn).",
     )
     parser.add_argument(
         "--num-episodes",

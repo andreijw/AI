@@ -43,7 +43,9 @@ AI/
 │       │   ├── random_agent.py
 │       │   ├── reinforce_agent.py
 │       │   ├── actor_critic_agent.py
-│       │   └── ppo_agent.py
+│       │   ├── ppo_agent.py
+│       │   ├── dqn_agent.py
+│       │   └── replay_buffer.py
 │       ├── training/            # Training pipeline
 │       │   ├── __init__.py
 │       │   └── trainer.py
@@ -64,7 +66,8 @@ AI/
 │   ├── cartpole_default.yaml
 │   ├── cartpole_reinforce.yaml
 │   ├── cartpole_actor_critic.yaml
-│   └── cartpole_ppo.yaml
+│   ├── cartpole_ppo.yaml
+│   └── cartpole_dqn.yaml
 ├── train.py                     # Main training script
 ├── record.py                    # Record a trained agent from a checkpoint
 ├── setup.ps1                   # Windows developer setup (Python 3.12 + .venv + CI checks)
@@ -186,6 +189,9 @@ python train.py --config configs/cartpole_actor_critic.yaml
 
 # PPO
 python train.py --config configs/cartpole_ppo.yaml
+
+# DQN
+python train.py --config configs/cartpole_dqn.yaml
 ```
 
 ### Run any agent from one base config (quick overrides)
@@ -205,6 +211,9 @@ python train.py --config configs/cartpole_default.yaml --agent-type actor_critic
 
 # quick PPO run
 python train.py --config configs/cartpole_default.yaml --agent-type ppo --num-episodes 200
+
+# quick DQN run
+python train.py --config configs/cartpole_default.yaml --agent-type dqn --num-episodes 200
 ```
 
 ### Visualization and video recording
@@ -314,7 +323,7 @@ environment:
 
 # Agent settings
 agent:
-  type: "random"  # Options: "random", "reinforce", "actor_critic", "ppo"
+  type: "random"  # Options: "random", "reinforce", "actor_critic", "ppo", "dqn"
   config:
     seed: 42
 
