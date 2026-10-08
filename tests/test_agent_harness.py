@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rl_cartpole.agents import (
     ActorCriticAgent,
     BaseAgent,
+    DQNAgent,
     PPOAgent,
     RandomAgent,
     ReinforceAgent,
@@ -21,6 +22,10 @@ ALL_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
     (ReinforceAgent, {"seed": 42, "learning_rate": 0.001}),
     (ActorCriticAgent, {"seed": 42, "learning_rate": 0.001}),
     (PPOAgent, {"seed": 42, "learning_rate": 0.0003}),
+    (
+        DQNAgent,
+        {"seed": 42, "learning_rate": 0.001, "batch_size": 2, "min_buffer_size": 2},
+    ),
 ]
 
 

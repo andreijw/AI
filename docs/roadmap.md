@@ -105,7 +105,7 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
     - Comprehensive unit tests in `tests/test_replay_buffer.py`.
   - **Known edge cases**: Buffer sampling before reaching minimum sample size; terminal state transitions.
 
-- [ ] **`DqnAgent` Implementation**
+- [x] **`DqnAgent` Implementation**
   - **Description**: Pure NumPy DQN agent with separate online and target Q-networks, epsilon-greedy exploration,
     and Bellman TD error optimization.
   - **Acceptance criteria**:
