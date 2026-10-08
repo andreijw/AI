@@ -36,9 +36,10 @@ This document outlines manual verification and testing procedures for the RL fra
 
 | Check # | Target Feature | Command to Execute | Expected Behavior |
 | --- | --- | --- | --- |
-| VID-1 | **Training clips** | `python train.py --config configs/cartpole_ppo.yaml --record-video --video-every 250 --video-dir videos/ppo` | Exactly `cartpole-training-episode-{250,500,...,1500}.mp4`; no evaluation episodes or drifted numbers; later clips balance longer. |
-| VID-2 | **Trained-agent video** | `python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/agent_episode_1400.pt --video-dir videos/ppo` | One `cartpole-playback-full.mp4` with 5 episodes; no per-episode clips left behind. |
+| VID-1 | **Training clips** | `python train.py --config configs/cartpole_ppo.yaml --record-video --video-every 250` | Exactly `videos/ppo/cartpole-training-episode-{250,500,...,1500}.mp4`; no evaluation episodes or drifted numbers; later clips balance longer. |
+| VID-2 | **Trained-agent video** | `python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/ppo/agent_episode_1400.pt` | One `videos/ppo/cartpole-playback-full.mp4` with 5 episodes; no per-episode clips left behind. |
 | VID-3 | **Usage errors** | `python train.py --video-every 5` and `python record.py` | Exit with "--video-every requires --record-video" and "the following arguments are required: --checkpoint" respectively. |
+| OUT-1 | **Per-agent outputs** | Train `cartpole_default.yaml` and `cartpole_ppo.yaml` with `--record-video --plot` | `checkpoints/`, `videos/` and `plots/` each contain separate `random/` and `ppo/` folders; neither run overwrites the other. |
 
 ### Evaluation & Checkpoint Verification
 

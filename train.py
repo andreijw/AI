@@ -57,6 +57,11 @@ def load_run_config(config_path, agent_type=None, num_episodes=None):
     return config, agent_type
 
 
+def agent_output_dir(base_dir, agent_type):
+    """Per-agent output folder, so runs of different agents never overwrite each other."""
+    return os.path.join(base_dir, agent_type)
+
+
 def require_moviepy():
     """Raise ImportError with install instructions if moviepy (needed to write videos) is missing."""
     try:
@@ -153,8 +158,7 @@ def main():
     parser.add_argument(
         "--video-dir",
         type=str,
-        default="./videos",
-        help="Directory to save recorded videos (default: ./videos)",
+        help="Directory to save recorded videos (default: ./videos/<agent_type>)",
     )
     parser.add_argument(
         "--video-every",
@@ -172,8 +176,7 @@ def main():
     parser.add_argument(
         "--plot-dir",
         type=str,
-        default="./plots",
-        help="Directory to save the training metrics plot (default: ./plots)",
+        help="Directory to save the training metrics plot (default: ./plots/<agent_type>)",
     )
     parser.add_argument(
         "--agent-type",
@@ -198,6 +201,11 @@ def main():
         parser.error("--video-every must be a positive integer.")
 
     config, agent_type = load_run_config(args.config, args.agent_type, args.num_episodes)
+    config["training"]["checkpoint_dir"] = agent_output_dir(
+        config["training"].get("checkpoint_dir", "./checkpoints"), agent_type
+    )
+    video_dir = args.video_dir or agent_output_dir("./videos", agent_type)
+    plot_dir = args.plot_dir or agent_output_dir("./plots", agent_type)
 
     # Setup logger
     logger = setup_logger(
@@ -244,16 +252,16 @@ def main():
                 video_every = (
                     args.video_every if args.video_every is not None else trainer.eval_frequency
                 )
-                os.makedirs(args.video_dir, exist_ok=True)
+                os.makedirs(video_dir, exist_ok=True)
                 env.wrap_env(
                     TrainingVideoRecorder(
                         env.env,
-                        video_folder=args.video_dir,
+                        video_folder=video_dir,
                         progress=trainer,
                         every=video_every,
                     )
                 )
-                logger.info(f"Recording videos every {video_every} episodes to '{args.video_dir}'")
+                logger.info(f"Recording videos every {video_every} episodes to '{video_dir}'")
 
             # Train
             try:
@@ -264,7 +272,7 @@ def main():
                     plot_path = plot_training_metrics(
                         episode_rewards=trainer.episode_rewards,
                         episode_lengths=trainer.episode_lengths,
-                        save_dir=args.plot_dir,
+                        save_dir=plot_dir,
                         title=f"CartPole {agent_type.capitalize()} Agent – Training Metrics",
                     )
                     logger.info(f"Training metrics plot saved to '{plot_path}'")
