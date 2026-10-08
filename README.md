@@ -290,8 +290,8 @@ python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/ppo
 
 `record.py` loads the agent type from the config (or `--agent-type`), plays `--episodes`
 evaluation episodes (default 5) and saves them as one
-`videos/<agent_type>/cartpole-playback-full.mp4` (`--video-dir` to change). A well-trained agent balances for the full 500 steps, i.e. 10 seconds
-per episode.
+`videos/<agent_type>/cartpole-playback-full.mp4` (`--video-dir` to change).
+A well-trained agent balances for the full 500 steps, i.e. 10 seconds per episode.
 
 After training, copy the videos to your local machine and open them in any video player:
 
