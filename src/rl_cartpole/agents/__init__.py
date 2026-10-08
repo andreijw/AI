@@ -6,6 +6,7 @@ from .base_agent import BaseAgent
 from .ppo_agent import PPOAgent
 from .random_agent import RandomAgent
 from .reinforce_agent import ReinforceAgent
+from .replay_buffer import ReplayBuffer
 
 __all__ = [
     "ActorCriticAgent",
@@ -14,4 +15,5 @@ __all__ = [
     "PPOAgent",
     "RandomAgent",
     "ReinforceAgent",
+    "ReplayBuffer",
 ]
