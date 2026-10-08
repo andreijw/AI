@@ -14,6 +14,7 @@ from rl_cartpole.utils import setup_logger
 from rl_cartpole.utils.video import merge_episode_clips
 from train import (
     AGENT_CLASSES,
+    agent_output_dir,
     close_env,
     create_agent,
     create_env,
@@ -38,7 +39,7 @@ def main():
         "--checkpoint",
         type=str,
         required=True,
-        help="Agent checkpoint to load (e.g. checkpoints/agent_episode_1000.pt)",
+        help="Agent checkpoint to load (e.g. checkpoints/ppo/agent_episode_1400.pt)",
     )
     parser.add_argument(
         "--episodes",
@@ -49,8 +50,7 @@ def main():
     parser.add_argument(
         "--video-dir",
         type=str,
-        default="./videos",
-        help="Directory to save the video (default: ./videos)",
+        help="Directory to save the video (default: ./videos/<agent_type>)",
     )
     parser.add_argument(
         "--agent-type",
@@ -65,6 +65,7 @@ def main():
 
     require_moviepy()
     config, agent_type = load_run_config(args.config, args.agent_type)
+    video_dir = args.video_dir or agent_output_dir("./videos", agent_type)
     logger = setup_logger(name="rl_cartpole", log_dir=config["training"]["log_dir"])
 
     with headless_rendering():
@@ -77,7 +78,7 @@ def main():
             env.wrap_env(
                 RecordVideo(
                     env.env,
-                    video_folder=args.video_dir,
+                    video_folder=video_dir,
                     episode_trigger=lambda _: True,
                     name_prefix=PLAYBACK_NAME_PREFIX,
                     disable_logger=True,
@@ -90,7 +91,7 @@ def main():
             # Closing writes the last episode's clip, so merging happens afterwards.
             close_env(env, logger)
 
-    video_path = merge_episode_clips(args.video_dir, name_prefix=PLAYBACK_NAME_PREFIX)
+    video_path = merge_episode_clips(video_dir, name_prefix=PLAYBACK_NAME_PREFIX)
     logger.info(f"Playback video saved to '{video_path}'")
 
 

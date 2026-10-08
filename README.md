@@ -166,7 +166,7 @@ python train.py --config configs/quick_test.yaml
 To generate and save learning-curve plots during training, include `--plot` on your initial run:
 
 ```bash
-python train.py --config configs/quick_test.yaml --plot --plot-dir ./plots
+python train.py --config configs/quick_test.yaml --plot
 ```
 
 > Note: Running `train.py` again with `--plot` will start a new training run and then save plots,
@@ -209,10 +209,15 @@ python train.py --config configs/cartpole_default.yaml --agent-type ppo --num-ep
 
 ### Visualization and video recording
 
-For a full run with saved learning-curve plots:
+Outputs are kept in per-agent folders so training one agent never overwrites another's:
+`checkpoints/<agent_type>/`, `videos/<agent_type>/` and `plots/<agent_type>/` (for example
+`checkpoints/ppo/agent_episode_1400.pt`). Re-training the same agent replaces that agent's previous
+outputs; copy its folders first to keep a run. Logs in `logs/` are timestamped per run.
+
+For a full run with saved learning-curve plots (saved to `plots/ppo/`):
 
 ```bash
-python train.py --config configs/cartpole_ppo.yaml --plot --plot-dir ./plots
+python train.py --config configs/cartpole_ppo.yaml --plot
 ```
 
 To visualize live training locally (requires display):
@@ -224,7 +229,7 @@ python train.py --config configs/cartpole_ppo.yaml --render
 For headless visualization (saved MP4 videos):
 
 ```bash
-python train.py --config configs/cartpole_ppo.yaml --record-video --video-dir ./videos
+python train.py --config configs/cartpole_ppo.yaml --record-video
 ```
 
 ### Basic/default run
@@ -254,7 +259,8 @@ Then run training with video recording:
 python train.py --record-video
 ```
 
-Videos are saved to `./videos/` by default. Use `--video-dir` to choose a different location:
+Videos are saved to `./videos/<agent_type>/` by default. Use `--video-dir` to choose a different
+location (used exactly as given):
 
 ```bash
 python train.py --record-video --video-dir /path/to/videos
@@ -279,19 +285,19 @@ To get one longer video of a trained agent, record it from a checkpoint after tr
 does not slow training down:
 
 ```bash
-python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/agent_episode_1500.pt --episodes 5
+python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/ppo/agent_episode_1400.pt --episodes 5
 ```
 
 `record.py` loads the agent type from the config (or `--agent-type`), plays `--episodes`
-evaluation episodes (default 5) and saves them as one `videos/cartpole-playback-full.mp4`
-(`--video-dir` to change). A well-trained agent balances for the full 500 steps, i.e. 10 seconds
-per episode.
+evaluation episodes (default 5) and saves them as one
+`videos/<agent_type>/cartpole-playback-full.mp4` (`--video-dir` to change).
+A well-trained agent balances for the full 500 steps, i.e. 10 seconds per episode.
 
 After training, copy the videos to your local machine and open them in any video player:
 
 ```bash
 # From your local machine
-scp user@orin-nano:/path/to/AI/videos/*.mp4 .
+scp -r user@orin-nano:/path/to/AI/videos .
 ```
 
 ## Configuration

@@ -75,6 +75,24 @@ Status labels: `[ ]` Not Started · `[~]` In Progress · `[x]` Complete
   - **Out of scope**: Recording every training episode into one video (too slow: ~6 min instead of ~8 s for
     1000 random-agent episodes); a config-file key for the video interval; changes to `--render`.
 
+- [x] **Per-Agent Output Directories**
+  - **Description**: Training outputs from different agents currently share `checkpoints/`, `videos/` and `plots/`
+    with identical file names, so training one agent overwrites another's checkpoints and videos. Default each
+    output location to a per-agent subfolder named after the agent type.
+  - **Acceptance criteria**:
+    - `train.py` saves checkpoints to `<training.checkpoint_dir>/<agent_type>/` (e.g. `checkpoints/ppo/`).
+    - `train.py --video-dir` and `--plot-dir` default to `videos/<agent_type>/` and `plots/<agent_type>/`;
+      `record.py --video-dir` defaults to `videos/<agent_type>/`.
+    - The agent type is the effective one, so `--agent-type` overrides choose the folder too.
+    - An explicit `--video-dir` / `--plot-dir` is used exactly as given (no agent subfolder appended).
+    - Logs are unchanged (already timestamped per run in `logs/`).
+    - One shared helper builds the per-agent path for both scripts; no duplicated logic.
+    - README and TESTING.md updated, including the wrong `agent_episode_1500.pt` example in the README.
+  - **Known edge cases**: `training.checkpoint_dir` missing from config (falls back to `./checkpoints/<agent_type>`);
+    re-training the same agent overwrites that agent's previous outputs (intended; copy the folder to keep a run).
+  - **Out of scope**: Per-run (timestamped) output folders; `record.py` picking the latest checkpoint
+    automatically; migrating existing files in the old flat folders.
+
 ### Phase 4 — Value-Based Learning: Deep Q-Network (DQN)
 
 Targeting value-learning baseline for direct comparison against policy-gradient methods (A2C/PPO).
