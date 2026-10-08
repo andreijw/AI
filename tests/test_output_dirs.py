@@ -100,3 +100,13 @@ def test_record_defaults_video_to_agent_subfolder(tmp_path, monkeypatch):
     )
 
     assert os.listdir(tmp_path / "videos" / "reinforce") == ["cartpole-playback-full.mp4"]
+
+
+def test_checkpoint_subfolder_with_dqn(tmp_path, monkeypatch):
+    """Verify DQN checkpoints land in checkpoints/dqn/ subfolder."""
+    config_path = _config_saving_at_episode_2(tmp_path)
+
+    run_main(["--config", config_path, "--agent-type", "dqn"], monkeypatch)
+
+    assert os.listdir(tmp_path / "checkpoints") == ["dqn"]
+    assert "agent_episode_2.pt" in os.listdir(tmp_path / "checkpoints" / "dqn")

@@ -233,3 +233,37 @@ def test_dqn_save_load_checkpoint(tmp_path):
     np.testing.assert_allclose(agent._b2, restored._b2)
     np.testing.assert_allclose(agent._target_W1, restored._target_W1)
     assert agent.epsilon == restored.epsilon
+
+
+def test_dqn_updates_per_step_multiple_updates():
+    """Verify updates_per_step triggers proportional mini-batch gradient updates."""
+    agent = DQNAgent(
+        observation_dim=4,
+        action_dim=2,
+        config={
+            "seed": 42,
+            "batch_size": 2,
+            "min_buffer_size": 2,
+            "updates_per_step": 0.5,
+            "max_updates_per_call": 10,
+        },
+    )
+    batch = {
+        "observations": np.random.randn(8, 4),
+        "actions": np.random.randint(0, 2, size=8),
+        "rewards": np.ones(8),
+        "next_observations": np.random.randn(8, 4),
+        "dones": np.zeros(8, dtype=bool),
+    }
+    agent.update(batch)
+    # 8 transitions * 0.5 updates_per_step = 4 gradient updates
+    assert agent._update_counter == 4
+
+
+def test_dqn_updates_per_step_validation():
+    """Verify invalid updates_per_step and max_updates_per_call raise ValueError."""
+    with pytest.raises(ValueError, match="updates_per_step"):
+        DQNAgent(observation_dim=4, action_dim=2, config={"updates_per_step": -0.5})
+
+    with pytest.raises(ValueError, match="max_updates_per_call"):
+        DQNAgent(observation_dim=4, action_dim=2, config={"max_updates_per_call": 0})
