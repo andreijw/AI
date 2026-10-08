@@ -97,7 +97,7 @@ Status labels: `[ ]` Not Started · `[~]` In Progress · `[x]` Complete
 
 Targeting value-learning baseline for direct comparison against policy-gradient methods (A2C/PPO).
 
-- [ ] **`ReplayBuffer` Component**
+- [x] **`ReplayBuffer` Component**
   - **Description**: Fixed-capacity ring buffer storing transition tuples `(state, action, reward, next_state, done)`.
   - **Acceptance criteria**:
     - Pure NumPy ring buffer implementation supporting O(1) insertion and O(batch_size) uniform random sampling.

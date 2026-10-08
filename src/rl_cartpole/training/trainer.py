@@ -249,10 +249,12 @@ class Trainer:
         episode_reward = 0.0
         episode_length = 0
 
-        # Placeholder for trajectory collection (for future PPO implementation)
+        # Collect trajectory transitions
         observations = []
         actions = []
         rewards = []
+        next_observations = []
+        dones = []
 
         done = False
         while not done and episode_length < self.max_steps_per_episode:
@@ -263,21 +265,25 @@ class Trainer:
             next_obs, reward, terminated, truncated, info = self.env.step(action)
             done = terminated or truncated
 
-            # Store trajectory (for future policy updates)
+            # Store trajectory transitions
             observations.append(obs)
             actions.append(action)
             rewards.append(reward)
+            next_observations.append(next_obs)
+            dones.append(done)
 
             episode_reward += reward
             episode_length += 1
             obs = next_obs
 
-        # Agent update (placeholder - actual implementation depends on algorithm)
+        # Agent update
         if training:
             batch = {
                 "observations": np.array(observations),
                 "actions": np.array(actions),
                 "rewards": np.array(rewards),
+                "next_observations": np.array(next_observations),
+                "dones": np.array(dones),
             }
             self.agent.update(batch)
 
