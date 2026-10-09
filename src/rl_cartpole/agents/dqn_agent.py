@@ -47,6 +47,12 @@ class DQNAgent(BaseAgent):
         self.target_update_frequency: int = int(config.get("target_update_frequency", 100))
         self.tau: float | None = float(config["tau"]) if config.get("tau") is not None else None
         self.max_grad_norm: float = float(config.get("max_grad_norm", 10.0))
+        self.updates_per_step: float | None = (
+            float(config["updates_per_step"])
+            if config.get("updates_per_step") is not None
+            else None
+        )
+        self.max_updates_per_call: int = int(config.get("max_updates_per_call", 64))
 
         self._validate_dims(observation_dim, action_dim, self.hidden_dim)
         if self.learning_rate <= 0.0:
@@ -63,6 +69,14 @@ class DQNAgent(BaseAgent):
             raise ValueError(f"buffer_capacity must be positive, got {self.buffer_capacity!r}")
         if self.batch_size <= 0:
             raise ValueError(f"batch_size must be positive, got {self.batch_size!r}")
+        if self.updates_per_step is not None and self.updates_per_step < 0:
+            raise ValueError(
+                f"updates_per_step must be non-negative, got {self.updates_per_step!r}"
+            )
+        if self.max_updates_per_call <= 0:
+            raise ValueError(
+                f"max_updates_per_call must be positive, got {self.max_updates_per_call!r}"
+            )
 
         self.epsilon: float = self.epsilon_start
         self._update_counter: int = 0
@@ -184,71 +198,87 @@ class DQNAgent(BaseAgent):
         if not self.replay_buffer.can_sample(self.min_buffer_size):
             return {"loss": 0.0, "epsilon": self.epsilon, "mean_q": 0.0}
 
-        # Sample mini-batch from experience replay
-        samples = self.replay_buffer.sample(self.batch_size)
-        obs = samples["observations"]
-        actions = samples["actions"]
-        rewards = samples["rewards"]
-        next_obs = samples["next_observations"]
-        dones = samples["dones"]
-        b_size = len(actions)
+        n_transitions = len(batch.get("actions", [])) if isinstance(batch, dict) else 0
+        if self.updates_per_step is not None and self.updates_per_step > 0 and n_transitions > 0:
+            num_updates = min(
+                self.max_updates_per_call,
+                max(1, int(n_transitions * self.updates_per_step)),
+            )
+        else:
+            num_updates = 1
 
-        # 1. Compute Bellman targets
-        targets = self._compute_bellman_targets(rewards, next_obs, dones)
+        total_loss = 0.0
+        total_q = 0.0
 
-        # 2. Forward pass online network
-        q_vals, h = self._forward_q(obs, target=False)
-        pred_q = q_vals[np.arange(b_size), actions]
+        for _ in range(num_updates):
+            # Sample mini-batch from experience replay
+            samples = self.replay_buffer.sample(self.batch_size)
+            obs = samples["observations"]
+            actions = samples["actions"]
+            rewards = samples["rewards"]
+            next_obs = samples["next_observations"]
+            dones = samples["dones"]
+            b_size = len(actions)
 
-        # 3. TD error and MSE loss: 0.5 * (pred_q - targets)^2
-        td_error = pred_q - targets
-        loss = float(np.mean(0.5 * (td_error**2)))
+            # 1. Compute Bellman targets
+            targets = self._compute_bellman_targets(rewards, next_obs, dones)
 
-        # 4. Backward pass
-        d_q = np.zeros_like(q_vals)
-        d_q[np.arange(b_size), actions] = td_error
+            # 2. Forward pass online network
+            q_vals, h = self._forward_q(obs, target=False)
+            pred_q = q_vals[np.arange(b_size), actions]
 
-        grad_w2 = (h.T @ d_q) / b_size
-        grad_b2 = np.mean(d_q, axis=0)
+            # 3. TD error and MSE loss: 0.5 * (pred_q - targets)^2
+            td_error = pred_q - targets
+            loss = float(np.mean(0.5 * (td_error**2)))
 
-        d_h = d_q @ self._W2.T
-        d_pre_h = d_h * (h > 0.0)
+            # 4. Backward pass
+            d_q = np.zeros_like(q_vals)
+            d_q[np.arange(b_size), actions] = td_error
 
-        grad_w1 = (obs.T @ d_pre_h) / b_size
-        grad_b1 = np.mean(d_pre_h, axis=0)
+            grad_w2 = (h.T @ d_q) / b_size
+            grad_b2 = np.mean(d_q, axis=0)
 
-        # Clip gradients to avoid exploding gradients
-        np.clip(grad_w1, -self.max_grad_norm, self.max_grad_norm, out=grad_w1)
-        np.clip(grad_b1, -self.max_grad_norm, self.max_grad_norm, out=grad_b1)
-        np.clip(grad_w2, -self.max_grad_norm, self.max_grad_norm, out=grad_w2)
-        np.clip(grad_b2, -self.max_grad_norm, self.max_grad_norm, out=grad_b2)
+            d_h = d_q @ self._W2.T
+            d_pre_h = d_h * (h > 0.0)
 
-        # 5. Gradient descent step
-        self._W1 -= self.learning_rate * grad_w1
-        self._b1 -= self.learning_rate * grad_b1
-        self._W2 -= self.learning_rate * grad_w2
-        self._b2 -= self.learning_rate * grad_b2
+            grad_w1 = (obs.T @ d_pre_h) / b_size
+            grad_b1 = np.mean(d_pre_h, axis=0)
 
-        # 6. Target network synchronization
-        self._update_counter += 1
-        if self.tau is not None and self.tau < 1.0:
-            self._target_W1 = self.tau * self._W1 + (1.0 - self.tau) * self._target_W1
-            self._target_b1 = self.tau * self._b1 + (1.0 - self.tau) * self._target_b1
-            self._target_W2 = self.tau * self._W2 + (1.0 - self.tau) * self._target_W2
-            self._target_b2 = self.tau * self._b2 + (1.0 - self.tau) * self._target_b2
-        elif self._update_counter % self.target_update_frequency == 0:
-            self._target_W1 = np.copy(self._W1)
-            self._target_b1 = np.copy(self._b1)
-            self._target_W2 = np.copy(self._W2)
-            self._target_b2 = np.copy(self._b2)
+            # Clip gradients to avoid exploding gradients
+            np.clip(grad_w1, -self.max_grad_norm, self.max_grad_norm, out=grad_w1)
+            np.clip(grad_b1, -self.max_grad_norm, self.max_grad_norm, out=grad_b1)
+            np.clip(grad_w2, -self.max_grad_norm, self.max_grad_norm, out=grad_w2)
+            np.clip(grad_b2, -self.max_grad_norm, self.max_grad_norm, out=grad_b2)
+
+            # 5. Gradient descent step
+            self._W1 -= self.learning_rate * grad_w1
+            self._b1 -= self.learning_rate * grad_b1
+            self._W2 -= self.learning_rate * grad_w2
+            self._b2 -= self.learning_rate * grad_b2
+
+            # 6. Target network synchronization
+            self._update_counter += 1
+            if self.tau is not None and self.tau < 1.0:
+                self._target_W1 = self.tau * self._W1 + (1.0 - self.tau) * self._target_W1
+                self._target_b1 = self.tau * self._b1 + (1.0 - self.tau) * self._target_b1
+                self._target_W2 = self.tau * self._W2 + (1.0 - self.tau) * self._target_W2
+                self._target_b2 = self.tau * self._b2 + (1.0 - self.tau) * self._target_b2
+            elif self._update_counter % self.target_update_frequency == 0:
+                self._target_W1 = np.copy(self._W1)
+                self._target_b1 = np.copy(self._b1)
+                self._target_W2 = np.copy(self._W2)
+                self._target_b2 = np.copy(self._b2)
+
+            total_loss += loss
+            total_q += float(np.mean(pred_q))
 
         # 7. Epsilon decay
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
         return {
-            "loss": loss,
+            "loss": total_loss / num_updates,
             "epsilon": float(self.epsilon),
-            "mean_q": float(np.mean(pred_q)),
+            "mean_q": total_q / num_updates,
         }
 
     def save(self, path: str) -> None:

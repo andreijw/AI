@@ -1,0 +1,42 @@
+# CartPole Deep Q-Network (DQN) Training Configuration
+# DQN uses an experience replay buffer and a separate target network
+# to stabilize temporal difference learning in discrete action spaces.
+
+# Environment settings
+environment:
+  name: "CartPole-v1"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 500
+  seed: 42
+
+# Agent settings
+agent:
+  type: "dqn"
+  config:
+    learning_rate: 0.005           # SGD step size
+    gamma: 0.99                    # Discount factor
+    hidden_dim: 128                # Shared hidden layer width
+    buffer_capacity: 20000         # Replay buffer maximum capacity
+    batch_size: 64                 # Training mini-batch size
+    min_buffer_size: 100           # Minimum replay buffer samples before training
+    epsilon_start: 1.0             # Initial exploration probability
+    epsilon_end: 0.02              # Minimum exploration probability
+    epsilon_decay: 0.995           # Multiplicative decay rate per update
+    target_update_frequency: 50    # Updates between target network syncs
+    updates_per_step: 1.0          # Mini-batch gradient steps per environment transition
+    max_updates_per_call: 64       # Maximum gradient steps per episode update
+    seed: 42                       # Weight initialisation and sampling seed
+
+# Training settings
+training:
+  num_episodes: 500
+  max_steps_per_episode: 500
+  eval_frequency: 50             # Evaluate every N episodes
+  save_frequency: 100            # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true

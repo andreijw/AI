@@ -115,7 +115,7 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
     - Unit tests in `tests/test_dqn_agent.py` achieving >85% coverage.
   - **Known edge cases**: Bellman target clipping, NaN/Inf gradient explosion, terminal state value zeroing.
 
-- [ ] **DQN Hyperparameter Configuration & Integration**
+- [x] **DQN Hyperparameter Configuration & Integration**
   - **Description**: Add `configs/cartpole_dqn.yaml`, register `dqn` in `train.py`, and run benchmark comparisons.
   - **Acceptance criteria**:
     - `configs/cartpole_dqn.yaml` with calibrated learning rate, replay capacity, batch size, and discount factor.
