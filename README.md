@@ -49,11 +49,13 @@ AI/
 │       ├── training/            # Training pipeline
 │       │   ├── __init__.py
 │       │   └── trainer.py
-│       └── utils/               # Utilities
-│           ├── __init__.py
-│           ├── config.py        # Configuration loading
-│           ├── logger.py        # Logging utilities
-│           └── visualization.py # Plotting utilities
+│       ├── utils/               # Utilities
+│       │   ├── __init__.py
+│       │   ├── config.py        # Configuration loading
+│       │   ├── logger.py        # Logging utilities
+│       │   └── visualization.py # Plotting utilities
+│       └── benchmark.py         # CartPole benchmark challenge implementation
+│   └── benchmark.py             # General benchmark interface & runner engine
 ├── tests/                       # Unit tests
 │   ├── __init__.py
 │   ├── test_environment.py
@@ -308,6 +310,24 @@ After training, copy the videos to your local machine and open them in any video
 # From your local machine
 scp -r user@orin-nano:/path/to/AI/videos .
 ```
+
+### Multi-Agent Benchmarking
+
+Run an automated comparative benchmark across all algorithms over reproducible seeds:
+
+```bash
+# Benchmark all agents on CartPole over 500 episodes across seeds 42 and 123
+python src/benchmark.py --challenge cartpole \
+    --agents random reinforce actor_critic ppo dqn --episodes 500 --seeds 42 123
+
+# Quick comparison between PPO and DQN
+python src/benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42
+```
+
+Outputs:
+- Comparative learning curve plot: `plots/benchmarks/cartpole/benchmark_comparison.png`
+- Markdown summary table: [`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md)
+- Raw metrics JSON: `plots/benchmarks/cartpole/benchmark_metrics.json`
 
 ## Configuration
 

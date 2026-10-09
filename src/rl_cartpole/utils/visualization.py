@@ -19,7 +19,7 @@ if not _has_display and not os.environ.get("MPLBACKEND"):
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-__all__ = ["plot_training_metrics"]
+__all__ = ["plot_training_metrics", "plot_benchmark_comparison"]
 
 _PLOT_FILENAME = "training_metrics.png"
 
@@ -128,6 +128,119 @@ def plot_training_metrics(
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
         saved_path = os.path.abspath(os.path.join(save_dir, _PLOT_FILENAME))
+        fig.savefig(saved_path, dpi=150)
+
+    if show:
+        plt.show()
+
+    plt.close(fig)
+    return saved_path
+
+
+def plot_benchmark_comparison(
+    agent_curves: dict[str, list[list[float]]],
+    window: int = 10,
+    save_path: str | None = None,
+    show: bool = False,
+    title: str = "CartPole Multi-Agent Benchmark Comparison",
+    target_score: float | None = 475.0,
+) -> str | None:
+    """
+    Plot comparative reward trajectories for multiple agents across training episodes.
+
+    For each agent, runs are smoothed using a rolling average, and the mean trajectory
+    along with shaded +/- 1 standard deviation confidence bands are plotted.
+
+    Args:
+        agent_curves: Mapping of agent name to a list of runs, where each run is a list of
+            episode reward floats.
+        window: Rolling-average window size (must be >= 1; default: 10).
+        save_path: File path to save the generated plot PNG. If None, the plot is not saved.
+        show: Whether to display the plot interactively.
+        title: Figure title.
+        target_score: Optional reference score threshold (e.g. 475.0 for CartPole-v1 solved criterion).
+
+    Returns:
+        Absolute path to the saved PNG, or None if save_path is not set.
+
+    Raises:
+        ValueError: If agent_curves is empty or contains empty run data.
+        ValueError: If window is less than 1.
+    """
+    if not agent_curves:
+        raise ValueError("agent_curves must not be empty.")
+    if window < 1:
+        raise ValueError(f"window must be >= 1; got {window}.")
+
+    for name, runs in agent_curves.items():
+        if not runs:
+            raise ValueError(f"Runs for agent '{name}' must not be empty.")
+        for i, run in enumerate(runs):
+            if not run:
+                raise ValueError(f"Run {i} for agent '{name}' must not be empty.")
+
+    fig, ax = plt.subplots(figsize=(11, 6))
+    fig.suptitle(title, fontsize=14)
+
+    palette = [
+        "#1f77b4",  # blue
+        "#ff7f0e",  # orange
+        "#2ca02c",  # green
+        "#d62728",  # red
+        "#9467bd",  # purple
+        "#8c564b",  # brown
+        "#e377c2",  # pink
+        "#7f7f7f",  # gray
+    ]
+
+    for idx, (name, runs) in enumerate(agent_curves.items()):
+        color = palette[idx % len(palette)]
+        smoothed_runs = [_rolling_average(run, window) for run in runs]
+        min_len = min(len(r) for r in smoothed_runs)
+        aligned = np.array([r[:min_len] for r in smoothed_runs], dtype=np.float64)
+
+        mean_curve = np.mean(aligned, axis=0)
+        std_curve = np.std(aligned, axis=0)
+        episodes = np.arange(1, min_len + 1)
+
+        final_mean = float(mean_curve[-1])
+        final_std = float(std_curve[-1]) if len(runs) > 1 else 0.0
+        label = (
+            f"{name} ({final_mean:.1f} ± {final_std:.1f})"
+            if len(runs) > 1
+            else f"{name} ({final_mean:.1f})"
+        )
+
+        ax.plot(episodes, mean_curve, label=label, color=color, linewidth=2)
+        if len(runs) > 1:
+            ax.fill_between(
+                episodes,
+                mean_curve - std_curve,
+                mean_curve + std_curve,
+                color=color,
+                alpha=0.15,
+            )
+
+    if target_score is not None:
+        ax.axhline(
+            target_score,
+            color="black",
+            linestyle="--",
+            linewidth=1.2,
+            alpha=0.6,
+            label=f"Solved Threshold ({target_score:.0f})",
+        )
+
+    ax.set_xlabel("Episode", fontsize=11)
+    ax.set_ylabel(f"Reward (Rolling Avg w={window})", fontsize=11)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="lower right", fontsize=10, framealpha=0.9)
+    plt.tight_layout()
+
+    saved_path: str | None = None
+    if save_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        saved_path = os.path.abspath(save_path)
         fig.savefig(saved_path, dpi=150)
 
     if show:

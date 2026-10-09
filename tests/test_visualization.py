@@ -9,7 +9,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import numpy as np
 import pytest
 
-from rl_cartpole.utils.visualization import _rolling_average, plot_training_metrics
+from rl_cartpole.utils.visualization import (
+    _rolling_average,
+    plot_benchmark_comparison,
+    plot_training_metrics,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -145,5 +149,79 @@ def test_plot_custom_title(tmp_path, sample_data):
     result = plot_training_metrics(
         rewards, lengths, save_dir=str(tmp_path), title="Custom Agent – Metrics"
     )
+    assert result is not None
+    assert os.path.isfile(result)
+
+
+# ---------------------------------------------------------------------------
+# plot_benchmark_comparison unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_plot_benchmark_empty_curves():
+    """Empty agent_curves dictionary should raise ValueError."""
+    with pytest.raises(ValueError, match="agent_curves must not be empty"):
+        plot_benchmark_comparison({})
+
+
+def test_plot_benchmark_invalid_window():
+    """Window less than 1 should raise ValueError."""
+    with pytest.raises(ValueError, match="window must be >= 1"):
+        plot_benchmark_comparison({"PPO": [[10.0, 20.0]]}, window=0)
+
+
+def test_plot_benchmark_empty_runs():
+    """Agent with empty list of runs or empty run should raise ValueError."""
+    with pytest.raises(ValueError, match="Runs for agent 'PPO' must not be empty"):
+        plot_benchmark_comparison({"PPO": []})
+
+    with pytest.raises(ValueError, match="Run 0 for agent 'PPO' must not be empty"):
+        plot_benchmark_comparison({"PPO": [[]]})
+
+
+def test_plot_benchmark_returns_none_without_save_path():
+    """Returns None when save_path is not specified."""
+    curves = {
+        "Random": [[10.0, 15.0, 12.0]],
+        "DQN": [[20.0, 50.0, 100.0]],
+    }
+    result = plot_benchmark_comparison(curves, save_path=None)
+    assert result is None
+
+
+def test_plot_benchmark_saves_png(tmp_path):
+    """Saves plot image to the requested path."""
+    curves = {
+        "PPO": [[10.0, 20.0, 30.0, 40.0], [15.0, 25.0, 35.0, 45.0]],
+        "DQN": [[5.0, 10.0, 25.0, 50.0]],
+    }
+    target = str(tmp_path / "plots" / "benchmark_test.png")
+    result = plot_benchmark_comparison(curves, window=2, save_path=target, target_score=40.0)
+    assert result == os.path.abspath(target)
+    assert os.path.isfile(target)
+
+
+def test_plot_interactive_show(monkeypatch, sample_data):
+    """Calling with show=True invokes plt.show."""
+    import matplotlib.pyplot as plt
+
+    show_called = []
+    monkeypatch.setattr(plt, "show", lambda: show_called.append(True))
+
+    rewards, lengths = sample_data
+    plot_training_metrics(rewards, lengths, show=True)
+    plot_benchmark_comparison({"PPO": [rewards]}, show=True)
+
+    assert len(show_called) == 2
+
+
+def test_plot_benchmark_unequal_run_lengths(tmp_path):
+    """Unequal run lengths across seeds or agents are aligned to minimum length."""
+    curves = {
+        "A2C": [[10.0, 20.0, 30.0], [10.0, 20.0, 30.0, 40.0, 50.0]],
+        "REINFORCE": [[5.0, 15.0, 25.0, 35.0]],
+    }
+    target = str(tmp_path / "unequal.png")
+    result = plot_benchmark_comparison(curves, save_path=target, target_score=None)
     assert result is not None
     assert os.path.isfile(result)
