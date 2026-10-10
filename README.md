@@ -325,6 +325,7 @@ python src/benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --s
 ```
 
 Outputs:
+
 - Comparative learning curve plot: `plots/benchmarks/cartpole/benchmark_comparison.png`
 - Markdown summary table: [`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md)
 - Raw metrics JSON: `plots/benchmarks/cartpole/benchmark_metrics.json`
