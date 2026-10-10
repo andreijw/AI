@@ -42,6 +42,13 @@ This document outlines manual verification and testing procedures for the RL fra
 | VID-3 | **Usage errors** | `python train.py --video-every 5` and `python record.py` | Exit with "--video-every requires --record-video" and "the following arguments are required: --checkpoint" respectively. |
 | OUT-1 | **Per-agent outputs** | Train `cartpole_default.yaml` and `cartpole_ppo.yaml` with `--record-video --plot` | `checkpoints/`, `videos/` and `plots/` each contain separate `random/` and `ppo/` folders; neither run overwrites the other. |
 
+### Multi-Agent Benchmark Checks
+
+| Check # | Target Feature | Command to Execute | Expected Behavior |
+| --- | --- | --- | --- |
+| BM-1 | **Benchmark Runner** | `python src/benchmark.py --challenge cartpole --agents random ppo --episodes 5 --no-plot` | Runs multi-agent benchmark without plot, writes metrics JSON and summary report. |
+| BM-2 | **Benchmark Plotting** | `python src/benchmark.py --challenge cartpole --agents random reinforce --episodes 5` | Generates `plots/benchmarks/cartpole/benchmark_comparison.png` and `docs/benchmarks/cartpole_results.md`. |
+
 ### Evaluation & Checkpoint Verification
 
 | Check # | Target Feature | Steps to Execute | Expected Behavior |
