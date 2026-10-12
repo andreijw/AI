@@ -510,7 +510,7 @@ With discrete control (CartPole: Random, REINFORCE, Actor-Critic, PPO, DQN) and 
 control (Pendulum: Random, Actor-Critic, PPO) fully operational, the framework provides
 a decoupled foundation for future AI challenges.
 
-### Next Steps:
+### Next Steps
 
 1. **Continuous Off-Policy Learning**: Implement DDPG (Deep Deterministic Policy Gradient) or
    SAC (Soft Actor-Critic) with experience replay for sample-efficient continuous torque control.
