@@ -147,6 +147,25 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
   - **Known edge cases**: Action squashing/tanh bounding; standard deviation vanishing or numerical overflow.
   - **Out of scope**: Off-policy continuous algorithms (DDPG/SAC); multi-discrete action spaces.
 
+- [ ] **Continuous Off-Policy Learning & DDPG (Deep Deterministic Policy Gradient)**
+  - **Description**: Implement a pure NumPy `DDPGAgent` utilizing a deterministic actor network $\mu_\theta(s)$,
+    an action-value critic $Q_\phi(s, a)$, continuous transition experience replay via `ReplayBuffer`, exploration
+    noise (Gaussian or Ornstein-Uhlenbeck), and Polyak soft target updates to solve `Pendulum-v1`
+    sample-efficiently.
+  - **Acceptance criteria**:
+    - Pure NumPy deterministic actor and Q-value critic network architectures.
+    - Continuous transition ingestion and random mini-batch sampling from `ReplayBuffer`.
+    - Critic TD loss optimization and deterministic policy gradient backpropagation
+      ($\nabla_\theta Q(s, \mu_\theta(s))$).
+    - Polyak soft target weight synchronization ($\theta' \leftarrow \tau \theta + (1-\tau) \theta'$ with
+      $\tau \approx 0.005$).
+    - Reference configuration `configs/pendulum_ddpg.yaml` solving `Pendulum-v1` (mean reward $\ge -200$)
+      in $\le 100$ episodes.
+    - CLI dispatch support in `train.py`, `record.py`, and `src/benchmark.py`.
+    - Unit and integration tests in `tests/test_ddpg_agent.py` achieving $>90\%$ coverage.
+  - **Known edge cases**: Q-value overestimation; divergence from non-smooth actor gradients; torque saturation.
+  - **Out of scope**: Twin Delayed DDPG (TD3) double Q-learning; stochastic entropy auto-tuning (SAC).
+
 - [ ] **Curriculum Learning & Domain Randomization Scheduling**
   - **Description**: Add dynamic curriculum pacing that scales domain randomization and noise injection difficulty
     as the agent reaches performance milestones during training.
