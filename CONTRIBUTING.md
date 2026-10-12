@@ -38,7 +38,8 @@ contributing, writing code, refactoring components, or submitting pull requests.
 ### Determinism & Reproducibility
 
 - **Seeding**: Support deterministic runs by propagating explicit random seeds to environments (`env.reset(seed=...)`),
-  NumPy random number generators (`np.random.default_rng(seed)` or `np.random.seed(seed)`), and action sampling policies.
+  NumPy random number generators (`np.random.default_rng(seed)` or `np.random.seed(seed)`), and action
+  sampling policies.
 
 ---
 

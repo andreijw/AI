@@ -12,9 +12,9 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from rl_cartpole.agents import RandomAgent
 from rl_cartpole.environments import CartPoleEnv
-from rl_cartpole.training import Trainer
+from rl_core.agents import RandomAgent
+from rl_core.training import Trainer
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -132,7 +132,7 @@ def test_log_info_uses_logger_when_available(env, agent):
 def test_log_info_falls_back_to_logging_without_logger(env, agent, caplog):
     """_log_info should emit via the module logger when no logger is provided."""
     trainer = Trainer(env=env, agent=agent, config={})
-    with caplog.at_level(logging.INFO, logger="rl_cartpole.training.trainer"):
+    with caplog.at_level(logging.INFO, logger="rl_core.training.trainer"):
         trainer._log_info("fallback message")
     assert "fallback message" in caplog.text
 

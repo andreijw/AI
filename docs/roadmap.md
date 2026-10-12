@@ -133,16 +133,17 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 
 ### Phase 6 — Advanced RL & Robotics Extensions
 
-- [ ] **Continuous Action Space Support (Gaussian Policies)**
-  - **Description**: Extend policy gradient agents (`ActorCriticAgent`, `PPOAgent`) and environments to support
-    continuous control benchmarks (e.g., `Pendulum-v1`, `InvertedPendulum-v4`).
+- [x] **Continuous Action Space Support & Core Decoupling (Gaussian Policies & Pendulum-v1)**
+  - **Description**: Decoupled algorithm-agnostic RL framework into `src/rl_core/` and extended policy gradient
+    agents (`ContinuousActorCriticAgent`, `ContinuousPPOAgent`, `ContinuousRandomAgent`) to support continuous control
+    benchmarks, introducing the `src/rl_pendulum/` challenge package.
   - **Acceptance criteria**:
     - Gaussian policy heads predicting state-dependent action mean $\mu(s)$ and trainable log standard deviation
       $\log \sigma$.
     - Reparameterized action sampling ($a = \mu + \sigma \odot \epsilon$) and Gaussian log-likelihood backprop.
-    - Support for `gymnasium.spaces.Box` action spaces in `CartPoleEnv` / environment factory wrappers.
+    - Support for `gymnasium.spaces.Box` action spaces in `PendulumEnv` wrapper and vectorization factories.
     - Calibrated configuration `configs/pendulum_ppo.yaml` solving Pendulum-v1.
-    - Unit tests in `tests/test_continuous_agent.py` achieving >90% coverage.
+    - Unit tests in `tests/test_continuous_agent.py` and `tests/test_pendulum.py` achieving >95% coverage.
   - **Known edge cases**: Action squashing/tanh bounding; standard deviation vanishing or numerical overflow.
   - **Out of scope**: Off-policy continuous algorithms (DDPG/SAC); multi-discrete action spaces.
 

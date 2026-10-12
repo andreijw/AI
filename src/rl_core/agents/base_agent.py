@@ -138,7 +138,7 @@ class BaseAgent(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def select_action(self, observation: np.ndarray, training: bool = True) -> int:
+    def select_action(self, observation: np.ndarray, training: bool = True) -> Any:
         """
         Select an action given an observation.
 
@@ -147,16 +147,16 @@ class BaseAgent(ABC):
             training: Whether in training mode (affects exploration)
 
         Returns:
-            Selected action
+            Selected action (discrete int or continuous float/vector)
         """
 
     @abstractmethod
-    def update(self, batch: dict[str, Any]) -> dict[str, float]:
+    def update(self, batch: Any) -> dict[str, float]:
         """
         Update the agent's policy based on collected experience.
 
         Args:
-            batch: Dictionary containing trajectory data
+            batch: Dictionary or trajectory list containing experience data
 
         Returns:
             Dictionary of training metrics

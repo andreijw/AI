@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from rl_cartpole.agents.replay_buffer import ReplayBuffer
+from rl_core.agents.replay_buffer import ReplayBuffer
 
 
 def test_init_valid():

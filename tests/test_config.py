@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from rl_cartpole.utils.config import load_config, merge_configs, save_config
+from rl_core.utils.config import load_config, merge_configs, save_config
 
 
 def test_load_yaml_config():

@@ -19,7 +19,8 @@ The architecture is designed to support:
 
 ## Features
 
-- **Modular Architecture**: Clean separation of concerns with dedicated modules for environments, agents, training, and utilities
+- **Modular Architecture**: Clean separation of concerns with dedicated modules for environments,
+  agents, training, and utilities
 - **Environment Wrapper**: Custom CartPole environment wrapper with episode tracking and monitoring
 - **Configurable Training**: YAML-based configuration system for easy experimentation
 - **Logging & Metrics**: Built-in logging system for tracking training progress
@@ -31,53 +32,37 @@ The architecture is designed to support:
 ```
 AI/
 ├── src/
-│   └── rl_cartpole/
-│       ├── __init__.py
-│       ├── environments/        # Environment wrappers and factories
-│       │   ├── __init__.py
-│       │   ├── cartpole_env.py
-│       │   └── make_env.py
-│       ├── agents/              # Agent implementations
-│       │   ├── __init__.py
-│       │   ├── base_agent.py
-│       │   ├── random_agent.py
-│       │   ├── reinforce_agent.py
-│       │   ├── actor_critic_agent.py
-│       │   ├── ppo_agent.py
-│       │   ├── dqn_agent.py
-│       │   └── replay_buffer.py
-│       ├── training/            # Training pipeline
-│       │   ├── __init__.py
-│       │   └── trainer.py
-│       ├── utils/               # Utilities
-│       │   ├── __init__.py
-│       │   ├── config.py        # Configuration loading
-│       │   ├── logger.py        # Logging utilities
-│       │   └── visualization.py # Plotting utilities
-│       └── benchmark.py         # CartPole benchmark challenge implementation
+│   ├── rl_core/                 # Algorithm-agnostic RL framework
+│   │   ├── agents/              # Core discrete & continuous agent implementations
+│   │   │   ├── base_agent.py
+│   │   │   ├── actor_critic_base.py
+│   │   │   ├── continuous_actor_critic.py
+│   │   │   ├── continuous_ppo.py
+│   │   │   ├── continuous_random_agent.py
+│   │   │   ├── dqn_agent.py
+│   │   │   ├── ppo_agent.py
+│   │   │   ├── random_agent.py
+│   │   │   ├── reinforce_agent.py
+│   │   │   └── replay_buffer.py
+│   │   ├── training/            # Generic training pipeline (trainer.py)
+│   │   └── utils/               # Config, logging, video recording & plotting utilities
+│   ├── rl_cartpole/             # CartPole-v1 discrete balance control challenge
+│   │   ├── environments/        # CartPole wrappers and vectorization factories
+│   │   └── benchmark.py         # CartPole benchmark challenge implementation
+│   ├── rl_pendulum/             # Pendulum-v1 continuous torque control challenge
+│   │   ├── environments/        # Pendulum wrappers and continuous noise factories
+│   │   └── benchmark.py         # Pendulum benchmark challenge implementation
 │   └── benchmark.py             # General benchmark interface & runner engine
-├── tests/                       # Unit tests
-│   ├── __init__.py
-│   ├── test_environment.py
-│   ├── test_agents.py
-│   ├── test_reinforce_agent.py
-│   ├── test_actor_critic_agent.py
-│   ├── test_trainer.py
-│   └── ...
-├── configs/                     # Configuration files
-│   ├── cartpole_default.yaml
-│   ├── cartpole_reinforce.yaml
-│   ├── cartpole_actor_critic.yaml
-│   ├── cartpole_ppo.yaml
-│   └── cartpole_dqn.yaml
-├── train.py                     # Main training script
-├── record.py                    # Record a trained agent from a checkpoint
-├── setup.ps1                   # Windows developer setup (Python 3.12 + .venv + CI checks)
-├── .mcp.json                   # Shared MCP servers for AI assistants (context7)
-├── pyproject.toml              # Project configuration
-├── requirements.txt            # Dependencies
-├── CONTRIBUTING.md             # Coding standards and feature/bug workflow
-├── CLAUDE.md / GEMINI.md       # AI assistant instructions
+├── tests/                       # Unit & integration test suites
+├── configs/                     # YAML hyperparameter configurations
+│   ├── cartpole_*.yaml          # CartPole challenge configs (default, PPO, DQN, etc.)
+│   └── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C)
+├── train.py                     # Main training entrypoint
+├── record.py                    # Checkpoint video recorder
+├── setup.ps1                   # Windows developer setup
+├── pyproject.toml              # Project packaging & tool settings
+├── CONTRIBUTING.md             # Coding standards & workflow
+├── ARCHITECTURE.md             # Architectural design & Mermaid diagrams
 └── README.md                   # This file
 ```
 
@@ -194,6 +179,12 @@ python train.py --config configs/cartpole_ppo.yaml
 
 # DQN
 python train.py --config configs/cartpole_dqn.yaml
+
+# Pendulum Continuous Actor-Critic
+python train.py --config configs/pendulum_actor_critic.yaml
+
+# Pendulum Continuous PPO
+python train.py --config configs/pendulum_ppo.yaml
 ```
 
 ### Run any agent from one base config (quick overrides)
@@ -220,9 +211,10 @@ python train.py --config configs/cartpole_default.yaml --agent-type dqn --num-ep
 
 ### Visualization and video recording
 
-Outputs are kept in per-agent folders so training one agent never overwrites another's:
-`checkpoints/<agent_type>/`, `videos/<agent_type>/` and `plots/<agent_type>/` (for example
-`checkpoints/ppo/agent_episode_1400.pt`). Re-training the same agent replaces that agent's previous
+Outputs are partitioned into per-challenge and per-agent folders so runs never overwrite one another:
+`checkpoints/<challenge>/<agent_type>/`, `videos/<challenge>/<agent_type>/`, `plots/<challenge>/<agent_type>/`,
+and `logs/<challenge>/<agent_type>/` (for example `checkpoints/cartpole/ppo/agent_episode_1400.pt` or
+`checkpoints/pendulum/ppo/agent_episode_200.pt`). Re-training the same agent replaces that agent's previous
 outputs; copy its folders first to keep a run. Logs in `logs/` are timestamped per run.
 
 For a full run with saved learning-curve plots (saved to `plots/ppo/`):
@@ -469,7 +461,8 @@ Workflows are automatically synchronized from `.github/workflows` by
 
 <!-- WORKFLOWS:END -->
 
-For more information about the Copilot deployment workflow and GPG signing setup, see [.github/COPILOT_DEPLOYMENT.md](.github/COPILOT_DEPLOYMENT.md).
+For more information about the Copilot deployment workflow and GPG signing setup,
+see [.github/COPILOT_DEPLOYMENT.md](.github/COPILOT_DEPLOYMENT.md).
 
 ## Architecture
 
@@ -489,12 +482,18 @@ The `BaseAgent` abstract class defines the interface for all RL agents:
 - `update()`: Update policy based on collected experience
 - `save()` / `load()`: Checkpoint management
 
-Implemented agents:
+Implemented agents (in `src/rl_core/agents/`):
 
-- `RandomAgent`: Random baseline policy
-- `ReinforceAgent`: Monte Carlo policy-gradient agent
-- `ActorCriticAgent`: Policy + value network agent with entropy regularization
-- `PPOAgent`: Clipped-policy actor-critic agent for more stable updates
+- **Discrete Control Agents**:
+  - `RandomAgent`: Random action baseline policy
+  - `ReinforceAgent`: Monte Carlo policy-gradient agent
+  - `ActorCriticAgent`: Advantage Actor-Critic (A2C) policy + value network agent
+  - `PPOAgent`: Clipped-policy Proximal Policy Optimization agent
+  - `DQNAgent`: Deep Q-Network with replay buffer and target network
+- **Continuous Control Agents**:
+  - `ContinuousRandomAgent`: Uniform random continuous torque baseline policy
+  - `ContinuousActorCriticAgent`: Continuous Gaussian policy A2C with state-value critic
+  - `ContinuousPPOAgent`: Continuous Gaussian policy PPO with clipped surrogate objective
 
 ### Training Pipeline
 
@@ -507,17 +506,16 @@ The `Trainer` class orchestrates the training process:
 
 ## Next AI Progression
 
-With random, REINFORCE, actor-critic, and PPO in place, the next natural step is to add a
-value-based baseline so policy-gradient and value-learning approaches can be compared directly.
+With discrete control (CartPole: Random, REINFORCE, Actor-Critic, PPO, DQN) and continuous
+control (Pendulum: Random, Actor-Critic, PPO) fully operational, the framework provides
+a decoupled foundation for future AI challenges.
 
-### Immediate target: `DQNAgent`
+### Next Steps:
 
-1. Add a `DQNAgent` implementation that follows the same `BaseAgent` lifecycle (`select_action`,
-   `update`, `save`, `load`).
-2. Extend `train.py` dispatch and config options so DQN can run through the same CLI flow used by
-   existing agents.
-3. Add focused tests for replay handling, target updates, and epsilon-greedy behavior.
-4. Benchmark DQN against PPO on CartPole with the existing metrics and plotting pipeline.
+1. **Continuous Off-Policy Learning**: Implement DDPG (Deep Deterministic Policy Gradient) or
+   SAC (Soft Actor-Critic) with experience replay for sample-efficient continuous torque control.
+2. **Advanced Environments**: BipedalWalker, MountainCar, or Acrobot challenges.
+3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 
 ## Future Enhancements
 

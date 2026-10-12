@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import numpy as np
 import pytest
 
-from rl_cartpole.utils.visualization import (
+from rl_core.utils.visualization import (
     _rolling_average,
     plot_benchmark_comparison,
     plot_training_metrics,

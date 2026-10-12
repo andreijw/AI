@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import pytest
 
-from rl_cartpole.utils.logger import Logger, setup_logger
+from rl_core.utils.logger import Logger, setup_logger
 
 # ---------------------------------------------------------------------------
 # Helpers

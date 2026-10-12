@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import numpy as np
 import pytest
 
-from rl_cartpole.agents import ActorCriticAgent, BaseAgent, RandomAgent, ReinforceAgent
+from rl_core.agents import ActorCriticAgent, BaseAgent, RandomAgent, ReinforceAgent
 
 # ---------------------------------------------------------------------------
 # Shared fixtures / helpers

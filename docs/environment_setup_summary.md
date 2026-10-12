@@ -2,8 +2,8 @@
 
 ## Overview
 
-This document summarizes the implementation of the basic environment setup for the CartPole RL project, including observation
-noise, action noise, domain randomization, and vectorized environment support.
+This document summarizes the implementation of the basic environment setup for the CartPole RL
+project, including observation noise, action noise, domain randomization, and vectorized environment support.
 
 ## Files Added/Modified
 

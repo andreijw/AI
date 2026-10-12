@@ -64,7 +64,8 @@ Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI o
 ## MCP Servers
 
 Shared servers are defined in [.mcp.json](.mcp.json) (same `context7` definition and `CONTEXT7_API_KEY` as the
-eternal-descent repo). Setup and troubleshooting: [README → AI Assistant MCP Servers](README.md#ai-assistant-mcp-servers).
+eternal-descent repo). Setup and troubleshooting:
+[README → AI Assistant MCP Servers](README.md#ai-assistant-mcp-servers).
 
 | Server | Use it when |
 | :--- | :--- |

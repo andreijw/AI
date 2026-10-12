@@ -8,7 +8,7 @@ import pytest
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from rl_cartpole.agents import DQNAgent, ReinforceAgent
+from rl_core.agents import DQNAgent, ReinforceAgent
 from tests.helpers import minimal_config, run_main
 
 
@@ -51,7 +51,7 @@ def test_record_writes_single_playback_video(tmp_path, monkeypatch):
 def test_record_loads_checkpoint_and_records_each_episode(tmp_path, monkeypatch):
     """The checkpoint is loaded into the agent and every requested episode is merged."""
     pytest.importorskip("moviepy")
-    import rl_cartpole.utils.video as video_mod
+    import rl_core.utils.video as video_mod
 
     loaded = []
     original_load = ReinforceAgent.load

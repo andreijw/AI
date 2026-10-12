@@ -29,20 +29,22 @@ To optimize token usage and context window limits:
 
 ## 2. Codebase Directory Layout
 
-* **`src/rl_cartpole/`** (located at [src/rl_cartpole/](file:///D:/Documents/Code/AI/src/rl_cartpole/)): Core
-  reinforcement learning framework source code.
-  * `src/rl_cartpole/environments/` (located at
-    [environments/](file:///D:/Documents/Code/AI/src/rl_cartpole/environments/)): Gymnasium wrapper implementations,
-    observation/action noise injections, domain randomization configurations, and vectorized environment factories.
-  * `src/rl_cartpole/agents/` (located at [agents/](file:///D:/Documents/Code/AI/src/rl_cartpole/agents/)): RL agent
-    policy implementations, including abstract `BaseAgent`, baseline `RandomAgent`, the shared actor/critic network
-    base `ActorCriticBase` (`actor_critic_base.py`), and deep/policy-gradient agents: `ReinforceAgent`,
-    `ActorCriticAgent`, and `PPOAgent`.
-  * `src/rl_cartpole/training/` (located at [training/](file:///D:/Documents/Code/AI/src/rl_cartpole/training/)):
-    Training pipelines and loop management orchestration (`trainer.py`).
-  * `src/rl_cartpole/utils/` (located at [utils/](file:///D:/Documents/Code/AI/src/rl_cartpole/utils/)): Common
-    utilities including yaml configuration parsing (`config.py`), progress and training metrics logging (`logger.py`),
-    and visualization helpers (`visualization.py`).
+* **`src/rl_core/`**: Algorithm-agnostic reinforcement learning framework.
+  * `src/rl_core/agents/`: Base agent interfaces (`BaseAgent`, `ActorCriticBase`, `ContinuousActorCriticBase`),
+    discrete agents (`RandomAgent`, `ReinforceAgent`, `ActorCriticAgent`, `PPOAgent`, `DQNAgent`),
+    continuous agents (`ContinuousRandomAgent`, `ContinuousActorCriticAgent`, `ContinuousPPOAgent`), and `ReplayBuffer`.
+  * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).
+  * `src/rl_core/utils/`: Configuration parsing (`config.py`), structured logging (`logger.py`),
+    video recording (`video.py`), and visualization helpers (`visualization.py`).
+* **`src/rl_cartpole/`**: CartPole-v1 discrete balance control challenge.
+  * `src/rl_cartpole/environments/`: Gymnasium wrapper implementations, observation/action noise injections,
+    domain randomization configurations, and vectorized environment factories.
+  * `src/rl_cartpole/benchmark.py`: CartPole benchmark challenge implementation.
+* **`src/rl_pendulum/`**: Pendulum-v1 continuous torque control challenge.
+  * `src/rl_pendulum/environments/`: Pendulum wrappers, observation/action noise, domain
+    randomization, and vectorization.
+  * `src/rl_pendulum/benchmark.py`: Pendulum benchmark challenge implementation.
+* **`src/benchmark.py`**: General benchmark interface & runner engine across registered challenges.
 * **`tests/`** (located at [tests/](file:///D:/Documents/Code/AI/tests/)): Pytest unit and integration test suite
   targeting environments, agents, logging, configurations, and visualization.
 * **`configs/`** (located at [configs/](file:///D:/Documents/Code/AI/configs/)): YAML files specifying hyperparameter
