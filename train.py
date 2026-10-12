@@ -8,17 +8,20 @@ from contextlib import contextmanager
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from rl_cartpole.agents import (
+from rl_cartpole.environments import CartPoleEnv
+from rl_core.agents import (
     ActorCriticAgent,
+    ContinuousActorCriticAgent,
+    ContinuousPPOAgent,
+    ContinuousRandomAgent,
     DQNAgent,
     PPOAgent,
     RandomAgent,
     ReinforceAgent,
 )
-from rl_cartpole.environments import CartPoleEnv
-from rl_cartpole.training import Trainer
-from rl_cartpole.utils import load_config, plot_training_metrics, setup_logger
-from rl_cartpole.utils.video import TrainingVideoRecorder
+from rl_core.training import Trainer
+from rl_core.utils import load_config, plot_training_metrics, setup_logger
+from rl_core.utils.video import TrainingVideoRecorder
 
 AGENT_CLASSES = {
     "random": RandomAgent,
@@ -26,6 +29,12 @@ AGENT_CLASSES = {
     "actor_critic": ActorCriticAgent,
     "ppo": PPOAgent,
     "dqn": DQNAgent,
+}
+
+CONTINUOUS_AGENT_CLASSES = {
+    "random": ContinuousRandomAgent,
+    "actor_critic": ContinuousActorCriticAgent,
+    "ppo": ContinuousPPOAgent,
 }
 
 
@@ -64,8 +73,10 @@ def load_run_config(config_path, agent_type=None, num_episodes=None):
     return config, agent_type
 
 
-def agent_output_dir(base_dir, agent_type):
-    """Per-agent output folder, so runs of different agents never overwrite each other."""
+def agent_output_dir(base_dir, agent_type, challenge=None):
+    """Per-agent (and optionally per-challenge) output folder."""
+    if challenge:
+        return os.path.join(base_dir, challenge, agent_type)
     return os.path.join(base_dir, agent_type)
 
 
@@ -104,16 +115,29 @@ def headless_rendering(enabled=True):
 
 
 def create_env(config, render_mode):
-    """Create the CartPoleEnv described by the config's environment section."""
+    """Create the CartPoleEnv or PendulumEnv described by the config's environment section."""
     env_config = config["environment"]
-    env_name = env_config.get("name")
+    env_name = env_config.get("name") or "CartPole-v1"
+    if "pendulum" in env_name.lower():
+        from rl_pendulum.environments import PendulumEnv
+
+        return PendulumEnv(
+            env_name=env_name,
+            render_mode=render_mode,
+            max_episode_steps=env_config.get("max_episode_steps", 200),
+            seed=env_config.get("seed"),
+            obs_noise_std=env_config.get("obs_noise_std", 0.0),
+            action_noise_std=env_config.get("action_noise_std", 0.0),
+            domain_randomization=env_config.get("domain_randomization"),
+        )
+
     obs_noise_std = env_config.get("obs_noise_std")
     action_noise_prob = env_config.get("action_noise_prob")
     return CartPoleEnv(
         env_name="CartPole-v1" if env_name is None else env_name,
         render_mode=render_mode,
-        max_episode_steps=env_config["max_episode_steps"],
-        seed=env_config["seed"],
+        max_episode_steps=env_config.get("max_episode_steps", 500),
+        seed=env_config.get("seed"),
         obs_noise_std=0.0 if obs_noise_std is None else obs_noise_std,
         action_noise_prob=0.0 if action_noise_prob is None else action_noise_prob,
         domain_randomization=env_config.get("domain_randomization"),
@@ -122,6 +146,27 @@ def create_env(config, render_mode):
 
 def create_agent(agent_type, config, env):
     """Create an agent of agent_type sized for env, using the config's agent section."""
+    import gymnasium as gym
+
+    is_continuous = isinstance(env.action_space, gym.spaces.Box)
+    if is_continuous:
+        if agent_type not in CONTINUOUS_AGENT_CLASSES:
+            raise ValueError(
+                f"Agent type '{agent_type}' is not supported for continuous action spaces. "
+                f"Supported: {sorted(CONTINUOUS_AGENT_CLASSES)}"
+            )
+        agent_cfg = dict(config["agent"]["config"])
+        if hasattr(env.action_space, "low") and "action_low" not in agent_cfg:
+            agent_cfg["action_low"] = env.action_space.low
+        if hasattr(env.action_space, "high") and "action_high" not in agent_cfg:
+            agent_cfg["action_high"] = env.action_space.high
+
+        return CONTINUOUS_AGENT_CLASSES[agent_type](
+            observation_dim=env.observation_space.shape[0],
+            action_dim=env.action_space.shape[0],
+            config=agent_cfg,
+        )
+
     return AGENT_CLASSES[agent_type](
         observation_dim=env.observation_space.shape[0],
         action_dim=env.action_space.n,
@@ -196,6 +241,13 @@ def main():
         type=int,
         help="Override training.num_episodes from config (must be > 0).",
     )
+    parser.add_argument(
+        "--challenge",
+        type=str,
+        choices=["cartpole", "pendulum"],
+        default=None,
+        help="Override challenge type (cartpole or pendulum).",
+    )
     args = parser.parse_args()
 
     if args.render and args.record_video:
@@ -208,18 +260,24 @@ def main():
         parser.error("--video-every must be a positive integer.")
 
     config, agent_type = load_run_config(args.config, args.agent_type, args.num_episodes)
+    env_name = config["environment"].get("name") or "CartPole-v1"
+    challenge = args.challenge or ("pendulum" if "pendulum" in env_name.lower() else "cartpole")
+
     config["training"]["checkpoint_dir"] = agent_output_dir(
-        config["training"].get("checkpoint_dir", "./checkpoints"), agent_type
+        config["training"].get("checkpoint_dir", "./checkpoints"), agent_type, challenge=challenge
     )
-    video_dir = args.video_dir or agent_output_dir("./videos", agent_type)
-    plot_dir = args.plot_dir or agent_output_dir("./plots", agent_type)
+    video_dir = args.video_dir or agent_output_dir("./videos", agent_type, challenge=challenge)
+    plot_dir = args.plot_dir or agent_output_dir("./plots", agent_type, challenge=challenge)
+    config["training"]["log_dir"] = agent_output_dir(
+        config["training"].get("log_dir", "./logs"), agent_type, challenge=challenge
+    )
 
     # Setup logger
     logger = setup_logger(
-        name="rl_cartpole",
+        name=f"rl_{challenge}",
         log_dir=config["training"]["log_dir"],
     )
-    logger.info("Starting CartPole RL training")
+    logger.info(f"Starting {challenge.capitalize()} RL training")
     logger.info(f"Configuration: {config}")
 
     # --record-video uses rgb_array (no display needed); --render uses human (requires display).
@@ -280,7 +338,7 @@ def main():
                         episode_rewards=trainer.episode_rewards,
                         episode_lengths=trainer.episode_lengths,
                         save_dir=plot_dir,
-                        title=f"CartPole {agent_type.capitalize()} Agent – Training Metrics",
+                        title=f"{challenge.capitalize()} {agent_type.capitalize()} Agent – Training Metrics",
                     )
                     logger.info(f"Training metrics plot saved to '{plot_path}'")
             except KeyboardInterrupt:

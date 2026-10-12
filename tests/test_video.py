@@ -1,4 +1,4 @@
-"""Tests for training video recording and clip merging (rl_cartpole.utils.video)."""
+"""Tests for training video recording and clip merging (rl_core.utils.video)."""
 
 import logging
 import os
@@ -12,7 +12,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_cartpole.environments import CartPoleEnv
-from rl_cartpole.utils.video import TrainingVideoRecorder, merge_episode_clips
+from rl_core.utils.video import TrainingVideoRecorder, merge_episode_clips
 
 PREFIX = "cartpole-training"
 

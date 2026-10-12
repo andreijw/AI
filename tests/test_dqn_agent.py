@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from rl_cartpole.agents.dqn_agent import DQNAgent
+from rl_core.agents.dqn_agent import DQNAgent
 
 
 def test_dqn_init_valid():

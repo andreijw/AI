@@ -32,15 +32,18 @@ This document outlines manual verification and testing procedures for the RL fra
 | TR-2 | **Actor-Critic** | `python train.py --config configs/cartpole_actor_critic.yaml` | Actor policy and Critic value updates succeed; TD errors decrease over time. |
 | TR-3 | **PPO** | `python train.py --config configs/cartpole_ppo.yaml` | Rollouts collect trajectory batches, surrogate loss clips, average reward improves. |
 | TR-4 | **DQN** | `python train.py --config configs/cartpole_dqn.yaml` | Completes training loop, replay buffer samples mini-batches, Q-values converge. |
+| TR-5 | **Continuous A2C** | `python train.py --config configs/pendulum_actor_critic.yaml` | Continuous Gaussian policy updates on Pendulum-v1; critic loss converges. |
+| TR-6 | **Continuous PPO** | `python train.py --config configs/pendulum_ppo.yaml` | Continuous PPO surrogate clipping and GAE updates solve Pendulum-v1. |
 
 ### Video Recording Checks
 
 | Check # | Target Feature | Command to Execute | Expected Behavior |
 | --- | --- | --- | --- |
-| VID-1 | **Training clips** | `python train.py --config configs/cartpole_ppo.yaml --record-video --video-every 250` | Exactly `videos/ppo/cartpole-training-episode-{250,500,...,1500}.mp4`; no evaluation episodes or drifted numbers; later clips balance longer. |
-| VID-2 | **Trained-agent video** | `python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/ppo/agent_episode_1400.pt` | One `videos/ppo/cartpole-playback-full.mp4` with 5 episodes; no per-episode clips left behind. |
-| VID-3 | **Usage errors** | `python train.py --video-every 5` and `python record.py` | Exit with "--video-every requires --record-video" and "the following arguments are required: --checkpoint" respectively. |
-| OUT-1 | **Per-agent outputs** | Train `cartpole_default.yaml` and `cartpole_ppo.yaml` with `--record-video --plot` | `checkpoints/`, `videos/` and `plots/` each contain separate `random/` and `ppo/` folders; neither run overwrites the other. |
+| VID-1 | **Training clips** | `python train.py --config configs/cartpole_ppo.yaml --record-video --video-every 250` | Exactly `videos/cartpole/ppo/cartpole-training-episode-{250,500,...,1500}.mp4`; balances longer. |
+| VID-2 | **Trained-agent video** | `python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_1400.pt` | One `videos/cartpole/ppo/cartpole-playback-full.mp4` with 5 episodes. |
+| VID-3 | **Usage errors** | `python train.py --video-every 5` and `python record.py` | Exit with "--video-every requires --record-video" and "the following arguments are required: --checkpoint". |
+| VID-4 | **Pendulum recording** | `python record.py --config configs/pendulum_ppo.yaml --checkpoint checkpoints/pendulum/ppo/agent_episode_200.pt` | Generates `videos/pendulum/ppo/pendulum-playback-full.mp4`. |
+| OUT-1 | **Scoped outputs** | Train `cartpole_default.yaml` and `pendulum_ppo.yaml` with `--record-video --plot` | `checkpoints/`, `videos/`, `plots/`, `logs/` contain partitioned `<challenge>/<agent>/` paths. |
 
 ### Multi-Agent Benchmark Checks
 
@@ -48,6 +51,7 @@ This document outlines manual verification and testing procedures for the RL fra
 | --- | --- | --- | --- |
 | BM-1 | **Benchmark Runner** | `python src/benchmark.py --challenge cartpole --agents random ppo --episodes 5 --no-plot` | Runs multi-agent benchmark without plot, writes metrics JSON and summary report. |
 | BM-2 | **Benchmark Plotting** | `python src/benchmark.py --challenge cartpole --agents random reinforce --episodes 5` | Generates `plots/benchmarks/cartpole/benchmark_comparison.png` and `docs/benchmarks/cartpole_results.md`. |
+| BM-3 | **Continuous Benchmark** | `python src/benchmark.py --challenge pendulum --agents random ppo --episodes 5` | Benchmarks continuous agents, writes metrics and markdown report. |
 
 ### Evaluation & Checkpoint Verification
 

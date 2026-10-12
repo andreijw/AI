@@ -1,8 +1,9 @@
-"""
-RL CartPole - A modular reinforcement learning framework for CartPole simulation.
+"""CartPole discrete control challenge package."""
 
-This package provides a clean, extensible foundation for experimenting with
-RL algorithms in physics-based environments.
-"""
+from .environments import CartPoleEnv, make_env, make_vec_env
 
-__version__ = "0.1.0"
+__all__ = [
+    "CartPoleEnv",
+    "make_env",
+    "make_vec_env",
+]

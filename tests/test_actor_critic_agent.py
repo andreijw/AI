@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import numpy as np
 
-from rl_cartpole.agents import ActorCriticAgent
+from rl_core.agents import ActorCriticAgent
 
 _AC_CONFIG = {
     "learning_rate": 1e-3,

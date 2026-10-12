@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import numpy as np
 import pytest
 
-from rl_cartpole.agents import RandomAgent
+from rl_core.agents import RandomAgent
 
 
 def test_random_agent_creation():

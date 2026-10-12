@@ -9,9 +9,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from gymnasium.wrappers import RecordVideo
 
-from rl_cartpole.training import Trainer
-from rl_cartpole.utils import setup_logger
-from rl_cartpole.utils.video import merge_episode_clips
+from rl_core.training import Trainer
+from rl_core.utils import setup_logger
+from rl_core.utils.video import merge_episode_clips
 from train import (
     AGENT_CLASSES,
     agent_output_dir,
@@ -58,6 +58,13 @@ def main():
         choices=sorted(AGENT_CLASSES),
         help="Override the agent type from config (random, reinforce, actor_critic, ppo, dqn).",
     )
+    parser.add_argument(
+        "--challenge",
+        type=str,
+        choices=["cartpole", "pendulum"],
+        default=None,
+        help="Challenge type (cartpole or pendulum).",
+    )
     args = parser.parse_args()
 
     if args.episodes <= 0:
@@ -65,8 +72,11 @@ def main():
 
     require_moviepy()
     config, agent_type = load_run_config(args.config, args.agent_type)
-    video_dir = args.video_dir or agent_output_dir("./videos", agent_type)
-    logger = setup_logger(name="rl_cartpole", log_dir=config["training"]["log_dir"])
+    env_name = config["environment"].get("name") or "CartPole-v1"
+    challenge = args.challenge or ("pendulum" if "pendulum" in env_name.lower() else "cartpole")
+    video_dir = args.video_dir or agent_output_dir("./videos", agent_type, challenge=challenge)
+    playback_prefix = f"{challenge}-playback"
+    logger = setup_logger(name=f"rl_{challenge}", log_dir=config["training"]["log_dir"])
 
     with headless_rendering():
         env = create_env(config, render_mode="rgb_array")
@@ -80,7 +90,7 @@ def main():
                     env.env,
                     video_folder=video_dir,
                     episode_trigger=lambda _: True,
-                    name_prefix=PLAYBACK_NAME_PREFIX,
+                    name_prefix=playback_prefix,
                     disable_logger=True,
                 )
             )
@@ -91,7 +101,7 @@ def main():
             # Closing writes the last episode's clip, so merging happens afterwards.
             close_env(env, logger)
 
-    video_path = merge_episode_clips(video_dir, name_prefix=PLAYBACK_NAME_PREFIX)
+    video_path = merge_episode_clips(video_dir, name_prefix=playback_prefix)
     logger.info(f"Playback video saved to '{video_path}'")
 
 

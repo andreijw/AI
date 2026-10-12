@@ -1,10 +1,9 @@
 """
-Example script demonstrating basic usage of the RL CartPole framework.
+Example script demonstrating basic usage of the decoupled RL framework.
 
 This script shows how to:
-1. Create an environment
-2. Create an agent
-3. Run a simple episode
+1. Run a discrete control episode (CartPole-v1 with RandomAgent)
+2. Run a continuous control episode (Pendulum-v1 with ContinuousRandomAgent)
 """
 
 import os
@@ -13,62 +12,75 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from rl_cartpole.agents import RandomAgent
 from rl_cartpole.environments import CartPoleEnv
+from rl_core.agents import ContinuousRandomAgent, RandomAgent
+from rl_pendulum.environments import PendulumEnv
 
 
-def main():
-    """Run a simple episode with a random agent."""
+def run_cartpole_demo():
+    """Run a simple discrete control episode on CartPole-v1."""
     print("=" * 60)
-    print("RL CartPole Example")
+    print("Discrete Control Demo: CartPole-v1")
     print("=" * 60)
 
-    # Create environment
-    print("\n1. Creating CartPole environment...")
-    env = CartPoleEnv(seed=42, max_episode_steps=500)
-    print(f"   Observation space: {env.observation_space}")
-    print(f"   Action space: {env.action_space}")
+    env = CartPoleEnv(seed=42, max_episode_steps=200)
+    obs_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.n
+    agent = RandomAgent(observation_dim=obs_dim, action_dim=action_dim, config={"seed": 42})
 
-    # Create agent
-    print("\n2. Creating Random agent...")
-    agent = RandomAgent(
-        observation_dim=env.observation_space.shape[0], action_dim=env.action_space.n, config={}
-    )
-
-    # Run episode
-    print("\n3. Running episode...")
     obs, _ = env.reset()
-    print(f"   Initial observation: {obs}")
-
-    episode_reward = 0
+    episode_reward = 0.0
     episode_steps = 0
     done = False
 
-    while not done and episode_steps < 100:
-        # Select action
+    while not done and episode_steps < 50:
         action = agent.select_action(obs)
-
-        # Take step
-        obs, reward, terminated, truncated, info = env.step(action)
+        obs, reward, terminated, truncated, _ = env.step(action)
         done = terminated or truncated
-
         episode_reward += reward
         episode_steps += 1
 
-        # Print every 10 steps
-        if episode_steps % 10 == 0:
-            print(f"   Step {episode_steps}: reward={episode_reward:.1f}")
-
-    # Episode summary
-    print("\n4. Episode complete!")
-    print(f"   Total steps: {episode_steps}")
-    print(f"   Total reward: {episode_reward}")
-    print(f"   Average reward per step: {episode_reward / episode_steps:.2f}")
-
-    # Cleanup
+    print(f"CartPole Episode Finished: Steps={episode_steps}, Reward={episode_reward:.1f}")
     env.close()
+
+
+def run_pendulum_demo():
+    """Run a simple continuous control episode on Pendulum-v1."""
     print("\n" + "=" * 60)
-    print("Example complete!")
+    print("Continuous Control Demo: Pendulum-v1")
+    print("=" * 60)
+
+    env = PendulumEnv(seed=42, max_episode_steps=200)
+    obs_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.shape[0]
+    agent = ContinuousRandomAgent(
+        observation_dim=obs_dim,
+        action_dim=action_dim,
+        config={"seed": 42, "action_low": -2.0, "action_high": 2.0},
+    )
+
+    obs, _ = env.reset()
+    episode_reward = 0.0
+    episode_steps = 0
+    done = False
+
+    while not done and episode_steps < 50:
+        action = agent.select_action(obs)
+        obs, reward, terminated, truncated, _ = env.step(action)
+        done = terminated or truncated
+        episode_reward += reward
+        episode_steps += 1
+
+    print(f"Pendulum Episode Finished: Steps={episode_steps}, Reward={episode_reward:.1f}")
+    env.close()
+
+
+def main():
+    """Run framework demonstrations."""
+    run_cartpole_demo()
+    run_pendulum_demo()
+    print("\n" + "=" * 60)
+    print("All demonstrations complete!")
     print("=" * 60)
 
 

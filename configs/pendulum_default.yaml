@@ -1,0 +1,26 @@
+# Pendulum Default / Random Agent Configuration
+
+environment:
+  name: "Pendulum-v1"
+  render_mode: null
+  max_episode_steps: 200
+  seed: 42
+
+agent:
+  type: "random"
+  config:
+    seed: 42
+    action_low: -2.0
+    action_high: 2.0
+
+training:
+  num_episodes: 200
+  max_steps_per_episode: 200
+  eval_frequency: 20
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import numpy as np
 
-from rl_cartpole.agents import ReinforceAgent
+from rl_core.agents import ReinforceAgent
 
 _REINFORCE_CONFIG = {"learning_rate": 1e-3, "gamma": 0.99, "hidden_dim": 64, "seed": 0}
 

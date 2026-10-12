@@ -171,9 +171,36 @@ def demo_config_based():
     print()
 
 
+def demo_pendulum_features():
+    """Demonstrate continuous control Pendulum environment features."""
+    print("=" * 60)
+    print("Demo 7: Continuous Control (Pendulum-v1)")
+    print("=" * 60)
+
+    from rl_pendulum.environments import make_env as make_pendulum_env
+
+    dr = {"gravity": (8.0, 12.0), "mass": (0.8, 1.2), "length": (0.8, 1.2)}
+    env = make_pendulum_env(
+        seed=42, obs_noise_std=0.05, action_noise_std=0.1, domain_randomization=dr
+    )
+    obs, _ = env.reset()
+
+    print(f"Observation space:   {env.observation_space}")
+    print(f"Action space:        {env.action_space}")
+    print(f"Initial observation: {obs}")
+
+    torque = np.array([1.5], dtype=np.float32)
+    next_obs, reward, terminated, truncated, _ = env.step(torque)
+    print(f"Applied continuous torque: {torque[0]:.2f}")
+    print(f"Next observation: {next_obs}, Reward: {reward:.2f}")
+
+    env.close()
+    print()
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("CartPole Environment Features Demonstration")
+    print("RL Environment Features Demonstration")
     print("=" * 60 + "\n")
 
     demo_basic_env()
@@ -182,6 +209,7 @@ if __name__ == "__main__":
     demo_domain_randomization()
     demo_vectorized_env()
     demo_config_based()
+    demo_pendulum_features()
 
     print("=" * 60)
     print("All demos completed successfully!")

@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import numpy as np
 import pytest
 
-from rl_cartpole.agents import PPOAgent
+from rl_core.agents import PPOAgent
 
 _PPO_CONFIG = {
     "learning_rate": 3e-4,

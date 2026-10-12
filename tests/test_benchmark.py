@@ -18,9 +18,9 @@ from benchmark import (
     main,
     run_benchmark,
 )
-from rl_cartpole.agents.random_agent import RandomAgent
 from rl_cartpole.benchmark import CartPoleChallenge
 from rl_cartpole.environments.cartpole_env import CartPoleEnv
+from rl_core.agents.random_agent import RandomAgent
 
 
 def test_find_solved_episode_empty():

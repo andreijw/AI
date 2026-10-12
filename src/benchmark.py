@@ -22,8 +22,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import numpy as np
 
-from rl_cartpole.training.trainer import Trainer
-from rl_cartpole.utils.visualization import _rolling_average, plot_benchmark_comparison
+from rl_core.training.trainer import Trainer
+from rl_core.utils.visualization import _rolling_average, plot_benchmark_comparison
 
 # Global registry of available benchmark challenges
 CHALLENGES: dict[str, type[BenchmarkChallenge]] = {}
@@ -435,9 +435,13 @@ def run_benchmark(
     Returns:
         Dictionary with benchmark results and file paths.
     """
-    # Lazy import to ensure cartpole challenge is registered
+    # Lazy import to ensure standard challenges are registered
     if "cartpole" not in CHALLENGES:
-        import rl_cartpole.benchmark  # noqa: F401
+        with contextlib.suppress(ImportError):
+            import rl_cartpole.benchmark  # noqa: F401
+    if "pendulum" not in CHALLENGES:
+        with contextlib.suppress(ImportError):
+            import rl_pendulum.benchmark  # noqa: F401
 
     if challenge_name not in CHALLENGES:
         raise ValueError(
@@ -470,6 +474,8 @@ def main() -> None:
     # Ensure standard challenges are loaded
     with contextlib.suppress(ImportError):
         import rl_cartpole.benchmark  # noqa: F401
+    with contextlib.suppress(ImportError):
+        import rl_pendulum.benchmark  # noqa: F401
 
     parser = argparse.ArgumentParser(description="General Reinforcement Learning Benchmark Suite")
     parser.add_argument(

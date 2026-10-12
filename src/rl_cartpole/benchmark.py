@@ -6,15 +6,15 @@ import os
 from typing import Any
 
 from benchmark import BenchmarkChallenge, register_challenge
-from rl_cartpole.agents import (
+from rl_cartpole.environments.cartpole_env import CartPoleEnv
+from rl_core.agents import (
     ActorCriticAgent,
     DQNAgent,
     PPOAgent,
     RandomAgent,
     ReinforceAgent,
 )
-from rl_cartpole.environments.cartpole_env import CartPoleEnv
-from rl_cartpole.utils.config import load_config
+from rl_core.utils.config import load_config
 
 AGENT_CLASSES: dict[str, Any] = {
     "random": RandomAgent,

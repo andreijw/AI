@@ -4,10 +4,10 @@ import logging
 import os
 from typing import Any
 
+import gymnasium as gym
 import numpy as np
 
 from ..agents.base_agent import BaseAgent
-from ..environments.cartpole_env import CartPoleEnv
 
 _logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class Trainer:
 
     def __init__(
         self,
-        env: CartPoleEnv,
+        env: gym.Env | Any,
         agent: BaseAgent,
         config: dict[str, Any],
         logger: Any | None = None,
@@ -272,7 +272,7 @@ class Trainer:
             next_observations.append(next_obs)
             dones.append(done)
 
-            episode_reward += reward
+            episode_reward += float(reward)
             episode_length += 1
             obs = next_obs
 
