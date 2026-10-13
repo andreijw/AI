@@ -90,6 +90,25 @@ pytest -q
 This workflow is the single source of truth for humans and every AI assistant (see `CLAUDE.md` and `GEMINI.md`).
 Follow these steps **in order** for every new feature or bug fix. Do not skip or reorder steps.
 
+**Who decides what.** When an AI assistant does the work, the maintainer makes three decisions: which work to do,
+whether the plan is right (step 3, after it has been reviewed), and when to commit (after step 6's gates have
+passed). The assistant makes the implementation, test and refactoring choices in between and reports them. Committed
+hyperparameters and published benchmark numbers, scope, new dependencies and changes under `.github/` always go to
+the maintainer.
+
+**Skills.** In Claude Code each step is carried out by a skill in [`.claude/skills/`](.claude/skills/), started by
+`dev-loop`. Setup: [README → AI Assistant Skills](README.md#ai-assistant-skills). Other assistants and human
+contributors can read the same files as checklists.
+
+| Step | Skill |
+| :--- | :--- |
+| 0–3 Branch, roadmap item and plan | `dev-loop`, with `algorithm-crafter` for algorithm work and the plan reviewed by `architect` |
+| 4 Tests first | `test-crafter` |
+| 5 Implement | `dev-loop` |
+| 6 Regressions, duplication and gates | `test-crafter` (mutation checks), `cleanup`, `experiment-runner` (learning run), then `pr-reviewer` |
+| 7–9 Manual testing, completion, PR | `doc-sync`, then the `dev-loop` hand-off |
+| A run that does not learn | `training-doctor`, before any hyperparameter is changed |
+
 ### Step 0 — Create a branch
 
 - Start from an up-to-date `develop` and create one branch per roadmap item:
@@ -107,7 +126,8 @@ git checkout -b feature/<kebab-case-name>   # or fix/<kebab-case-name> for bugs
 - Find the matching item in `docs/roadmap.md`. If none exists, add it under the appropriate phase.
 - Flesh out the item: write a clear description, acceptance criteria, and known edge cases.
 - Mark the item **In Progress**.
-- **Stop here and ask the user to confirm the roadmap item** before continuing. Do not proceed until confirmed.
+- The roadmap item is confirmed together with the plan in step 3. Stop here first only if the scope or the intended
+  behaviour is unclear.
 
 ### Step 2 — Finalize the work item
 
@@ -118,18 +138,26 @@ git checkout -b feature/<kebab-case-name>   # or fix/<kebab-case-name> for bugs
 ### Step 3 — Plan the solution
 
 - Identify every file, class, function, and configuration that needs to change.
-- **Check existing components first** — search `src/rl_cartpole/` for similar logic before writing anything new
-  (e.g. `agents/base_agent.py` `BaseAgent`, `agents/actor_critic_base.py` `ActorCriticBase`,
-  `environments/make_env.py` factories, `utils/`). Plan to reuse or extend rather than duplicate.
+- **Check existing components first** — search `src/rl_core/` and the challenge packages for similar logic before
+  writing anything new (e.g. `rl_core/agents/base_agent.py` `BaseAgent`, `rl_core/agents/actor_critic_base.py`
+  `ActorCriticBase`, the `environments/make_env.py` factories, `rl_core/utils/`). Plan to reuse or extend rather than
+  duplicate.
 - Design clean abstractions; avoid one-off inline logic for anything with a natural architectural boundary.
-- Write a short implementation plan and share it before touching any code.
-- Highlight any breaking changes, config schema updates, or numerical stability considerations.
+- For a change to a hyperparameter, a schedule or an update rule, walk the numbers through a typical run before
+  proposing them. For new maths, write down the array shapes and the hand-derived gradients.
+- Highlight any breaking changes, config schema updates, checkpoint format changes, or numerical stability
+  considerations.
+- Have the plan reviewed for structure (the `architect` skill) and revise it.
+- **Stop here: share the reviewed plan and the roadmap item with the user and wait for approval** before touching
+  any code.
 
 ### Step 4 — Red: write failing tests first
 
 - Add or update tests in `tests/test_*.py` that encode the **expected behavior** defined in step 2.
 - Cover happy paths **and** edge cases (e.g., state bounds, action clamping, terminal vs. truncated states,
   reproducibility under a fixed seed).
+- A hand-written backward pass gets a finite-difference gradient check (`assert_gradients_match` in
+  `tests/helpers.py`). For a bug, the first test reproduces the bug.
 - Run only the affected tests and confirm they **fail for the right reason** (an assertion or missing feature, not an
   import or syntax error):
 
@@ -164,6 +192,16 @@ pytest
 bandit -r src/ -ll
 pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes
 ```
+
+- **Prove the tests can fail** (mutation check): break each new rule in the smallest way, confirm a named test
+  fails, and undo the break (`.claude/skills/test-crafter/scripts/mutation_check.py` automates this). List the
+  mutations in the PR.
+- **Show that it still learns** when the change touches an update rule, a loss, a network, the trainer or a committed
+  config: seeded runs through `src/benchmark.py` with `--output-dir` and `--report` pointing outside the repository,
+  so saved runs and `docs/benchmarks/` are untouched. A few-episode smoke run is not evidence of learning.
+- **Pass every gate** before asking for a commit: `ruff check .`, `ruff format --check .`, `mypy src`, `pytest`, the
+  two audits above, and a review of the final diff by someone who did not write it (the `pr-reviewer` skill in a
+  fresh agent).
 
 ### Step 7 — Request manual testing
 

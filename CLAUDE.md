@@ -22,6 +22,48 @@ Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI o
   another assistant; translate its tool names with the mapping below.
 - **Manual test procedures** → [TESTING.md](TESTING.md). **Architecture** → [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Dev Team Workflow
+
+You are the dev team; the maintainer makes the big decisions. The workflow in CONTRIBUTING.md §4 is run through the
+skills in [.claude/skills/](.claude/skills/). Start every feature, tuning change or bug fix with `dev-loop`, which
+calls the others in order.
+
+**The maintainer decides three things:** which work to do (from your proposal), whether the reviewed plan is right,
+and when to commit. Everything between those points is yours to decide, do and report. Also theirs: hyperparameters
+in committed `configs/`, solve thresholds and published benchmark numbers, scope and roadmap order, new dependencies,
+changes under `.github/`, and anything destructive, which includes the git-ignored training outputs in
+`checkpoints/`, `logs/`, `videos/` and `plots/`.
+
+| Skill | Use it |
+| :--- | :--- |
+| `dev-loop` | For any request to build, change, tune or fix, and for "what's next" |
+| `architect` | On every plan before the maintainer sees it; for "where should this live" questions |
+| `algorithm-crafter` | When the work is a new algorithm, network piece, loss or update rule |
+| `test-crafter` | Before production code; whenever tests are added or coverage is questioned |
+| `experiment-runner` | When the question is whether an agent learns, or which of two things learns better |
+| `training-doctor` | When an agent does not learn, diverges or gives NaN, before touching a hyperparameter |
+| `cleanup` | After implementing, before review |
+| `pr-reviewer` | As the last gate before the hand-off; for any review request |
+| `doc-sync` | Before the hand-off |
+
+- `architect`, `cleanup` and `pr-reviewer` build on the **brooks-lint** plugin (pinned in
+  [.claude/settings.json](.claude/settings.json)) and add this project's knowledge. Project review rules C1–C6 live
+  in [.brooks-lint.yaml](.brooks-lint.yaml). Use its read-only modes only (`brooks-review`, `brooks-audit`,
+  `brooks-test`, `brooks-debt`); never `brooks-sweep`.
+- Run `architect` and `pr-reviewer` in a **fresh agent**: tell it to read the skill's `SKILL.md` and give it the plan
+  or branch, since it cannot see the conversation.
+- If the plugin is missing, the skills still run with the project checks; say so and point to
+  [README → AI Assistant Skills](README.md#ai-assistant-skills).
+- **Training runs never write into the maintainer's results.** Send experiment output to the scratch directory:
+  `src/benchmark.py` with `--output-dir` and `--report`, `train.py` with a copied config whose `checkpoint_dir` and
+  `log_dir` point there. The benchmark rewrites the tracked `docs/benchmarks/*.md` by default.
+- **A smoke run is not evidence of learning.** Report which config, how many episodes and how many seeds; say
+  "not verified" for anything not run.
+- Shared tooling: gradient checks in `tests/helpers.py` (`assert_gradients_match`), the mutation runner in
+  `.claude/skills/test-crafter/scripts/`, and a Markdown line-length check in `.claude/skills/doc-sync/scripts/`.
+- When a review or a bug teaches a lesson worth keeping, put it where it will be applied: a rule in
+  `.brooks-lint.yaml`, or a line in the relevant skill.
+
 ## Branch-First TDD
 
 - **Before any edit for a feature or fix, be on a dedicated branch.** If on `develop` (or an unrelated branch), branch
@@ -41,6 +83,7 @@ Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI o
   `.[dev,video]`, runs the CI checks). Flags: `-Update`, `-NonInteractive`, `-SkipChecks`, `-InstallHooks`.
 - **Run every Python tool from `.venv`**: `.venv/Scripts/python -m pytest`, `.venv/Scripts/python -m ruff check .`,
   `.venv/Scripts/python -m mypy src`. Never use bare `python` — on this machine it is the Microsoft Store stub.
+  On Linux and macOS the interpreter is `.venv/bin/python`; the skills write `python` and mean whichever applies.
 - If `.venv` is missing, ask the user to run `.\setup.ps1`; do not `pip install` into a global interpreter.
 
 ## Tool Mapping (GEMINI.md → Claude Code)
@@ -101,3 +144,7 @@ Treat the repository as the source of truth when docs disagree:
 - `requirements.txt` lists `matplotlib>=3.5.0` and `pytest-cov>=4.0.0`, lagging `pyproject.toml`
   (`matplotlib>=3.9.4`, `pytest-cov>=7.1.0`). Install from `pyproject.toml` (`pip install -e ".[dev,video]"`).
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
+- CONTRIBUTING.md §5 and TESTING.md `CKPT-*` describe `.npz` checkpoints; `Trainer` names them
+  `agent_episode_<n>.pt` (NumPy archive content, resolved by `BaseAgent._resolve_save_path`).
+- `Trainer` discards the metrics `agent.update()` returns, so losses never reach the logs; TESTING.md `LOG-1` lists
+  a loss column that is not written. The roadmap has an item for it.

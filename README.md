@@ -584,6 +584,76 @@ for that project, skip to step 3.
 - **A new environment variable isn't picked up.** Reloading the window isn't enough: quit **every** VS Code window.
   Check from VS Code's integrated terminal: `[bool]$env:CONTEXT7_API_KEY`.
 
+## AI Assistant Skills
+
+The repo ships the development workflow as Claude Code **skills** in [`.claude/skills/`](.claude/skills/). They are
+Markdown files committed with the code, so cloning the repo installs them: Claude Code loads them when it starts in
+this folder and picks the right one from what you ask. Together they let the assistant act as the dev team while a
+person makes three decisions: which work to do, whether the plan is right, and when to commit.
+
+| Skill | What it does | Runs |
+| :--- | :--- | :--- |
+| `dev-loop` | Takes a feature or fix from proposal to hand-off, calling the others in order | Whenever you ask to build, change or fix something, or ask what is next |
+| `architect` | Reviews a plan or structure: package boundaries, Python class design, NumPy and Gymnasium hazards | On every plan before you see it |
+| `algorithm-crafter` | Pins down an algorithm's variant, array shapes and hand-derived gradients, then fits it to the agent base classes and registries | When the work is a new agent or update rule |
+| `test-crafter` | Writes unit tests, gradient checks and integration tests, then breaks the code on purpose to prove they fail | Before the implementation |
+| `experiment-runner` | Runs seeded training sweeps outside your saved results and reports what they do and do not show | When the question is whether an agent learns |
+| `training-doctor` | Finds why an agent does not learn, diverges or gives NaN, cheapest check first | Before any hyperparameter is changed to fix a bad run |
+| `cleanup` | Finds and merges duplication against the whole codebase; removes leftovers | After the implementation |
+| `pr-reviewer` | Final review: acceptance criteria, numerical correctness, soundness of the learning, what gets committed | Before you are asked to commit |
+| `doc-sync` | Brings roadmap, TESTING, README, ARCHITECTURE and assistant docs back in line | Before you are asked to commit |
+
+`architect`, `cleanup` and `pr-reviewer` build on the [brooks-lint](https://github.com/hyhmrright/brooks-lint) plugin
+(MIT), which supplies a general code-quality rubric. The rules specific to this project live in
+[`.brooks-lint.yaml`](.brooks-lint.yaml) and in the skills themselves. Without the plugin the skills still run, with
+the project checks only.
+
+### Skill Tooling
+
+| Tool | Purpose |
+| :--- | :--- |
+| `tests/helpers.py` → `numerical_grad`, `assert_gradients_match` | Finite-difference check of a hand-written backward pass, parameter by parameter |
+| `.claude/skills/test-crafter/scripts/mutation_check.py` | Applies small breaks from a JSON list, reports which tests notice, restores the files |
+| `.claude/skills/doc-sync/scripts/check_md_width.py` | Checks the Markdown line-length rule on machines without Node |
+| `src/benchmark.py --output-dir … --report …` | Seeded experiment sweeps that leave `docs/benchmarks/` and saved runs alone |
+
+### Skill Setup
+
+1. **Prerequisites:** [Claude Code](https://code.claude.com) 2.1 or newer (CLI or the VS Code extension) and the
+   `.venv` from [Installation](#installation). Node.js is optional: it is only needed to run `markdownlint` locally.
+
+2. **Install the brooks-lint plugin.** [`.claude/settings.json`](.claude/settings.json) declares its marketplace,
+   pinned to the tag `v1.7.0`, and enables the plugin for this project. Start `claude` in the repo, trust the folder,
+   and accept the prompt to install it. If no prompt appears, install it from a terminal. The marketplace has to be
+   added before the plugin can be found in it:
+
+   ```bash
+   claude plugin marketplace add hyhmrright/brooks-lint@v1.7.0
+   claude plugin install brooks-lint@brooks-lint-marketplace
+   claude plugin list                                   # brooks-lint, Version: 1.7.0, enabled
+   ```
+
+3. **Restart Claude Code** so the plugin and skills are loaded.
+
+4. **Verify.** Type `/` in Claude Code: the nine skills above should be listed, along with
+   `brooks-lint:brooks-review`, `brooks-lint:brooks-audit` and `brooks-lint:brooks-test`.
+
+5. **Use it.** Ask in plain words ("what should we work on next?", "PPO stopped learning on Pendulum, find out
+   why") or name a skill (`/dev-loop`, `/training-doctor`). The assistant stages changes and prints the commit and
+   push commands; it never commits, pushes or merges.
+
+The same settings file pre-approves the read-only quality gates (Ruff, mypy, pytest, Bandit, the duplication check
+and the two skill scripts) so the loop does not stop to ask for each one. To opt out of the plugin personally, add
+this to your git-ignored `.claude/settings.local.json`:
+
+```json
+{
+  "enabledPlugins": { "brooks-lint@brooks-lint-marketplace": false }
+}
+```
+
+Other assistants can use the skills too: they are ordinary Markdown, and [GEMINI.md](GEMINI.md) §5 points to them.
+
 ## Contributing
 
 Contributions are welcome! Before opening a Pull Request, read [CONTRIBUTING.md](CONTRIBUTING.md). It holds the coding

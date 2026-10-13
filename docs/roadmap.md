@@ -111,6 +111,66 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 
 ## Upcoming Milestones
 
+### Workflow Tooling
+
+- [~] **Dev Team Skills for Claude Code**
+  - **Description**: Port the dev-team skills from the sibling `eternal-descent` repo to this Python and RL
+    codebase (`dev-loop`, `architect`, `test-crafter`, `cleanup`, `pr-reviewer`, `doc-sync`), add the RL-specific
+    skills `algorithm-crafter`, `experiment-runner` and `training-doctor`, and add the tooling they rely on.
+  - **Acceptance criteria**:
+    - Nine skills under `.claude/skills/`, each naming this repository's real packages, helpers, commands and gates.
+    - `.claude/settings.json` pins the brooks-lint plugin and pre-approves the quality-gate commands;
+      `.brooks-lint.yaml` holds project review rules C1 to C6.
+    - `tests/helpers.py` provides `numerical_grad` and `assert_gradients_match`, covered by `tests/test_helpers.py`.
+    - `mutation_check.py` and `check_md_width.py` ship with the skills that use them and pass Ruff.
+    - CLAUDE.md, CONTRIBUTING.md §4, GEMINI.md §5 and the README describe the workflow and its setup.
+  - **Known edge cases**: Machines without Node.js cannot run `markdownlint`; the skills fall back to the
+    line-length script. Without the brooks-lint plugin, the skills run with the project checks only.
+  - **Out of scope**: A `release` skill (there is no `main` branch, tag or changelog to release from); adding
+    gradient checks to the existing agents; the gaps found while building this (the four items below).
+
+- [ ] **Training Diagnostics in Logs**
+  - **Description**: `Trainer` discards the dictionary `agent.update()` returns, so losses, entropy and epsilon never
+    reach the metrics log and a failing run can only be diagnosed from a scratch script.
+  - **Acceptance criteria**:
+    - Per-episode update metrics are aggregated and written with the periodic reward metrics.
+    - A non-finite metric is reported loudly, with the episode it first appeared in.
+    - TESTING.md `LOG-1` matches what is written.
+  - **Out of scope**: TensorBoard or other external logging backends.
+
+- [ ] **Discounted-Return Tests That Can Fail**
+  - **Description**: The `*_compute_returns_discounting` tests in `tests/test_ppo_agent.py`,
+    `tests/test_actor_critic_agent.py` and `tests/test_reinforce_agent.py` assert only that returns decrease over five
+    rewards of 1. They still pass with the discount removed, because 5, 4, 3, 2, 1 also decreases; only
+    `test_compute_returns_exact_values` in `tests/test_agents_extensive.py` notices.
+  - **Acceptance criteria**:
+    - Each of the three tests asserts values worked out by hand, or is removed in favour of the exact-value tests,
+      with PPO covered by one.
+    - Replacing `self.gamma * cumulative` with `1.0 * cumulative` fails a named test in each agent's own test file
+      (checked with `mutation_check.py`).
+  - **Out of scope**: Changing `_compute_returns` itself.
+
+- [ ] **Softmax Stability Tests**
+  - **Description**: Removing the `logits - np.max(logits)` line from the softmax in
+    `rl_core/agents/actor_critic_base.py` or `rl_core/agents/reinforce_agent.py` fails no test in the suite, so the
+    guard against overflow required by CONTRIBUTING.md §1 is not locked in.
+  - **Acceptance criteria**:
+    - Tests drive each forward pass with weights large enough to produce logits near ±1000 and assert that the
+      probabilities are finite and sum to one.
+    - Removing the stabilisation line in either file fails a named test (checked with `mutation_check.py`).
+  - **Known edge cases**: All logits equal; one logit far above the rest.
+  - **Out of scope**: Gradient checks for the existing agents.
+
+- [ ] **Single `_compute_returns` Implementation**
+  - **Description**: `ReinforceAgent._compute_returns` and `ActorCriticBase._compute_returns` are the same
+    discounted-return loop written twice, so a fix to one can miss the other.
+  - **Acceptance criteria**:
+    - One implementation in `src/rl_core/agents/`, used by REINFORCE, Actor-Critic and PPO.
+    - Seeded runs give bit-identical weights before and after the change.
+    - The duplicate-code audit reports nothing new.
+  - **Known edge cases**: Empty reward array; `gamma` of 0 and of 1.
+  - **Out of scope**: Sharing the softmax or the network code between REINFORCE and the actor-critic family.
+
 ### Phase 5 — Multi-Agent Benchmarking & Comparative Evaluation
 
 - [x] **Cross-Agent Benchmark Suite & Comparative Visualizer**

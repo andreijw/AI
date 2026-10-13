@@ -164,6 +164,10 @@ now lives in **[CONTRIBUTING.md §4](CONTRIBUTING.md#4-feature--bug-workflow)** 
 one source of truth. Follow it **in order** for every new feature or bug fix, starting with Step 0: create a
 `feature/<name>` (or `fix/<name>`) branch off `develop`.
 
+Each step has a detailed checklist in [`.claude/skills/<name>/SKILL.md`](.claude/skills/) (`dev-loop`, `architect`,
+`algorithm-crafter`, `test-crafter`, `experiment-runner`, `training-doctor`, `cleanup`, `pr-reviewer`, `doc-sync`).
+They are written for Claude Code but are plain Markdown: read the one for the step you are on and follow it.
+
 ---
 
 ## 6. Checkpoints, Logs & Outputs Management
