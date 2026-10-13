@@ -23,7 +23,8 @@
       "Bash(.venv/Scripts/python src/benchmark.py *)",
       "Skill(update-config)",
       "Skill(update-config:*)",
-      "Edit(/.claude/skills/architect/**)"
+      "Edit(/.claude/skills/architect/**)",
+      "Bash(gh run *)"
     ]
   },
   "enabledPlugins": {

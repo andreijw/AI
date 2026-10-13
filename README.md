@@ -644,8 +644,9 @@ the project checks only.
 
 The same settings file pre-approves the commands the loop runs constantly, so it does not stop to ask for each one:
 the quality gates (Ruff check and format, mypy, pytest, Bandit, the duplication check, the two skill scripts),
-`train.py` and `src/benchmark.py`. Rules are written as command patterns, never with one-off file names; approve anything more specific
-into your git-ignored `.claude/settings.local.json`. To opt out of the plugin personally, add this to that file:
+`train.py` and `src/benchmark.py`. Rules are written as command patterns, never with one-off file names; approve
+anything more specific into your git-ignored `.claude/settings.local.json`. To opt out of the plugin personally, add
+this to that file:
 
 ```json
 {
