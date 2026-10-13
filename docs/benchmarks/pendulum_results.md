@@ -13,9 +13,9 @@ Comparative benchmark evaluation across reinforcement learning algorithms.
 
 | Algorithm | Mean Eval Reward | Reward Std | Solve Rate | Avg Solve Episode | Mean Time (s) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **random** | -1128.5 | ±114.0 | 0% | N/A | 4.04s |
-| **actor_critic** | -1038.6 | ±276.7 | 0% | N/A | 4.75s |
-| **ppo** | -1643.6 | ±25.5 | 0% | N/A | 8.39s |
+| **random** | -1322.6 | ±138.9 | 0% | N/A | 3.81s |
+| **actor_critic** | -1425.7 | ±78.9 | 0% | N/A | 4.47s |
+| **ppo** | -1625.8 | ±16.0 | 0% | N/A | 7.99s |
 
 ## Learning Trajectories
 

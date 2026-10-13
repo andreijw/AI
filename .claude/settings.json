@@ -1,16 +1,4 @@
 {
-  "extraKnownMarketplaces": {
-    "brooks-lint-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "hyhmrright/brooks-lint",
-        "ref": "v1.7.0"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "brooks-lint@brooks-lint-marketplace": true
-  },
   "permissions": {
     "allow": [
       "Bash(.venv/bin/python -m ruff check *)",
@@ -22,6 +10,7 @@
       "Bash(.venv/bin/python .claude/skills/test-crafter/scripts/mutation_check.py *)",
       "Bash(.venv/bin/python .claude/skills/doc-sync/scripts/check_md_width.py *)",
       "Bash(.venv/bin/python train.py *)",
+      "Bash(.venv/bin/python src/benchmark.py *)",
       "Bash(.venv/Scripts/python -m ruff check *)",
       "Bash(.venv/Scripts/python -m ruff format *)",
       "Bash(.venv/Scripts/python -m mypy *)",
@@ -30,7 +19,23 @@
       "Bash(.venv/Scripts/python -m pylint src --disable=all --enable=duplicate-code *)",
       "Bash(.venv/Scripts/python .claude/skills/test-crafter/scripts/mutation_check.py *)",
       "Bash(.venv/Scripts/python .claude/skills/doc-sync/scripts/check_md_width.py *)",
-      "Bash(.venv/Scripts/python train.py *)"
+      "Bash(.venv/Scripts/python train.py *)",
+      "Bash(.venv/Scripts/python src/benchmark.py *)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Edit(/.claude/skills/architect/**)"
     ]
+  },
+  "enabledPlugins": {
+    "brooks-lint@brooks-lint-marketplace": true
+  },
+  "extraKnownMarketplaces": {
+    "brooks-lint-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "hyhmrright/brooks-lint",
+        "ref": "v1.7.0"
+      }
+    }
   }
 }

@@ -30,10 +30,10 @@ This document outlines manual verification and testing procedures for the RL fra
 | --- | --- | --- | --- |
 | TR-1 | **REINFORCE** | `python train.py --config configs/cartpole_reinforce.yaml` | Completes training loop, outputs episode rewards and losses, saves final checkpoint. |
 | TR-2 | **Actor-Critic** | `python train.py --config configs/cartpole_actor_critic.yaml` | Actor policy and Critic value updates succeed; TD errors decrease over time. |
-| TR-3 | **PPO** | `python train.py --config configs/cartpole_ppo.yaml` | Rollouts collect trajectory batches, surrogate loss clips, average reward improves. |
+| TR-3 | **PPO** | `python train.py --config configs/cartpole_ppo.yaml` | Rollouts collect trajectory batches and the surrogate loss clips. Average reward should improve; as of 2026-10-13 it does not within 750 episodes (about 27, the random level), and the full 1500-episode run has not been measured (roadmap: "CartPole Agents Learn Within Their Budgets"). |
 | TR-4 | **DQN** | `python train.py --config configs/cartpole_dqn.yaml` | Completes training loop, replay buffer samples mini-batches, Q-values converge. |
 | TR-5 | **Continuous A2C** | `python train.py --config configs/pendulum_actor_critic.yaml` | Continuous Gaussian policy updates on Pendulum-v1; critic loss converges. |
-| TR-6 | **Continuous PPO** | `python train.py --config configs/pendulum_ppo.yaml` | Continuous PPO surrogate clipping and GAE updates solve Pendulum-v1. |
+| TR-6 | **Continuous PPO** | `python train.py --config configs/pendulum_ppo.yaml` | Completes training with finite `policy_loss`, `value_loss` and `entropy` in the metrics log. It does not yet learn: as of 2026-10-13 it scores about -1600 against a solve threshold of -200 (roadmap: "Pendulum PPO Learns and Solves Pendulum-v1"). |
 
 ### Video Recording Checks
 

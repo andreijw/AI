@@ -37,9 +37,15 @@ contributing, writing code, refactoring components, or submitting pull requests.
 
 ### Determinism & Reproducibility
 
-- **Seeding**: Support deterministic runs by propagating explicit random seeds to environments (`env.reset(seed=...)`),
-  NumPy random number generators (`np.random.default_rng(seed)` or `np.random.seed(seed)`), and action
-  sampling policies.
+- **Seeding**: Support deterministic runs by propagating explicit random seeds to environments, agents and buffers.
+  Every component that draws random numbers owns a generator created with `np.random.default_rng(seed)`; never call
+  `np.random.seed` or the global `np.random.*` functions (`tests/test_source_conventions.py` fails if one appears).
+  New components built from a seed another component already uses take their own stream with
+  `rl_core.seeding.derive_rng(seed, stream)`, as the environment wrappers do. Agents and `ReplayBuffer` do not yet:
+  they use `default_rng(seed)` directly (see the roadmap).
+- **Seeded environments**: A wrapper applies its constructor seed on the first `reset()` and then continues the
+  sequence, so a seeded run is reproducible and every episode starts from a different state. Pass `reset(seed=...)`
+  only to restart that sequence deliberately.
 
 ---
 

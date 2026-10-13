@@ -78,7 +78,8 @@ def make_vec_env(
         env_name: Name of the Gymnasium environment to create (default: "CartPole-v1")
         render_mode: Rendering mode ('human', 'rgb_array', or None)
         max_episode_steps: Maximum steps per episode
-        seed: Base random seed (each env gets seed + i)
+        seed: Base random seed (each env gets seed + i and continues its own
+              sequence across automatic resets)
         obs_noise_std: Standard deviation of Gaussian noise added to observations
         action_noise_prob: Probability of flipping the action (0.0 to 1.0)
         domain_randomization: Dictionary with parameter ranges for randomization

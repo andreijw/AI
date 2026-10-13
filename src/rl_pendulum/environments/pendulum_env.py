@@ -7,7 +7,8 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
-from gymnasium.utils import seeding
+
+from rl_core.seeding import WRAPPER_STREAM, derive_rng
 
 
 class PendulumEnv:
@@ -51,7 +52,8 @@ class PendulumEnv:
             env_name: Name of the Gymnasium environment (default: "Pendulum-v1").
             render_mode: Rendering mode ('human', 'rgb_array', or None).
             max_episode_steps: Maximum steps per episode (default: 200).
-            seed: Random seed for reproducibility.
+            seed: Random seed. Applied on the first reset; later resets continue the sequence,
+                so runs are reproducible and episodes differ from one another.
             obs_noise_std: Standard deviation of Gaussian noise added to observations.
             action_noise_std: Standard deviation of Gaussian noise added to continuous actions.
             domain_randomization: Dictionary with parameter ranges for physical randomization.
@@ -62,6 +64,13 @@ class PendulumEnv:
         self.max_episode_steps = max_episode_steps
         self.seed = seed
         self.render_mode = render_mode
+
+        # Generator for noise and domain randomization, on its own stream so it never repeats
+        # the numbers the wrapped environment draws its start states from. Created first so an
+        # invalid seed is rejected before any environment is opened.
+        self._np_random = derive_rng(seed, WRAPPER_STREAM)
+        # The constructor seed is applied on the first reset only; see reset().
+        self._has_reset = False
 
         # Noise validation
         if not np.isfinite(obs_noise_std) or obs_noise_std < 0.0:
@@ -95,7 +104,6 @@ class PendulumEnv:
 
         self._episode_steps = 0
         self._episode_reward = 0.0
-        self._np_random, _ = seeding.np_random(seed)
 
     def _validate_domain_randomization(
         self,
@@ -188,10 +196,14 @@ class PendulumEnv:
         options: dict[str, Any] | None = None,
     ) -> tuple[np.ndarray, dict[str, Any]]:
         """
-        Reset the environment to initial state.
+        Reset the environment to an initial state.
+
+        The constructor seed is applied on the first reset only. Later resets without a seed
+        continue the same random sequences, so a seeded environment gives a reproducible series
+        of different episodes. Passing a seed restarts that series from the given seed.
 
         Args:
-            seed: Optional seed for this episode.
+            seed: Optional seed that restarts the start-state and noise sequences.
             options: Optional reset options dictionary.
 
         Returns:
@@ -200,10 +212,14 @@ class PendulumEnv:
         self._episode_steps = 0
         self._episode_reward = 0.0
 
-        episode_seed = seed if seed is not None else self.seed
-        obs, info = self.env.reset(seed=episode_seed, options=options)
+        if seed is None and not self._has_reset:
+            seed = self.seed
 
-        self._np_random, _ = seeding.np_random(episode_seed)
+        obs, info = self.env.reset(seed=seed, options=options)
+        self._has_reset = True
+
+        if seed is not None:
+            self._np_random = derive_rng(seed, WRAPPER_STREAM)
         self._apply_domain_randomization()
         obs = self._add_observation_noise(obs)
 

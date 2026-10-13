@@ -5,7 +5,8 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
-from gymnasium.utils import seeding
+
+from rl_core.seeding import WRAPPER_STREAM, derive_rng
 
 
 class CartPoleEnv:
@@ -50,7 +51,8 @@ class CartPoleEnv:
                      Note: Non-CartPole environments only support observation noise
             render_mode: Rendering mode ('human', 'rgb_array', or None)
             max_episode_steps: Maximum steps per episode
-            seed: Random seed for reproducibility
+            seed: Random seed. Applied on the first reset; later resets continue the sequence,
+                  so runs are reproducible and episodes differ from one another
             obs_noise_std: Standard deviation of Gaussian noise added to observations
             action_noise_prob: Probability of flipping the action (0.0 to 1.0)
                               Note: Only works with Discrete(2) action spaces
@@ -67,6 +69,13 @@ class CartPoleEnv:
         self.max_episode_steps = max_episode_steps
         self.seed = seed
         self.render_mode = render_mode
+
+        # Generator for noise and domain randomization, on its own stream so it never repeats
+        # the numbers the wrapped environment draws its start states from. Created first so an
+        # invalid seed is rejected before any environment is opened.
+        self._np_random = derive_rng(seed, WRAPPER_STREAM)
+        # The constructor seed is applied on the first reset only; see reset().
+        self._has_reset = False
 
         # Noise parameters
         if not np.isfinite(obs_noise_std) or obs_noise_std < 0.0:
@@ -123,10 +132,6 @@ class CartPoleEnv:
         # Episode tracking
         self._episode_steps = 0
         self._episode_reward = 0.0
-
-        # Per-environment RNG for noise and domain randomization
-        # Initialize with a default RNG; will be synced with env RNG on reset()
-        self._np_random, _ = seeding.np_random(seed)
 
     def _validate_domain_randomization(
         self,
@@ -260,10 +265,14 @@ class CartPoleEnv:
         self, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[np.ndarray, dict[str, Any]]:
         """
-        Reset the environment to initial state.
+        Reset the environment to an initial state.
+
+        The constructor seed is applied on the first reset only. Later resets without a seed
+        continue the same random sequences, so a seeded environment gives a reproducible series
+        of different episodes. Passing a seed restarts that series from the given seed.
 
         Args:
-            seed: Optional seed for this episode
+            seed: Optional seed that restarts the start-state and noise sequences
             options: Optional dictionary of reset options (for compatibility with Gym API)
 
         Returns:
@@ -272,14 +281,14 @@ class CartPoleEnv:
         self._episode_steps = 0
         self._episode_reward = 0.0
 
-        # Determine the seed to use for this episode
-        episode_seed = seed if seed is not None else self.seed
+        if seed is None and not self._has_reset:
+            seed = self.seed
 
-        obs, info = self.env.reset(seed=episode_seed, options=options)
+        obs, info = self.env.reset(seed=seed, options=options)
+        self._has_reset = True
 
-        # Initialize or update the wrapper's RNG using a seed derived from this episode
-        # This keeps the wrapper's randomness separate from the underlying env's RNG
-        self._np_random, _ = seeding.np_random(episode_seed)
+        if seed is not None:
+            self._np_random = derive_rng(seed, WRAPPER_STREAM)
 
         # Apply domain randomization at the start of each episode
         self._apply_domain_randomization()
@@ -325,7 +334,9 @@ class CartPoleEnv:
         This is the intended way to apply wrappers (e.g. RecordVideo) without
         breaking the CartPoleEnv interface.  The wrapper must accept the current
         ``self.env`` as its first constructor argument and has already been
-        fully constructed before being passed here.
+        fully constructed before being passed here. It must wrap the current
+        ``self.env``: the constructor seed is applied on the first reset only, so
+        a different environment installed after that reset would never be seeded.
 
         Args:
             wrapper: A fully-constructed Gymnasium wrapper that wraps ``self.env``.
