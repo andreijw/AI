@@ -176,3 +176,104 @@ def test_continuous_ppo_update():
     assert "value_loss" in metrics
     assert "entropy" in metrics
     assert isinstance(metrics["policy_loss"], float)
+
+
+# ---------------------------------------------------------------------------
+# Reproducibility of the PPO mini-batch shuffle
+# ---------------------------------------------------------------------------
+
+_PPO_PARAMS = ("_W1", "_b1", "_W_mu", "_b_mu", "_log_std", "_W_v", "_b_v")
+
+
+@pytest.fixture
+def preserve_global_numpy_random_state():
+    """Let a test seed NumPy's global generator without leaking that into other tests."""
+    state = np.random.get_state()
+    yield
+    np.random.set_state(state)
+
+
+def _shuffle_sensitive_trajectory() -> dict[str, np.ndarray]:
+    """Sixteen fixed transitions: with batch_size 4 the mini-batch order changes the result."""
+    rng = np.random.default_rng(1234)
+    n_steps = 16
+    return {
+        "observations": rng.standard_normal((n_steps, 3)),
+        "actions": rng.uniform(-2.0, 2.0, size=(n_steps, 1)),
+        "rewards": rng.standard_normal(n_steps),
+        "next_observations": rng.standard_normal((n_steps, 3)),
+        "dones": np.array([False] * (n_steps - 1) + [True]),
+    }
+
+
+def _ppo_agent(seed: int) -> ContinuousPPOAgent:
+    config = {"hidden_dim": 8, "ppo_epochs": 3, "batch_size": 4, "seed": seed}
+    return ContinuousPPOAgent(observation_dim=3, action_dim=1, config=config)
+
+
+def _ppo_params(agent: ContinuousPPOAgent) -> dict[str, np.ndarray]:
+    return {name: np.array(getattr(agent, name), dtype=np.float64) for name in _PPO_PARAMS}
+
+
+def _assert_same_params(first: ContinuousPPOAgent, second: ContinuousPPOAgent) -> None:
+    a, b = _ppo_params(first), _ppo_params(second)
+    for name in _PPO_PARAMS:
+        np.testing.assert_array_equal(
+            a[name], b[name], err_msg=f"{name} differs between two agents with the same seed."
+        )
+
+
+def _params_differ(first: ContinuousPPOAgent, second: ContinuousPPOAgent) -> bool:
+    a, b = _ppo_params(first), _ppo_params(second)
+    return any(not np.array_equal(a[name], b[name]) for name in _PPO_PARAMS)
+
+
+def test_continuous_ppo_update_is_deterministic_for_a_seed(preserve_global_numpy_random_state):
+    """Same seed and data give identical weights, whatever NumPy's global generator holds."""
+    trajectory = _shuffle_sensitive_trajectory()
+    first, second = _ppo_agent(seed=7), _ppo_agent(seed=7)
+
+    np.random.seed(0)
+    first.update(trajectory)
+    np.random.seed(1)
+    second.update(trajectory)
+
+    _assert_same_params(first, second)
+
+
+def test_continuous_ppo_update_leaves_global_random_state_untouched():
+    """An update neither reads nor advances NumPy's global random state."""
+    agent = _ppo_agent(seed=7)
+    before = np.random.get_state()
+
+    agent.update(_shuffle_sensitive_trajectory())
+
+    after = np.random.get_state()
+    assert before[0] == after[0]
+    assert np.array_equal(before[1], after[1]), "update() advanced the global NumPy generator."
+    assert before[2:] == after[2:], "update() advanced the global NumPy generator."
+
+
+def test_continuous_ppo_shuffle_draws_from_the_agents_own_generator():
+    """Replacing the agent's generator changes the mini-batch order, and so the weights."""
+    trajectory = _shuffle_sensitive_trajectory()
+    first, second = _ppo_agent(seed=7), _ppo_agent(seed=7)
+    second._rng = np.random.default_rng(999)
+
+    first.update(trajectory)
+    second.update(trajectory)
+
+    assert _params_differ(first, second), (
+        "Weights are identical with a different generator: the shuffle is not using self._rng."
+    )
+
+
+def test_continuous_ppo_update_differs_across_seeds():
+    """Different seeds give different weights (initialisation alone already ensures this)."""
+    trajectory = _shuffle_sensitive_trajectory()
+    first, second = _ppo_agent(seed=1), _ppo_agent(seed=2)
+
+    first.update(trajectory)
+    second.update(trajectory)
+
+    assert _params_differ(first, second)
