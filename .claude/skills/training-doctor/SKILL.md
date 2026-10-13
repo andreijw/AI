@@ -29,9 +29,18 @@ diff holds the cause and `git diff develop...HEAD` is the first thing to read.
 
 ## 1. Look inside the update
 
-`Trainer` discards what `agent.update` returns: the logs carry only the ten-episode reward and length
-averages. To see losses, entropy or epsilon, drive the agent from a scratch script instead of adding
-prints to `src/`:
+Start with the log. Every ten episodes `Trainer` writes a record to
+`logs/<challenge>/<agent>/metrics_<timestamp>.jsonl` with `avg_reward`, `avg_length` and, under `update`,
+the mean of each metric `agent.update()` returned (losses, entropy, epsilon, mean Q-value). The first
+non-finite value of each metric is logged as a `WARNING` naming the episode, the value becomes `null` in
+the file, and its name is listed under `non_finite`. Read those before anything else: a loss that climbs,
+an entropy that hits zero, or an epsilon that never moves usually names the rung to start on. That file
+comes from `train.py`; `src/benchmark.py` passes a plain logger, so there the same record is only an INFO
+line and the warning is what reaches the console.
+
+The log is a ten-episode average, and a run shorter than ten episodes writes no record. To see single
+updates, or to find the exact operation that produces a NaN, drive the agent from a scratch script instead
+of adding prints to `src/`:
 
 ```python
 import numpy as np

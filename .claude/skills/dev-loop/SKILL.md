@@ -65,9 +65,12 @@ Check Gymnasium and NumPy signatures in Context7, not from memory.
 
 For anything that changes a hyperparameter, a schedule or an update rule, **walk the numbers** before
 proposing them: play the real values through a typical run. `configs/cartpole_dqn.yaml` decays epsilon by
-0.995 per update from 1.0 to a floor of 0.02. That is ln(0.02) / ln(0.995) ≈ 780 updates, and at one update
-per environment step with early episodes lasting about 20 steps, exploration is over within the first 40 of
-500 episodes. Whether that is right is a judgement; not knowing it is a mistake. Do the same for learning
+0.995 "per update" from 1.0 to a floor of 0.02, and `DQNAgent` applies that once per `update()` call, which
+the trainer makes once per episode. Reaching the floor takes ln(0.02) / ln(0.995) ≈ 780 episodes, but the
+config trains for 500, so epsilon ends near 0.08 and the floor is never reached. Read as "per gradient
+step" the same line would end exploration within the first 40 episodes. Whether either is right is a
+judgement; not knowing which one the code does is a mistake, and the logged `epsilon` settles it. Do the
+same for learning
 rate against the number of updates, target-sync period against episode length, buffer warm-up against
 batch size, and a Polyak rate against how many updates the target lags by (ln 2 / τ).
 

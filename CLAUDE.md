@@ -146,5 +146,3 @@ Treat the repository as the source of truth when docs disagree:
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
 - CONTRIBUTING.md §5 and TESTING.md `CKPT-*` describe `.npz` checkpoints; `Trainer` names them
   `agent_episode_<n>.pt` (NumPy archive content, resolved by `BaseAgent._resolve_save_path`).
-- `Trainer` discards the metrics `agent.update()` returns, so losses never reach the logs; TESTING.md `LOG-1` lists
-  a loss column that is not written. The roadmap has an item for it.

@@ -89,8 +89,8 @@ The questions a training run, not an interpreter, would raise:
   rule. The reported reward is the environment's, not a shaped or noised one. A threshold is met by the
   rolling average the challenge defines, not by one good episode.
 - **Visibility.** Every quantity that can go wrong is in the metrics `update` returns (loss, entropy,
-  epsilon, a gradient norm). `Trainer` does not log them today, so they are the only window a diagnosis
-  has. A NaN is loud: it is not clipped into a number that looks fine.
+  epsilon, a gradient norm): `Trainer` averages those into the metrics log every ten episodes and warns
+  at the first non-finite value. A NaN is loud: it is not clipped into a number that looks fine.
 - **Stated intent.** A committed hyperparameter, a `solve_threshold` or a published benchmark figure that
   moved without a roadmap line needs the maintainer, not a silent approval.
 - **Evidence.** For each claim that something learns, or learns better: which config, how many episodes,
