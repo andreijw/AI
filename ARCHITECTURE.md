@@ -250,7 +250,8 @@ checkpoints/
 logs/
 ├── cartpole/
 │   └── ppo/
-│       └── training_metrics.jsonl
+│       ├── rl_cartpole_<timestamp>.log
+│       └── metrics_<timestamp>.jsonl
 └── pendulum/
     └── ppo/
 

@@ -1,7 +1,9 @@
 """Training pipeline for RL agents."""
 
 import logging
+import math
 import os
+from collections.abc import Mapping
 from typing import Any
 
 import gymnasium as gym
@@ -10,6 +12,9 @@ import numpy as np
 from ..agents.base_agent import BaseAgent
 
 _logger = logging.getLogger(__name__)
+
+# Episodes between periodic metric records; also the window their averages cover.
+_LOG_INTERVAL = 10
 
 
 class Trainer:
@@ -72,6 +77,12 @@ class Trainer:
         self.current_episode = 0
         self.evaluating = False
 
+        # Values agent.update() has returned since the last periodic record, by metric name.
+        self._update_metric_window: dict[str, list[float]] = {}
+        self._non_finite_metrics_seen: set[str] = set()
+        # 1-based training episode in which an update metric first stopped being finite.
+        self.first_non_finite_episode: int | None = None
+
     def _get_int_config(self, name: str, default: int) -> int:
         """Get an integer config value without lossy coercion."""
         raw_value = self.config.get(name, default)
@@ -121,9 +132,70 @@ class Trainer:
                 return
         _logger.info(message)
 
+    def _log_warning(self, message: str) -> None:
+        """Log a warning using the logger if available, otherwise the module logger."""
+        if self.logger is not None:
+            warning_method = getattr(self.logger, "warning", None)
+            if callable(warning_method):
+                warning_method(message)
+                return
+        _logger.warning(message)
+
+    def _record_update_metrics(self, metrics: Any) -> None:
+        """
+        Keep the numeric values one agent.update() call returned for the next periodic record.
+
+        Values that are not real numbers are skipped. The first non-finite value of each metric
+        is reported at WARNING level with the episode it appeared in; training continues.
+
+        Args:
+            metrics: Whatever agent.update() returned. Anything that is not a mapping is ignored.
+        """
+        if not isinstance(metrics, Mapping):
+            return
+        for name, raw_value in metrics.items():
+            if isinstance(raw_value, bool) or not isinstance(
+                raw_value, (int, float, np.integer, np.floating)
+            ):
+                continue
+            value = float(raw_value)
+            self._update_metric_window.setdefault(name, []).append(value)
+            if not math.isfinite(value) and name not in self._non_finite_metrics_seen:
+                self._non_finite_metrics_seen.add(name)
+                if self.first_non_finite_episode is None:
+                    self.first_non_finite_episode = self.current_episode
+                self._log_warning(
+                    f"Non-finite update metric '{name}' = {value} first appeared at "
+                    f"episode {self.current_episode}."
+                )
+
+    def _drain_update_metrics(self) -> dict[str, Any]:
+        """
+        Summarize the update metrics gathered since the last periodic record, then clear them.
+
+        Returns:
+            Fields to merge into the periodic record: ``update`` maps each metric to its mean,
+            and ``non_finite`` lists the metrics whose mean is not finite. Empty when no update
+            metrics were gathered; ``non_finite`` is omitted when every mean is finite.
+        """
+        window, self._update_metric_window = self._update_metric_window, {}
+        if not window:
+            return {}
+        # A mean is non-finite if any value was, or if finite values overflowed when summed.
+        # _log_metrics writes such a mean as None; here it is also named so it cannot pass silently.
+        with np.errstate(over="ignore", invalid="ignore"):
+            means = {name: float(np.mean(values)) for name, values in window.items()}
+        non_finite = [name for name, mean in means.items() if not math.isfinite(mean)]
+        fields: dict[str, Any] = {"update": means}
+        if non_finite:
+            fields["non_finite"] = non_finite
+        return fields
+
     def _log_metrics(self, metrics: dict[str, Any]) -> None:
         """
         Log training or evaluation metrics in a logger-agnostic way.
+
+        Non-finite numbers are written as None so every record is strict JSON.
 
         Supports:
         - Custom loggers exposing `log(metrics: dict)`
@@ -136,11 +208,14 @@ class Trainer:
             Recursively convert values to JSON-serializable Python built-ins.
 
             - NumPy scalars (np.generic) -> corresponding Python scalars via .item()
+            - Non-finite floats (NaN, inf) -> None, which JSON can represent
             - Containers (dict, list, tuple) -> same structure with normalized contents
             """
             if isinstance(value, np.generic):
                 # Includes np.floating, np.integer, etc.
-                return value.item()
+                value = value.item()
+            if isinstance(value, float) and not math.isfinite(value):
+                return None
             if isinstance(value, dict):
                 return {k: _normalize_value(v) for k, v in value.items()}
             if isinstance(value, (list, tuple)):
@@ -198,13 +273,13 @@ class Trainer:
             self.episode_lengths.append(episode_length)
 
             # Log progress
-            if (episode + 1) % 10 == 0:
-                avg_reward = np.mean(self.episode_rewards[-10:])
-                avg_length = np.mean(self.episode_lengths[-10:])
+            if (episode + 1) % _LOG_INTERVAL == 0:
+                avg_reward = np.mean(self.episode_rewards[-_LOG_INTERVAL:])
+                avg_length = np.mean(self.episode_lengths[-_LOG_INTERVAL:])
                 self._log_info(
                     f"Episode {episode + 1}/{self.num_episodes} | "
-                    f"Avg Reward (last 10): {avg_reward:.2f} | "
-                    f"Avg Length (last 10): {avg_length:.2f}"
+                    f"Avg Reward (last {_LOG_INTERVAL}): {avg_reward:.2f} | "
+                    f"Avg Length (last {_LOG_INTERVAL}): {avg_length:.2f}"
                 )
 
                 self._log_metrics(
@@ -212,6 +287,7 @@ class Trainer:
                         "episode": episode + 1,
                         "avg_reward": avg_reward,
                         "avg_length": avg_length,
+                        **self._drain_update_metrics(),
                     }
                 )
 
@@ -285,7 +361,7 @@ class Trainer:
                 "next_observations": np.array(next_observations),
                 "dones": np.array(dones),
             }
-            self.agent.update(batch)
+            self._record_update_metrics(self.agent.update(batch))
 
         return episode_reward, episode_length
 

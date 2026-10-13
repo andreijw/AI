@@ -129,14 +129,24 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
   - **Out of scope**: A `release` skill (there is no `main` branch, tag or changelog to release from); adding
     gradient checks to the existing agents; the gaps found while building this (the four items below).
 
-- [ ] **Training Diagnostics in Logs**
+- [~] **Training Diagnostics in Logs**
   - **Description**: `Trainer` discards the dictionary `agent.update()` returns, so losses, entropy and epsilon never
-    reach the metrics log and a failing run can only be diagnosed from a scratch script.
+    reach the metrics log and a failing run can only be diagnosed from a scratch script. Keep what `update` returns,
+    write it with the periodic reward metrics, and warn the moment a value stops being finite.
   - **Acceptance criteria**:
-    - Per-episode update metrics are aggregated and written with the periodic reward metrics.
-    - A non-finite metric is reported loudly, with the episode it first appeared in.
-    - TESTING.md `LOG-1` matches what is written.
-  - **Out of scope**: TensorBoard or other external logging backends.
+    - The periodic metrics record (every 10 episodes, alongside `avg_reward` and `avg_length`) gains an `update`
+      mapping holding the mean of each metric `agent.update()` returned over those episodes.
+    - An agent whose `update` returns nothing (the random agents) produces records without an `update` key.
+    - The first non-finite value of each update metric is logged at WARNING level, naming the metric, the value and
+      the episode; the trainer records that episode in `first_non_finite_episode`. Training continues.
+    - Every metrics record is strict JSON: a non-finite mean is written as `null` and its name is listed under
+      `non_finite`.
+    - Evaluation episodes contribute nothing to the update metrics.
+    - TESTING.md `LOG-1` describes the file as it is written.
+  - **Known edge cases**: Metrics present in only some episodes of a window; non-numeric values in the dictionary;
+    runs shorter than one logging interval (no periodic record is written, as today).
+  - **Out of scope**: TensorBoard or other external logging backends; stopping a run on a non-finite value; plotting
+    update metrics; making the 10-episode logging interval configurable; changing what any agent returns.
 
 - [ ] **Discounted-Return Tests That Can Fail**
   - **Description**: The `*_compute_returns_discounting` tests in `tests/test_ppo_agent.py`,
@@ -173,7 +183,20 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 
 ### Code Health
 
-Findings from the brooks-lint health pass of 2026-10-12 (dashboard 82/100), most severe first.
+Defects found while working on other items, then findings from the brooks-lint health pass of 2026-10-12
+(dashboard 82/100), most severe first.
+
+- [ ] **Seed the Continuous PPO Mini-Batch Shuffle**
+  - **Description**: `ContinuousPPOAgent.update` shuffles mini-batch indices with the global
+    `np.random.shuffle` (`rl_core/agents/continuous_ppo.py`), so two runs with the same seed give different
+    results. Found on 2026-10-12 while verifying the training diagnostics change: the Pendulum PPO benchmark with
+    seeds 1 and 3 differed between two runs of the same code.
+  - **Acceptance criteria**:
+    - The shuffle draws from the agent's own seeded generator; no bare `np.random.*` call remains under `src/`.
+    - A test trains two agents with the same seed and gets identical weights; a different seed differs.
+    - Two benchmark runs with the same seeds report identical rewards for every agent on both challenges.
+  - **Known edge cases**: Seeded Pendulum PPO results change once, when the fix lands.
+  - **Out of scope**: Retuning `configs/pendulum_ppo.yaml`.
 
 - [ ] **Break the Benchmark Import Cycle**
   - **Description**: `src/benchmark.py` imports `rl_cartpole.benchmark` and `rl_pendulum.benchmark` inside functions
