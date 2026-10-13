@@ -111,6 +111,10 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 
 ## Upcoming Milestones
 
+**Agreed order (2026-10-13):** Seed the Continuous PPO Mini-Batch Shuffle → the test-gap items (Discounted-Return
+Tests That Can Fail, Softmax Stability Tests, Single `_compute_returns` Implementation) → Break the Benchmark Import
+Cycle → DDPG.
+
 ### Workflow Tooling
 
 - [~] **Dev Team Skills for Claude Code**
@@ -186,17 +190,63 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 Defects found while working on other items, then findings from the brooks-lint health pass of 2026-10-12
 (dashboard 82/100), most severe first.
 
-- [ ] **Seed the Continuous PPO Mini-Batch Shuffle**
+- [ ] **Seeded Environments Replay One Start State**
+  - **Description**: `CartPoleEnv.reset()` and `PendulumEnv.reset()` reuse the constructor seed whenever they are
+    called without one, and `Trainer` never passes one. With a seed in the config (every committed config has one)
+    each training and evaluation episode starts from the identical initial state, so agents train on a single
+    start state and the ten greedy evaluation episodes are the same episode ten times. Found on 2026-10-13.
+  - **Acceptance criteria**:
+    - A seeded environment gives a reproducible sequence of different start states: the seed is applied on the
+      first reset, and later resets continue the same generator.
+    - Two seeded runs are still identical to each other; the wrapper's noise generator follows the same rule.
+    - Tests cover both wrappers: consecutive resets differ, and two environments with the same seed agree episode
+      by episode.
+    - Evaluation rewards across episodes are no longer identical for a deterministic policy.
+  - **Known edge cases**: An explicit `reset(seed=...)` must still restart the sequence; vectorized environments;
+    domain randomization resampling per episode.
+  - **Out of scope**: Regenerating `docs/benchmarks/` (the published numbers were produced with the repeated start
+    state and need a maintainer-approved rerun afterwards); retuning configs.
+
+- [ ] **Pendulum PPO Learns and Solves Pendulum-v1**
+  - **Description**: `ContinuousPPOAgent` with `configs/pendulum_ppo.yaml` does not learn. On 2026-10-13 the
+    benchmark at its default 200 episodes gave evaluation rewards of -1632, -1673 and -1584 on seeds 1, 2 and 3
+    (the same order of magnitude before the shuffle fix), against a solve threshold of -200 and a random agent
+    between -892 and -1582. The roadmap and TESTING.md `TR-6` say this configuration solves the task. Find out why,
+    fix it, and show that it solves Pendulum-v1 reproducibly.
+  - **Acceptance criteria**:
+    - A written diagnosis (the `training-doctor` ladder) names the cause or causes, each confirmed by a check that
+      fails before the fix and passes after: finite-difference gradient checks of the continuous actor and critic,
+      a direction test, overfitting a fixed batch, and a read of one real batch.
+    - Each code defect found is fixed test-first; any change to `configs/pendulum_ppo.yaml` is proposed with its
+      evidence and approved by the maintainer.
+    - With the committed config, the rolling training average reaches -200 on at least 4 of 5 seeds within the
+      configured episode budget, and two runs with the same seeds agree.
+    - `ContinuousActorCriticAgent` is assessed the same way and either learns or has its own roadmap item.
+    - TESTING.md `TR-6` states the measured result, and `docs/benchmarks/pendulum_results.md` is regenerated from a
+      maintainer-approved run.
+  - **Known edge cases**: Things to rule out, none confirmed yet: every episode starting from the same state (the
+    item above); the 200-episode benchmark budget against the 500 the config asks for; Pendulum episodes end only
+    by time limit, which the batch reports as `done`, so a bootstrapping critic may treat step 200 as terminal;
+    rewards between about -16 and 0 per step with no scaling (a value loss near 7000 was logged at episode 20);
+    one update per 200-step episode; action clipping against the Gaussian log-probability.
+  - **Out of scope**: DDPG and other new algorithms; changing the solve threshold; the discrete agents.
+  - **Depends on**: Seeded Environments Replay One Start State, so the diagnosis is not confounded by it.
+
+- [~] **Seed the Continuous PPO Mini-Batch Shuffle**
   - **Description**: `ContinuousPPOAgent.update` shuffles mini-batch indices with the global
     `np.random.shuffle` (`rl_core/agents/continuous_ppo.py`), so two runs with the same seed give different
     results. Found on 2026-10-12 while verifying the training diagnostics change: the Pendulum PPO benchmark with
     seeds 1 and 3 differed between two runs of the same code.
   - **Acceptance criteria**:
-    - The shuffle draws from the agent's own seeded generator; no bare `np.random.*` call remains under `src/`.
+    - The shuffle draws from the agent's own seeded generator; no bare `np.random.*` call remains under `src/`,
+      and a test fails if one is added.
+    - An update neither reads nor advances NumPy's global random state.
     - A test trains two agents with the same seed and gets identical weights; a different seed differs.
     - Two benchmark runs with the same seeds report identical rewards for every agent on both challenges.
   - **Known edge cases**: Seeded Pendulum PPO results change once, when the fix lands.
-  - **Out of scope**: Retuning `configs/pendulum_ppo.yaml`.
+  - **Out of scope**: Retuning `configs/pendulum_ppo.yaml`; regenerating the Pendulum PPO row of
+    `docs/benchmarks/pendulum_results.md`, which was produced with the unseeded shuffle and needs a
+    maintainer-approved rerun.
 
 - [ ] **Break the Benchmark Import Cycle**
   - **Description**: `src/benchmark.py` imports `rl_cartpole.benchmark` and `rl_pendulum.benchmark` inside functions

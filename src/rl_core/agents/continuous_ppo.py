@@ -108,7 +108,7 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
 
         indices = np.arange(n_steps)
         for _ in range(self.ppo_epochs):
-            np.random.shuffle(indices)
+            self._rng.shuffle(indices)
 
             for start in range(0, n_steps, self.batch_size):
                 batch_idx = indices[start : start + self.batch_size]
