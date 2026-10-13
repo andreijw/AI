@@ -1,0 +1,101 @@
+# Project configuration for the brooks-lint review plugin (pinned in .claude/settings.json).
+# The plugin supplies the general review rubric; this file adds what it cannot know about this project.
+# Reference: https://github.com/hyhmrright/brooks-lint (.brooks-lint.example.yaml)
+
+version: 1
+
+ignore:
+  - ".venv/**"
+  - "**/__pycache__/**"
+  - "**/*.egg-info/**"
+  - ".mypy_cache/**"
+  - ".ruff_cache/**"
+  - ".pytest_cache/**"
+  - "htmlcov/**"
+  - "logs/**"
+  - "checkpoints/**"
+  - "videos/**"
+  - "plots/**"
+  - "test_logs/**"
+  - "test_checkpoints/**"
+  - "docs/benchmarks/**"
+
+custom_risks:
+  C1:
+    name: Framework Leak Across the Core Boundary
+    question: "Does algorithm code depend on an environment, a challenge or a learning framework, or does algorithm logic live outside rl_core/agents?"
+    symptoms:
+      - "A file under src/rl_core/agents/ imports gymnasium, rl_cartpole, rl_pendulum, matplotlib or yaml"
+      - "src/rl_core/ imports a challenge package, or one challenge package imports another"
+      - "An import of torch, tensorflow, jax or another autodiff or deep learning library anywhere"
+      - "Update-rule maths (returns, advantages, targets, gradients) written in train.py, record.py, Trainer or a benchmark adapter instead of an agent"
+      - "An agent steps an environment, writes files other than its own checkpoint, or prints"
+    severity:
+      critical: "rl_core now needs a specific environment or a learning framework to import, or the pure NumPy rule is broken"
+      warning: "A testable rule is buried in the trainer or a script, so only a training run can reach it"
+      suggestion: "A small calculation in a script that would read better as a named function in rl_core"
+  C2:
+    name: Unowned Randomness
+    question: "Could two seeded runs differ, or could one object's random draws disturb another's?"
+    symptoms:
+      - "np.random.seed(...) or a bare np.random.<function> call instead of an owned np.random.default_rng(seed)"
+      - "A new source of randomness (initialisation, sampling, noise, shuffling) whose seed does not come from config"
+      - "An environment reset without the configured seed where reproducibility is promised"
+      - "A refactor that changes the order of draws from a generator without saying that seeded results change"
+      - "A test that samples without pinning a seed"
+    severity:
+      critical: "A run with a fixed seed is no longer reproducible, or benchmark runs share random state"
+      warning: "A seed is accepted but does not reach every source of randomness"
+      suggestion: "A generator created ad hoc where the object's own generator could be used"
+  C3:
+    name: Behaviour Chosen by Identity
+    question: "Is behaviour selected by checking which agent or challenge this is, instead of by its interface or its config?"
+    symptoms:
+      - "Comparisons against an agent or challenge name (agent_type == \"...\"), or isinstance checks on agent classes, outside the registry maps"
+      - "A new name-to-class or name-to-config map that must be kept in step with AGENT_CLASSES, CONTINUOUS_AGENT_CLASSES or a challenge's CONFIG_MAP"
+      - "A hyperparameter written as a literal inside update() or select_action() instead of read from config in __init__"
+      - "A dimension written as a literal (4, 2, 3) instead of taken from the environment's spaces"
+    severity:
+      critical: "A new agent or challenge would silently get the wrong behaviour unless several branches are edited"
+      warning: "One identity check where a method on the agent or a config key would do"
+      suggestion: "A lookup that could collapse into an existing registry"
+  C4:
+    name: Reinvented Helper
+    question: "Does new code repeat what a base class, a helper or a script function in this codebase already does?"
+    symptoms:
+      - "A new discounted-return loop, softmax, Gaussian log-probability, Adam step, action sampler, checkpoint path rule or dimension check where a base-class method exists (search src/rl_core/agents/base_agent.py, actor_critic_base.py, continuous_actor_critic.py)"
+      - "Config loading, environment or agent construction, or output-path building written again instead of using rl_core.utils.config or the helpers in train.py"
+      - "A wrapper or factory copied between rl_cartpole and rl_pendulum with only names changed"
+      - "A hyperparameter restated in code, tests and docs instead of owned by the config"
+      - "Two near-identical tests that differ only in inputs and could be one parametrized case; a gradient check written by hand instead of tests/helpers.assert_gradients_match"
+    severity:
+      critical: "Two copies of a rule that can now disagree (one fixed, one not)"
+      warning: "A duplicated mechanism with a shared helper available"
+      suggestion: "Similar code that is not yet worth extracting"
+  C5:
+    name: Unlocked Behaviour
+    question: "Would the tests fail if this behaviour were broken?"
+    symptoms:
+      - "A hand-written backward pass with no finite-difference gradient check and no value worked out by hand"
+      - "A test that asserts only that code ran: weights changed, a dict was returned, no exception was raised"
+      - "A new agent missing from ALL_AGENTS in tests/test_agent_harness.py, or a registry or config entry no test builds"
+      - "Script, Trainer or benchmark wiring changed with no integration test through tests/helpers.run_main or Trainer"
+      - "A claim that an agent learns or improved with no seeded run reported"
+    severity:
+      critical: "An update rule changed and no test would notice a wrong sign, scale or mask"
+      warning: "A rule is tested only through a broader test that could pass for the wrong reason"
+      suggestion: "An edge case (empty batch, one-step episode, zero spread, bounds) left untested"
+  C6:
+    name: Silent Numerical Failure
+    question: "Can this produce a wrong number, a NaN or an inf without raising?"
+    symptoms:
+      - "np.log, a division, np.exp or np.sqrt with no guard for zero, a huge argument or a zero standard deviation"
+      - "Arithmetic between arrays shaped (n,) and (n, 1), or a sum, mean or max with no explicit axis where one is needed"
+      - "A bootstrap term with no terminal mask, or one that treats a time-limit truncation as a terminal state without saying so"
+      - "A target network or stored array assigned with = instead of .copy(); an update that mutates its input batch or the config dict"
+      - "A quantity that should be held constant (TD target, advantage, stored log-probability) recomputed from the weights being updated"
+      - "A checkpoint that omits an array or counter the agent needs to resume, or np.load with allow_pickle=True"
+    severity:
+      critical: "Training can diverge, or learn from a wrong signal, with no error"
+      warning: "A guard is missing on a path that ordinary configs can reach"
+      suggestion: "A shape or dtype left implicit that a comment or assertion would pin down"

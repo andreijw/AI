@@ -220,3 +220,6 @@ videos/
 
 # Claude Code personal settings (local MCP overrides, approvals, permissions)
 .claude/settings.local.json
+
+# brooks-lint review history (written by the Claude Code plugin)
+.brooks-lint-history.json
