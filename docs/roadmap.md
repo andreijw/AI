@@ -171,6 +171,74 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
   - **Known edge cases**: Empty reward array; `gamma` of 0 and of 1.
   - **Out of scope**: Sharing the softmax or the network code between REINFORCE and the actor-critic family.
 
+### Code Health
+
+Findings from the brooks-lint health pass of 2026-10-12 (dashboard 82/100), most severe first.
+
+- [ ] **Break the Benchmark Import Cycle**
+  - **Description**: `src/benchmark.py` imports `rl_cartpole.benchmark` and `rl_pendulum.benchmark` inside functions
+    in two places, both import `benchmark` back, and a `sys.modules.setdefault("benchmark", ...)` alias holds the
+    cycle together. A third challenge means editing the runner twice.
+  - **Acceptance criteria**:
+    - `BenchmarkChallenge` and the challenge registry live in `rl_core`; challenge packages import only `rl_core`.
+    - The runner discovers registered challenges without naming any of them, and the `sys.modules` alias is gone.
+    - `python src/benchmark.py` and the tests in `tests/test_benchmark.py` behave as before.
+  - **Known edge cases**: Running `src/benchmark.py` directly as `__main__`; a challenge package that fails to import.
+  - **Out of scope**: Changing benchmark metrics or the report format.
+
+- [ ] **Select the Challenge Through the Registry**
+  - **Description**: `train.py` and `record.py` choose the environment with `"pendulum" in env_name.lower()` in three
+    places and hardcode `choices=["cartpole", "pendulum"]`, so an unknown challenge silently becomes CartPole.
+  - **Acceptance criteria**:
+    - Environment and agent construction go through the challenge registry; no string matching on the name.
+    - `--challenge` choices come from the registry, and an unknown environment name is an error naming the options.
+    - Adding a challenge requires no edit to `train.py` or `record.py`.
+  - **Known edge cases**: Configs with no `environment.name`; `--challenge` disagreeing with the config.
+  - **Out of scope**: Merging the discrete and continuous agent maps (depends on the cycle item above).
+
+- [ ] **Split `update` into Loss-and-Gradients and Apply**
+  - **Description**: The agents' `update` methods run 59 to 141 lines and mix batch parsing, forward pass, loss,
+    backward pass and optimizer step, so no gradient check can be written against them.
+  - **Acceptance criteria**:
+    - Each learning agent has a method that returns the loss and gradients for a batch and changes no state, and a
+      separate step that applies them.
+    - Each has a finite-difference test using `assert_gradients_match` from `tests/helpers.py`.
+    - Seeded runs give bit-identical weights before and after the change.
+  - **Known edge cases**: PPO's multiple epochs over one batch; DQN's several mini-batches per call; ReLU kinks and
+    clip boundaries in the gradient check.
+  - **Out of scope**: Shortening `train.main` and `BenchmarkRunner.run`; changing any update rule.
+
+- [ ] **Test Agents Through Their Public Behaviour**
+  - **Description**: Tests reach into private attributes 274 times (124 in `tests/test_agents_extensive.py`), so a
+    refactor with no behaviour change breaks many of them; `_compute_returns` alone is called by 11 tests.
+  - **Acceptance criteria**:
+    - Agent tests assert through `select_action`, the metrics `update` returns, and save/load round trips.
+    - Private access remains only where a test checks the maths directly (gradient checks, exact returns), through
+      one helper per agent family.
+    - The five "weights change after update" tests are replaced by checks that could fail for a wrong gradient.
+  - **Known edge cases**: Tests that need a specific weight state to reach an edge case.
+  - **Out of scope**: The integration tests in `tests/test_trainer.py` and the script tests.
+
+- [ ] **Shared Environment Wrapper Base**
+  - **Description**: `rl_cartpole/environments/cartpole_env.py` and `rl_pendulum/environments/pendulum_env.py` repeat
+    four near-identical blocks (the largest about 50 lines) for noise, statistics and wrapping, so a fix in one
+    challenge misses the other.
+  - **Acceptance criteria**:
+    - The shared behaviour lives once in `rl_core`; each challenge keeps only what differs.
+    - The duplicate-code audit at 8 similar lines reports no pair between the two files.
+    - `tests/test_environment.py` and `tests/test_pendulum.py` pass unchanged.
+  - **Known edge cases**: Discrete action flips against continuous action noise; per-challenge randomized parameters.
+  - **Out of scope**: The `make_env` factories; new wrappers such as frame stacking.
+
+- [ ] **Complete Optimizer State in Checkpoints**
+  - **Description**: The continuous agents save the Adam step count `adam_t` but not the moment estimates, so a run
+    resumed from a checkpoint takes mis-scaled first steps. DQN does not save its target-sync counter.
+  - **Acceptance criteria**:
+    - Everything an agent needs to resume training round-trips through `save` and `load`.
+    - A test trains, saves, loads into a fresh agent, and gets the same weights after one more seeded update.
+    - Checkpoints written before the change still load.
+  - **Out of scope**: A resume option for `train.py`.
+
 ### Phase 5 — Multi-Agent Benchmarking & Comparative Evaluation
 
 - [x] **Cross-Agent Benchmark Suite & Comparative Visualizer**
