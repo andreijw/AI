@@ -114,9 +114,11 @@ change to their update rules.
 - **Ask what break would make each check fail.** "The weights changed after `update`" passes for a gradient
   with the wrong sign, the wrong scale or the wrong layer. It shows the code ran. Replace it with a check
   that could fail: the loss on a fixed batch falls over several updates, or the gradient matches the
-  numerical one. A real case from this suite: "returns decrease over time with γ < 1", tested on five
-  rewards of 1, still passes with the discount removed, because 5, 4, 3, 2, 1 also decreases. Only the test
-  that asserts the exact values notices.
+  numerical one. Two real cases from this suite: a test that "returns decrease over time with γ < 1", on
+  five rewards of 1, still passed with the discount removed, because 5, 4, 3, 2, 1 also decreases; only
+  the test asserting exact values noticed. And a softmax stability test that scaled the weights by 1e4
+  could not fail, because that seed's logits were negative and never overflow; setting the head's bias to
+  ±1000 can.
 - **Every file goes under `tmp_path`.** Never `checkpoints/`, `logs/`, `videos/` or `plots/`: those hold
   the maintainer's training runs, and `train.py` overwrites an agent's earlier files.
 - **Pin every seed.** Agent config, `ReplayBuffer`, `env.reset(seed=...)`. An unseeded test is a flaky test
@@ -151,10 +153,10 @@ your scratch directory and run it from the repository root:
 ```json
 [
   {
-    "file": "src/rl_core/agents/actor_critic_base.py",
-    "old": "self.gamma * cumulative",
+    "file": "src/rl_core/agents/returns.py",
+    "old": "gamma * cumulative",
     "new": "1.0 * cumulative",
-    "tests": ["tests/test_actor_critic_agent.py", "tests/test_agents_extensive.py"],
+    "tests": ["tests/test_returns.py"],
     "why": "discount dropped from returns"
   }
 ]

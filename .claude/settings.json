@@ -1,29 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.venv/bin/python -m ruff check *)",
-      "Bash(.venv/bin/python -m ruff format *)",
-      "Bash(.venv/bin/python -m mypy *)",
-      "Bash(.venv/bin/python -m pytest *)",
-      "Bash(.venv/bin/python -m bandit -r src/ -ll)",
-      "Bash(.venv/bin/python -m pylint src --disable=all --enable=duplicate-code *)",
-      "Bash(.venv/bin/python .claude/skills/test-crafter/scripts/mutation_check.py *)",
-      "Bash(.venv/bin/python .claude/skills/doc-sync/scripts/check_md_width.py *)",
-      "Bash(.venv/bin/python train.py *)",
-      "Bash(.venv/bin/python src/benchmark.py *)",
-      "Bash(.venv/Scripts/python -m ruff check *)",
-      "Bash(.venv/Scripts/python -m ruff format *)",
-      "Bash(.venv/Scripts/python -m mypy *)",
-      "Bash(.venv/Scripts/python -m pytest *)",
-      "Bash(.venv/Scripts/python -m bandit -r src/ -ll)",
-      "Bash(.venv/Scripts/python -m pylint src --disable=all --enable=duplicate-code *)",
-      "Bash(.venv/Scripts/python .claude/skills/test-crafter/scripts/mutation_check.py *)",
-      "Bash(.venv/Scripts/python .claude/skills/doc-sync/scripts/check_md_width.py *)",
-      "Bash(.venv/Scripts/python train.py *)",
-      "Bash(.venv/Scripts/python src/benchmark.py *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(.venv/Scripts/python *)",
       "Skill(update-config)",
       "Skill(update-config:*)",
-      "Edit(/.claude/skills/architect/**)",
+      "Edit(/.claude/skills/**)",
       "Bash(gh run *)"
     ]
   },

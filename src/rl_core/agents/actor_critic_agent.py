@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 
 from .actor_critic_base import ActorCriticBase
+from .returns import discounted_returns
 
 
 class ActorCriticAgent(ActorCriticBase):
@@ -94,7 +95,7 @@ class ActorCriticAgent(ActorCriticBase):
 
         # Monte-Carlo returns (same as REINFORCE, no normalisation here so the
         # value function retains scale information)
-        returns = self._compute_returns(rewards)
+        returns = discounted_returns(rewards, self.gamma)
 
         grads = self._zero_ac_gradients()
         total_policy_loss = 0.0

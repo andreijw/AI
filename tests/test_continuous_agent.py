@@ -277,3 +277,54 @@ def test_continuous_ppo_update_differs_across_seeds():
     second.update(trajectory)
 
     assert _params_differ(first, second)
+
+
+# ---------------------------------------------------------------------------
+# The update uses the agent's own discount factor
+# ---------------------------------------------------------------------------
+
+
+def _actor_critic_weights_after_update(gamma: float) -> dict[str, np.ndarray]:
+    """Train a continuous actor-critic agent on a fixed batch with uneven, late rewards.
+
+    Three updates, not one: the first Adam step moves every weight by about the learning rate
+    whatever the gradient's size, so after a single step two runs differ only where a gradient
+    changed sign.
+    """
+    rng = np.random.default_rng(11)
+    batch = {
+        "observations": rng.standard_normal((6, 3)),
+        "actions": rng.uniform(-2.0, 2.0, size=(6, 1)),
+        "rewards": np.array([-1.0, 0.0, -2.0, -1.0, 0.0, -3.0]),
+        "next_observations": rng.standard_normal((6, 3)),
+        "dones": np.array([False] * 5 + [True]),
+    }
+    agent = ContinuousActorCriticAgent(
+        observation_dim=3, action_dim=1, config={"hidden_dim": 8, "seed": 5, "gamma": gamma}
+    )
+    for _ in range(3):
+        agent.update(batch)
+    return {name: np.array(getattr(agent, name), dtype=np.float64) for name in _PPO_PARAMS}
+
+
+def test_continuous_actor_critic_update_depends_on_the_discount_factor():
+    """A different gamma must lead to different weights, well beyond rounding noise."""
+    short_sighted = _actor_critic_weights_after_update(gamma=0.5)
+    far_sighted = _actor_critic_weights_after_update(gamma=0.99)
+
+    difference = max(
+        float(np.max(np.abs(short_sighted[name] - far_sighted[name]))) for name in _PPO_PARAMS
+    )
+    assert difference > 1e-6, (
+        f"Weights match for gamma 0.5 and 0.99 (largest difference {difference:.2e}): "
+        "the update is ignoring gamma."
+    )
+
+
+def test_continuous_actor_critic_update_is_identical_for_the_same_discount_factor():
+    """Guards the test above: with gamma held fixed, nothing else makes the weights differ."""
+    first = _actor_critic_weights_after_update(gamma=0.9)
+    second = _actor_critic_weights_after_update(gamma=0.9)
+
+    for name in _PPO_PARAMS:
+        np.testing.assert_array_equal(first[name], second[name])

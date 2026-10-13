@@ -41,7 +41,7 @@ A duplicate rarely shares a name with the original. For each candidate, search f
 | Picks a discrete action from probabilities | `rng.choice(`, `np.argmax(probs` | `BaseAgent._select_action_from_probs` |
 | Works out a checkpoint path or extension | `.npz`, `os.path.splitext` | `BaseAgent._resolve_save_path` / `_resolve_load_path` |
 | Rejects bad dimensions | `<= 0` near `raise ValueError` | `BaseAgent._validate_dims` |
-| Computes discounted returns | `gamma *` in a reversed loop | `ActorCriticBase._compute_returns` (`ReinforceAgent` has its own) |
+| Computes discounted returns | `gamma *` in a reversed loop | `rl_core.agents.returns.discounted_returns` |
 | Unpacks the trainer's batch | `batch["observations"]` | `ActorCriticBase._parse_trajectory` |
 | Accumulates or applies actor-critic gradients | `dW`, `grads[` | `_zero_ac_gradients`, `_accumulate_ac_gradients`, `_apply_ac_gradients` |
 | Gaussian log-probability or entropy | `np.log(2 * np.pi` | `ContinuousActorCriticBase._log_prob`, `_entropy` |
@@ -92,10 +92,10 @@ at the config or is checked by the `doc-sync` skill.
   look alike and differ where it matters (a softmax over actions against a Gaussian with a learned spread).
   Merging coincidental likeness produces a function with flags that nobody can change safely. Two
   occurrences are a note; the third is the signal to extract.
-- **Known duplication is not licence for more.** `_compute_returns` exists on both `ReinforceAgent` and
-  `ActorCriticBase`, the numerically stable softmax is written inline in more than one agent, and the
-  name-to-class maps are repeated in `train.py` and each challenge. Do not add a further copy; if the
-  change needs one, that is the moment to extract.
+- **Known duplication is not licence for more.** The numerically stable softmax is written inline in both
+  `ReinforceAgent` and `ActorCriticBase`, and the name-to-class maps are repeated in `train.py` and each
+  challenge. Do not add a further copy; if the change needs one, that is the moment to extract. The
+  discounted-returns loop was once written three times and is now `discounted_returns`.
 - Shared maths with no state becomes a module-level function under `src/rl_core/` with its own unit test.
   Shared state and behaviour for a family of agents goes on the family's base class.
 

@@ -63,7 +63,8 @@ custom_risks:
     name: Reinvented Helper
     question: "Does new code repeat what a base class, a helper or a script function in this codebase already does?"
     symptoms:
-      - "A new discounted-return loop, softmax, Gaussian log-probability, Adam step, action sampler, checkpoint path rule or dimension check where a base-class method exists (search src/rl_core/agents/base_agent.py, actor_critic_base.py, continuous_actor_critic.py)"
+      - "A new discounted-return loop where rl_core.agents.returns.discounted_returns exists, or a generator built with default_rng(seed) where rl_core.seeding.derive_rng should give it its own stream"
+      - "A new softmax, Gaussian log-probability, Adam step, action sampler, checkpoint path rule or dimension check where a base-class method exists (search src/rl_core/agents/base_agent.py, actor_critic_base.py, continuous_actor_critic.py)"
       - "Config loading, environment or agent construction, or output-path building written again instead of using rl_core.utils.config or the helpers in train.py"
       - "A wrapper or factory copied between rl_cartpole and rl_pendulum with only names changed"
       - "A hyperparameter restated in code, tests and docs instead of owned by the config"

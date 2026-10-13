@@ -35,6 +35,7 @@ AI/
 │   ├── rl_core/                 # Algorithm-agnostic RL framework
 │   │   ├── agents/              # Core discrete & continuous agent implementations
 │   │   │   ├── base_agent.py
+│   │   │   ├── actor_critic_agent.py
 │   │   │   ├── actor_critic_base.py
 │   │   │   ├── continuous_actor_critic.py
 │   │   │   ├── continuous_ppo.py
@@ -43,9 +44,11 @@ AI/
 │   │   │   ├── ppo_agent.py
 │   │   │   ├── random_agent.py
 │   │   │   ├── reinforce_agent.py
-│   │   │   └── replay_buffer.py
+│   │   │   ├── replay_buffer.py
+│   │   │   └── returns.py       # Discounted returns shared by the episodic agents
 │   │   ├── training/            # Generic training pipeline (trainer.py)
-│   │   └── utils/               # Config, logging, video recording & plotting utilities
+│   │   ├── utils/               # Config, logging, video recording & plotting utilities
+│   │   └── seeding.py           # Separate seeded random streams (derive_rng)
 │   ├── rl_cartpole/             # CartPole-v1 discrete balance control challenge
 │   │   ├── environments/        # CartPole wrappers and vectorization factories
 │   │   └── benchmark.py         # CartPole benchmark challenge implementation
@@ -642,11 +645,12 @@ the project checks only.
    why") or name a skill (`/dev-loop`, `/training-doctor`). The assistant stages changes and prints the commit and
    push commands; it never commits, pushes or merges.
 
-The same settings file pre-approves the commands the loop runs constantly, so it does not stop to ask for each one:
-the quality gates (Ruff check and format, mypy, pytest, Bandit, the duplication check, the two skill scripts),
-`train.py` and `src/benchmark.py`. Rules are written as command patterns, never with one-off file names; approve
-anything more specific into your git-ignored `.claude/settings.local.json`. To opt out of the plugin personally, add
-this to that file:
+The same settings file pre-approves what the loop runs constantly, so it does not stop to ask each time: anything run
+with the project's own interpreter (`.venv/bin/python` or `.venv/Scripts/python`, which covers the quality gates,
+`train.py`, `src/benchmark.py` and the skill scripts), edits to the skill files, and `gh run`. That means the
+assistant can run any Python in this repository's environment without a prompt; narrow it in the file if you prefer
+to be asked. Rules are written as patterns, never with one-off file names; approve anything more specific into your
+git-ignored `.claude/settings.local.json`. To opt out of the plugin personally, add this to that file:
 
 ```json
 {
