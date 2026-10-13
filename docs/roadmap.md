@@ -111,9 +111,10 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 
 ## Upcoming Milestones
 
-**Agreed order (2026-10-13):** Seed the Continuous PPO Mini-Batch Shuffle → the test-gap items (Discounted-Return
-Tests That Can Fail, Softmax Stability Tests, Single `_compute_returns` Implementation) → Break the Benchmark Import
-Cycle → DDPG.
+**Agreed order (2026-10-13):** Seed the Continuous PPO Mini-Batch Shuffle → Seeded Environments Replay One Start
+State → the test-gap items (Discounted-Return Tests That Can Fail, Softmax Stability Tests, Single `_compute_returns`
+Implementation) → CartPole Agents Learn Within Their Budgets → Break the Benchmark Import Cycle → Pendulum PPO
+Learns and Solves Pendulum-v1 → DDPG.
 
 ### Workflow Tooling
 
@@ -190,7 +191,7 @@ Cycle → DDPG.
 Defects found while working on other items, then findings from the brooks-lint health pass of 2026-10-12
 (dashboard 82/100), most severe first.
 
-- [ ] **Seeded Environments Replay One Start State**
+- [~] **Seeded Environments Replay One Start State**
   - **Description**: `CartPoleEnv.reset()` and `PendulumEnv.reset()` reuse the constructor seed whenever they are
     called without one, and `Trainer` never passes one. With a seed in the config (every committed config has one)
     each training and evaluation episode starts from the identical initial state, so agents train on a single
@@ -207,12 +208,64 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: Regenerating `docs/benchmarks/` (the published numbers were produced with the repeated start
     state and need a maintainer-approved rerun afterwards); retuning configs.
 
+- [ ] **CartPole Agents Learn Within Their Budgets**
+  - **Description**: After the seeding fixes, the benchmark of 2026-10-13 (750 episodes, seeds 42 and 123; see
+    `docs/benchmarks/cartpole_results.md`) shows Actor-Critic and DQN solving CartPole-v1, REINFORCE improving slowly
+    (mean evaluation reward 121) and PPO at the random level (27, against 25 for the random agent). The benchmark
+    also trains every agent for the same number of episodes (500 by default), while the agents' own configs ask for
+    500 to 2000. Find out which agents have a learning defect and which only lack episodes, fix the defects, and
+    make the benchmark's budget and solve rule say what they mean.
+  - **Acceptance criteria**:
+    - Each learning agent is run at its own config's budget on at least 5 seeds, and the result is recorded: solve
+      rate, evaluation reward, episodes to solve.
+    - PPO gets the `training-doctor` ladder: a finite-difference gradient check, a direction test, overfitting a
+      fixed batch and a read of one real batch. Each cause found is confirmed by a check that fails before the fix
+      and passes after, and is fixed test-first. REINFORCE gets the same if it does not solve at its own budget.
+    - Any change to a committed `configs/cartpole_*.yaml` is proposed with its evidence and approved by the
+      maintainer.
+    - The benchmark's default budget per agent is a deliberate choice: either each agent's config budget, or one
+      shared number that every agent expected to solve the task can solve it in. The report states which.
+    - The solve rule is documented where the report is read. Today a run counts as solved if the rolling training
+      average reaches the threshold, or if only the final evaluation does, in which case the last episode is
+      reported as the solve episode.
+    - With the committed configs, every agent the README lists as solving CartPole-v1 reaches the threshold on at
+      least 4 of 5 seeds, and `docs/benchmarks/cartpole_results.md` and TESTING.md `TR-1` to `TR-4` say what was
+      measured.
+  - **Known edge cases**: Things to rule out, none confirmed: PPO updating once per episode on that episode alone,
+    with a learning rate of 0.0003; DQN reaching the threshold and then losing it (seed 42 solved at episode 274
+    and finished at 334); epsilon never reaching its floor within 500 episodes.
+  - **Out of scope**: The Pendulum agents (their own item below); new algorithms; changing the solve threshold.
+
+- [ ] **Separate Random Streams for Agents and Buffers**
+  - **Description**: Agents and `ReplayBuffer` create their generators with `np.random.default_rng(seed)`, and the
+    committed configs and both benchmark adapters give the agent the same seed as the environment. Weight
+    initialisation, exploration, replay sampling and the environment's start states therefore draw from one
+    identical stream. The environment wrappers already use `rl_core.seeding.derive_rng`.
+  - **Acceptance criteria**:
+    - Each agent and `ReplayBuffer` takes a named stream from `derive_rng`; no two components built from one seed
+      draw the same numbers, and a test fails if they do.
+    - Runs stay reproducible for a seed.
+  - **Known edge cases**: Every seeded result changes once more; checkpoints that store generator state.
+  - **Out of scope**: Regenerating `docs/benchmarks/`.
+
+- [ ] **Separate Evaluation Environment**
+  - **Description**: `Trainer.evaluate` runs on the training environment, so evaluation episodes advance the same
+    random sequence and `eval_frequency` changes which start states later training episodes see. Runs stay
+    reproducible, but evaluation is not independent of training.
+  - **Acceptance criteria**:
+    - Evaluation uses its own environment with its own seeded sequence; changing `eval_frequency` leaves the
+      training episodes unchanged for a given seed.
+    - Every evaluation uses the same fixed set of start states, so scores are comparable across a run.
+  - **Out of scope**: Vectorized evaluation.
+
 - [ ] **Pendulum PPO Learns and Solves Pendulum-v1**
   - **Description**: `ContinuousPPOAgent` with `configs/pendulum_ppo.yaml` does not learn. On 2026-10-13 the
     benchmark at its default 200 episodes gave evaluation rewards of -1632, -1673 and -1584 on seeds 1, 2 and 3
     (the same order of magnitude before the shuffle fix), against a solve threshold of -200 and a random agent
-    between -892 and -1582. The roadmap and TESTING.md `TR-6` say this configuration solves the task. Find out why,
-    fix it, and show that it solves Pendulum-v1 reproducibly.
+    between -892 and -1582. Fixing the repeated start state did not change that: the published run
+    (`docs/benchmarks/pendulum_results.md`, 150 episodes, seeds 42 and 123) has PPO at -1626 and Actor-Critic at
+    -1426, both below the random agent's -1323. The Phase 6 entry above says this configuration solves the task.
+    Find out why it does not, fix it, and show that it solves Pendulum-v1 reproducibly.
   - **Acceptance criteria**:
     - A written diagnosis (the `training-doctor` ladder) names the cause or causes, each confirmed by a check that
       fails before the fix and passes after: finite-difference gradient checks of the continuous actor and critic,
@@ -295,11 +348,12 @@ Defects found while working on other items, then findings from the brooks-lint h
 - [ ] **Shared Environment Wrapper Base**
   - **Description**: `rl_cartpole/environments/cartpole_env.py` and `rl_pendulum/environments/pendulum_env.py` repeat
     four near-identical blocks (the largest about 50 lines) for noise, statistics and wrapping, so a fix in one
-    challenge misses the other.
+    challenge misses the other. The seeding logic in `__init__` and `reset()` is a fifth, kept in step today only by
+    the shared tests in `tests/test_env_seeding.py`.
   - **Acceptance criteria**:
     - The shared behaviour lives once in `rl_core`; each challenge keeps only what differs.
     - The duplicate-code audit at 8 similar lines reports no pair between the two files.
-    - `tests/test_environment.py` and `tests/test_pendulum.py` pass unchanged.
+    - `tests/test_environment.py`, `tests/test_pendulum.py` and `tests/test_env_seeding.py` pass unchanged.
   - **Known edge cases**: Discrete action flips against continuous action noise; per-challenge randomized parameters.
   - **Out of scope**: The `make_env` factories; new wrappers such as frame stacking.
 

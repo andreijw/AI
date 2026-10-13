@@ -78,7 +78,11 @@ signal to extract. An abstract base with one subclass and no second one on the r
 **Randomness is owned and seeded.** Every object that draws random numbers holds its own
 `np.random.default_rng(seed)`, seeded from its config. No `np.random.seed`, no bare `np.random.*` calls:
 global state makes two agents in one benchmark run disturb each other. Environments are seeded through
-`reset(seed=...)`. A plan that adds a source of randomness says where its seed comes from.
+the wrapper's constructor seed, applied on the first reset and continued after that. Two components built
+from one seed should not share a stream: `rl_core.seeding.derive_rng(seed, stream)` gives each its own. The
+environment wrappers use it; agents and `ReplayBuffer` still call `default_rng(seed)` directly, so with the
+same seed they draw the environment's numbers (a roadmap item). A plan that adds a source of randomness says
+where its seed comes from and which stream it uses.
 
 **`terminated` and `truncated` are different facts.** The trainer folds them into one `done` flag and the
 batch carries only `dones`. For Monte Carlo returns that is harmless. For anything that bootstraps from the

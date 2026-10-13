@@ -131,7 +131,7 @@ creating a minimal config:
 environment:
   name: "CartPole-v1"
   max_episode_steps: 500
-  seed: 42
+  seed: 42            # reproducible sequence of start states (each episode differs)
 
 agent:
   type: "random"
@@ -643,9 +643,10 @@ the project checks only.
    push commands; it never commits, pushes or merges.
 
 The same settings file pre-approves the commands the loop runs constantly, so it does not stop to ask for each one:
-the quality gates (Ruff check and format, mypy, pytest, Bandit, the duplication check, the two skill scripts) and
-`train.py`. Rules are written as command patterns, never with one-off file names; approve anything more specific
-into your git-ignored `.claude/settings.local.json`. To opt out of the plugin personally, add this to that file:
+the quality gates (Ruff check and format, mypy, pytest, Bandit, the duplication check, the two skill scripts),
+`train.py` and `src/benchmark.py`. Rules are written as command patterns, never with one-off file names; approve
+anything more specific into your git-ignored `.claude/settings.local.json`. To opt out of the plugin personally, add
+this to that file:
 
 ```json
 {

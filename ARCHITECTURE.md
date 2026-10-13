@@ -206,7 +206,7 @@ sequenceDiagram
 
     User->>Trainer: train()
     loop Episode Loop (1 to num_episodes)
-        Trainer->>Env: reset(seed)
+        Trainer->>Env: reset()
         Env-->>Trainer: obs, info
         loop Step Loop (until done or max_steps)
             Trainer->>Agent: select_action(obs, training=True)

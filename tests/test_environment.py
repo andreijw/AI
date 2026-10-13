@@ -514,16 +514,6 @@ def test_domain_randomization_missing_attrs_raises():
         env.close()
 
 
-def test_env_reset_without_seed_uses_instance_seed():
-    """reset() with no seed argument should fall back to self.seed."""
-    env = CartPoleEnv(seed=7)
-    obs, info = env.reset()
-
-    assert isinstance(obs, np.ndarray)
-    assert obs.shape == (4,)
-    env.close()
-
-
 def test_env_episode_reward_accumulates():
     """episode_reward should accumulate across multiple steps."""
     env = CartPoleEnv(seed=42, max_episode_steps=50)
