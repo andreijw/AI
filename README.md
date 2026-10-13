@@ -642,9 +642,10 @@ the project checks only.
    why") or name a skill (`/dev-loop`, `/training-doctor`). The assistant stages changes and prints the commit and
    push commands; it never commits, pushes or merges.
 
-The same settings file pre-approves the read-only quality gates (Ruff, mypy, pytest, Bandit, the duplication check
-and the two skill scripts) so the loop does not stop to ask for each one. To opt out of the plugin personally, add
-this to your git-ignored `.claude/settings.local.json`:
+The same settings file pre-approves the commands the loop runs constantly, so it does not stop to ask for each one:
+the quality gates (Ruff check and format, mypy, pytest, Bandit, the duplication check, the two skill scripts) and
+`train.py`. Rules are written as command patterns, never with one-off file names; approve anything more specific
+into your git-ignored `.claude/settings.local.json`. To opt out of the plugin personally, add this to that file:
 
 ```json
 {
