@@ -1,4 +1,16 @@
 {
+  "extraKnownMarketplaces": {
+    "brooks-lint-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "hyhmrright/brooks-lint",
+        "ref": "v1.7.0"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "brooks-lint@brooks-lint-marketplace": true
+  },
   "permissions": {
     "allow": [
       "Bash(.venv/bin/python -m ruff check *)",
@@ -16,23 +28,7 @@
       "Bash(.venv/Scripts/python -m bandit -r src/ -ll)",
       "Bash(.venv/Scripts/python -m pylint src --disable=all --enable=duplicate-code *)",
       "Bash(.venv/Scripts/python .claude/skills/test-crafter/scripts/mutation_check.py *)",
-      "Bash(.venv/Scripts/python .claude/skills/doc-sync/scripts/check_md_width.py *)",
-      "Bash(.venv/bin/python train.py --config /tmp/claude-1000/-home-andreijw-AI/d3b09b54-fc29-4968-90f5-ed8efc60318b/scratchpad/td/div_cartpole_ppo.yaml --num-episodes 30)",
-      "Bash(.venv/bin/python -m ruff format --no-cache --check src/rl_core/training/trainer.py tests/test_trainer.py)",
-      "Bash(.venv/bin/python -m mypy --cache-dir=/dev/null src/rl_core/training/trainer.py)",
-      "Bash(.venv/bin/python -m ruff format tests/test_trainer.py -q)"
+      "Bash(.venv/Scripts/python .claude/skills/doc-sync/scripts/check_md_width.py *)"
     ]
-  },
-  "enabledPlugins": {
-    "brooks-lint@brooks-lint-marketplace": true
-  },
-  "extraKnownMarketplaces": {
-    "brooks-lint-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "hyhmrright/brooks-lint",
-        "ref": "v1.7.0"
-      }
-    }
   }
 }
