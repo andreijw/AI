@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from rl_core.agents import ActorCriticAgent, PPOAgent, ReinforceAgent
-from tests.helpers import assert_gradients_match
+from tests.helpers import ReferenceAdam, assert_gradients_match
 
 EPS = 1e-5  # perturbation used by tests.helpers.numerical_grad
 N_STEPS, OBS_DIM, HIDDEN_DIM, ACTION_DIM = 6, 4, 6, 3
@@ -492,3 +492,126 @@ def test_ppo_update_runs_every_epoch_against_the_log_probabilities_recorded_firs
     assert metrics["entropy_bonus"] == pytest.approx(components["entropy"] / N_STEPS, rel=1e-12)
     assert metrics["clip_fraction"] == pytest.approx(clipped_count / N_STEPS, rel=1e-12)
     assert metrics["policy_loss"] != pytest.approx(components["total"] / N_STEPS, rel=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# The Adam option: `optimizer: adam` steps the mean gradient with Adam instead of SGD
+# ---------------------------------------------------------------------------
+# The clip of 0.05 is below the mean gradient's norm for this batch, so it scales every step.
+
+ADAM = {"gamma": 0.5, "learning_rate": 0.05, "optimizer": "adam", "max_grad_norm": 0.05}
+
+
+def _adam_descend(agent, adam: ReferenceAdam, grads: dict) -> None:
+    """Step an agent with the reference Adam on the episode-mean gradient."""
+    mean = {
+        name: np.asarray(gradient, dtype=np.float64) / N_STEPS for name, gradient in grads.items()
+    }
+    norm = np.sqrt(sum(float(np.sum(np.square(g))) for g in mean.values()))
+    assert norm > ADAM["max_grad_norm"], "The clip must bite for this test to cover it."
+    for name, step in adam.step(mean).items():
+        attribute = PARAMETER_ATTRIBUTES[name]
+        current = getattr(agent, attribute)
+        setattr(agent, attribute, float(current - step) if name == "b_v" else current - step)
+
+
+def test_reinforce_with_adam_steps_the_mean_gradient_with_adam():
+    agent, reference = _agent(ReinforceAgent, **ADAM), _agent(ReinforceAgent, **ADAM)
+    adam = ReferenceAdam(ADAM["learning_rate"], ADAM["max_grad_norm"])
+    batch = _step_batch()
+
+    for _ in range(2):  # the second step uses the moments of the first
+        agent.update(batch)
+        _, grads = reference._loss_and_grads(
+            batch["observations"], batch["actions"], _standardised(STEP_RETURNS)
+        )
+        _adam_descend(reference, adam, grads)
+
+    _assert_same_weights(agent, reference)
+
+
+def test_actor_critic_with_adam_steps_the_mean_gradient_with_adam():
+    agent, reference = _agent(ActorCriticAgent, **ADAM), _agent(ActorCriticAgent, **ADAM)
+    adam = ReferenceAdam(ADAM["learning_rate"], ADAM["max_grad_norm"])
+    batch = _step_batch()
+
+    for _ in range(2):
+        agent.update(batch)
+        _, grads = reference._loss_and_grads(batch["observations"], batch["actions"], STEP_RETURNS)
+        _adam_descend(reference, adam, grads)
+
+    _assert_same_weights(agent, reference)
+
+
+def test_ppo_with_adam_takes_one_adam_step_per_epoch():
+    config = {**ADAM, "ppo_epochs": 2}
+    agent, reference = _agent(PPOAgent, **config), _agent(PPOAgent, **config)
+    adam = ReferenceAdam(ADAM["learning_rate"], ADAM["max_grad_norm"])
+    batch = _step_batch()
+    observations, actions = batch["observations"], batch["actions"]
+
+    agent.update(batch)
+
+    forward = [reference._forward(obs) for obs in observations]
+    old_log_probs = np.log([probs[a] for (probs, _, _), a in zip(forward, actions, strict=True)])
+    advantages = _standardised(STEP_RETURNS - np.array([value for _, value, _ in forward]))
+    for _ in range(2):
+        _, grads, _ = reference._epoch_loss_and_grads(
+            observations, actions, STEP_RETURNS, advantages, old_log_probs
+        )
+        _adam_descend(reference, adam, grads)
+
+    _assert_same_weights(agent, reference)
+    assert agent._optimizer.t == 2
+
+
+DISCRETE_AGENTS = [ReinforceAgent, ActorCriticAgent, PPOAgent]
+
+
+@pytest.mark.parametrize("agent_cls", DISCRETE_AGENTS)
+def test_default_optimizer_is_plain_sgd(agent_cls):
+    assert _agent(agent_cls)._optimizer is None
+
+
+@pytest.mark.parametrize("agent_cls", DISCRETE_AGENTS)
+def test_unknown_optimizer_is_rejected_at_construction(agent_cls):
+    with pytest.raises(ValueError, match="optimizer must be one of"):
+        _agent(agent_cls, optimizer="rmsprop")
+
+
+@pytest.mark.parametrize("agent_cls", DISCRETE_AGENTS)
+def test_adam_checkpoint_resumes_exactly(agent_cls, tmp_path):
+    """A reloaded Adam agent continues with the same moments and step count as the original."""
+    agent = _agent(agent_cls, **ADAM)
+    batch = _step_batch()
+    agent.update(batch)
+    path = str(tmp_path / "agent.npz")
+    agent.save(path)
+
+    resumed = _agent(agent_cls, **{**ADAM, "seed": 99})  # different initial weights
+    resumed.load(path)
+    assert resumed._optimizer.t == agent._optimizer.t
+
+    agent.update(batch)
+    resumed.update(batch)
+    actual, expected = _weights(resumed), _weights(agent)
+    for name in expected:
+        np.testing.assert_array_equal(actual[name], expected[name], err_msg=f"{name} differs.")
+
+
+@pytest.mark.parametrize("agent_cls", DISCRETE_AGENTS)
+def test_sgd_checkpoint_loads_into_an_adam_agent_with_fresh_optimizer_state(agent_cls, tmp_path):
+    sgd = _agent(agent_cls, gamma=0.5)
+    path = str(tmp_path / "sgd.npz")
+    sgd.save(path)
+    with np.load(path) as data:
+        assert not any(key.startswith("adam_") for key in data.files)
+
+    adam_agent = _agent(agent_cls, **ADAM)
+    adam_agent.update(_step_batch())
+    adam_agent.load(path)
+
+    assert adam_agent._optimizer.t == 0
+    for moment in (*adam_agent._optimizer.m.values(), *adam_agent._optimizer.v.values()):
+        np.testing.assert_array_equal(moment, 0.0)
+    _assert_same_weights(adam_agent, sgd)

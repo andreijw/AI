@@ -12,6 +12,7 @@ Unlike the discrete agents, these average over the batch inside the loss and its
 the step is Adam with global gradient-norm clipping.
 """
 
+import copy
 import math
 
 import numpy as np
@@ -19,7 +20,7 @@ import pytest
 
 from rl_core.agents.continuous_actor_critic import ContinuousActorCriticAgent
 from rl_core.agents.continuous_ppo import ContinuousPPOAgent
-from tests.helpers import assert_gradients_match
+from tests.helpers import ReferenceAdam, assert_gradients_match
 
 EPS = 1e-5  # perturbation used by tests.helpers.numerical_grad
 N_STEPS, OBS_DIM, HIDDEN_DIM, ACTION_DIM = 6, 3, 6, 2
@@ -90,9 +91,9 @@ def _state(agent) -> dict[str, np.ndarray]:
         for name, attribute in PARAMETER_ATTRIBUTES.items()
     }
     for name in PARAMETER_ATTRIBUTES:
-        snapshot[f"adam_m:{name}"] = np.array(agent._adam_m[name], dtype=np.float64)
-        snapshot[f"adam_v:{name}"] = np.array(agent._adam_v[name], dtype=np.float64)
-    snapshot["adam_t"] = np.array(agent._adam_t)
+        snapshot[f"adam_m:{name}"] = np.array(agent._optimizer.m[name], dtype=np.float64)
+        snapshot[f"adam_v:{name}"] = np.array(agent._optimizer.v[name], dtype=np.float64)
+    snapshot["adam_t"] = np.array(agent._optimizer.t)
     return snapshot
 
 
@@ -399,26 +400,11 @@ def test_actor_critic_rejects_advantages_of_the_wrong_length():
 # ---------------------------------------------------------------------------
 
 
-class _ReferenceAdam:
-    """Adam with global gradient-norm clipping, written out independently of the agents."""
+class _ReferenceAdam(ReferenceAdam):
+    """The shared reference Adam, applying its steps to a continuous agent's parameters."""
 
-    def __init__(self, learning_rate: float, max_grad_norm: float):
-        self.learning_rate, self.max_grad_norm = learning_rate, max_grad_norm
-        self.m: dict[str, np.ndarray] = {}
-        self.v: dict[str, np.ndarray] = {}
-        self.t = 0
-
-    def step(self, agent, grads: dict) -> None:
-        self.t += 1
-        norm = math.sqrt(sum(float(np.sum(np.square(g))) for g in grads.values()))
-        clip = min(1.0, self.max_grad_norm / (norm + 1e-6))
-        for name, raw in grads.items():
-            gradient = np.asarray(raw, dtype=np.float64) * clip
-            self.m[name] = 0.9 * self.m.get(name, 0.0) + 0.1 * gradient
-            self.v[name] = 0.999 * self.v.get(name, 0.0) + 0.001 * gradient**2
-            m_hat = self.m[name] / (1.0 - 0.9**self.t)
-            v_hat = self.v[name] / (1.0 - 0.999**self.t)
-            step = self.learning_rate * m_hat / (np.sqrt(v_hat) + 1e-8)
+    def step(self, agent, grads: dict) -> None:  # type: ignore[override]
+        for name, step in super().step(grads).items():
             attribute = PARAMETER_ATTRIBUTES[name]
             current = getattr(agent, attribute)
             setattr(agent, attribute, float(current - step) if name == "b_v" else current - step)
@@ -451,7 +437,7 @@ def test_adam_step_matches_an_independent_implementation():
         adam.step(reference, grads)
 
     _assert_same_weights(agent, reference)
-    assert agent._adam_t == 3
+    assert agent._optimizer.t == 3
     moved = _state(agent)
     assert all(not np.array_equal(moved[name], untouched[name]) for name in PARAMETER_ATTRIBUTES)
 
@@ -487,7 +473,7 @@ def test_actor_critic_update_takes_one_adam_step_on_its_gradients():
     )
     _ReferenceAdam(0.01, reference.max_grad_norm).step(reference, grads)
     _assert_same_weights(agent, reference)
-    assert agent._adam_t == 1
+    assert agent._optimizer.t == 1
     assert metrics["policy_loss"] == pytest.approx(components["policy"], rel=1e-12)
     assert metrics["value_loss"] == pytest.approx(components["value"], rel=1e-12)
     assert metrics["entropy"] == pytest.approx(components["entropy"], rel=1e-12)
@@ -602,7 +588,7 @@ def test_ppo_update_replays_as_minibatch_steps_on_fixed_inputs(last_done, batch_
     assert len(seen) == 4, "Two epochs of two mini-batches each."
     assert len(chosen) == N_STEPS % batch_size, "The last mini-batch is the remainder."
     _assert_same_weights(agent, reference)
-    assert agent._adam_t == 4
+    assert agent._optimizer.t == 4
     for metric, component in (
         ("policy_loss", "policy"),
         ("value_loss", "value"),
@@ -610,3 +596,26 @@ def test_ppo_update_replays_as_minibatch_steps_on_fixed_inputs(last_done, batch_
     ):
         expected = float(np.mean([components[component] for components in seen]))
         assert metrics[metric] == pytest.approx(expected, rel=1e-12)
+
+
+@pytest.mark.parametrize("agent_cls", [ContinuousActorCriticAgent, ContinuousPPOAgent])
+def test_checkpoint_resumes_with_the_same_adam_state(agent_cls, tmp_path):
+    """A reloaded agent continues exactly: the checkpoint holds the Adam moments, not only t."""
+    agent = _agent(agent_cls, gamma=0.5)
+    batch = _step_batch()
+    agent.update(batch)
+    path = str(tmp_path / "agent.npz")
+    agent.save(path)
+
+    resumed = _agent(agent_cls, gamma=0.5, seed=99)  # different initial weights
+    resumed.load(path)
+    assert resumed._optimizer.t == agent._optimizer.t > 0
+    # Checkpoints do not hold the sampling generator (PPO's shuffle); share it so only the
+    # optimiser state is under test.
+    resumed._rng = copy.deepcopy(agent._rng)
+
+    agent.update(batch)
+    resumed.update(batch)
+    after, expected = _state(resumed), _state(agent)
+    for name in expected:
+        np.testing.assert_array_equal(after[name], expected[name], err_msg=f"{name} differs.")

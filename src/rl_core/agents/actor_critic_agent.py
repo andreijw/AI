@@ -35,7 +35,10 @@ class ActorCriticAgent(ActorCriticBase):
         Learning. ICML 2016.
 
     Config keys (all optional):
-        learning_rate (float): SGD step size. Default: 1e-3.
+        learning_rate (float): Step size for the configured optimizer. Default: 1e-3.
+        optimizer     (str):   "sgd" or "adam". Default: "sgd".
+        max_grad_norm (float): Global gradient-norm clip; requires optimizer "adam".
+                               Default: none.
         gamma         (float): Discount factor ∈ (0, 1]. Default: 0.99.
         hidden_dim    (int):   Shared hidden layer width. Default: 128.
         value_coef    (float): Critic-loss weight. Default: 0.5.
@@ -99,8 +102,8 @@ class ActorCriticAgent(ActorCriticBase):
 
         components, grads = self._loss_and_grads(observations, actions, returns)
 
-        # SGD update averaged over episode length
-        self._apply_ac_gradients(grads, self.learning_rate / n_steps)
+        # One optimiser step on the gradient averaged over the episode
+        self._step(grads, n_steps)
 
         return {
             "policy_loss": float(components["policy"] / n_steps),

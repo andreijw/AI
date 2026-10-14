@@ -16,7 +16,9 @@ class PPOAgent(ActorCriticBase):
     multiple optimization epochs over each on-policy trajectory.
 
     Config keys (all optional):
-        learning_rate (float): SGD step size. Default: 3e-4.
+        learning_rate (float): Step size for the configured optimizer. Default: 3e-4.
+        optimizer (str): "sgd" or "adam"; Adam takes one step per epoch. Default: "sgd".
+        max_grad_norm (float): Global gradient-norm clip; requires optimizer "adam". Default: none.
         gamma (float): Discount factor ∈ (0, 1]. Default: 0.99.
         hidden_dim (int): Shared hidden layer width. Default: 128.
         value_coef (float): Critic-loss weight. Default: 0.5.
@@ -86,7 +88,7 @@ class PPOAgent(ActorCriticBase):
                 observations, actions, returns, advantages, old_log_probs
             )
 
-            self._apply_ac_gradients(grads, self.learning_rate / n_steps)
+            self._step(grads, n_steps)
 
             policy_loss = components["policy"] / n_steps
             value_loss = components["value"] / n_steps

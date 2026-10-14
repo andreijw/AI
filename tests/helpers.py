@@ -1,6 +1,8 @@
-"""Shared helpers for tests: running the train.py / record.py scripts, and gradient checks."""
+"""Shared helpers for tests: running the train.py / record.py scripts, gradient checks, and a
+reference Adam optimiser."""
 
 import importlib
+import math
 import sys
 from collections.abc import Callable, Mapping
 
@@ -108,3 +110,32 @@ def assert_gradients_match(
             atol=atol,
             err_msg=f"Analytic gradient for parameter {name!r} disagrees with finite differences.",
         )
+
+
+class ReferenceAdam:
+    """Adam with optional global gradient-norm clipping, written out independently of the agents.
+
+    ``step`` returns the amount to subtract from each parameter; the caller applies it.
+    """
+
+    def __init__(self, learning_rate: float, max_grad_norm: float | None = None):
+        self.learning_rate, self.max_grad_norm = learning_rate, max_grad_norm
+        self.m: dict[str, np.ndarray] = {}
+        self.v: dict[str, np.ndarray] = {}
+        self.t = 0
+
+    def step(self, grads: Mapping[str, np.ndarray | float]) -> dict[str, np.ndarray]:
+        self.t += 1
+        clip = 1.0
+        if self.max_grad_norm is not None:
+            norm = math.sqrt(sum(float(np.sum(np.square(g))) for g in grads.values()))
+            clip = min(1.0, self.max_grad_norm / (norm + 1e-6))
+        steps = {}
+        for name, raw in grads.items():
+            gradient = np.asarray(raw, dtype=np.float64) * clip
+            self.m[name] = 0.9 * self.m.get(name, 0.0) + 0.1 * gradient
+            self.v[name] = 0.999 * self.v.get(name, 0.0) + 0.001 * gradient**2
+            m_hat = self.m[name] / (1.0 - 0.9**self.t)
+            v_hat = self.v[name] / (1.0 - 0.999**self.t)
+            steps[name] = self.learning_rate * m_hat / (np.sqrt(v_hat) + 1e-8)
+        return steps

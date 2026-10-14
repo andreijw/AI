@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 
 from .base_agent import BaseAgent
+from .optim import Adam, optimizer_from_config
 
 
 class ActorCriticBase(BaseAgent):
@@ -25,7 +26,11 @@ class ActorCriticBase(BaseAgent):
         value_coef   (float): Critic-loss weight. Default: 0.5.
         entropy_coef (float): Entropy-bonus weight. Default: 0.01.
         seed         (int):   RNG seed for weight initialisation. Default: None.
+        optimizer    (str):   "sgd" or "adam" (see :mod:`rl_core.agents.optim`). Default: "sgd".
+        max_grad_norm (float): Global gradient-norm clip; requires optimizer "adam". Default: none.
     """
+
+    learning_rate: float
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         super().__init__(observation_dim, action_dim, config)
@@ -59,6 +64,19 @@ class ActorCriticBase(BaseAgent):
         # Value head (critic): hidden → scalar
         self._W_v: np.ndarray = rng.standard_normal(self.hidden_dim) * scale_head
         self._b_v: float = 0.0
+
+        self._optimizer: Adam | None = optimizer_from_config(config, self._parameters())
+
+    def _parameters(self) -> dict[str, Any]:
+        """The network parameters by name, keyed as in :meth:`_zero_ac_gradients`."""
+        return {
+            "W1": self._W1,
+            "b1": self._b1,
+            "W_pi": self._W_pi,
+            "b_pi": self._b_pi,
+            "W_v": self._W_v,
+            "b_v": self._b_v,
+        }
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -177,6 +195,20 @@ class ActorCriticBase(BaseAgent):
         self._W_v -= scale * grads["W_v"]
         self._b_v -= scale * grads["b_v"]
 
+    def _step(self, grads: dict[str, Any], n_steps: int) -> None:
+        """
+        Take one optimiser step on gradients summed over ``n_steps`` steps.
+
+        With plain SGD (the default) the parameters move by ``learning_rate / n_steps`` times
+        the summed gradients. With ``optimizer: adam`` the mean gradient is stepped with Adam at
+        ``learning_rate``.
+        """
+        if self._optimizer is None:
+            self._apply_ac_gradients(grads, self.learning_rate / n_steps)
+            return
+        mean = {name: gradient / n_steps for name, gradient in grads.items()}
+        self._apply_ac_gradients(self._optimizer.step(mean, self.learning_rate), 1.0)
+
     # ------------------------------------------------------------------
     # BaseAgent interface
     # ------------------------------------------------------------------
@@ -215,15 +247,10 @@ class ActorCriticBase(BaseAgent):
         """
         save_path = self._resolve_save_path(path)
         with open(save_path, "wb") as f:
-            np.savez(
-                f,
-                W1=self._W1,
-                b1=self._b1,
-                W_pi=self._W_pi,
-                b_pi=self._b_pi,
-                W_v=self._W_v,
-                b_v=np.array(self._b_v),
-            )
+            arrays: dict[str, Any] = {k: np.asarray(v) for k, v in self._parameters().items()}
+            if self._optimizer is not None:
+                arrays.update(self._optimizer.state())
+            np.savez(f, **arrays)
 
     def load(self, path: str) -> None:
         """
@@ -245,3 +272,5 @@ class ActorCriticBase(BaseAgent):
             self._b_pi = data["b_pi"]
             self._W_v = data["W_v"]
             self._b_v = float(data["b_v"])
+            if self._optimizer is not None:
+                self._optimizer.load_state(data)
