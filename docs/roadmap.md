@@ -269,6 +269,16 @@ Defects found while working on other items, then findings from the brooks-lint h
     1265 to 1420), evaluation 442 ± 73, and the training average still falls back afterwards (final 189 to 456).
     REINFORCE with `optimizer: adam` and its committed learning rate and budget (0.001, 2000 episodes): 5 of 5
     reach 475 (episodes 645 to 1012, mean 830), evaluation 449 ± 59; one seed's final training average is 173.
+    PPO with `optimizer: adam` at its committed 0.0003, 3000 episodes: 5 of 5 reach 475 (episodes 530, 651, 968,
+    1066 and 1626), so 4 of 5 within the 1500 committed at the time; evaluation after 3000 episodes 442 (280 to
+    500), against 495 after 2000 in the learning gate below. DQN at 750 episodes: 4 of 5 reach 475 (episodes 378,
+    380, 463 and 576; seed 3 ends at 404), evaluation 450 ± 46. DQN with
+    `epsilon_decay: 0.99` (floor by episode 389) at 500 episodes: 2 of 5, evaluation 294 ± 60, worse than the
+    committed 0.995.
+  - **Committed configs (2026-10-14)**: REINFORCE and PPO use `optimizer: adam`; PPO trains for 2000 episodes
+    and DQN for 750. Learning gate with those configs, seeds 1 to 5: REINFORCE 5 of 5, Actor-Critic 5 of 5, PPO
+    5 of 5, DQN 4 of 5. Left: regenerating `docs/benchmarks/cartpole_results.md` with the seeds the maintainer
+    names, and the README's list of agents that solve CartPole-v1.
   - **Decided (2026-10-14)**: A run counts as solved only when the rolling training average reaches the
     threshold; a final evaluation at or above it is reported separately. Without `--episodes`, every agent in every
     challenge trains for its own config's `training.num_episodes`, the random agents included. The README claims

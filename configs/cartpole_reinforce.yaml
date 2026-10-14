@@ -13,7 +13,8 @@ environment:
 agent:
   type: "reinforce"
   config:
-    learning_rate: 0.001   # SGD step size
+    learning_rate: 0.001   # Adam step size
+    optimizer: "adam"      # "sgd" solved 0 of 5 seeds in 2000 episodes; Adam 5 of 5 (roadmap, 2026-10-14)
     gamma: 0.99            # Discount factor
     hidden_dim: 128        # Hidden layer width
     seed: 42               # Weight initialisation seed

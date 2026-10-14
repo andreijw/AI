@@ -144,8 +144,10 @@ Treat the repository as the source of truth when docs disagree:
 - `requirements.txt` lists `matplotlib>=3.5.0` and `pytest-cov>=4.0.0`, lagging `pyproject.toml`
   (`matplotlib>=3.9.4`, `pytest-cov>=7.1.0`). Install from `pyproject.toml` (`pip install -e ".[dev,video]"`).
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
-- The roadmap's completed Phase 2 and Phase 6 entries describe PPO as working and `configs/pendulum_ppo.yaml` as
-  solving Pendulum-v1. Measured on 2026-10-13 (`docs/benchmarks/`), CartPole PPO and both Pendulum agents score at
-  or below the random agent. Two open roadmap items own this; do not quote those entries as results.
+- The roadmap's completed Phase 6 entry describes `configs/pendulum_ppo.yaml` as solving Pendulum-v1. Measured on
+  2026-10-13 (`docs/benchmarks/`), both Pendulum agents score at or below the random agent; the open roadmap item
+  "Pendulum PPO Learns and Solves Pendulum-v1" owns this, so do not quote that entry as a result. CartPole PPO does
+  solve CartPole-v1 since its config switched to Adam (5 of 5 seeds, 2026-10-14; TESTING.md `TR-3`), though
+  `docs/benchmarks/cartpole_results.md` still shows the older run until it is regenerated.
 - CONTRIBUTING.md §5 and TESTING.md `CKPT-*` describe `.npz` checkpoints; `Trainer` names them
   `agent_episode_<n>.pt` (NumPy archive content, resolved by `BaseAgent._resolve_save_path`).
