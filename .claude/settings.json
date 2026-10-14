@@ -8,7 +8,8 @@
       "Edit(/.claude/skills/**)",
       "Bash(gh *)",
       "Bash(sort *)",
-      "Edit(/.claude/skills/test-crafter/**)"
+      "Edit(/.claude/skills/test-crafter/**)",
+      "Bash(git grep *)"
     ],
     "deny": [
       "Bash(gh pr merge *)",

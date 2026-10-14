@@ -45,17 +45,17 @@ To optimize token usage and context window limits:
     randomization, and vectorization.
   * `src/rl_pendulum/benchmark.py`: Pendulum benchmark challenge implementation.
 * **`src/benchmark.py`**: General benchmark interface & runner engine across registered challenges.
-* **`tests/`** (located at [tests/](file:///D:/Documents/Code/AI/tests/)): Pytest unit and integration test suite
+* **`tests/`** (located at [tests/](tests/)): Pytest unit and integration test suite
   targeting environments, agents, logging, configurations, and visualization.
-* **`configs/`** (located at [configs/](file:///D:/Documents/Code/AI/configs/)): YAML files specifying hyperparameter
+* **`configs/`** (located at [configs/](configs/)): YAML files specifying hyperparameter
   configs for training default, REINFORCE, Actor-Critic, and PPO algorithms.
-* **`scripts/`** (located at [scripts/](file:///D:/Documents/Code/AI/scripts/)): Automation scripts
+* **`scripts/`** (located at [scripts/](scripts/)): Automation scripts
   (e.g., `sync_workflow_docs.py`).
-* **`docs/`** (located at [docs/](file:///D:/Documents/Code/AI/docs/)): Feature guides, setup documents, summaries,
+* **`docs/`** (located at [docs/](docs/)): Feature guides, setup documents, summaries,
   and roadmaps (`roadmap.md`, `environment_setup_summary.md`).
-* **`examples/`** (located at [examples/](file:///D:/Documents/Code/AI/examples/)): Demonstration scripts showcasing
-  features (e.g., [demo_env_features.py](file:///D:/Documents/Code/AI/examples/demo_env_features.py)).
-* **`train.py`** (located at [train.py](file:///D:/Documents/Code/AI/train.py)): The main command-line entrypoint for
+* **`examples/`** (located at [examples/](examples/)): Demonstration scripts showcasing
+  features (e.g., [demo_env_features.py](examples/demo_env_features.py)).
+* **`train.py`** (located at [train.py](train.py)): The main command-line entrypoint for
   initiating RL agent training runs.
 * **`record.py`**: Records a trained agent from a checkpoint into one MP4 (reuses `train.py` setup helpers).
 * **`example.py`**: Minimal standalone usage example of the framework.
