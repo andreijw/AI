@@ -52,6 +52,7 @@ This document outlines manual verification and testing procedures for the RL fra
 | BM-1 | **Benchmark Runner** | `python src/benchmark.py --challenge cartpole --agents random ppo --episodes 5 --no-plot` | Runs multi-agent benchmark without plot, writes metrics JSON and summary report. |
 | BM-2 | **Benchmark Plotting** | `python src/benchmark.py --challenge cartpole --agents random reinforce --episodes 5` | Generates `plots/benchmarks/cartpole/benchmark_comparison.png` and `docs/benchmarks/cartpole_results.md`. |
 | BM-3 | **Continuous Benchmark** | `python src/benchmark.py --challenge pendulum --agents random ppo --episodes 5` | Benchmarks continuous agents, writes metrics and markdown report. |
+| BM-4 | **Per-Agent Budgets and Solve Rule** | `python src/benchmark.py --challenge cartpole --agents random dqn --seeds 1 --no-plot --output-dir bm4 --report bm4/report.md` (about a minute) | The console says each agent uses its own config. `bm4/report.md` lists 1000 episodes for random and 500 for DQN, has a "How a Run Counts as Solved" section, and shows Solve Rate and Eval ≥ Threshold as separate columns. Delete `bm4/` afterwards. |
 
 ### Evaluation & Checkpoint Verification
 

@@ -45,8 +45,10 @@ python src/benchmark.py --challenge cartpole --agents dqn ppo --seeds 1 2 3 4 5 
 
 - Without `--report`, it rewrites the tracked file `docs/benchmarks/<challenge>_results.md`. Without
   `--output-dir`, it writes under the repository. Neither is acceptable for an experiment.
-- `--episodes` overrides the challenge's default budget; `--window` is the rolling-average window for the
-  solve rule (default 10); `--eval-episodes` is how many greedy episodes score each run (default 10).
+- Without `--episodes`, each agent trains for its own config's `training.num_episodes`; `--episodes N` gives
+  every agent N. A run counts as solved only on its rolling training average; the final evaluation is
+  reported apart. `--window` is the rolling-average window for the solve rule (default 10);
+  `--eval-episodes` is how many greedy episodes score each run (default 10).
 - The default is two seeds (42 and 123). That is enough to see that something runs, not enough to compare.
   Use at least three for "it learns" and five for "A is better than B".
 - **To try a hyperparameter**, copy `configs/` to `<scratch>/configs`, edit the copy, and pass
@@ -77,9 +79,12 @@ CartPole agent improves, so expect the full run to cost more than the linear est
 | Field | Meaning |
 | :--- | :--- |
 | `summary.<agent>.mean_eval_reward`, `std_eval_reward` | Mean and spread across seeds of the evaluation reward after training |
+| `summary.<agent>.episodes` | Episodes each run of this agent trained for |
 | `summary.<agent>.solve_rate` | Fraction of seeds whose rolling training average reached the challenge's `solve_threshold` |
 | `summary.<agent>.avg_solved_episode` | Mean first episode at which that happened, over the seeds that solved |
-| `detailed_runs.<agent>[i]` | One seed: `eval_mean_reward`, `final_rolling_avg`, `solved_episode`, `is_solved`, `duration` |
+| `summary.<agent>.eval_threshold_rate` | Fraction of seeds whose final evaluation reached the threshold (not a solve) |
+| `detailed_runs.<agent>[i]` | One seed: `eval_mean_reward`, `final_rolling_avg`, `solved_episode`, `is_solved`, `eval_reached_threshold`, `duration` |
+| `metadata.episodes`, `episodes_per_agent` | The `--episodes` override (`null` without one), and the budget each agent got |
 
 Read the per-seed rows, not only the mean. Things to look for:
 
@@ -113,6 +118,6 @@ Never choose which seeds to report after seeing them.
 ## Republishing benchmark results
 
 `docs/benchmarks/*.md` and the plots under `plots/benchmarks/` are the project's published numbers.
-Regenerate them only when asked or when the roadmap item says so, with the default budget and the seeds
+Regenerate them only when asked or when the roadmap item says so, with each agent's config budget and the seeds
 the maintainer names, by running the benchmark without `--report` and `--output-dir`. Show the diff of the
 report before staging it.

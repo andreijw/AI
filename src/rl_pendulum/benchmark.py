@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import os
-from typing import Any
+from typing import Any, ClassVar
 
 from benchmark import BenchmarkChallenge, register_challenge
 from rl_core.agents import (
@@ -11,7 +10,6 @@ from rl_core.agents import (
     ContinuousPPOAgent,
     ContinuousRandomAgent,
 )
-from rl_core.utils.config import load_config
 from rl_pendulum.environments.pendulum_env import PendulumEnv
 
 AGENT_CLASSES: dict[str, Any] = {
@@ -25,7 +23,7 @@ AGENT_CLASSES: dict[str, Any] = {
 class PendulumChallenge(BenchmarkChallenge):
     """Pendulum-v1 continuous torque control benchmark challenge."""
 
-    CONFIG_MAP: dict[str, str] = {
+    CONFIG_MAP: ClassVar[dict[str, str]] = {
         "random": "pendulum_default.yaml",
         "actor_critic": "pendulum_actor_critic.yaml",
         "ppo": "pendulum_ppo.yaml",
@@ -55,16 +53,9 @@ class PendulumChallenge(BenchmarkChallenge):
         return sorted(AGENT_CLASSES)
 
     def setup_run(
-        self, agent_type: str, seed: int, episodes: int
+        self, agent_type: str, seed: int, episodes: int | None
     ) -> tuple[Any, Any, dict[str, Any]]:
-        config_file = self.CONFIG_MAP.get(agent_type, "pendulum_default.yaml")
-        config_path = os.path.join(self.config_dir, config_file)
-        config = load_config(config_path)
-
-        config.setdefault("environment", {})["seed"] = seed
-        config.setdefault("agent", {}).setdefault("config", {})["seed"] = seed
-        config.setdefault("training", {})["num_episodes"] = episodes
-        config["training"]["save_frequency"] = max(episodes + 1, 999999)
+        config = self.load_run_config(agent_type, seed, episodes)
 
         env_cfg = config["environment"]
         env = PendulumEnv(

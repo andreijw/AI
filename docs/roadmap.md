@@ -226,7 +226,7 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: Regenerating `docs/benchmarks/` (the published numbers were produced with the repeated start
     state and need a maintainer-approved rerun afterwards); retuning configs.
 
-- [ ] **CartPole Agents Learn Within Their Budgets**
+- [~] **CartPole Agents Learn Within Their Budgets**
   - **Description**: After the seeding fixes, the benchmark of 2026-10-13 (750 episodes, seeds 42 and 123; see
     `docs/benchmarks/cartpole_results.md`) shows Actor-Critic and DQN solving CartPole-v1, REINFORCE improving slowly
     (mean evaluation reward 121) and PPO at the random level (27, against 25 for the random agent). The benchmark
@@ -255,6 +255,28 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Ruled out (2026-10-13)**: The hand-written gradients of REINFORCE, Actor-Critic, PPO and DQN agree with
     finite differences for every parameter, and each `update` applies them as it should
     (`tests/test_policy_gradient_maths.py`, `tests/test_dqn_maths.py`). PPO's score is not a backward-pass error.
+  - **Measured (2026-10-14)**: Committed configs, each agent at its own config's budget, seeds 1 to 5: Actor-Critic
+    solves 5 of 5 (evaluation 494 ± 11, at episodes 906 to 1269), DQN 3 of 5 in 500 episodes (406 ± 77), PPO 0 of 5
+    in 1500 (160 ± 91), REINFORCE 0 of 5 in 2000 (239 ± 120), random 21 ± 3. On seed 1, one PPO update moves
+    log π(a|s) 3 to 6 times less than one Actor-Critic update: PPO and REINFORCE normalise their advantages to unit
+    spread (Actor-Critic's raw advantages have a spread of about 6), and PPO's learning rate of 0.0003 is the usual
+    value for Adam, used here with plain SGD. PPO's clip never binds. With only PPO's learning rate raised to 0.0015,
+    evaluation rose on every seed (356 ± 99) and 1 of 5 solved: step size is a cause, not the only one. At 0.003,
+    evaluation is 449 ± 81 but the training average reaches 475 on no seed. REINFORCE at 0.005 (2000 episodes):
+    evaluation 404 ± 35, training average 160 to 200, still rising. PPO with Adam (no clipping) at the committed
+    0.0003: the training average reaches 475 on 3 of 5 seeds at episodes 586 to 652, faster than Actor-Critic, but
+    is not held (one seed ends at 186). Adam with global-norm clipping at 0.5: 3 of 5 reach 475, later (episodes
+    1265 to 1420), evaluation 442 ± 73, and the training average still falls back afterwards (final 189 to 456).
+  - **Decided (2026-10-14)**: A run counts as solved only when the rolling training average reaches the
+    threshold; a final evaluation at or above it is reported separately. Without `--episodes`, every agent in every
+    challenge trains for its own config's `training.num_episodes`, the random agents included. The README claims
+    CartPole-v1 for each of REINFORCE, Actor-Critic, PPO and DQN that reaches the threshold on 4 of 5 seeds. Budgets
+    may be raised where an agent is still improving. Tuning goes in `configs/cartpole_*.yaml`; a shared optimiser
+    option defaults to the current behaviour.
+  - **Plan**: four stacked PRs. A: the benchmark's budget and solve rule. B: an `optimizer` option (Adam, with
+    optional global-norm clipping) for the discrete agents, then PPO and REINFORCE configs with 5-seed evidence.
+    C: DQN to 4 of 5 (budget, epsilon schedule). D: regenerate `docs/benchmarks/cartpole_results.md`, README and
+    TESTING.md `TR-1` to `TR-4`.
   - **DQN behaviours to decide on (2026-10-13; pinned by tests as they are, none changed)**:
     - Two comments in `configs/cartpole_dqn.yaml` do not match the code: epsilon decays once per `update` call,
       which is once per episode, not "per update"; and `updates_per_step: 1.0` is capped at 64 gradient steps per
@@ -315,7 +337,8 @@ Defects found while working on other items, then findings from the brooks-lint h
     - TESTING.md `TR-6` states the measured result, and `docs/benchmarks/pendulum_results.md` is regenerated from a
       maintainer-approved run.
   - **Known edge cases**: Things to rule out, none confirmed yet: every episode starting from the same state (the
-    item above); the 200-episode benchmark budget against the 500 the config asks for; Pendulum episodes end only
+    item above); the 200-episode benchmark budget against the 500 the config asks for (the benchmark now uses each
+    config's budget unless `--episodes` is given, so the published report predates that); Pendulum episodes end only
     by time limit, which the batch reports as `done`, so a bootstrapping critic may treat step 200 as terminal;
     rewards between about -16 and 0 per step with no scaling (a value loss near 7000 was logged at episode 20);
     one update per 200-step episode; action clipping against the Gaussian log-probability.

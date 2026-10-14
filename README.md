@@ -311,13 +311,18 @@ scp -r user@orin-nano:/path/to/AI/videos .
 Run an automated comparative benchmark across all algorithms over reproducible seeds:
 
 ```bash
-# Benchmark all agents on CartPole over 500 episodes across seeds 42 and 123
+# Benchmark all agents on CartPole, each for its own config's budget, across seeds 42 and 123
 python src/benchmark.py --challenge cartpole \
-    --agents random reinforce actor_critic ppo dqn --episodes 500 --seeds 42 123
+    --agents random reinforce actor_critic ppo dqn --seeds 42 123
 
-# Quick comparison between PPO and DQN
+# Quick comparison between PPO and DQN, both for 150 episodes
 python src/benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42
 ```
+
+Without `--episodes`, each agent trains for `training.num_episodes` in its config (`configs/<challenge>_<agent>.yaml`,
+or `<challenge>_default.yaml` for the random agent). A run counts as solved when its average training reward over
+`--window` episodes (default 10) reaches the challenge's threshold (475 for CartPole-v1, -200 for Pendulum-v1). The
+final greedy evaluation is reported in its own column and does not count as a solve.
 
 Outputs:
 
