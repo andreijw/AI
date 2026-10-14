@@ -300,6 +300,25 @@ Defects found while working on other items, then findings from the brooks-lint h
     by time limit, which the batch reports as `done`, so a bootstrapping critic may treat step 200 as terminal;
     rewards between about -16 and 0 per step with no scaling (a value loss near 7000 was logged at episode 20);
     one update per 200-step episode; action clipping against the Gaussian log-probability.
+  - **Ruled out (2026-10-13)**: The hand-written gradients of both continuous agents agree with finite differences
+    for every parameter, and so do Adam and PPO's advantage estimation
+    (`tests/test_continuous_policy_gradient_maths.py`). The repeated start state is fixed and the agents still do
+    not learn. So a backward-pass error is not the cause at the settings tested; the clip of `log_std` to
+    [-20, 2] is the one piece of that path with no test.
+  - **Observations to start from (2026-10-13, untrained agents, no training run; hypotheses, not findings)**:
+    - The initial policy mean is often outside the action bounds of ±2. Two separate checks of untrained agents
+      gave a median `|mu|` between about 1 and 9 depending on the seed, with 30% to 99% of sampled actions clipped.
+      The log-density is evaluated on the clipped action, so for those steps `a − mu` is a fixed offset, not
+      noise. A candidate cause; measure it per seed with the states sampled as training samples them.
+    - Continuous Actor-Critic takes one Adam step per episode. Adam moves each weight by at most about the
+      learning rate (3e-4) per step, so 300 episodes allow roughly 0.09 of travel, while returns of several
+      hundred below zero were seen with a value loss of the order of 1e5.
+    - Continuous PPO takes 32 Adam steps per 200-step episode (mini-batches of 64, 64, 64 and 8, for 8 epochs); the
+      8-sample mini-batch gets a full step.
+    - The value loss dominates the shared gradient: its norm is thousands against a clip of 0.5, and inside the
+      shared trunk the critic term swamps the actor term.
+    - `configs/pendulum_ppo.yaml` sets `clip_epsilon`, but `ContinuousPPOAgent` reads `clip_ratio`, so the config
+      value is ignored (both are 0.2 today). The discrete `PPOAgent` reads `clip_epsilon`.
   - **Out of scope**: DDPG and other new algorithms; changing the solve threshold; the discrete agents.
   - **Depends on**: Seeded Environments Replay One Start State, so the diagnosis is not confounded by it.
 
@@ -344,8 +363,10 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Description**: The agents' `update` methods run 59 to 141 lines and mix batch parsing, forward pass, loss,
     backward pass and optimizer step, so no gradient check can be written against them.
   - **Progress**: Delivered in three parts. Part 1 (2026-10-13) covers REINFORCE, Actor-Critic and PPO
-    (`tests/test_policy_gradient_maths.py`); their hand-written gradients all agree with finite differences. Part 2
-    is the two continuous agents, part 3 is DQN.
+    (`tests/test_policy_gradient_maths.py`). Part 2 (2026-10-13) covers the two continuous agents
+    (`tests/test_continuous_policy_gradient_maths.py`), including Adam with gradient clipping and PPO's generalised
+    advantage estimation. The hand-written gradients of all five agents agree with finite differences. Part 3 is
+    DQN.
   - **Acceptance criteria**:
     - Each learning agent has a method that returns the loss and gradients for a batch and changes no state, and a
       separate step that applies them.
