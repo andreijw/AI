@@ -407,7 +407,8 @@ Defects found while working on other items, then findings from the brooks-lint h
     `docs/benchmarks/pendulum_results.md`, which was produced with the unseeded shuffle and needs a
     maintainer-approved rerun.
 
-- [~] **Actor-Critic Trains with Adam**
+- [x] **Actor-Critic Trains with Adam**
+  - **Delivered in**: open PR #77, results in the PR that follows #78 (stack #70).
   - **Description**: On CartPole, Actor-Critic first reached the solve threshold later than REINFORCE (episodes 906 to
     1269 against 645 to 1012), the opposite of what a critic should give, because REINFORCE trains with Adam and
     Actor-Critic with plain SGD.
@@ -415,11 +416,13 @@ Defects found while working on other items, then findings from the brooks-lint h
     - `configs/cartpole_actor_critic.yaml` uses `optimizer: "adam"` (maintainer-approved), and a test pins it.
     - With the committed config, Actor-Critic reaches 475 on at least 4 of 5 seeds within 1500 episodes.
   - **Measured (2026-10-14)**: Adam at the committed learning rate (0.001) and budget, seeds 1 to 5: 5 of 5, first
-    reaching 475 at episodes 490 to 839 (SGD: 906 to 1269); final training averages 446 to 500; evaluation 476 ± 33.
-  - **Learning gate (2026-10-14)**: the committed config gives the same per-seed results.
+    reaching 475 at episodes 490 to 839 (SGD: 906 to 1269); final training averages 446 to 500; evaluation 476 ± 32.
+  - **Learning gate (2026-10-15)**: the committed config gives the same per-seed results; published in
+    `docs/benchmarks/cartpole_results.md` on 2026-10-15.
   - **Out of scope**: Bootstrapped (TD) critic targets.
 
-- [~] **Standard PPO for Discrete Actions**
+- [x] **Standard PPO for Discrete Actions**
+  - **Delivered in**: open PR #78 (code) and the config and results PR that follows it (stack #70).
   - **Description**: `PPOAgent` updated once per episode on that episode alone, full batch, with Monte-Carlo
     advantages. Standard PPO (Schulman et al., 2017) collects a rollout across episodes, uses GAE, and takes several
     epochs of shuffled mini-batch steps.
@@ -435,6 +438,10 @@ Defects found while working on other items, then findings from the brooks-lint h
     steps, 20 epochs, learning rate 0.001, λ 0.8, γ 0.98, no entropy bonus) solve 5 of 5 at episodes 353 to 449 but
     3 seeds collapse afterwards (evaluation 341). Adding annealing over 200,000 trained transitions: 5 of 5 at
     episodes 323 to 427, final training averages 453 to 500, evaluation 500 on every seed.
+  - **Learning gate (2026-10-15)**: the committed config (those settings, 1000 episodes): 5 of 5 at episodes 323 to
+    427, evaluation 500 on every seed, final training averages 360 to 500; about 85 seconds per run. "Holds it" is
+    judged by the greedy evaluation after training (500 on every seed); seed 3's stochastic training average ends at
+    360, below the threshold. Published in `docs/benchmarks/cartpole_results.md` on 2026-10-15.
   - **Known edge cases**: Steps still buffered when training ends are never trained on; checkpoints do not hold the
     buffer; CartPole's 500-step time limit is treated as terminal, as for every agent.
   - **Out of scope**: Value-loss clipping, KL early stopping, parallel environments.

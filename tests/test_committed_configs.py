@@ -19,7 +19,7 @@ from rl_core.agents.optim import Adam  # noqa: E402
 MEASURED = {
     "reinforce": ("adam", 2000),
     "actor_critic": ("adam", 1500),
-    "ppo": ("adam", 2000),
+    "ppo": ("adam", 1000),
 }
 
 
@@ -38,3 +38,15 @@ def test_dqn_trains_for_the_measured_budget_and_keeps_its_epsilon_schedule():
     assert train_cfg["num_episodes"] == 750
     # A faster decay (0.99) solved fewer seeds than this one in 500 episodes.
     assert agent.epsilon_decay == pytest.approx(0.995)
+
+
+def test_ppo_uses_standard_rollouts_with_an_annealed_learning_rate():
+    """rl-zoo CartPole settings with linear annealing: 5 of 5 seeds by episode 427 (roadmap)."""
+    env, agent, _ = CartPoleChallenge().setup_run("ppo", seed=1, episodes=None)
+    env.close()
+    assert (agent.rollout_steps, agent.minibatch_size, agent.ppo_epochs) == (256, 256, 20)
+    assert agent.anneal_steps == 200_000
+    assert (agent.gae_lambda, agent.gamma, agent.entropy_coef) == (0.8, 0.98, 0.0)
+    assert agent.learning_rate == pytest.approx(0.001)
+    assert agent._optimizer.max_grad_norm == pytest.approx(0.5)
+    assert (agent.clip_epsilon, agent.value_coef) == (0.2, 0.5)
