@@ -117,70 +117,115 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
                 b_advantages = advantages[batch_idx]
                 b_returns = returns[batch_idx]
                 b_old_log_probs = old_log_probs[batch_idx]
-                b_size = len(batch_idx)
 
-                # Forward pass
-                b_h = np.maximum(0.0, b_states @ self._W1 + self._b1)  # (b_size, hidden_dim)
-                b_mu = b_h @ self._W_mu + self._b_mu  # (b_size, action_dim)
-                b_log_std = np.clip(self._log_std, -20.0, 2.0)
-                b_values = b_h @ self._W_v + self._b_v  # (b_size,)
-
-                # Log probs and ratio
-                new_log_probs = self._log_prob(b_actions, b_mu, b_log_std)
-                ratio = np.exp(new_log_probs - b_old_log_probs)
-
-                # Clipped surrogate
-                surr1 = ratio * b_advantages
-                clipped_ratio = np.clip(ratio, 1.0 - self.clip_ratio, 1.0 + self.clip_ratio)
-                surr2 = clipped_ratio * b_advantages
-
-                # Active gradient mask: only compute policy gradient where surr1 <= surr2
-                # or ratio was unclipped
-                active_mask = (surr1 <= surr2).astype(np.float64)
-
-                # Gradient of ratio w.r.t new_log_probs is ratio
-                # dL_pi / d(log_prob) = -active_mask * ratio * advantages
-                d_log_p = -active_mask * ratio * b_advantages
-
-                variance = np.exp(2.0 * b_log_std)
-                residual = b_actions - b_mu
-                d_mu = (residual / (variance + 1e-8)) * d_log_p[:, np.newaxis]
-                d_log_std = (((residual**2) / (variance + 1e-8)) - 1.0) * d_log_p[:, np.newaxis]
-
-                grad_w_mu = (b_h.T @ d_mu) / b_size
-                grad_b_mu = np.mean(d_mu, axis=0)
-                grad_log_std = np.mean(d_log_std, axis=0) - self.entropy_coef
-
-                # Critic loss: 0.5 * (V - R)^2
-                v_diff = b_values - b_returns
-                grad_w_v = (b_h.T @ v_diff) * self.value_coef / b_size
-                grad_b_v = float(np.mean(v_diff) * self.value_coef)
-
-                # Backprop to trunk
-                d_h_actor = d_mu @ self._W_mu.T
-                d_h_critic = (v_diff[:, np.newaxis] * self.value_coef) @ self._W_v[np.newaxis, :]
-                d_h = (d_h_actor + d_h_critic) * (b_h > 0) / b_size
-
-                grad_w1 = b_states.T @ d_h
-                grad_b1 = np.sum(d_h, axis=0)
-
-                grads = {
-                    "W1": grad_w1,
-                    "b1": grad_b1,
-                    "W_mu": grad_w_mu,
-                    "b_mu": grad_b_mu,
-                    "log_std": grad_log_std,
-                    "W_v": grad_w_v,
-                    "b_v": grad_b_v,
-                }
+                components, grads = self._minibatch_loss_and_grads(
+                    b_states, b_actions, b_returns, b_advantages, b_old_log_probs
+                )
                 self._adam_step(grads, self.learning_rate)
 
-                epoch_policy_losses.append(float(-np.mean(np.minimum(surr1, surr2))))
-                epoch_value_losses.append(float(0.5 * np.mean(np.square(v_diff))))
-                epoch_entropies.append(self._entropy(b_log_std))
+                epoch_policy_losses.append(components["policy"])
+                epoch_value_losses.append(components["value"])
+                epoch_entropies.append(components["entropy"])
 
         return {
             "policy_loss": float(np.mean(epoch_policy_losses)),
             "value_loss": float(np.mean(epoch_value_losses)),
             "entropy": float(np.mean(epoch_entropies)),
         }
+
+    def _minibatch_loss_and_grads(
+        self,
+        b_states: np.ndarray,
+        b_actions: np.ndarray,
+        b_returns: np.ndarray,
+        b_advantages: np.ndarray,
+        b_old_log_probs: np.ndarray,
+    ) -> tuple[dict[str, float], dict[str, Any]]:
+        """
+        Compute the PPO loss and its gradients for one mini-batch, changing no state.
+
+        The loss is ``−mean(min(r·A, clip(r, 1±ε)·A)) + value_coef·½·mean((V(s) − R)²)
+        − entropy_coef·H`` with ``r = exp(log π(a|s) − log π_old(a|s))`` and ``H`` the entropy of
+        the Gaussian policy summed over action dimensions. Returns, advantages and old
+        log-probabilities are held constant when differentiating. No gradient flows through the
+        policy term of a step whose clipped surrogate is the smaller one.
+
+        Args:
+            b_states:        Array of shape (B, observation_dim).
+            b_actions:       Array of shape (B, action_dim).
+            b_returns:       Array of shape (B,): the return R the critic regresses towards.
+            b_advantages:    Array of shape (B,): the (normalised) advantage of each step.
+            b_old_log_probs: Array of shape (B,): log π_old(a|s) recorded before the update.
+
+        Returns:
+            Tuple of (components, gradients). Components holds the ``policy``, ``value`` and
+            ``entropy`` terms and their weighted ``total``. Gradients are those of ``total``,
+            keyed ``W1``, ``b1``, ``W_mu``, ``b_mu``, ``log_std``, ``W_v``, ``b_v``.
+        """
+        b_size = len(b_returns)
+
+        # Forward pass
+        b_h = np.maximum(0.0, b_states @ self._W1 + self._b1)  # (b_size, hidden_dim)
+        b_mu = b_h @ self._W_mu + self._b_mu  # (b_size, action_dim)
+        b_log_std = np.clip(self._log_std, -20.0, 2.0)
+        b_values = b_h @ self._W_v + self._b_v  # (b_size,)
+
+        # Log probs and ratio
+        new_log_probs = self._log_prob(b_actions, b_mu, b_log_std)
+        ratio = np.exp(new_log_probs - b_old_log_probs)
+
+        # Clipped surrogate
+        surr1 = ratio * b_advantages
+        clipped_ratio = np.clip(ratio, 1.0 - self.clip_ratio, 1.0 + self.clip_ratio)
+        surr2 = clipped_ratio * b_advantages
+
+        # Active gradient mask: only compute policy gradient where surr1 <= surr2
+        # or ratio was unclipped
+        active_mask = (surr1 <= surr2).astype(np.float64)
+
+        # Gradient of ratio w.r.t new_log_probs is ratio
+        # dL_pi / d(log_prob) = -active_mask * ratio * advantages
+        d_log_p = -active_mask * ratio * b_advantages
+
+        variance = np.exp(2.0 * b_log_std)
+        residual = b_actions - b_mu
+        d_mu = (residual / (variance + 1e-8)) * d_log_p[:, np.newaxis]
+        d_log_std = (((residual**2) / (variance + 1e-8)) - 1.0) * d_log_p[:, np.newaxis]
+
+        grad_w_mu = (b_h.T @ d_mu) / b_size
+        grad_b_mu = np.mean(d_mu, axis=0)
+        grad_log_std = np.mean(d_log_std, axis=0) - self.entropy_coef
+
+        # Critic loss: 0.5 * (V - R)^2
+        v_diff = b_values - b_returns
+        grad_w_v = (b_h.T @ v_diff) * self.value_coef / b_size
+        grad_b_v = float(np.mean(v_diff) * self.value_coef)
+
+        # Backprop to trunk
+        d_h_actor = d_mu @ self._W_mu.T
+        d_h_critic = (v_diff[:, np.newaxis] * self.value_coef) @ self._W_v[np.newaxis, :]
+        d_h = (d_h_actor + d_h_critic) * (b_h > 0) / b_size
+
+        grad_w1 = b_states.T @ d_h
+        grad_b1 = np.sum(d_h, axis=0)
+
+        grads = {
+            "W1": grad_w1,
+            "b1": grad_b1,
+            "W_mu": grad_w_mu,
+            "b_mu": grad_b_mu,
+            "log_std": grad_log_std,
+            "W_v": grad_w_v,
+            "b_v": grad_b_v,
+        }
+
+        policy_loss = float(-np.mean(np.minimum(surr1, surr2)))
+        value_loss = float(0.5 * np.mean(np.square(v_diff)))
+        entropy = self._entropy(b_log_std)
+        components = {
+            "policy": policy_loss,
+            "value": value_loss,
+            "entropy": entropy,
+            "total": policy_loss + self.value_coef * value_loss - self.entropy_coef * entropy,
+        }
+        return components, grads

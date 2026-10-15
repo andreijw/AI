@@ -288,9 +288,56 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         else:
             return {}
 
-        n_steps = len(rewards)
-
         returns = discounted_returns(rewards, self.gamma)
+
+        components, grads = self._loss_and_grads(states, actions, returns)
+
+        self._adam_step(grads, self.learning_rate)
+
+        return {
+            "loss": components["total"],
+            "policy_loss": components["policy"],
+            "value_loss": components["value"],
+            "entropy": components["entropy"],
+        }
+
+    def _loss_and_grads(
+        self,
+        states: np.ndarray,
+        actions: np.ndarray,
+        returns: np.ndarray,
+        advantages: np.ndarray | None = None,
+    ) -> tuple[dict[str, float], dict[str, Any]]:
+        """
+        Compute the actor-critic loss and its gradients for one episode, changing no state.
+
+        The loss is ``−mean(log π(a_t|s_t)·A_t) + value_coef·½·mean((V(s_t) − G_t)²)
+        − entropy_coef·H``, where ``H`` is the entropy of the Gaussian policy summed over action
+        dimensions. Returns and advantages are held constant when differentiating.
+
+        Args:
+            states:     Array of shape (T, observation_dim).
+            actions:    Array of shape (T, action_dim).
+            returns:    Array of shape (T,): the Monte-Carlo return G_t of each step.
+            advantages: Array of shape (T,) to use as A_t, exactly as given: it is not
+                        normalised again. If omitted, ``G_t − V(s_t)`` from the current weights,
+                        normalised over the episode, is used, which lets :meth:`update` make a
+                        single forward pass. Passing that same array explicitly gives identical
+                        results.
+
+        Returns:
+            Tuple of (components, gradients). Components holds the ``policy``, ``value`` and
+            ``entropy`` terms and their weighted ``total``. Gradients are those of ``total``,
+            keyed ``W1``, ``b1``, ``W_mu``, ``b_mu``, ``log_std``, ``W_v``, ``b_v``.
+
+        Raises:
+            ValueError: If ``advantages`` is given with a different length from ``returns``.
+        """
+        n_steps = len(returns)
+        if advantages is not None and len(advantages) != n_steps:
+            raise ValueError(
+                f"advantages has {len(advantages)} entries but the batch has {n_steps} steps"
+            )
 
         # Forward pass over batch
         h = np.maximum(0.0, states @ self._W1 + self._b1)  # (n_steps, hidden_dim)
@@ -298,12 +345,12 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         log_std = np.clip(self._log_std, -20.0, 2.0)
         values = h @ self._W_v + self._b_v  # (n_steps,)
 
-        # Advantages
-        advantages = returns - values
-        # Normalize advantages for training stability
-        if n_steps > 1:
-            adv_std = np.std(advantages)
-            advantages = (advantages - np.mean(advantages)) / (adv_std + 1e-8)
+        if advantages is None:
+            advantages = returns - values
+            # Normalize advantages for training stability
+            if n_steps > 1:
+                adv_std = np.std(advantages)
+                advantages = (advantages - np.mean(advantages)) / (adv_std + 1e-8)
 
         # Gaussian log probs
         variance = np.exp(2.0 * log_std)
@@ -342,15 +389,14 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
             "b_v": grad_b_v,
         }
 
-        self._adam_step(grads, self.learning_rate)
-
         policy_loss = float(-np.mean(self._log_prob(actions, mu, log_std) * advantages))
         value_loss = float(0.5 * np.mean(np.square(v_diff)))
         entropy = self._entropy(log_std)
 
-        return {
-            "loss": policy_loss + self.value_coef * value_loss - self.entropy_coef * entropy,
-            "policy_loss": policy_loss,
-            "value_loss": value_loss,
+        components = {
+            "policy": policy_loss,
+            "value": value_loss,
             "entropy": entropy,
+            "total": policy_loss + self.value_coef * value_loss - self.entropy_coef * entropy,
         }
+        return components, grads

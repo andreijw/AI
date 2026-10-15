@@ -121,8 +121,14 @@ A gradient check proves the gradients match the loss, not that the loss is the r
 rewards, and write the expected number in the test. That is what catches a return paired with the wrong
 step.
 
-REINFORCE, Actor-Critic and PPO have both. The continuous agents and DQN do not yet; adding them is the
-first step of any change to their update rules.
+REINFORCE, Actor-Critic, PPO and the two continuous agents have both
+(`tests/test_policy_gradient_maths.py`, `tests/test_continuous_policy_gradient_maths.py`). DQN does not
+yet; adding them is the first step of any change to its update rule.
+
+Three things those files learned the hard way: pin how `update` turns the gradients into a step (a flipped
+sign there passes every gradient check); after one Adam step every weight has moved by about the learning
+rate whatever the gradient, so compare inputs or take several steps; and a done flag only at the end of a
+batch cannot show a missing mask, so include a batch that ends an episode in the middle.
 
 ## Rules that keep tests honest
 
