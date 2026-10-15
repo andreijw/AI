@@ -118,7 +118,8 @@ Break the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 
 
 ### Workflow Tooling
 
-- [~] **Dev Team Skills for Claude Code**
+- [x] **Dev Team Skills for Claude Code**
+  - **Delivered in**: merged in #64.
   - **Description**: Port the dev-team skills from the sibling `eternal-descent` repo to this Python and RL
     codebase (`dev-loop`, `architect`, `test-crafter`, `cleanup`, `pr-reviewer`, `doc-sync`), add the RL-specific
     skills `algorithm-crafter`, `experiment-runner` and `training-doctor`, and add the tooling they rely on.
@@ -134,7 +135,8 @@ Break the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 
   - **Out of scope**: A `release` skill (there is no `main` branch, tag or changelog to release from); adding
     gradient checks to the existing agents; the gaps found while building this (the four items below).
 
-- [~] **Training Diagnostics in Logs**
+- [x] **Training Diagnostics in Logs**
+  - **Delivered in**: merged in #65.
   - **Description**: `Trainer` discards the dictionary `agent.update()` returns, so losses, entropy and epsilon never
     reach the metrics log and a failing run can only be diagnosed from a scratch script. Keep what `update` returns,
     write it with the periodic reward metrics, and warn the moment a value stops being finite.
@@ -153,7 +155,8 @@ Break the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 
   - **Out of scope**: TensorBoard or other external logging backends; stopping a run on a non-finite value; plotting
     update metrics; making the 10-episode logging interval configurable; changing what any agent returns.
 
-- [~] **Discounted-Return Tests That Can Fail**
+- [x] **Discounted-Return Tests That Can Fail**
+  - **Delivered in**: open PR #68 (stack #70).
   - **Description**: The `*_compute_returns_discounting` tests in `tests/test_ppo_agent.py`,
     `tests/test_actor_critic_agent.py` and `tests/test_reinforce_agent.py` asserted only that returns decrease over
     five rewards of 1. They still passed with the discount removed, because 5, 4, 3, 2, 1 also decreases; only the
@@ -166,7 +169,8 @@ Break the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 
       (checked with `mutation_check.py`).
   - **Out of scope**: Nothing further; this ships together with the single implementation below.
 
-- [~] **Softmax Stability Tests**
+- [x] **Softmax Stability Tests**
+  - **Delivered in**: open PR #68 (stack #70).
   - **Description**: Removing the `logits - np.max(logits)` line from the softmax in
     `rl_core/agents/actor_critic_base.py` or `rl_core/agents/reinforce_agent.py` failed no test in the suite, so the
     guard against overflow required by CONTRIBUTING.md §1 was not locked in.
@@ -179,7 +183,8 @@ Break the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 
   - **Out of scope**: Gradient checks for the existing agents (see "Split `update` into Loss-and-Gradients and
     Apply"); sharing the softmax (see "One Softmax for the Discrete Policies").
 
-- [~] **Single `_compute_returns` Implementation**
+- [x] **Single `_compute_returns` Implementation**
+  - **Delivered in**: open PR #68 (stack #70).
   - **Description**: `ReinforceAgent._compute_returns` and `ActorCriticBase._compute_returns` were the same
     discounted-return loop written twice, with a third copy inline in `ContinuousActorCriticAgent.update`, so a fix
     to one could miss the others.
@@ -209,7 +214,8 @@ Break the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 
 Defects found while working on other items, then findings from the brooks-lint health pass of 2026-10-12
 (dashboard 82/100), most severe first.
 
-- [~] **Seeded Environments Replay One Start State**
+- [x] **Seeded Environments Replay One Start State**
+  - **Delivered in**: merged in #67.
   - **Description**: `CartPoleEnv.reset()` and `PendulumEnv.reset()` reuse the constructor seed whenever they are
     called without one, and `Trainer` never passes one. With a seed in the config (every committed config has one)
     each training and evaluation episode starts from the identical initial state, so agents train on a single
@@ -226,7 +232,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: Regenerating `docs/benchmarks/` (the published numbers were produced with the repeated start
     state and need a maintainer-approved rerun afterwards); retuning configs.
 
-- [~] **CartPole Agents Learn Within Their Budgets**
+- [x] **CartPole Agents Learn Within Their Budgets**
+  - **Delivered in**: open PRs #73, #74, #75 and the results PR that follows them (stack #70).
   - **Description**: After the seeding fixes, the benchmark of 2026-10-13 (750 episodes, seeds 42 and 123; see
     `docs/benchmarks/cartpole_results.md`) shows Actor-Critic and DQN solving CartPole-v1, REINFORCE improving slowly
     (mean evaluation reward 121) and PPO at the random level (27, against 25 for the random agent). The benchmark
@@ -255,6 +262,9 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Ruled out (2026-10-13)**: The hand-written gradients of REINFORCE, Actor-Critic, PPO and DQN agree with
     finite differences for every parameter, and each `update` applies them as it should
     (`tests/test_policy_gradient_maths.py`, `tests/test_dqn_maths.py`). PPO's score is not a backward-pass error.
+    Direction and overfit checks for REINFORCE, Actor-Critic and PPO (2026-10-14, same file): one update on a
+    one-state batch raises the probability of the rewarded action, and 300 updates on it bring that probability above
+    0.9 while the critic's loss halves. A read of real batches (`diag_step`, Measured below) found the step size.
   - **Measured (2026-10-14)**: Committed configs, each agent at its own config's budget, seeds 1 to 5: Actor-Critic
     solves 5 of 5 (evaluation 494 ± 11, at episodes 906 to 1269), DQN 3 of 5 in 500 episodes (406 ± 77), PPO 0 of 5
     in 1500 (160 ± 91), REINFORCE 0 of 5 in 2000 (239 ± 120), random 21 ± 3. On seed 1, one PPO update moves
@@ -277,8 +287,8 @@ Defects found while working on other items, then findings from the brooks-lint h
     committed 0.995.
   - **Committed configs (2026-10-14)**: REINFORCE and PPO use `optimizer: adam`; PPO trains for 2000 episodes
     and DQN for 750. Learning gate with those configs, seeds 1 to 5: REINFORCE 5 of 5, Actor-Critic 5 of 5, PPO
-    5 of 5, DQN 4 of 5. Left: regenerating `docs/benchmarks/cartpole_results.md` with the seeds the maintainer
-    names, and the README's list of agents that solve CartPole-v1.
+    5 of 5, DQN 4 of 5. Published in `docs/benchmarks/cartpole_results.md` (seeds 1 to 5, each agent's config
+    budget; the same per-seed results) and in the README's "Which agents solve which challenge".
   - **Decided (2026-10-14)**: A run counts as solved only when the rolling training average reaches the
     threshold; a final evaluation at or above it is reported separately. Without `--episodes`, every agent in every
     challenge trains for its own config's `training.num_episodes`, the random agents included. The README claims
@@ -376,7 +386,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: DDPG and other new algorithms; changing the solve threshold; the discrete agents.
   - **Depends on**: Seeded Environments Replay One Start State, so the diagnosis is not confounded by it.
 
-- [~] **Seed the Continuous PPO Mini-Batch Shuffle**
+- [x] **Seed the Continuous PPO Mini-Batch Shuffle**
+  - **Delivered in**: merged in #66.
   - **Description**: `ContinuousPPOAgent.update` shuffles mini-batch indices with the global
     `np.random.shuffle` (`rl_core/agents/continuous_ppo.py`), so two runs with the same seed give different
     results. Found on 2026-10-12 while verifying the training diagnostics change: the Pendulum PPO benchmark with
@@ -387,6 +398,9 @@ Defects found while working on other items, then findings from the brooks-lint h
     - An update neither reads nor advances NumPy's global random state.
     - A test trains two agents with the same seed and gets identical weights; a different seed differs.
     - Two benchmark runs with the same seeds report identical rewards for every agent on both challenges.
+  - **Verified (2026-10-14)**: Two Pendulum benchmark runs (seeds 1 and 2, 15 episodes) gave identical rewards for
+    every agent; on CartPole, the learning gate and the published run (seeds 1 to 5, full budgets) gave identical
+    per-seed results for every agent.
   - **Known edge cases**: Seeded Pendulum PPO results change once, when the fix lands.
   - **Out of scope**: Retuning `configs/pendulum_ppo.yaml`; regenerating the Pendulum PPO row of
     `docs/benchmarks/pendulum_results.md`, which was produced with the unseeded shuffle and needs a
@@ -413,7 +427,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: Configs with no `environment.name`; `--challenge` disagreeing with the config.
   - **Out of scope**: Merging the discrete and continuous agent maps (depends on the cycle item above).
 
-- [~] **Split `update` into Loss-and-Gradients and Apply**
+- [x] **Split `update` into Loss-and-Gradients and Apply**
+  - **Delivered in**: open PRs #69, #71 and #72 (stack #70).
   - **Description**: The agents' `update` methods run 59 to 141 lines and mix batch parsing, forward pass, loss,
     backward pass and optimizer step, so no gradient check can be written against them.
   - **Progress**: Delivered in three parts. Part 1 (2026-10-13) covers REINFORCE, Actor-Critic and PPO
@@ -421,8 +436,7 @@ Defects found while working on other items, then findings from the brooks-lint h
     (`tests/test_continuous_policy_gradient_maths.py`), including Adam with gradient clipping and PPO's generalised
     advantage estimation. Part 3 (2026-10-13) covers DQN (`tests/test_dqn_maths.py`), including its Bellman
     targets, element-wise gradient clip and target-network sync. The hand-written gradients of all six learning
-    agents agree with finite differences. All three parts are done; the item is complete once the maintainer
-    confirms.
+    agents agree with finite differences. Confirmed complete by the maintainer on 2026-10-14.
   - **Acceptance criteria**:
     - Each learning agent has a method that returns the loss and gradients for a batch and changes no state, and a
       separate step that applies them.

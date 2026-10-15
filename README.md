@@ -12,7 +12,8 @@ control loops and can be extended later.
 
 The architecture is designed to support:
 
-- Multiple RL algorithms (currently includes random, REINFORCE, actor-critic, and PPO agents)
+- Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO
+  with Gaussian policies for Pendulum)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -190,6 +191,26 @@ python train.py --config configs/pendulum_actor_critic.yaml
 # Pendulum Continuous PPO
 python train.py --config configs/pendulum_ppo.yaml
 ```
+
+### Which agents solve which challenge
+
+A run solves the challenge when its average training reward over 10 episodes reaches the threshold: 475 for
+CartPole-v1, -200 for Pendulum-v1. CartPole-v1, measured with the committed configs on seeds 1 to 5
+([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md), 2026-10-14). `train.py` uses seed
+42, which was not measured, so a single `train.py` run may land on the unlucky side of these numbers:
+
+| Agent | Config | Episodes | Seeds solved | First solve (episode) |
+| :--- | :--- | :---: | :---: | :---: |
+| REINFORCE | `cartpole_reinforce.yaml` (Adam) | 2000 | 5 of 5 | 645 to 1012 |
+| Actor-Critic | `cartpole_actor_critic.yaml` (SGD) | 1500 | 5 of 5 | 906 to 1269 |
+| PPO | `cartpole_ppo.yaml` (Adam) | 2000 | 5 of 5 | 530 to 1626 |
+| DQN | `cartpole_dqn.yaml` | 750 | 4 of 5 | 378 to 576 |
+
+"Solved" means the average reached the threshold at least once; it does not mean the agent held it to the end of
+training. Neither Pendulum agent solves Pendulum-v1 yet: Actor-Critic scored -1426 and PPO -1626, below the random
+agent's -1323, in the 2026-10-13 benchmark
+([`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md), seeds 42 and 123, 150 episodes,
+before the current solve rule). The roadmap item "Pendulum PPO Learns and Solves Pendulum-v1" owns this.
 
 ### Run any agent from one base config (quick overrides)
 
