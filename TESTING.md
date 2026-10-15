@@ -28,10 +28,10 @@ This document outlines manual verification and testing procedures for the RL fra
 
 | Check # | Algorithm | Command to Execute | Expected Behavior |
 | --- | --- | --- | --- |
-| TR-1 | **REINFORCE** | `python train.py --config configs/cartpole_reinforce.yaml` | Completes training loop, outputs episode rewards and losses, saves final checkpoint. |
-| TR-2 | **Actor-Critic** | `python train.py --config configs/cartpole_actor_critic.yaml` | Actor policy and Critic value updates succeed; TD errors decrease over time. |
-| TR-3 | **PPO** | `python train.py --config configs/cartpole_ppo.yaml` | Rollouts collect trajectory batches and the surrogate loss clips. Average reward should improve; as of 2026-10-13 it does not within 750 episodes (about 27, the random level), and the full 1500-episode run has not been measured (roadmap: "CartPole Agents Learn Within Their Budgets"). |
-| TR-4 | **DQN** | `python train.py --config configs/cartpole_dqn.yaml` | Completes training loop, replay buffer samples mini-batches, Q-values converge. |
+| TR-1 | **REINFORCE** | `python train.py --config configs/cartpole_reinforce.yaml` | Completes 2000 episodes with Adam and saves checkpoints. Measured 2026-10-14 through the benchmark on seeds 1 to 5: the 10-episode training average reaches 475 on 5 of 5 (episodes 645 to 1012), evaluation 449 ± 59 (lowest seed 335). It does not always hold it: one seed ends with a training average of 173. Seed 42, which `train.py` uses, was not measured. |
+| TR-2 | **Actor-Critic** | `python train.py --config configs/cartpole_actor_critic.yaml` | Completes 1500 episodes with plain SGD. Measured 2026-10-14 on seeds 1 to 5: reaches 475 on 5 of 5 (episodes 906 to 1269), evaluation 494 ± 11. Seed 42 not measured. |
+| TR-3 | **PPO** | `python train.py --config configs/cartpole_ppo.yaml` | Completes 2000 episodes with Adam; `clip_fraction` is logged. Measured 2026-10-14 on seeds 1 to 5: reaches 475 on 5 of 5 (episodes 530 to 1626), evaluation 495 ± 9. Seed 42 not measured. |
+| TR-4 | **DQN** | `python train.py --config configs/cartpole_dqn.yaml` | Completes 750 episodes; `epsilon` falls to about 0.023. Measured 2026-10-14 on seeds 1 to 5: reaches 475 on 4 of 5 (episodes 378 to 576; seed 3 ends at 404), evaluation 450 ± 46. Seed 42 not measured. |
 | TR-5 | **Continuous A2C** | `python train.py --config configs/pendulum_actor_critic.yaml` | Continuous Gaussian policy updates on Pendulum-v1; critic loss converges. |
 | TR-6 | **Continuous PPO** | `python train.py --config configs/pendulum_ppo.yaml` | Completes training with finite `policy_loss`, `value_loss` and `entropy` in the metrics log. It does not yet learn: as of 2026-10-13 it scores about -1600 against a solve threshold of -200 (roadmap: "Pendulum PPO Learns and Solves Pendulum-v1"). |
 
@@ -39,7 +39,7 @@ This document outlines manual verification and testing procedures for the RL fra
 
 | Check # | Target Feature | Command to Execute | Expected Behavior |
 | --- | --- | --- | --- |
-| VID-1 | **Training clips** | `python train.py --config configs/cartpole_ppo.yaml --record-video --video-every 250` | Exactly `videos/cartpole/ppo/cartpole-training-episode-{250,500,...,1500}.mp4`; balances longer. |
+| VID-1 | **Training clips** | `python train.py --config configs/cartpole_ppo.yaml --record-video --video-every 250` | Exactly `videos/cartpole/ppo/cartpole-training-episode-{250,500,...,2000}.mp4`; balances longer. |
 | VID-2 | **Trained-agent video** | `python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_1400.pt` | One `videos/cartpole/ppo/cartpole-playback-full.mp4` with 5 episodes. |
 | VID-3 | **Usage errors** | `python train.py --video-every 5` and `python record.py` | Exit with "--video-every requires --record-video" and "the following arguments are required: --checkpoint". |
 | VID-4 | **Pendulum recording** | `python record.py --config configs/pendulum_ppo.yaml --checkpoint checkpoints/pendulum/ppo/agent_episode_200.pt` | Generates `videos/pendulum/ppo/pendulum-playback-full.mp4`. |
