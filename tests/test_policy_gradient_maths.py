@@ -615,3 +615,57 @@ def test_sgd_checkpoint_loads_into_an_adam_agent_with_fresh_optimizer_state(agen
     for moment in (*adam_agent._optimizer.m.values(), *adam_agent._optimizer.v.values()):
         np.testing.assert_array_equal(moment, 0.0)
     _assert_same_weights(adam_agent, sgd)
+
+
+# ---------------------------------------------------------------------------
+# Direction and overfit checks (the training-doctor ladder, rung 2)
+# ---------------------------------------------------------------------------
+# One state seen at every step. Action 0 is always followed by reward 1 and action 1 by 0, and a
+# tiny gamma keeps each return close to its own reward, so action 0 has the higher advantage.
+
+
+def _one_state_batch() -> dict[str, np.ndarray]:
+    state = np.random.default_rng(5).standard_normal(OBS_DIM)
+    actions = np.array([0, 1] * (N_STEPS // 2))
+    return {
+        "observations": np.tile(state, (N_STEPS, 1)),
+        "actions": actions,
+        "rewards": (actions == 0).astype(np.float64),
+        "next_observations": np.tile(state, (N_STEPS, 1)),
+        "dones": np.array([False] * (N_STEPS - 1) + [True]),
+    }
+
+
+def _probs(agent, state: np.ndarray) -> np.ndarray:
+    forward = agent._policy if isinstance(agent, ReinforceAgent) else agent._forward
+    return forward(state)[0]
+
+
+@pytest.mark.parametrize("agent_cls", DISCRETE_AGENTS)
+def test_one_update_raises_the_probability_of_the_better_action(agent_cls):
+    agent = _agent(agent_cls, gamma=0.01, learning_rate=0.05, entropy_coef=0.0)
+    batch = _one_state_batch()
+    state = batch["observations"][0]
+    before = _probs(agent, state)
+
+    agent.update(batch)
+
+    after = _probs(agent, state)
+    assert after[0] > before[0], "The action followed by reward must become more likely."
+    assert after[1] < before[1], "The action followed by nothing must become less likely."
+
+
+@pytest.mark.parametrize("agent_cls", DISCRETE_AGENTS)
+def test_repeated_updates_on_one_batch_fit_it(agent_cls):
+    """Updating on the same small batch must fit it; an agent that cannot will not fit CartPole."""
+    agent = _agent(agent_cls, gamma=0.01, learning_rate=0.05, entropy_coef=0.0)
+    batch = _one_state_batch()
+    state = batch["observations"][0]
+
+    first = agent.update(batch)
+    for _ in range(300):
+        last = agent.update(batch)
+
+    assert _probs(agent, state)[0] > 0.9
+    if "value_loss" in first:
+        assert last["value_loss"] < 0.5 * first["value_loss"], "The critic must fit the returns."
