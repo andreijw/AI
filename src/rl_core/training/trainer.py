@@ -331,6 +331,7 @@ class Trainer:
         rewards = []
         next_observations = []
         dones = []
+        terminateds = []
 
         done = False
         while not done and episode_length < self.max_steps_per_episode:
@@ -347,6 +348,7 @@ class Trainer:
             rewards.append(reward)
             next_observations.append(next_obs)
             dones.append(done)
+            terminateds.append(bool(terminated))
 
             episode_reward += float(reward)
             episode_length += 1
@@ -360,6 +362,7 @@ class Trainer:
                 "rewards": np.array(rewards),
                 "next_observations": np.array(next_observations),
                 "dones": np.array(dones),
+                "terminated": np.array(terminateds, dtype=bool),
             }
             self._record_update_metrics(self.agent.update(batch))
 

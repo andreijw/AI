@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from .continuous_actor_critic import ContinuousActorCriticBase
+from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import gae
 
 
@@ -18,6 +19,18 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
     updates with probability ratio clipping:
       r_t(theta) = exp(log_prob(a_t|s_t) - old_log_prob(a_t|s_t))
       L_clip = -min(r_t * A_t, clip(r_t, 1-eps, 1+eps) * A_t)
+
+    Each ``update`` call is one rollout (one episode from the Trainer). When the batch carries
+    ``terminated``, a final step cut by the time limit (done but not terminated) bootstraps from
+    V(next state); without it every ``done`` ends the episode.
+
+    Config keys, beyond those of :class:`ContinuousActorCriticBase` (all optional):
+        clip_epsilon (float): PPO clip range; ``clip_ratio`` is accepted as an alias. Default: 0.2.
+        ppo_epochs (int): Passes over each rollout. Default: 8.
+        batch_size (int): Mini-batch size. Default: 64.
+        gae_lambda (float): GAE lambda. Default: 0.95.
+        anneal_steps (int): Decay the learning rate and clip range linearly to zero over this many
+            trained transitions; unset keeps both constant. Default: unset.
     """
 
     def __init__(
@@ -28,21 +41,38 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
     ) -> None:
         super().__init__(observation_dim, action_dim, config)
 
-        self.clip_ratio: float = float(config.get("clip_ratio", 0.2))
+        # The clip range: ``clip_epsilon`` as in the discrete PPO, ``clip_ratio`` kept as an alias.
+        epsilon, ratio = config.get("clip_epsilon"), config.get("clip_ratio")
+        if epsilon is not None and ratio is not None and float(epsilon) != float(ratio):
+            raise ValueError(f"clip_epsilon and clip_ratio disagree ({epsilon!r} vs {ratio!r})")
+        self.clip_ratio: float = float(
+            epsilon if epsilon is not None else ratio if ratio is not None else 0.2
+        )
+        if self.clip_ratio <= 0.0:
+            raise ValueError(f"clip_epsilon must be positive, got {self.clip_ratio!r}")
         self.ppo_epochs: int = int(config.get("ppo_epochs", 8))
         self.batch_size: int = int(config.get("batch_size", 64))
         self.gae_lambda: float = float(config.get("gae_lambda", 0.95))
         self.learning_rate: float = float(config.get("learning_rate", 3e-4))
+        # Decay the learning rate and clip range linearly to zero over this many trained
+        # transitions (counted per update); unset keeps both constant.
+        self.anneal_steps: int | None = anneal_steps_from_config(config)
+        self._steps_trained = 0
 
     def update(self, trajectory: Any) -> dict[str, float]:
         """
         Perform PPO clipped policy updates over collected trajectory rollout.
 
         Args:
-            trajectory: List of transition dicts or batch dictionary.
+            trajectory: Batch dictionary ("observations", "actions", "rewards", optionally "dones",
+                "next_observations", "terminated") or a list of transition dicts ("state",
+                "action", "reward", "done", optionally "next_state", "terminated"). Only the final
+                step's ``terminated`` is used: if it is False, that step bootstraps from
+                V(next state). Without a next state it is treated as terminal.
 
         Returns:
-            Dictionary containing metrics averaged over PPO update epochs.
+            Mean ``policy_loss``, ``value_loss`` and ``entropy`` over the mini-batch steps, and
+            ``anneal_fraction`` (the share of the learning rate and clip range used).
         """
         last_next_obs: np.ndarray | None = None
         if isinstance(trajectory, dict):
@@ -54,6 +84,11 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
             dones = np.asarray(
                 trajectory.get("dones", np.zeros(len(rewards), dtype=bool)), dtype=bool
             )
+            terminated = trajectory.get("terminated")
+            if terminated is not None and len(terminated) > 0 and len(dones) > 0:
+                # A final step cut by the time limit is done but not terminated: bootstrap it.
+                dones = dones.copy()
+                dones[-1] = bool(np.asarray(terminated, dtype=bool)[-1])
             next_obs = trajectory.get("next_observations")
             if next_obs is not None and len(next_obs) > 0:
                 last_next_obs = np.asarray(next_obs[-1], dtype=np.float64)
@@ -64,12 +99,18 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
             actions = np.array([t["action"] for t in trajectory], dtype=np.float64)
             rewards = np.array([t["reward"] for t in trajectory], dtype=np.float64)
             dones = np.array([t["done"] for t in trajectory], dtype=bool)
+            if "terminated" in trajectory[-1]:
+                dones[-1] = bool(trajectory[-1]["terminated"])
             if "next_state" in trajectory[-1]:
                 last_next_obs = np.asarray(trajectory[-1]["next_state"], dtype=np.float64)
         else:
             return {}
 
         n_steps = len(rewards)
+        rewards = rewards * self.reward_scale
+        fraction = anneal_fraction(self._steps_trained, self.anneal_steps)
+        learning_rate = self.learning_rate * fraction
+        clip_epsilon = self.clip_ratio * fraction
 
         # Compute values for all states
         _, _, values_raw, _ = self._forward(states)
@@ -112,19 +153,32 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
                 b_old_log_probs = old_log_probs[batch_idx]
 
                 components, grads = self._minibatch_loss_and_grads(
-                    b_states, b_actions, b_returns, b_advantages, b_old_log_probs
+                    b_states,
+                    b_actions,
+                    b_returns,
+                    b_advantages,
+                    b_old_log_probs,
+                    clip_epsilon=clip_epsilon,
                 )
-                self._adam_step(grads, self.learning_rate)
+                self._adam_step(grads, learning_rate)
 
                 epoch_policy_losses.append(components["policy"])
                 epoch_value_losses.append(components["value"])
                 epoch_entropies.append(components["entropy"])
 
+        self._steps_trained += n_steps
         return {
             "policy_loss": float(np.mean(epoch_policy_losses)),
             "value_loss": float(np.mean(epoch_value_losses)),
             "entropy": float(np.mean(epoch_entropies)),
+            "anneal_fraction": float(fraction),
         }
+
+    def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
+        return {"ppo_steps_trained": np.array(self._steps_trained)}
+
+    def _load_extra_checkpoint_state(self, data: Any) -> None:
+        self._steps_trained = int(data["ppo_steps_trained"]) if "ppo_steps_trained" in data else 0
 
     def _minibatch_loss_and_grads(
         self,
@@ -133,6 +187,7 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         b_returns: np.ndarray,
         b_advantages: np.ndarray,
         b_old_log_probs: np.ndarray,
+        clip_epsilon: float | None = None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         """
         Compute the PPO loss and its gradients for one mini-batch, changing no state.
@@ -165,16 +220,22 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
 
         # Log probs and ratio
         new_log_probs = self._log_prob(b_actions, b_mu, b_log_std)
-        ratio = np.exp(new_log_probs - b_old_log_probs)
+        # A log-ratio beyond ±20 means the old log-probability is stale: clamp it so exp cannot
+        # overflow, and give that step no policy gradient (with a negative advantage the
+        # unclipped term would otherwise win and its gradient would be about e^20 times |A|).
+        log_ratio = new_log_probs - b_old_log_probs
+        stale = np.abs(log_ratio) > 20.0
+        ratio = np.exp(np.clip(log_ratio, -20.0, 20.0))
 
         # Clipped surrogate
         surr1 = ratio * b_advantages
-        clipped_ratio = np.clip(ratio, 1.0 - self.clip_ratio, 1.0 + self.clip_ratio)
+        epsilon = self.clip_ratio if clip_epsilon is None else clip_epsilon
+        clipped_ratio = np.clip(ratio, 1.0 - epsilon, 1.0 + epsilon)
         surr2 = clipped_ratio * b_advantages
 
         # Active gradient mask: only compute policy gradient where surr1 <= surr2
         # or ratio was unclipped
-        active_mask = (surr1 <= surr2).astype(np.float64)
+        active_mask = ((surr1 <= surr2) & ~stale).astype(np.float64)
 
         # Gradient of ratio w.r.t new_log_probs is ratio
         # dL_pi / d(log_prob) = -active_mask * ratio * advantages

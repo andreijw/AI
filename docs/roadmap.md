@@ -404,8 +404,11 @@ Defects found while working on other items, then findings from the brooks-lint h
     (evaluation -216 to -251 on those four). Gradients, direction (the mean moves toward rewarded actions) and Adam
     were already ruled out.
   - **Progress**: Part 1 (unclipped training samples; the Pendulum wrapper clips torque before action noise) fixes
-    the NaN. Part 2: small initial mean head, `reward_scale`, time-limit bootstrapping, annealing for continuous
-    PPO. Part 3: the measured config, learning gate and published results for both challenges.
+    the NaN. Part 2 adds, as code with tests: `mean_init_scale` (default 0.01) on both continuous agents,
+    `reward_scale` (default 1), a `terminated` array in the Trainer's batch so that continuous PPO bootstraps a final
+    step cut by the time limit, `anneal_steps` for continuous PPO, `clip_epsilon` as its clip key (`clip_ratio` kept
+    as an alias) and a clamp on the log-ratio. Part 3: the measured config, learning gate and published results for
+    both challenges.
   - **Out of scope**: DDPG and other new algorithms; changing the solve threshold; the discrete agents.
   - **Depends on**: Seeded Environments Replay One Start State, so the diagnosis is not confounded by it.
 
