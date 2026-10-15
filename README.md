@@ -196,14 +196,14 @@ python train.py --config configs/pendulum_ppo.yaml
 
 A run solves the challenge when its average training reward over 10 episodes reaches the threshold: 475 for
 CartPole-v1, -200 for Pendulum-v1. CartPole-v1, measured with the committed configs on seeds 1 to 5
-([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md), 2026-10-14). `train.py` uses seed
+([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md), 2026-10-15). `train.py` uses seed
 42, which was not measured, so a single `train.py` run may land on the unlucky side of these numbers:
 
 | Agent | Config | Episodes | Seeds solved | First solve (episode) |
 | :--- | :--- | :---: | :---: | :---: |
 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 2000 | 5 of 5 | 645 to 1012 |
-| Actor-Critic | `cartpole_actor_critic.yaml` (SGD) | 1500 | 5 of 5 | 906 to 1269 |
-| PPO | `cartpole_ppo.yaml` (Adam) | 2000 | 5 of 5 | 530 to 1626 |
+| Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 1500 | 5 of 5 | 490 to 839 |
+| PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 1000 | 5 of 5 | 323 to 427 |
 | DQN | `cartpole_dqn.yaml` | 750 | 4 of 5 | 378 to 576 |
 
 "Solved" means the average reached the threshold at least once; it does not mean the agent held it to the end of
