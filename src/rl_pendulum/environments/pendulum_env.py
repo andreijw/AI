@@ -180,14 +180,17 @@ class PendulumEnv:
             return (obs + noise).astype(obs.dtype)
         return obs
 
+    def _clip_to_action_space(self, action: np.ndarray) -> np.ndarray:
+        """Clip an action to the torque limits of the action space, as float32."""
+        low = getattr(self.action_space, "low", -2.0)
+        high = getattr(self.action_space, "high", 2.0)
+        return np.clip(action, low, high).astype(np.float32)
+
     def _apply_action_noise(self, action: np.ndarray) -> np.ndarray:
         """Add Gaussian perturbation to continuous action, clipped to bounds."""
         if self.action_noise_std > 0:
             noise = self._np_random.normal(0, self.action_noise_std, action.shape)
-            noisy = action + noise
-            low = getattr(self.action_space, "low", -2.0)
-            high = getattr(self.action_space, "high", 2.0)
-            return np.clip(noisy, low, high).astype(np.float32)
+            return self._clip_to_action_space(action + noise)
         return action
 
     def reset(
@@ -241,6 +244,9 @@ class PendulumEnv:
         action_arr = np.asarray(action, dtype=np.float32)
         if action_arr.ndim == 0:
             action_arr = np.array([action_arr.item()], dtype=np.float32)
+        # Agents return unclipped samples while training: clip to the torque limit first, so that
+        # action noise still perturbs an out-of-range action instead of being clipped away.
+        action_arr = self._clip_to_action_space(action_arr)
 
         noisy_action = self._apply_action_noise(action_arr)
 

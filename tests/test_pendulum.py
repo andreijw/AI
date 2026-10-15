@@ -199,3 +199,29 @@ def test_pendulum_benchmark_challenge_registration_and_setup():
     env_rand, agent_rand, _ = challenge.setup_run("random", seed=42, episodes=5)
     assert isinstance(env_rand, PendulumEnv)
     env_rand.close()
+
+
+def test_pendulum_env_passes_the_inner_env_a_bounded_action():
+    """The wrapper clips before stepping; Gymnasium's own clip must not be what keeps torque bounded."""
+    env = PendulumEnv(seed=1)
+    env.reset(seed=1)
+    sent = []
+    inner_step = env.env.step
+    env.env.step = lambda action: (sent.append(np.array(action)), inner_step(action))[1]
+    env.step(np.array([5.0], dtype=np.float32))
+    env.step(np.array([-7.5], dtype=np.float32))
+    env.close()
+    np.testing.assert_allclose(np.concatenate(sent), [2.0, -2.0])
+
+
+def test_pendulum_env_clips_before_adding_action_noise():
+    """An out-of-range action still gets noise: clipping only after the noise would swallow it."""
+    env = PendulumEnv(seed=1, action_noise_std=0.5)
+    env.reset(seed=1)
+    torques = []
+    for _ in range(20):
+        env.step(np.array([5.0], dtype=np.float32))
+        torques.append(float(env.env.unwrapped.last_u))
+    env.close()
+    assert all(-2.0 <= t <= 2.0 for t in torques)
+    assert min(torques) < 1.9, "Noise must still move the torque below the limit sometimes."
