@@ -14,7 +14,8 @@ environment:
 agent:
   type: "actor_critic"
   config:
-    learning_rate: 0.001   # SGD step size
+    learning_rate: 0.001   # Adam step size
+    optimizer: "adam"      # SGD first reached 475 at episodes 906-1269; Adam at 490-839 (roadmap, 2026-10-14)
     gamma: 0.99            # Discount factor
     hidden_dim: 128        # Shared hidden layer width
     value_coef: 0.5        # Weight for the critic (value) loss

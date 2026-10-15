@@ -18,7 +18,7 @@ from rl_core.agents.optim import Adam  # noqa: E402
 # agent type -> (optimizer, training budget)
 MEASURED = {
     "reinforce": ("adam", 2000),
-    "actor_critic": ("sgd", 1500),
+    "actor_critic": ("adam", 1500),
     "ppo": ("adam", 2000),
 }
 
