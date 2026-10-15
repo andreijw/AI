@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from benchmark import BenchmarkChallenge, register_challenge
 from rl_cartpole.environments.cartpole_env import CartPoleEnv
 from rl_core.agents import (
     ActorCriticAgent,
@@ -13,6 +12,7 @@ from rl_core.agents import (
     RandomAgent,
     ReinforceAgent,
 )
+from rl_core.challenges import BenchmarkChallenge, register_challenge
 
 AGENT_CLASSES: dict[str, Any] = {
     "random": RandomAgent,
@@ -34,9 +34,6 @@ class CartPoleChallenge(BenchmarkChallenge):
         "ppo": "cartpole_ppo.yaml",
         "dqn": "cartpole_dqn.yaml",
     }
-
-    def __init__(self, config_dir: str = "configs") -> None:
-        self.config_dir = config_dir
 
     @property
     def name(self) -> str:

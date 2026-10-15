@@ -6,7 +6,7 @@ import gymnasium as gym
 import numpy as np
 import pytest
 
-from benchmark import CHALLENGES
+from rl_core.challenges import CHALLENGES
 from rl_pendulum.benchmark import PendulumChallenge
 from rl_pendulum.environments import (
     PendulumEnv,

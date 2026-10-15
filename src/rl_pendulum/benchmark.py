@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from benchmark import BenchmarkChallenge, register_challenge
 from rl_core.agents import (
     ContinuousActorCriticAgent,
     ContinuousPPOAgent,
     ContinuousRandomAgent,
 )
+from rl_core.challenges import BenchmarkChallenge, register_challenge
 from rl_pendulum.environments.pendulum_env import PendulumEnv
 
 AGENT_CLASSES: dict[str, Any] = {
@@ -28,9 +28,6 @@ class PendulumChallenge(BenchmarkChallenge):
         "actor_critic": "pendulum_actor_critic.yaml",
         "ppo": "pendulum_ppo.yaml",
     }
-
-    def __init__(self, config_dir: str = "configs") -> None:
-        self.config_dir = config_dir
 
     @property
     def name(self) -> str:
