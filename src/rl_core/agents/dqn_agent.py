@@ -218,45 +218,17 @@ class DQNAgent(BaseAgent):
             rewards = samples["rewards"]
             next_obs = samples["next_observations"]
             dones = samples["dones"]
-            b_size = len(actions)
 
             # 1. Compute Bellman targets
             targets = self._compute_bellman_targets(rewards, next_obs, dones)
 
-            # 2. Forward pass online network
-            q_vals, h = self._forward_q(obs, target=False)
-            pred_q = q_vals[np.arange(b_size), actions]
+            # 2. TD loss and its gradients for the online network
+            components, grads = self._loss_and_grads(obs, actions, targets)
 
-            # 3. TD error and MSE loss: 0.5 * (pred_q - targets)^2
-            td_error = pred_q - targets
-            loss = float(np.mean(0.5 * (td_error**2)))
+            # 3. Clipped gradient descent step
+            self._apply_gradients(grads)
 
-            # 4. Backward pass
-            d_q = np.zeros_like(q_vals)
-            d_q[np.arange(b_size), actions] = td_error
-
-            grad_w2 = (h.T @ d_q) / b_size
-            grad_b2 = np.mean(d_q, axis=0)
-
-            d_h = d_q @ self._W2.T
-            d_pre_h = d_h * (h > 0.0)
-
-            grad_w1 = (obs.T @ d_pre_h) / b_size
-            grad_b1 = np.mean(d_pre_h, axis=0)
-
-            # Clip gradients to avoid exploding gradients
-            np.clip(grad_w1, -self.max_grad_norm, self.max_grad_norm, out=grad_w1)
-            np.clip(grad_b1, -self.max_grad_norm, self.max_grad_norm, out=grad_b1)
-            np.clip(grad_w2, -self.max_grad_norm, self.max_grad_norm, out=grad_w2)
-            np.clip(grad_b2, -self.max_grad_norm, self.max_grad_norm, out=grad_b2)
-
-            # 5. Gradient descent step
-            self._W1 -= self.learning_rate * grad_w1
-            self._b1 -= self.learning_rate * grad_b1
-            self._W2 -= self.learning_rate * grad_w2
-            self._b2 -= self.learning_rate * grad_b2
-
-            # 6. Target network synchronization
+            # 4. Target network synchronization
             self._update_counter += 1
             if self.tau is not None and self.tau < 1.0:
                 self._target_W1 = self.tau * self._W1 + (1.0 - self.tau) * self._target_W1
@@ -269,10 +241,10 @@ class DQNAgent(BaseAgent):
                 self._target_W2 = np.copy(self._W2)
                 self._target_b2 = np.copy(self._b2)
 
-            total_loss += loss
-            total_q += float(np.mean(pred_q))
+            total_loss += components["loss"]
+            total_q += components["mean_q"]
 
-        # 7. Epsilon decay
+        # 5. Epsilon decay
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
         return {
@@ -280,6 +252,71 @@ class DQNAgent(BaseAgent):
             "epsilon": float(self.epsilon),
             "mean_q": total_q / num_updates,
         }
+
+    def _loss_and_grads(
+        self,
+        obs: np.ndarray,
+        actions: np.ndarray,
+        targets: np.ndarray,
+    ) -> tuple[dict[str, float], dict[str, np.ndarray]]:
+        """
+        Compute the TD loss and its gradients for one mini-batch, changing no state.
+
+        The loss is ``mean(½·(Q(s, a) − y)²)`` over the mini-batch, for the online network.
+        The targets ``y`` are held constant when differentiating.
+
+        Args:
+            obs:     Array of shape (B, observation_dim).
+            actions: Integer array of shape (B,): the action taken in each state.
+            targets: Array of shape (B,): the Bellman target of each transition.
+
+        Returns:
+            Tuple of (components, gradients). Components holds ``loss`` and ``mean_q``, the
+            mean of the predicted Q-values. Gradients are those of ``loss``, keyed ``W1``,
+            ``b1``, ``W2``, ``b2``, and are not clipped; :meth:`_apply_gradients` clips them.
+        """
+        b_size = len(actions)
+
+        # Forward pass online network
+        q_vals, h = self._forward_q(obs, target=False)
+        pred_q = q_vals[np.arange(b_size), actions]
+
+        # TD error and MSE loss: 0.5 * (pred_q - targets)^2
+        td_error = pred_q - targets
+        loss = float(np.mean(0.5 * (td_error**2)))
+
+        # Backward pass
+        d_q = np.zeros_like(q_vals)
+        d_q[np.arange(b_size), actions] = td_error
+
+        grad_w2 = (h.T @ d_q) / b_size
+        grad_b2 = np.mean(d_q, axis=0)
+
+        d_h = d_q @ self._W2.T
+        d_pre_h = d_h * (h > 0.0)
+
+        grad_w1 = (obs.T @ d_pre_h) / b_size
+        grad_b1 = np.mean(d_pre_h, axis=0)
+
+        components = {"loss": loss, "mean_q": float(np.mean(pred_q))}
+        return components, {"W1": grad_w1, "b1": grad_b1, "W2": grad_w2, "b2": grad_b2}
+
+    def _apply_gradients(self, grads: dict[str, np.ndarray]) -> None:
+        """
+        Take one gradient-descent step on the online network.
+
+        Each gradient element is clipped to ``[-max_grad_norm, max_grad_norm]`` before the step
+        (an element-wise clip, despite the name). The arrays in ``grads`` are not modified.
+
+        Args:
+            grads: Gradients keyed ``W1``, ``b1``, ``W2``, ``b2``, as returned by
+                   :meth:`_loss_and_grads`.
+        """
+        limit = self.max_grad_norm
+        self._W1 -= self.learning_rate * np.clip(grads["W1"], -limit, limit)
+        self._b1 -= self.learning_rate * np.clip(grads["b1"], -limit, limit)
+        self._W2 -= self.learning_rate * np.clip(grads["W2"], -limit, limit)
+        self._b2 -= self.learning_rate * np.clip(grads["b2"], -limit, limit)
 
     def save(self, path: str) -> None:
         """

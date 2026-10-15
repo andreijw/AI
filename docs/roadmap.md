@@ -252,6 +252,25 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: Things to rule out, none confirmed: PPO updating once per episode on that episode alone,
     with a learning rate of 0.0003; DQN reaching the threshold and then losing it (seed 42 solved at episode 274
     and finished at 334); epsilon never reaching its floor within 500 episodes.
+  - **Ruled out (2026-10-13)**: The hand-written gradients of REINFORCE, Actor-Critic, PPO and DQN agree with
+    finite differences for every parameter, and each `update` applies them as it should
+    (`tests/test_policy_gradient_maths.py`, `tests/test_dqn_maths.py`). PPO's score is not a backward-pass error.
+  - **DQN behaviours to decide on (2026-10-13; pinned by tests as they are, none changed)**:
+    - Two comments in `configs/cartpole_dqn.yaml` do not match the code: epsilon decays once per `update` call,
+      which is once per episode, not "per update"; and `updates_per_step: 1.0` is capped at 64 gradient steps per
+      episode by `max_updates_per_call`, so a 500-step episode gets about 0.13 steps per transition.
+    - `max_grad_norm` clips each gradient element, not the gradient's norm, and is absent from the config
+      (default 10.0).
+    - While the replay buffer is warming up, `update` returns a loss and mean Q-value of 0, which the training log
+      averages in.
+    - Not validated at construction: `target_update_frequency: 0` raises `ZeroDivisionError` during training;
+      `tau` of 1 or more silently falls back to hard sync, 0 freezes the target network, and a negative value
+      extrapolates; `min_buffer_size` below `batch_size` fails at the first sample; `buffer_capacity` below
+      `batch_size` fails there too if `min_buffer_size` fits in the buffer, and otherwise (as with the default
+      `min_buffer_size`) the buffer never counts as warm, so the agent silently never trains and epsilon never
+      decays.
+    - A batch without `dones` is not stored, but gradient steps still run.
+    - A time-limit cut is stored as terminal, so the bootstrap is zeroed at CartPole's 500-step limit.
   - **Out of scope**: The Pendulum agents (their own item below); new algorithms; changing the solve threshold.
 
 - [ ] **Separate Random Streams for Agents and Buffers**
@@ -365,8 +384,10 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Progress**: Delivered in three parts. Part 1 (2026-10-13) covers REINFORCE, Actor-Critic and PPO
     (`tests/test_policy_gradient_maths.py`). Part 2 (2026-10-13) covers the two continuous agents
     (`tests/test_continuous_policy_gradient_maths.py`), including Adam with gradient clipping and PPO's generalised
-    advantage estimation. The hand-written gradients of all five agents agree with finite differences. Part 3 is
-    DQN.
+    advantage estimation. Part 3 (2026-10-13) covers DQN (`tests/test_dqn_maths.py`), including its Bellman
+    targets, element-wise gradient clip and target-network sync. The hand-written gradients of all six learning
+    agents agree with finite differences. All three parts are done; the item is complete once the maintainer
+    confirms.
   - **Acceptance criteria**:
     - Each learning agent has a method that returns the loss and gradients for a batch and changes no state, and a
       separate step that applies them.
