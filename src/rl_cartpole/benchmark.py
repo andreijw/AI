@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import os
-from typing import Any
+from typing import Any, ClassVar
 
 from benchmark import BenchmarkChallenge, register_challenge
 from rl_cartpole.environments.cartpole_env import CartPoleEnv
@@ -14,7 +13,6 @@ from rl_core.agents import (
     RandomAgent,
     ReinforceAgent,
 )
-from rl_core.utils.config import load_config
 
 AGENT_CLASSES: dict[str, Any] = {
     "random": RandomAgent,
@@ -29,7 +27,7 @@ AGENT_CLASSES: dict[str, Any] = {
 class CartPoleChallenge(BenchmarkChallenge):
     """CartPole-v1 discrete balance control benchmark challenge."""
 
-    CONFIG_MAP: dict[str, str] = {
+    CONFIG_MAP: ClassVar[dict[str, str]] = {
         "random": "cartpole_default.yaml",
         "reinforce": "cartpole_reinforce.yaml",
         "actor_critic": "cartpole_actor_critic.yaml",
@@ -61,16 +59,9 @@ class CartPoleChallenge(BenchmarkChallenge):
         return sorted(AGENT_CLASSES)
 
     def setup_run(
-        self, agent_type: str, seed: int, episodes: int
+        self, agent_type: str, seed: int, episodes: int | None
     ) -> tuple[Any, Any, dict[str, Any]]:
-        config_file = self.CONFIG_MAP.get(agent_type, "cartpole_default.yaml")
-        config_path = os.path.join(self.config_dir, config_file)
-        config = load_config(config_path)
-
-        config.setdefault("environment", {})["seed"] = seed
-        config.setdefault("agent", {}).setdefault("config", {})["seed"] = seed
-        config.setdefault("training", {})["num_episodes"] = episodes
-        config["training"]["save_frequency"] = max(episodes + 1, 999999)
+        config = self.load_run_config(agent_type, seed, episodes)
 
         env_cfg = config["environment"]
         env = CartPoleEnv(
