@@ -86,6 +86,55 @@ class ReinforceAgent(BaseAgent):
         probs = exp_logits / exp_logits.sum()
         return probs, h
 
+    def _loss_and_grads(
+        self, observations: np.ndarray, actions: np.ndarray, return_weights: np.ndarray
+    ) -> tuple[float, dict[str, np.ndarray]]:
+        """
+        Compute the REINFORCE loss and its gradients for one episode, changing no state.
+
+        The loss is ``Σ_t −return_weights[t] · log π(a_t | s_t)``, summed over the steps.
+        ``return_weights`` are held constant when differentiating.
+
+        Args:
+            observations:   Array of shape (T, observation_dim).
+            actions:        Integer array of shape (T,).
+            return_weights: Array of shape (T,): the (standardised) return credited to each step.
+
+        Returns:
+            Tuple of (loss, gradients). Gradients are keyed ``W1``, ``b1``, ``W2``, ``b2`` and are
+            those of the summed loss; :meth:`update` divides by the episode length.
+        """
+        grad_w1 = np.zeros_like(self._W1)
+        grad_b1 = np.zeros_like(self._b1)
+        grad_w2 = np.zeros_like(self._W2)
+        grad_b2 = np.zeros_like(self._b2)
+
+        total_loss = 0.0
+
+        for obs, action, disc_return in zip(observations, actions, return_weights, strict=True):
+            probs, h = self._policy(obs)
+
+            # d/d_logits log π(a|s) = one_hot(a) - π(·|s)
+            d_logits = -probs.copy()
+            d_logits[action] += 1.0
+
+            # Negate for gradient *descent* on the negative expected return
+            d_logits *= -disc_return
+
+            # Layer-2 gradients
+            grad_w2 += np.outer(h, d_logits)
+            grad_b2 += d_logits
+
+            # Layer-1 gradients (through ReLU)
+            d_h = d_logits @ self._W2.T
+            d_h[h <= 0] = 0.0
+            grad_w1 += np.outer(obs, d_h)
+            grad_b1 += d_h
+
+            total_loss += -np.log(np.clip(probs[action], 1e-8, 1.0)) * disc_return
+
+        return float(total_loss), {"W1": grad_w1, "b1": grad_b1, "W2": grad_w2, "b2": grad_b2}
+
     # ------------------------------------------------------------------
     # BaseAgent interface
     # ------------------------------------------------------------------
@@ -139,14 +188,6 @@ class ReinforceAgent(BaseAgent):
         std = returns.std()
         returns = (returns - returns.mean()) / std if std > 1e-8 else returns - returns.mean()
 
-        # Accumulate REINFORCE gradients over the episode
-        grad_w1 = np.zeros_like(self._W1)
-        grad_b1 = np.zeros_like(self._b1)
-        grad_w2 = np.zeros_like(self._W2)
-        grad_b2 = np.zeros_like(self._b2)
-
-        total_loss = 0.0
-
         if not (len(observations) == len(actions) == len(returns)):
             raise ValueError(
                 "Inconsistent trajectory lengths: "
@@ -155,33 +196,13 @@ class ReinforceAgent(BaseAgent):
                 f"returns={len(returns)}"
             )
 
-        for obs, action, disc_return in zip(observations, actions, returns, strict=True):
-            probs, h = self._policy(obs)
-
-            # d/d_logits log π(a|s) = one_hot(a) - π(·|s)
-            d_logits = -probs.copy()
-            d_logits[action] += 1.0
-
-            # Negate for gradient *descent* on the negative expected return
-            d_logits *= -disc_return
-
-            # Layer-2 gradients
-            grad_w2 += np.outer(h, d_logits)
-            grad_b2 += d_logits
-
-            # Layer-1 gradients (through ReLU)
-            d_h = d_logits @ self._W2.T
-            d_h[h <= 0] = 0.0
-            grad_w1 += np.outer(obs, d_h)
-            grad_b1 += d_h
-
-            total_loss += -np.log(np.clip(probs[action], 1e-8, 1.0)) * disc_return
+        total_loss, grads = self._loss_and_grads(observations, actions, returns)
 
         # Gradient step (averaged over episode length)
-        self._W1 -= self.learning_rate * grad_w1 / n_steps
-        self._b1 -= self.learning_rate * grad_b1 / n_steps
-        self._W2 -= self.learning_rate * grad_w2 / n_steps
-        self._b2 -= self.learning_rate * grad_b2 / n_steps
+        self._W1 -= self.learning_rate * grads["W1"] / n_steps
+        self._b1 -= self.learning_rate * grads["b1"] / n_steps
+        self._W2 -= self.learning_rate * grads["W2"] / n_steps
+        self._b2 -= self.learning_rate * grads["b2"] / n_steps
 
         return {"policy_loss": float(total_loss / n_steps)}
 

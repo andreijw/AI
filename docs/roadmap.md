@@ -113,8 +113,8 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 
 **Agreed order (2026-10-13):** Seed the Continuous PPO Mini-Batch Shuffle → Seeded Environments Replay One Start
 State → the test-gap items (Discounted-Return Tests That Can Fail, Softmax Stability Tests, Single `_compute_returns`
-Implementation) → CartPole Agents Learn Within Their Budgets → Break the Benchmark Import Cycle → Pendulum PPO
-Learns and Solves Pendulum-v1 → DDPG.
+Implementation) → Split `update` into Loss-and-Gradients and Apply → CartPole Agents Learn Within Their Budgets →
+Break the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 → DDPG.
 
 ### Workflow Tooling
 
@@ -340,9 +340,12 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: Configs with no `environment.name`; `--challenge` disagreeing with the config.
   - **Out of scope**: Merging the discrete and continuous agent maps (depends on the cycle item above).
 
-- [ ] **Split `update` into Loss-and-Gradients and Apply**
+- [~] **Split `update` into Loss-and-Gradients and Apply**
   - **Description**: The agents' `update` methods run 59 to 141 lines and mix batch parsing, forward pass, loss,
     backward pass and optimizer step, so no gradient check can be written against them.
+  - **Progress**: Delivered in three parts. Part 1 (2026-10-13) covers REINFORCE, Actor-Critic and PPO
+    (`tests/test_policy_gradient_maths.py`); their hand-written gradients all agree with finite differences. Part 2
+    is the two continuous agents, part 3 is DQN.
   - **Acceptance criteria**:
     - Each learning agent has a method that returns the loss and gradients for a batch and changes no state, and a
       separate step that applies them.

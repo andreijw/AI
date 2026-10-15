@@ -69,7 +69,9 @@ State the reduction once: averaging over the batch divides every gradient by `B`
   worth watching. `save` and `load` round-trip every array and counter the agent needs to resume.
 - **Separate computing from applying.** One method computes the loss and gradients for a batch and changes
   nothing; another applies the step. This is what makes a gradient check possible, and it keeps the
-  optimizer swappable.
+  optimizer swappable. Everything held constant when differentiating is an argument of that method.
+  `ReinforceAgent._loss_and_grads`, `ActorCriticAgent._loss_and_grads` and
+  `PPOAgent._epoch_loss_and_grads` are the pattern to follow.
 - **Hyperparameters** come from `config.get(name, default)` in `__init__`, validated there.
 - **Randomness** comes from the agent's own `np.random.default_rng(config.get("seed"))`.
 - **Episode ends.** The batch has one `dones` flag covering both `terminated` and `truncated`. If the

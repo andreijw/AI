@@ -83,31 +83,46 @@ one that disagrees.
 from tests.helpers import assert_gradients_match
 
 
-def test_my_agent_gradients_match_finite_differences():
-    agent = MyAgent(observation_dim=3, action_dim=2, config={"hidden_dim": 4, "seed": 0})
-    batch = _fixed_batch()  # hand-built, no environment, no sampling
-    _, grads = agent._loss_and_grads(batch)  # analytic gradients, nothing applied
+def test_reinforce_gradients_match_finite_differences():
+    agent = ReinforceAgent(observation_dim=4, action_dim=3, config={"hidden_dim": 6, "seed": 11})
+    observations, actions = _batch()  # hand-built, no environment, no sampling
+    return_weights = np.array([0.7, -1.2, 0.4, 1.5, -0.9, 0.3])  # held constant
+    _, grads = agent._loss_and_grads(observations, actions, return_weights)  # nothing applied
 
     assert_gradients_match(
-        lambda: agent._loss_and_grads(batch)[0],
-        {"W1": agent._W1, "b1": agent._b1, "W_pi": agent._W_pi, "b_pi": agent._b_pi},
+        lambda: agent._loss_and_grads(observations, actions, return_weights)[0],
+        {"W1": agent._W1, "b1": agent._b1, "W2": agent._W2, "b2": agent._b2},
         grads,
     )
 ```
+
+`tests/test_policy_gradient_maths.py` has the working versions for REINFORCE, Actor-Critic and PPO, with
+the fixtures and kink assertions to copy.
 
 - Use a fixed batch and a fixed seed; `loss_fn` recomputes the loss from the agent's live weights, which
   the helper perturbs in place and restores.
 - The weights must be float64 (the helper refuses anything else): a 1e-5 nudge vanishes in float32.
 - Pass every parameter array, biases included. A parameter left out is a parameter not checked.
-- Keep the network small (hidden size 3 to 5) so the check runs in milliseconds.
+- Keep the network small (hidden size 3 to 6) so the check runs in milliseconds.
 - Avoid inputs that sit on a kink: a ReLU unit at exactly zero, or a ratio exactly on a PPO clip bound,
-  has no single gradient and will fail the comparison for no reason.
-- This needs the loss and its gradients to be computable without also applying the optimizer step
-  (`_loss_and_grads` above stands for whatever the agent calls that). If the code under test does both in
-  one method, split it; that is a design improvement, not a test hack.
+  has no single gradient and will fail the comparison for no reason. Assert the margin in the test.
+- Choose the fixture so that every term matters: a mix of active and inactive hidden units (or a missing
+  ReLU mask passes), `value_coef` away from 1 and `entropy_coef` well above its tiny default (or dropping
+  either from a gradient passes), and for PPO both clipped and unclipped steps.
+- Whatever the algorithm holds constant when differentiating (returns, advantages, old log-probabilities,
+  TD targets) must be an argument of the method, so the numerical gradient holds it constant too.
+- A parameter stored as a Python float (`_b_v`) cannot be perturbed in place: box it in a one-element
+  array and have the loss closure copy it back onto the agent.
+- This needs the loss and its gradients to be computable without also applying the optimizer step. If the
+  code under test does both in one method, split it; that is a design improvement, not a test hack.
 
-The agents written before this helper existed have no gradient check. Adding one is the first step of any
-change to their update rules.
+A gradient check proves the gradients match the loss, not that the loss is the right one. Pair it with a
+**loss worked out by hand**: zero the trunk so the policy and value are the same at every step, pick uneven
+rewards, and write the expected number in the test. That is what catches a return paired with the wrong
+step.
+
+REINFORCE, Actor-Critic and PPO have both. The continuous agents and DQN do not yet; adding them is the
+first step of any change to their update rules.
 
 ## Rules that keep tests honest
 

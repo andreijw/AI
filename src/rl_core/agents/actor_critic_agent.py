@@ -97,16 +97,60 @@ class ActorCriticAgent(ActorCriticBase):
         # value function retains scale information)
         returns = discounted_returns(rewards, self.gamma)
 
+        components, grads = self._loss_and_grads(observations, actions, returns)
+
+        # SGD update averaged over episode length
+        self._apply_ac_gradients(grads, self.learning_rate / n_steps)
+
+        return {
+            "policy_loss": float(components["policy"] / n_steps),
+            "value_loss": float(components["value"] / n_steps),
+            "entropy_bonus": float(components["entropy"] / n_steps),
+        }
+
+    def _loss_and_grads(
+        self,
+        observations: np.ndarray,
+        actions: np.ndarray,
+        returns: np.ndarray,
+        advantages: np.ndarray | None = None,
+    ) -> tuple[dict[str, float], dict[str, Any]]:
+        """
+        Compute the actor-critic loss and its gradients for one episode, changing no state.
+
+        The loss, summed over the steps, is
+        ``Σ_t [ −log π(a_t|s_t)·A_t + value_coef·½(V(s_t) − G_t)² − entropy_coef·H(π(·|s_t)) ]``.
+        Returns and advantages are held constant when differentiating.
+
+        Args:
+            observations: Array of shape (T, observation_dim).
+            actions:      Integer array of shape (T,).
+            returns:      Array of shape (T,): the Monte-Carlo return G_t of each step.
+            advantages:   Array of shape (T,) to use as A_t. If omitted, ``G_t − V(s_t)`` from the
+                          current weights is used, which lets :meth:`update` make a single forward
+                          pass per step. Passing that same array explicitly gives identical
+                          results.
+
+        Returns:
+            Tuple of (components, gradients). Components holds the summed ``policy``, ``value``
+            and ``entropy`` terms and their weighted ``total``. Gradients are those of ``total``,
+            keyed as in :meth:`_zero_ac_gradients`; :meth:`update` divides by the episode length.
+        """
+        if advantages is not None and len(advantages) != len(returns):
+            raise ValueError(
+                f"advantages has {len(advantages)} entries but the batch has {len(returns)} steps"
+            )
+
         grads = self._zero_ac_gradients()
         total_policy_loss = 0.0
         total_value_loss = 0.0
         total_entropy = 0.0
 
-        for obs, action, g in zip(observations, actions, returns, strict=True):
+        for step, (obs, action, g) in enumerate(zip(observations, actions, returns, strict=True)):
             probs, value, h = self._forward(obs)
 
             # Advantage estimate: how much better this action was than expected
-            advantage = g - value
+            advantage = g - value if advantages is None else float(advantages[step])
 
             # Actor loss: -log π(a|s) * advantage  (reported separately)
             log_prob_a = np.log(np.clip(probs[action], 1e-8, 1.0))
@@ -133,11 +177,14 @@ class ActorCriticAgent(ActorCriticBase):
 
             self._accumulate_ac_gradients(grads, obs, h, d_pi_logits, d_v_out)
 
-        # SGD update averaged over episode length
-        self._apply_ac_gradients(grads, self.learning_rate / n_steps)
-
-        return {
-            "policy_loss": float(total_policy_loss / n_steps),
-            "value_loss": float(total_value_loss / n_steps),
-            "entropy_bonus": float(total_entropy / n_steps),
+        components = {
+            "policy": float(total_policy_loss),
+            "value": float(total_value_loss),
+            "entropy": float(total_entropy),
+            "total": float(
+                total_policy_loss
+                + self.value_coef * total_value_loss
+                - self.entropy_coef * total_entropy
+            ),
         }
+        return components, grads
