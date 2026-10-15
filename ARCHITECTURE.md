@@ -49,7 +49,13 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 5. **Pure NumPy Neural Foundations**: Neural network architectures and gradient optimizations (Adam, He-init,
    clipped PPO, GAE) are implemented natively in NumPy without heavyweight external frameworks. One `Adam` in
    `rl_core/agents/optim.py` serves the continuous agents and, with `optimizer: adam` in the agent config,
-   REINFORCE, Actor-Critic and PPO, which otherwise use plain SGD.
+   REINFORCE, Actor-Critic and PPO, which otherwise use plain SGD. Discrete PPO takes the standard form when its
+   config sets `rollout_steps`, `minibatch_size` and `gae_lambda`: it buffers whole episodes until it holds
+   `rollout_steps` transitions, computes GAE over them (`rl_core/agents/returns.py`, shared with continuous PPO)
+   and takes `ppo_epochs` passes of shuffled `minibatch_size` steps. Without those keys it trains on each episode
+   alone, full batch, with return-minus-value advantages. The Trainer still calls `update` once per episode; PPO
+   returns no metrics on the episodes it only stores. Each episode ends its GAE trace, so CartPole's 500-step time
+   limit counts as terminal, as it does for every agent here.
 
 ---
 
@@ -148,6 +154,9 @@ classDiagram
     class PPOAgent {
         +float clip_epsilon
         +int ppo_epochs
+        +int rollout_steps
+        +int minibatch_size
+        +float gae_lambda
         +update(batch) dict
     }
 

@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from rl_core.agents.returns import discounted_returns
+from rl_core.agents.returns import discounted_returns, gae
 
 
 @pytest.mark.parametrize(
@@ -67,3 +67,45 @@ def test_discounted_returns_do_not_modify_the_rewards():
 @pytest.mark.parametrize("length", [1, 5, 50])
 def test_discounted_returns_have_one_entry_per_step(length):
     assert len(discounted_returns(np.ones(length), 0.99)) == length
+
+
+# ---------------------------------------------------------------------------
+# Generalised advantage estimation
+# ---------------------------------------------------------------------------
+# Two episodes back to back, gamma 0.5 and lambda 0.5 (so gamma * lambda = 0.25). Worked backwards:
+#   episode 2, t=4 (done):  delta = 1 - 0.1                 = 0.9    A = 0.9
+#              t=3:         delta = 1 + 0.5*0.1 - 0.2       = 0.85   A = 0.85 + 0.25*0.9   = 1.075
+#   episode 1, t=2 (done):  delta = 1 - 0.3                 = 0.7    A = 0.7 (trace reset)
+#              t=1:         delta = 1 + 0.5*0.3 - 0.4       = 0.75   A = 0.75 + 0.25*0.7   = 0.925
+#              t=0:         delta = 1 + 0.5*0.4 - 0.5       = 0.7    A = 0.7 + 0.25*0.925  = 0.93125
+
+GAE_REWARDS = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
+GAE_VALUES = np.array([0.5, 0.4, 0.3, 0.2, 0.1])
+GAE_DONES = np.array([False, False, True, False, True])
+
+
+def test_gae_matches_hand_computed_values_across_an_episode_boundary():
+    advantages = gae(GAE_REWARDS, GAE_VALUES, GAE_DONES, gamma=0.5, lam=0.5)
+    np.testing.assert_allclose(advantages, [0.93125, 0.925, 0.7, 1.075, 0.9], rtol=1e-12)
+
+
+def test_gae_bootstraps_an_unfinished_last_step_from_last_value():
+    # delta = 1 + 0.5 * 2.0 - 0.5 = 1.5
+    advantages = gae(np.array([1.0]), np.array([0.5]), np.array([False]), 0.5, 0.5, last_value=2.0)
+    np.testing.assert_allclose(advantages, [1.5], rtol=1e-12)
+
+
+def test_gae_ignores_last_value_after_a_finished_episode():
+    advantages = gae(np.array([1.0]), np.array([0.5]), np.array([True]), 0.5, 0.5, last_value=2.0)
+    np.testing.assert_allclose(advantages, [0.5], rtol=1e-12)
+
+
+def test_gae_with_lambda_one_is_the_return_minus_the_value():
+    """With lambda 1 and episodes that finish, GAE is the Monte-Carlo return minus V(s)."""
+    advantages = gae(GAE_REWARDS[:3], GAE_VALUES[:3], GAE_DONES[:3], gamma=0.9, lam=1.0)
+    expected = discounted_returns(GAE_REWARDS[:3], 0.9) - GAE_VALUES[:3]
+    np.testing.assert_allclose(advantages, expected, rtol=1e-12)
+
+
+def test_gae_of_an_empty_rollout_is_empty():
+    assert gae(np.array([]), np.array([]), np.array([], dtype=bool), 0.9, 0.95).shape == (0,)

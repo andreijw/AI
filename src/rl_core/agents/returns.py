@@ -1,4 +1,4 @@
-"""Discounted returns, shared by every agent that learns from whole episodes."""
+"""Discounted returns and advantage estimates, shared by the agents that learn from episodes."""
 
 import numpy as np
 
@@ -21,3 +21,41 @@ def discounted_returns(rewards: np.ndarray, gamma: float) -> np.ndarray:
         cumulative = float(rewards[t]) + gamma * cumulative
         returns[t] = cumulative
     return returns
+
+
+def gae(
+    rewards: np.ndarray,
+    values: np.ndarray,
+    dones: np.ndarray,
+    gamma: float,
+    lam: float,
+    last_value: float = 0.0,
+) -> np.ndarray:
+    """
+    Generalised advantage estimates (Schulman et al., 2016) for a rollout of one or more episodes.
+
+    ``A_t = δ_t + γλ·(1 − done_t)·A_{t+1}`` with ``δ_t = r_t + γ·V(s_{t+1})·(1 − done_t) − V(s_t)``,
+    computed from the last step back. A step with ``done_t`` ends its episode: nothing is
+    bootstrapped across it and the trace restarts.
+
+    Args:
+        rewards: Per-step rewards, shape (T,).
+        values: V(s_t) for each step, shape (T,).
+        dones: True on the last step of each episode, shape (T,).
+        gamma: Discount factor.
+        lam: GAE λ in [0, 1]; 1 gives the Monte-Carlo return minus V(s_t).
+        last_value: V of the state after the final step, used only if that step is not done.
+
+    Returns:
+        float64 array of advantages, shape (T,).
+    """
+    n_steps = len(rewards)
+    advantages = np.zeros(n_steps, dtype=np.float64)
+    last_gae = 0.0
+    for t in reversed(range(n_steps)):
+        next_value = values[t + 1] if t + 1 < n_steps else last_value
+        done_mask = 0.0 if dones[t] else 1.0
+        delta = rewards[t] + gamma * next_value * done_mask - values[t]
+        last_gae = delta + gamma * lam * done_mask * last_gae
+        advantages[t] = last_gae
+    return advantages

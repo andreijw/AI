@@ -83,16 +83,10 @@ def test_ppo_agent_update_returns_metrics():
 
 
 def test_ppo_agent_update_empty_batch():
-    """update() with an empty trajectory returns zero losses."""
+    """update() with an empty trajectory trains on nothing and reports no metrics."""
     agent = PPOAgent(observation_dim=4, action_dim=2, config=_PPO_CONFIG)
     batch = {"observations": np.empty((0, 4)), "actions": np.array([]), "rewards": np.array([])}
-    metrics = agent.update(batch)
-    assert metrics == {
-        "policy_loss": 0.0,
-        "value_loss": 0.0,
-        "entropy_bonus": 0.0,
-        "clip_fraction": 0.0,
-    }
+    assert agent.update(batch) == {}
 
 
 def test_ppo_agent_weights_change_after_update():

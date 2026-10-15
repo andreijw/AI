@@ -419,6 +419,26 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Learning gate (2026-10-14)**: the committed config gives the same per-seed results.
   - **Out of scope**: Bootstrapped (TD) critic targets.
 
+- [~] **Standard PPO for Discrete Actions**
+  - **Description**: `PPOAgent` updated once per episode on that episode alone, full batch, with Monte-Carlo
+    advantages. Standard PPO (Schulman et al., 2017) collects a rollout across episodes, uses GAE, and takes several
+    epochs of shuffled mini-batch steps.
+  - **Acceptance criteria**:
+    - `PPOAgent` buffers whole episodes until `rollout_steps`, computes GAE (`gae_lambda`) over the rollout, and trains
+      `ppo_epochs` passes of `minibatch_size` steps; without those keys it keeps its earlier per-episode method.
+    - Gradient check, hand-computed loss and GAE, replay against an independent implementation, buffering and
+      checkpoint tests; `ContinuousPPOAgent` shares the GAE function with bit-identical weights.
+    - Optional linear annealing of the learning rate and clip range (`anneal_steps`).
+    - The committed config (maintainer-approved) reaches 475 on at least 4 of 5 seeds and holds it.
+  - **Measured (2026-10-14)**, seeds 1 to 5, 2000 episodes: CleanRL settings (learning rate 0.00025, 4 epochs) solve
+    4 of 5 at either 256 or 512 steps per rollout, later than the per-episode PPO. rl-baselines3-zoo settings (256
+    steps, 20 epochs, learning rate 0.001, λ 0.8, γ 0.98, no entropy bonus) solve 5 of 5 at episodes 353 to 449 but
+    3 seeds collapse afterwards (evaluation 341). Adding annealing over 200,000 trained transitions: 5 of 5 at
+    episodes 323 to 427, final training averages 453 to 500, evaluation 500 on every seed.
+  - **Known edge cases**: Steps still buffered when training ends are never trained on; checkpoints do not hold the
+    buffer; CartPole's 500-step time limit is treated as terminal, as for every agent.
+  - **Out of scope**: Value-loss clipping, KL early stopping, parallel environments.
+
 - [ ] **Break the Benchmark Import Cycle**
   - **Description**: `src/benchmark.py` imports `rl_cartpole.benchmark` and `rl_pendulum.benchmark` inside functions
     in two places, both import `benchmark` back, and a `sys.modules.setdefault("benchmark", ...)` alias holds the

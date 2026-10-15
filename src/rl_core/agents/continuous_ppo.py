@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from .continuous_actor_critic import ContinuousActorCriticBase
+from .returns import gae
 
 
 class ContinuousPPOAgent(ContinuousActorCriticBase):
@@ -80,15 +81,7 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
             _, _, last_v, _ = self._forward(last_next_obs)
             next_val = float(last_v)
 
-        # Compute Generalized Advantage Estimation (GAE)
-        advantages = np.zeros(n_steps, dtype=np.float64)
-        last_gae = 0.0
-        for t in reversed(range(n_steps)):
-            next_value = values[t + 1] if t + 1 < n_steps else next_val
-            done_mask = 0.0 if dones[t] else 1.0
-            delta = rewards[t] + self.gamma * next_value * done_mask - values[t]
-            last_gae = delta + self.gamma * self.gae_lambda * done_mask * last_gae
-            advantages[t] = last_gae
+        advantages = gae(rewards, values, dones, self.gamma, self.gae_lambda, last_value=next_val)
 
         returns = advantages + values
 
