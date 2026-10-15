@@ -144,10 +144,10 @@ Treat the repository as the source of truth when docs disagree:
 - `requirements.txt` lists `matplotlib>=3.5.0` and `pytest-cov>=4.0.0`, lagging `pyproject.toml`
   (`matplotlib>=3.9.4`, `pytest-cov>=7.1.0`). Install from `pyproject.toml` (`pip install -e ".[dev,video]"`).
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
-- The roadmap's completed Phase 6 entry describes `configs/pendulum_ppo.yaml` as solving Pendulum-v1. Measured on
-  2026-10-13 (`docs/benchmarks/`), both Pendulum agents score at or below the random agent; the open roadmap item
-  "Pendulum PPO Learns and Solves Pendulum-v1" owns this, so do not quote that entry as a result. CartPole PPO does
-  solve CartPole-v1: its committed config is standard PPO with annealing (5 of 5 seeds by episode 427, 2026-10-15;
-  TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
+- The roadmap's completed Phase 6 entry describes `configs/pendulum_ppo.yaml` as solving Pendulum-v1; that was not true
+  until 2026-10-15, when the fixes of "Pendulum PPO Learns and Solves Pendulum-v1" made PPO reach -200 on 5 of 5 seeds
+  (`docs/benchmarks/pendulum_results.md`). Continuous Actor-Critic still scores below the random agent (its own open
+  roadmap item). CartPole PPO does solve CartPole-v1: its committed config is standard PPO with annealing (5 of 5 seeds
+  by episode 427, 2026-10-15; TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
 - CONTRIBUTING.md §5 and TESTING.md `CKPT-*` describe `.npz` checkpoints; `Trainer` names them
   `agent_episode_<n>.pt` (NumPy archive content, resolved by `BaseAgent._resolve_save_path`).
