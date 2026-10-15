@@ -1,4 +1,6 @@
 # Pendulum Continuous PPO Training Configuration
+# Measured 2026-10-15 (roadmap: Pendulum PPO Learns): the 10-episode training average reaches -200 on 5 of 5
+# seeds (1-5, docs/benchmarks/pendulum_results.md) within 500 episodes; 4 of 5 on seeds 6-10 in a scratch run.
 
 environment:
   name: "Pendulum-v1"
@@ -9,13 +11,15 @@ environment:
 agent:
   type: "ppo"
   config:
-    learning_rate: 0.0003
-    gamma: 0.99
+    learning_rate: 0.001     # Adam step size at the start; annealed to 0 over anneal_steps
+    gamma: 0.9               # Short horizon; 0.99 solved no seed
     gae_lambda: 0.95
     hidden_dim: 128
     value_coef: 0.5
     entropy_coef: 0.001
     clip_epsilon: 0.2
+    reward_scale: 0.1        # Rewards of -16..0 per step scaled before returns; keeps the critic in range
+    anneal_steps: 100000     # Learning rate and clip decay to 0 over the 500 x 200 training transitions
     ppo_epochs: 8
     batch_size: 64
     action_low: -2.0

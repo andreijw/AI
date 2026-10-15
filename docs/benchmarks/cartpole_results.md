@@ -21,11 +21,11 @@ share of runs whose final evaluation (10 greedy episodes) averaged at least
 
 | Algorithm | Episodes | Mean Eval Reward | Reward Std | Solve Rate | Avg Solve Episode | Eval ≥ Threshold | Mean Time (s) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **actor_critic** | 1500 | 475.8 | ±31.9 | 100% | 674.2 | 60% | 126.69s |
-| **dqn** | 750 | 450.0 | ±46.4 | 80% | 449.2 | 40% | 39.02s |
-| **ppo** | 1000 | 500.0 | ±0.0 | 100% | 388.4 | 100% | 85.04s |
-| **random** | 1000 | 20.8 | ±5.8 | 0% | N/A | 0% | 0.61s |
-| **reinforce** | 2000 | 449.3 | ±59.2 | 100% | 829.6 | 40% | 146.28s |
+| **actor_critic** | 1500 | 475.8 | ±31.9 | 100% | 674.2 | 60% | 127.07s |
+| **dqn** | 750 | 450.0 | ±46.4 | 80% | 449.2 | 40% | 39.21s |
+| **ppo** | 1000 | 500.0 | ±0.0 | 100% | 388.4 | 100% | 85.61s |
+| **random** | 1000 | 20.8 | ±5.8 | 0% | N/A | 0% | 0.64s |
+| **reinforce** | 2000 | 449.3 | ±59.2 | 100% | 829.6 | 40% | 147.02s |
 
 ## Learning Trajectories
 

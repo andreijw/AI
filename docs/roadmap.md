@@ -340,7 +340,13 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Every evaluation uses the same fixed set of start states, so scores are comparable across a run.
   - **Out of scope**: Vectorized evaluation.
 
-- [~] **Pendulum PPO Learns and Solves Pendulum-v1**
+- [x] **Pendulum PPO Learns and Solves Pendulum-v1**
+  - **Delivered in**: open PRs #82 (defect), #83 (code options) and the config and results PR that follows them.
+  - **Result (2026-10-15)**: published in `docs/benchmarks/pendulum_results.md`: the committed config's training
+    average reaches -200 on 5 of 5 seeds (1 to 5, episodes 211 to 318) but does not hold it: final training averages
+    -196 to -386 (1 of 5 still at -200), evaluation -285 ± 82 (1 of 5 at -200 or better). Scratch runs, not
+    published: 4 of 5 on seeds 6 to 10, and a separate gate run on seeds 1 to 5 that agrees with the published one
+    seed for seed. Continuous Actor-Critic does not learn with these settings and has its own item below.
   - **Description**: `ContinuousPPOAgent` with `configs/pendulum_ppo.yaml` does not learn. On 2026-10-13 the
     benchmark at its default 200 episodes gave evaluation rewards of -1632, -1673 and -1584 on seeds 1, 2 and 3
     (the same order of magnitude before the shuffle fix), against a solve threshold of -200 and a random agent
@@ -400,8 +406,9 @@ Defects found while working on other items, then findings from the brooks-lint h
     With all five changes (scratch patches): 5 of 5 seeds reach -200 (first at episodes 206 to 363) but drift back
     (evaluation -210 to -766); leaving any one of the five out drops to at most 1 of 5 (counting γ and the
     learning rate as one); on seeds 6 to 10, 3 of 5. Adding linear
-    annealing of the learning rate and clip range over 100,000 transitions: 4 of 5 reach -200 and hold near it
-    (evaluation -216 to -251 on those four). Gradients, direction (the mean moves toward rewarded actions) and Adam
+    annealing of the learning rate and clip range over 100,000 transitions: 4 of 5 reach -200 and stay near it
+    (evaluation -216 to -251 on those four), in those scratch patches; with the committed code (Result above) the
+    final training averages are -196 to -386. Gradients, direction (the mean moves toward rewarded actions) and Adam
     were already ruled out.
   - **Progress**: Part 1 (unclipped training samples; the Pendulum wrapper clips torque before action noise) fixes
     the NaN. Part 2 adds, as code with tests: `mean_init_scale` (default 0.01) on both continuous agents,
@@ -411,6 +418,24 @@ Defects found while working on other items, then findings from the brooks-lint h
     both challenges.
   - **Out of scope**: DDPG and other new algorithms; changing the solve threshold; the discrete agents.
   - **Depends on**: Seeded Environments Replay One Start State, so the diagnosis is not confounded by it.
+
+- [ ] **Continuous Actor-Critic Learns Pendulum-v1**
+  - **Description**: Split out of "Pendulum PPO Learns and Solves Pendulum-v1". `ContinuousActorCriticAgent` takes
+    one Adam step per 200-step episode (about 300 in its whole budget, against continuous PPO's 32 per episode), and it
+    does not yet use time-limit bootstrapping or annealing. With the new defaults (small initial mean head) and γ 0.9,
+    learning rate 0.001 and `reward_scale` 0.1 (a scratch run, not published; the committed config still has γ 0.99
+    and learning rate 0.0003), its final training average on seeds 1 to 5 was -1429 to -1530 after 300 episodes
+    (2026-10-15), at or below the random agent. The published committed config scores -1383 ± 63 in evaluation.
+  - **Acceptance criteria**:
+    - A diagnosis names why it does not learn, each cause confirmed by a check that fails before the fix.
+    - It uses the batch's `terminated` flag like continuous PPO, with a test.
+    - With a maintainer-approved config, the training average reaches -200 on at least 4 of 5 seeds within its
+      budget. If it cannot, its evaluation at least beats the random agent's on 4 of 5 seeds, and the item records
+      why one update per episode falls short and what would close the gap.
+    - Two runs with the same seeds agree; TESTING.md `TR-5` states the measured result, and
+      `docs/benchmarks/pendulum_results.md` is regenerated from a maintainer-approved run.
+  - **Known edge cases**: Its `update` takes the whole episode in one step; a larger budget may be needed.
+  - **Out of scope**: Turning it into PPO; DDPG.
 
 - [x] **Seed the Continuous PPO Mini-Batch Shuffle**
   - **Delivered in**: merged in #66.

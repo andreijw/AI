@@ -50,3 +50,17 @@ def test_ppo_uses_standard_rollouts_with_an_annealed_learning_rate():
     assert agent.learning_rate == pytest.approx(0.001)
     assert agent._optimizer.max_grad_norm == pytest.approx(0.5)
     assert (agent.clip_epsilon, agent.value_coef) == (0.2, 0.5)
+
+
+def test_pendulum_ppo_uses_the_measured_settings():
+    """γ 0.9, lr 0.001, reward scale 0.1, annealing over 100,000 transitions: 5 of 5 seeds reach -200
+    within 500 episodes (seeds 1–5, published; 4 of 5 on seeds 6–10 in a scratch run)."""
+    from rl_pendulum.benchmark import PendulumChallenge
+
+    env, agent, train_cfg = PendulumChallenge().setup_run("ppo", seed=1, episodes=None)
+    env.close()
+    assert (agent.gamma, agent.learning_rate, agent.reward_scale) == pytest.approx(
+        (0.9, 0.001, 0.1)
+    )
+    assert (agent.anneal_steps, agent.clip_ratio, agent.mean_init_scale) == (100_000, 0.2, 0.01)
+    assert train_cfg["num_episodes"] == 500

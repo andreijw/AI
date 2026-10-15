@@ -196,22 +196,23 @@ python train.py --config configs/pendulum_ppo.yaml
 ### Which agents solve which challenge
 
 A run solves the challenge when its average training reward over 10 episodes reaches the threshold: 475 for
-CartPole-v1, -200 for Pendulum-v1. CartPole-v1, measured with the committed configs on seeds 1 to 5
-([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md), 2026-10-15). `train.py` uses seed
-42, which was not measured, so a single `train.py` run may land on the unlucky side of these numbers:
+CartPole-v1, -200 for Pendulum-v1. Measured with the committed configs on seeds 1 to 5 on 2026-10-15
+([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
+[`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md)). `train.py` uses seed 42, which was
+not measured, so a single `train.py` run may land on the unlucky side of these numbers:
 
-| Agent | Config | Episodes | Seeds solved | First solve (episode) |
-| :--- | :--- | :---: | :---: | :---: |
-| REINFORCE | `cartpole_reinforce.yaml` (Adam) | 2000 | 5 of 5 | 645 to 1012 |
-| Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 1500 | 5 of 5 | 490 to 839 |
-| PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 1000 | 5 of 5 | 323 to 427 |
-| DQN | `cartpole_dqn.yaml` | 750 | 4 of 5 | 378 to 576 |
+| Challenge | Agent | Config | Episodes | Seeds solved | First solve (episode) |
+| :--- | :--- | :--- | :---: | :---: | :---: |
+| CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 2000 | 5 of 5 | 645 to 1012 |
+| CartPole-v1 | Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 1500 | 5 of 5 | 490 to 839 |
+| CartPole-v1 | PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 1000 | 5 of 5 | 323 to 427 |
+| CartPole-v1 | DQN | `cartpole_dqn.yaml` | 750 | 4 of 5 | 378 to 576 |
+| Pendulum-v1 | PPO | `pendulum_ppo.yaml` (annealed, rewards scaled) | 500 | 5 of 5 | 211 to 318 |
+| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` | 300 | 0 of 5 | — |
 
 "Solved" means the average reached the threshold at least once; it does not mean the agent held it to the end of
-training. Neither Pendulum agent solves Pendulum-v1 yet: Actor-Critic scored -1426 and PPO -1626, below the random
-agent's -1323, in the 2026-10-13 benchmark
-([`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md), seeds 42 and 123, 150 episodes,
-before the current solve rule). The roadmap item "Pendulum PPO Learns and Solves Pendulum-v1" owns this.
+training. Pendulum PPO's final greedy evaluation averages -285, with 1 of 5 seeds at -200 or better. Continuous
+Actor-Critic does not learn Pendulum-v1 yet (roadmap: "Continuous Actor-Critic Learns Pendulum-v1").
 
 ### Run any agent from one base config (quick overrides)
 
