@@ -69,11 +69,15 @@ def test_batched_forward_matches_the_single_observation_forward_row_by_row():
     assert (
         probs.shape == (5, ACTION_DIM) and values.shape == (5,) and hidden.shape == (5, HIDDEN_DIM)
     )
+    # Batched and single matrix products may sum in a different order (BLAS differs by CPU), and
+    # logits near 1000 turn last-bit differences into ~1e-10 relative differences after exp. A
+    # global max gives 0/0 instead, which no tolerance accepts.
     for row, obs in enumerate(observations):
         single_probs, single_value, single_hidden = agent._forward(obs)
-        np.testing.assert_allclose(probs[row], single_probs, rtol=1e-12, atol=1e-300)
-        assert values[row] == pytest.approx(single_value, rel=1e-12)
-        np.testing.assert_allclose(hidden[row], single_hidden, rtol=1e-12)
+        assert np.all(np.isfinite(probs[row]))
+        np.testing.assert_allclose(probs[row], single_probs, rtol=1e-9, atol=1e-300)
+        assert values[row] == pytest.approx(single_value, rel=1e-10)
+        np.testing.assert_allclose(hidden[row], single_hidden, rtol=1e-10)
 
 
 # ---------------------------------------------------------------------------
