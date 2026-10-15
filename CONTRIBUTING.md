@@ -232,6 +232,16 @@ pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20 --ign
 - Write the description exactly according to [.github/pull_request_template.md](.github/pull_request_template.md):
   summarize the changes, complete the checklist, detail verification steps, and list all files modified.
 
+### Pull requests and approval
+
+- Changes reach `develop` only through pull requests. Direct pushes, force pushes and deleting `develop` are blocked,
+  and every commit must be signed.
+- These CI checks must pass before a pull request can merge: Unit Tests, Ruff Linting, MyPy Type Checking, Bandit
+  Security Scan and Markdown Linting. CodeQL scanning and a Copilot review also run on every pull request.
+- The maintainer owns every file ([.github/CODEOWNERS](.github/CODEOWNERS)), so a pull request from anyone else
+  needs the maintainer's approval to merge. A new push dismisses an earlier approval.
+- Contributions from forks are welcome: open the pull request against `develop` and the maintainer will review it.
+
 ---
 
 ## 5. Generated Artifacts (Logs & Checkpoints)

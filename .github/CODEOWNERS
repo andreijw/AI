@@ -1,0 +1,3 @@
+# The maintainer owns every file: pull requests from anyone else need their approval to merge.
+# Enforced by the repository ruleset "BasicProtection" (require review from Code Owners).
+* @andreijw
