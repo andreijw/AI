@@ -267,6 +267,8 @@ Defects found while working on other items, then findings from the brooks-lint h
     0.0003: the training average reaches 475 on 3 of 5 seeds at episodes 586 to 652, faster than Actor-Critic, but
     is not held (one seed ends at 186). Adam with global-norm clipping at 0.5: 3 of 5 reach 475, later (episodes
     1265 to 1420), evaluation 442 ± 73, and the training average still falls back afterwards (final 189 to 456).
+    REINFORCE with `optimizer: adam` and its committed learning rate and budget (0.001, 2000 episodes): 5 of 5
+    reach 475 (episodes 645 to 1012, mean 830), evaluation 449 ± 59; one seed's final training average is 173.
   - **Decided (2026-10-14)**: A run counts as solved only when the rolling training average reaches the
     threshold; a final evaluation at or above it is reported separately. Without `--episodes`, every agent in every
     challenge trains for its own config's `training.num_episodes`, the random agents included. The README claims

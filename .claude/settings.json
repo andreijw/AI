@@ -16,7 +16,22 @@
       "Bash(gh stack merge *)",
       "Bash(gh stack rebase *)",
       "Bash(gh stack sync *)",
-      "Bash(gh repo delete *)"
+      "Bash(gh repo delete *)",
+      "Bash(git commit)",
+      "Bash(git commit *)",
+      "Bash(git push)",
+      "Bash(git push *)",
+      "Bash(git reset --hard)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean)",
+      "Bash(git clean *)",
+      "Bash(git checkout -- *)",
+      "Bash(git restore *)",
+      "Bash(rm -rf *)",
+      "Bash(rm -fr *)",
+      "Bash(rm -r *)",
+      "Bash(rm -R *)",
+      "Bash(rm --recursive *)"
     ]
   },
   "enabledPlugins": {

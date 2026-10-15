@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 
 from .base_agent import BaseAgent
+from .optim import Adam, optimizer_from_config
 from .returns import discounted_returns
 
 
@@ -26,10 +27,12 @@ class ReinforceAgent(BaseAgent):
         for Connectionist Reinforcement Learning. Machine Learning, 8, 229–256.
 
     Config keys (all optional):
-        learning_rate (float): Step size for SGD updates. Default: 1e-3.
+        learning_rate (float): Step size. Default: 1e-3.
         gamma        (float): Discount factor ∈ (0, 1]. Default: 0.99.
         hidden_dim   (int):   Width of the single hidden layer. Default: 128.
         seed         (int):   RNG seed for weight initialisation. Default: None.
+        optimizer    (str):   "sgd" or "adam" (see :mod:`rl_core.agents.optim`). Default: "sgd".
+        max_grad_norm (float): Global gradient-norm clip; requires optimizer "adam". Default: none.
     """
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
@@ -63,6 +66,10 @@ class ReinforceAgent(BaseAgent):
         self._b1: np.ndarray = np.zeros(self.hidden_dim)
         self._W2: np.ndarray = rng.standard_normal((self.hidden_dim, action_dim)) * scale2
         self._b2: np.ndarray = np.zeros(action_dim)
+
+        self._optimizer: Adam | None = optimizer_from_config(
+            config, {"W1": self._W1, "b1": self._b1, "W2": self._W2, "b2": self._b2}
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -198,11 +205,19 @@ class ReinforceAgent(BaseAgent):
 
         total_loss, grads = self._loss_and_grads(observations, actions, returns)
 
-        # Gradient step (averaged over episode length)
-        self._W1 -= self.learning_rate * grads["W1"] / n_steps
-        self._b1 -= self.learning_rate * grads["b1"] / n_steps
-        self._W2 -= self.learning_rate * grads["W2"] / n_steps
-        self._b2 -= self.learning_rate * grads["b2"] / n_steps
+        if self._optimizer is None:
+            # Gradient step (averaged over episode length)
+            self._W1 -= self.learning_rate * grads["W1"] / n_steps
+            self._b1 -= self.learning_rate * grads["b1"] / n_steps
+            self._W2 -= self.learning_rate * grads["W2"] / n_steps
+            self._b2 -= self.learning_rate * grads["b2"] / n_steps
+        else:
+            mean = {name: gradient / n_steps for name, gradient in grads.items()}
+            steps = self._optimizer.step(mean, self.learning_rate)
+            self._W1 -= steps["W1"]
+            self._b1 -= steps["b1"]
+            self._W2 -= steps["W2"]
+            self._b2 -= steps["b2"]
 
         return {"policy_loss": float(total_loss / n_steps)}
 
@@ -219,7 +234,15 @@ class ReinforceAgent(BaseAgent):
         """
         save_path = self._resolve_save_path(path)
         with open(save_path, "wb") as f:
-            np.savez(f, W1=self._W1, b1=self._b1, W2=self._W2, b2=self._b2)
+            arrays: dict[str, Any] = {
+                "W1": self._W1,
+                "b1": self._b1,
+                "W2": self._W2,
+                "b2": self._b2,
+            }
+            if self._optimizer is not None:
+                arrays.update(self._optimizer.state())
+            np.savez(f, **arrays)
 
     def load(self, path: str) -> None:
         """
@@ -239,3 +262,5 @@ class ReinforceAgent(BaseAgent):
             self._b1 = data["b1"]
             self._W2 = data["W2"]
             self._b2 = data["b2"]
+            if self._optimizer is not None:
+                self._optimizer.load_state(data)

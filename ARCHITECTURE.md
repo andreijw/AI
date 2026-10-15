@@ -47,7 +47,9 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 4. **Structured Artifact Scoping**: Generated logs, checkpoints, plots, and videos are partitioned deterministically
    by challenge and algorithm: `<artifact_root>/<challenge>/<agent>/`.
 5. **Pure NumPy Neural Foundations**: Neural network architectures and gradient optimizations (Adam, He-init,
-   clipped PPO, GAE) are implemented natively in NumPy without heavyweight external frameworks.
+   clipped PPO, GAE) are implemented natively in NumPy without heavyweight external frameworks. One `Adam` in
+   `rl_core/agents/optim.py` serves the continuous agents and, with `optimizer: adam` in the agent config,
+   REINFORCE, Actor-Critic and PPO, which otherwise use plain SGD.
 
 ---
 

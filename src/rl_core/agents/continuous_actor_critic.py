@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from .base_agent import BaseAgent
+from .optim import Adam
 from .returns import discounted_returns
 
 
@@ -78,26 +79,19 @@ class ContinuousActorCriticBase(BaseAgent):
         self._W_v: np.ndarray = self._rng.standard_normal(self.hidden_dim) * scale_head
         self._b_v: float = 0.0
 
-        # Optimizer momentum / state (Adam)
-        self._adam_m: dict[str, np.ndarray | float] = {
-            "W1": np.zeros_like(self._W1),
-            "b1": np.zeros_like(self._b1),
-            "W_mu": np.zeros_like(self._W_mu),
-            "b_mu": np.zeros_like(self._b_mu),
-            "log_std": np.zeros_like(self._log_std),
-            "W_v": np.zeros_like(self._W_v),
-            "b_v": 0.0,
-        }
-        self._adam_v: dict[str, np.ndarray | float] = {
-            "W1": np.zeros_like(self._W1),
-            "b1": np.zeros_like(self._b1),
-            "W_mu": np.zeros_like(self._W_mu),
-            "b_mu": np.zeros_like(self._b_mu),
-            "log_std": np.zeros_like(self._log_std),
-            "W_v": np.zeros_like(self._W_v),
-            "b_v": 0.0,
-        }
-        self._adam_t: int = 0
+        # Adam with global gradient-norm clipping
+        self._optimizer = Adam(
+            {
+                "W1": self._W1,
+                "b1": self._b1,
+                "W_mu": self._W_mu,
+                "b_mu": self._b_mu,
+                "log_std": self._log_std,
+                "W_v": self._W_v,
+                "b_v": self._b_v,
+            },
+            max_grad_norm=self.max_grad_norm,
+        )
 
     @staticmethod
     def _validate_dims(obs_dim: int, act_dim: int, hidden_dim: int) -> None:
@@ -167,25 +161,7 @@ class ContinuousActorCriticBase(BaseAgent):
 
     def _adam_step(self, grads: dict[str, np.ndarray | float], lr: float) -> None:
         """Apply one step of Adam optimization with gradient clipping."""
-        self._adam_t += 1
-        beta1, beta2, eps = 0.9, 0.999, 1e-8
-
-        # Global gradient clipping
-        total_norm_sq = 0.0
-        for g in grads.values():
-            total_norm_sq += np.sum(np.square(g))
-        total_norm = np.sqrt(total_norm_sq)
-        clip_coef = min(1.0, self.max_grad_norm / (total_norm + 1e-6))
-
-        for k, grad in grads.items():
-            g_clipped = grad * clip_coef
-            self._adam_m[k] = beta1 * self._adam_m[k] + (1.0 - beta1) * g_clipped
-            self._adam_v[k] = beta2 * self._adam_v[k] + (1.0 - beta2) * np.square(g_clipped)
-
-            m_hat = self._adam_m[k] / (1.0 - beta1**self._adam_t)
-            v_hat = self._adam_v[k] / (1.0 - beta2**self._adam_t)
-            step = lr * m_hat / (np.sqrt(v_hat) + eps)
-
+        for k, step in self._optimizer.step(grads, lr).items():
             if k == "W1":
                 self._W1 -= step
             elif k == "b1":
@@ -212,17 +188,17 @@ class ContinuousActorCriticBase(BaseAgent):
         save_path = self._resolve_save_path(path)
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
         with open(save_path, "wb") as f:
-            np.savez_compressed(
-                f,
-                W1=self._W1,
-                b1=self._b1,
-                W_mu=self._W_mu,
-                b_mu=self._b_mu,
-                log_std=self._log_std,
-                W_v=self._W_v,
-                b_v=np.array(self._b_v),
-                adam_t=np.array(self._adam_t),
-            )
+            arrays: dict[str, Any] = {
+                "W1": self._W1,
+                "b1": self._b1,
+                "W_mu": self._W_mu,
+                "b_mu": self._b_mu,
+                "log_std": self._log_std,
+                "W_v": self._W_v,
+                "b_v": np.array(self._b_v),
+                **self._optimizer.state(),
+            }
+            np.savez_compressed(f, **arrays)
 
     def load(self, path: str) -> None:
         """
@@ -240,8 +216,7 @@ class ContinuousActorCriticBase(BaseAgent):
             self._log_std = data["log_std"]
             self._W_v = data["W_v"]
             self._b_v = float(data["b_v"])
-            if "adam_t" in data:
-                self._adam_t = int(data["adam_t"])
+            self._optimizer.load_state(data)
 
 
 class ContinuousActorCriticAgent(ContinuousActorCriticBase):
