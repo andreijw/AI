@@ -1,6 +1,7 @@
 """The hand-written maths of the discrete policy-gradient agents.
 
-For REINFORCE, Actor-Critic and PPO this checks three things the behaviour tests cannot:
+For REINFORCE and Actor-Critic this checks three things the behaviour tests cannot (PPO's
+mini-batch maths is checked the same way in tests/test_discrete_ppo.py):
 
 * the analytic gradients agree with finite differences of the loss, parameter by parameter;
 * the loss equals a value worked out by hand, so a return paired with the wrong step is caught;
@@ -11,6 +12,8 @@ the algorithm holds constant while differentiating (standardised returns, advant
 log-probabilities) is an argument of that method, so the numerical gradient holds it constant
 too. Losses and gradients are summed over the steps of the batch, as the agents accumulate them.
 """
+
+import copy
 
 import numpy as np
 import pytest
@@ -134,36 +137,6 @@ def test_actor_critic_gradients_match_finite_differences():
     assert_gradients_match(loss, parameters, _boxed(grads))
 
 
-def _ppo_inputs(agent, observations, actions) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Returns, advantages and old log-probabilities that put ratios on both sides of the clip."""
-    returns = np.array([2.0, 1.5, 3.0, 0.5, 1.0, 2.5])
-    advantages = np.array([0.8, -1.1, 0.5, 1.3, -0.6, 0.2])
-    probabilities = [agent._forward(obs)[0] for obs in observations]
-    current = np.log([probs[a] for probs, a in zip(probabilities, actions, strict=True)])
-    # ratio = exp(current - old) = exp(-offset): 0.61, 1.65, 0.95, 1.05, 0.74, 1.35
-    old_log_probs = current + np.array([0.5, -0.5, 0.05, -0.05, 0.3, -0.3])
-    return returns, advantages, old_log_probs
-
-
-def test_ppo_gradients_match_finite_differences():
-    agent = _agent(PPOAgent)
-    agent._b_v = 0.2
-    observations, actions = _batch()
-    returns, advantages, old_log_probs = _ppo_inputs(agent, observations, actions)
-    _assert_away_from_kinks(agent, observations)
-    parameters, boxed_value_bias = _actor_critic_parameters(agent)
-    inputs = (observations, actions, returns, advantages, old_log_probs)
-
-    def loss() -> float:
-        agent._b_v = float(boxed_value_bias[0])
-        return agent._epoch_loss_and_grads(*inputs)[0]["total"]
-
-    _, grads, clipped_count = agent._epoch_loss_and_grads(*inputs)
-
-    assert 0 < clipped_count < N_STEPS, "The batch must exercise both branches of the clip."
-    assert_gradients_match(loss, parameters, _boxed(grads))
-
-
 # ---------------------------------------------------------------------------
 # Losses worked out by hand
 # ---------------------------------------------------------------------------
@@ -243,57 +216,6 @@ def test_actor_critic_losses_match_hand_computation():
     assert metrics["entropy_bonus"] == pytest.approx(HAND_ENTROPY, rel=1e-12)
 
 
-def test_ppo_epoch_loss_matches_hand_computation():
-    agent = _hand_agent(PPOAgent)  # clip_epsilon defaults to 0.2
-    observations = _hand_batch()["observations"]
-    advantages = np.array([1.0, 1.0, -0.5])
-    ratios = np.array([1.0, 2.0, 0.5])
-    old_log_probs = HAND_LOG_PROBS - np.log(ratios)
-
-    components, _, clipped_count = agent._epoch_loss_and_grads(
-        observations, HAND_ACTIONS, HAND_RETURNS, advantages, old_log_probs
-    )
-
-    # step 0: ratio 1.0, A  1.0 -> min(1.0, 1.0)    =  1.0   not clipped
-    # step 1: ratio 2.0, A  1.0 -> min(2.0, 1.2)    =  1.2   clipped
-    # step 2: ratio 0.5, A -0.5 -> min(-0.25, -0.4) = -0.4   clipped
-    # policy = -(1.0 + 1.2 - 0.4) = -1.8
-    assert clipped_count == 2
-    assert components["policy"] == pytest.approx(-1.8, rel=1e-12)
-    # value = sum(0.5 * (V - G)^2) = 0.5 * (1.5625 + 1.0 + 6.25) = 4.40625
-    assert components["value"] == pytest.approx(4.40625, rel=1e-12)
-    assert components["entropy"] == pytest.approx(3 * HAND_ENTROPY, rel=1e-12)
-    expected_total = -1.8 + agent.value_coef * 4.40625 - agent.entropy_coef * 3 * HAND_ENTROPY
-    assert components["total"] == pytest.approx(expected_total, rel=1e-12)
-
-
-def test_ppo_update_applies_one_epoch_built_from_hand_computed_returns():
-    """update() must feed the epoch the returns, advantages and log-probabilities it should.
-
-    PPO's reported losses cannot show a return paired with the wrong step: the first-epoch policy
-    loss is zero for any normalised advantages, and the value loss does not change when returns
-    are permuted. The weights do, so this compares them with what one epoch gives when the test
-    builds the inputs itself from the hand-written returns.
-    """
-    agent = _hand_agent(PPOAgent, ppo_epochs=1, learning_rate=0.1)
-    reference = _hand_agent(PPOAgent, ppo_epochs=1, learning_rate=0.1)
-    batch = _hand_batch()
-
-    metrics = agent.update(batch)
-
-    advantages = _standardised(HAND_RETURNS - HAND_VALUE)
-    _, grads, _ = reference._epoch_loss_and_grads(
-        batch["observations"], HAND_ACTIONS, HAND_RETURNS, advantages, HAND_LOG_PROBS
-    )
-    scale = reference.learning_rate / 3
-    np.testing.assert_allclose(
-        agent._b_pi, reference._b_pi - scale * grads["b_pi"], rtol=1e-12, atol=0
-    )
-    assert agent._b_v == pytest.approx(reference._b_v - scale * grads["b_v"], rel=1e-12)
-    assert not np.array_equal(agent._b_pi, reference._b_pi), "The update did not move the policy."
-    assert metrics["value_loss"] == pytest.approx(1.46875, rel=1e-12)
-
-
 # ---------------------------------------------------------------------------
 # Computing a loss changes nothing
 # ---------------------------------------------------------------------------
@@ -320,19 +242,6 @@ def test_actor_critic_loss_and_grads_changes_no_weight():
 
     first = agent._loss_and_grads(observations, actions, returns)
     second = agent._loss_and_grads(observations, actions, returns)
-
-    _assert_weights_unchanged(agent, before)
-    assert first[0] == second[0]
-
-
-def test_ppo_epoch_loss_and_grads_changes_no_weight():
-    agent = _agent(PPOAgent)
-    observations, actions = _batch()
-    inputs = (observations, actions, *_ppo_inputs(agent, observations, actions))
-    before = _weights(agent)
-
-    first = agent._epoch_loss_and_grads(*inputs)
-    second = agent._epoch_loss_and_grads(*inputs)
 
     _assert_weights_unchanged(agent, before)
     assert first[0] == second[0]
@@ -460,40 +369,6 @@ def test_actor_critic_update_descends_the_gradient_scaled_by_learning_rate_over_
     assert all(not np.array_equal(moved[name], untouched[name]) for name in moved)
 
 
-def test_ppo_update_runs_every_epoch_against_the_log_probabilities_recorded_first():
-    """Two epochs: the second must use the first's weights but the original log-probabilities.
-
-    The learning rate is large so that the first epoch moves the policy far enough for the
-    second to clip some steps. The reference repeats one epoch at a time with the inputs held
-    fixed, which is what makes the ratio differ from one and the clip matter.
-    """
-    config = {"gamma": 0.5, "learning_rate": 2.0, "ppo_epochs": 2}
-    agent, reference = _agent(PPOAgent, **config), _agent(PPOAgent, **config)
-    batch = _step_batch()
-    observations, actions = batch["observations"], batch["actions"]
-
-    metrics = agent.update(batch)
-
-    forward = [reference._forward(obs) for obs in observations]
-    old_log_probs = np.log([probs[a] for (probs, _, _), a in zip(forward, actions, strict=True)])
-    old_values = np.array([value for _, value, _ in forward])
-    assert np.ptp(old_values) > 1e-3, "The value function must not be constant for this test."
-    advantages = _standardised(STEP_RETURNS - old_values)
-    for _ in range(2):
-        components, grads, clipped_count = reference._epoch_loss_and_grads(
-            observations, actions, STEP_RETURNS, advantages, old_log_probs
-        )
-        _descend(reference, grads, scale=2.0 / N_STEPS)
-
-    _assert_same_weights(agent, reference)
-    assert 0 < clipped_count < N_STEPS, "The second epoch must clip some steps but not all."
-    assert metrics["policy_loss"] == pytest.approx(components["policy"] / N_STEPS, rel=1e-12)
-    assert metrics["value_loss"] == pytest.approx(components["value"] / N_STEPS, rel=1e-12)
-    assert metrics["entropy_bonus"] == pytest.approx(components["entropy"] / N_STEPS, rel=1e-12)
-    assert metrics["clip_fraction"] == pytest.approx(clipped_count / N_STEPS, rel=1e-12)
-    assert metrics["policy_loss"] != pytest.approx(components["total"] / N_STEPS, rel=1e-6)
-
-
 # ---------------------------------------------------------------------------
 # The Adam option: `optimizer: adam` steps the mean gradient with Adam instead of SGD
 # ---------------------------------------------------------------------------
@@ -543,28 +418,6 @@ def test_actor_critic_with_adam_steps_the_mean_gradient_with_adam():
     _assert_same_weights(agent, reference)
 
 
-def test_ppo_with_adam_takes_one_adam_step_per_epoch():
-    config = {**ADAM, "ppo_epochs": 2}
-    agent, reference = _agent(PPOAgent, **config), _agent(PPOAgent, **config)
-    adam = ReferenceAdam(ADAM["learning_rate"], ADAM["max_grad_norm"])
-    batch = _step_batch()
-    observations, actions = batch["observations"], batch["actions"]
-
-    agent.update(batch)
-
-    forward = [reference._forward(obs) for obs in observations]
-    old_log_probs = np.log([probs[a] for (probs, _, _), a in zip(forward, actions, strict=True)])
-    advantages = _standardised(STEP_RETURNS - np.array([value for _, value, _ in forward]))
-    for _ in range(2):
-        _, grads, _ = reference._epoch_loss_and_grads(
-            observations, actions, STEP_RETURNS, advantages, old_log_probs
-        )
-        _adam_descend(reference, adam, grads)
-
-    _assert_same_weights(agent, reference)
-    assert agent._optimizer.t == 2
-
-
 DISCRETE_AGENTS = [ReinforceAgent, ActorCriticAgent, PPOAgent]
 
 
@@ -591,6 +444,8 @@ def test_adam_checkpoint_resumes_exactly(agent_cls, tmp_path):
     resumed = _agent(agent_cls, **{**ADAM, "seed": 99})  # different initial weights
     resumed.load(path)
     assert resumed._optimizer.t == agent._optimizer.t
+    if agent_cls is PPOAgent:  # PPO shuffles mini-batches with its generator; checkpoints omit it
+        resumed._rng = copy.deepcopy(agent._rng)
 
     agent.update(batch)
     resumed.update(batch)

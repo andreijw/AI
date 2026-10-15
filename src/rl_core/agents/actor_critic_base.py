@@ -105,6 +105,24 @@ class ActorCriticBase(BaseAgent):
 
         return probs, value, h
 
+    def _forward_batch(self, observations: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Forward pass for a batch of observations; row ``i`` matches :meth:`_forward` on row ``i``.
+
+        Args:
+            observations: Array of shape (B, observation_dim).
+
+        Returns:
+            Tuple of (probabilities (B, action_dim), values (B,), hidden activations (B, H)).
+        """
+        h = np.maximum(0.0, observations @ self._W1 + self._b1)
+        logits = h @ self._W_pi + self._b_pi
+        logits = logits - np.max(logits, axis=1, keepdims=True)  # stable softmax, per row
+        exp_logits = np.exp(logits)
+        probs = exp_logits / exp_logits.sum(axis=1, keepdims=True)
+        values = h @ self._W_v + self._b_v
+        return probs, values, h
+
     def _parse_trajectory(
         self, batch: dict[str, Any]
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
@@ -195,19 +213,30 @@ class ActorCriticBase(BaseAgent):
         self._W_v -= scale * grads["W_v"]
         self._b_v -= scale * grads["b_v"]
 
-    def _step(self, grads: dict[str, Any], n_steps: int) -> None:
+    def _step(
+        self, grads: dict[str, Any], n_steps: int, learning_rate: float | None = None
+    ) -> None:
         """
         Take one optimiser step on gradients summed over ``n_steps`` steps.
 
         With plain SGD (the default) the parameters move by ``learning_rate / n_steps`` times
         the summed gradients. With ``optimizer: adam`` the mean gradient is stepped with Adam at
-        ``learning_rate``.
+        ``learning_rate``. ``learning_rate`` defaults to ``self.learning_rate``; a scheduled
+        rate is passed explicitly.
         """
+        lr = self.learning_rate if learning_rate is None else learning_rate
         if self._optimizer is None:
-            self._apply_ac_gradients(grads, self.learning_rate / n_steps)
+            self._apply_ac_gradients(grads, lr / n_steps)
             return
         mean = {name: gradient / n_steps for name, gradient in grads.items()}
-        self._apply_ac_gradients(self._optimizer.step(mean, self.learning_rate), 1.0)
+        self._apply_ac_gradients(self._optimizer.step(mean, lr), 1.0)
+
+    def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
+        """Arrays a subclass needs saved beyond the weights and optimizer state."""
+        return {}
+
+    def _load_extra_checkpoint_state(self, data: Any) -> None:
+        """Restore what :meth:`_extra_checkpoint_state` saved; ``data`` maps names to arrays."""
 
     # ------------------------------------------------------------------
     # BaseAgent interface
@@ -250,6 +279,7 @@ class ActorCriticBase(BaseAgent):
             arrays: dict[str, Any] = {k: np.asarray(v) for k, v in self._parameters().items()}
             if self._optimizer is not None:
                 arrays.update(self._optimizer.state())
+            arrays.update(self._extra_checkpoint_state())
             np.savez(f, **arrays)
 
     def load(self, path: str) -> None:
@@ -274,3 +304,4 @@ class ActorCriticBase(BaseAgent):
             self._b_v = float(data["b_v"])
             if self._optimizer is not None:
                 self._optimizer.load_state(data)
+            self._load_extra_checkpoint_state(data)
