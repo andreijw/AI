@@ -111,10 +111,11 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 
 ## Upcoming Milestones
 
-**Agreed order (2026-10-13):** Seed the Continuous PPO Mini-Batch Shuffle → Seeded Environments Replay One Start
-State → the test-gap items (Discounted-Return Tests That Can Fail, Softmax Stability Tests, Single `_compute_returns`
-Implementation) → Split `update` into Loss-and-Gradients and Apply → CartPole Agents Learn Within Their Budgets →
-Break the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 → DDPG.
+**Agreed order (2026-10-13, extended 2026-10-14):** Seed the Continuous PPO Mini-Batch Shuffle → Seeded Environments
+Replay One Start State → the test-gap items (Discounted-Return Tests That Can Fail, Softmax Stability Tests, Single
+`_compute_returns` Implementation) → Split `update` into Loss-and-Gradients and Apply → CartPole Agents Learn Within
+Their Budgets → Actor-Critic Trains with Adam → Standard PPO for Discrete Actions → Break the Benchmark Import Cycle →
+Pendulum PPO Learns and Solves Pendulum-v1 → DDPG.
 
 ### Workflow Tooling
 
@@ -405,6 +406,18 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: Retuning `configs/pendulum_ppo.yaml`; regenerating the Pendulum PPO row of
     `docs/benchmarks/pendulum_results.md`, which was produced with the unseeded shuffle and needs a
     maintainer-approved rerun.
+
+- [~] **Actor-Critic Trains with Adam**
+  - **Description**: On CartPole, Actor-Critic first reached the solve threshold later than REINFORCE (episodes 906 to
+    1269 against 645 to 1012), the opposite of what a critic should give, because REINFORCE trains with Adam and
+    Actor-Critic with plain SGD.
+  - **Acceptance criteria**:
+    - `configs/cartpole_actor_critic.yaml` uses `optimizer: "adam"` (maintainer-approved), and a test pins it.
+    - With the committed config, Actor-Critic reaches 475 on at least 4 of 5 seeds within 1500 episodes.
+  - **Measured (2026-10-14)**: Adam at the committed learning rate (0.001) and budget, seeds 1 to 5: 5 of 5, first
+    reaching 475 at episodes 490 to 839 (SGD: 906 to 1269); final training averages 446 to 500; evaluation 476 ± 33.
+  - **Learning gate (2026-10-14)**: the committed config gives the same per-seed results.
+  - **Out of scope**: Bootstrapped (TD) critic targets.
 
 - [ ] **Break the Benchmark Import Cycle**
   - **Description**: `src/benchmark.py` imports `rl_cartpole.benchmark` and `rl_pendulum.benchmark` inside functions
