@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from .base_agent import BaseAgent
+from .returns import discounted_returns
 
 
 class ContinuousActorCriticBase(BaseAgent):
@@ -289,12 +290,7 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
 
         n_steps = len(rewards)
 
-        # Compute discounted returns
-        returns = np.zeros(n_steps, dtype=np.float64)
-        running_return = 0.0
-        for t in reversed(range(n_steps)):
-            running_return = rewards[t] + self.gamma * running_return
-            returns[t] = running_return
+        returns = discounted_returns(rewards, self.gamma)
 
         # Forward pass over batch
         h = np.maximum(0.0, states @ self._W1 + self._b1)  # (n_steps, hidden_dim)

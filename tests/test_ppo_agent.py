@@ -140,16 +140,6 @@ def test_ppo_agent_action_probabilities_sum_to_one():
     assert h.shape == (64,)
 
 
-def test_ppo_agent_compute_returns_discounting():
-    """Discounted returns decrease over time with γ < 1 and constant rewards."""
-    config = {**_PPO_CONFIG, "gamma": 0.99}
-    agent = PPOAgent(observation_dim=4, action_dim=2, config=config)
-    rewards = np.ones(5)
-    returns = agent._compute_returns(rewards)
-    for t in range(len(returns) - 1):
-        assert returns[t] > returns[t + 1], f"G[{t}] should be > G[{t + 1}]"
-
-
 def test_ppo_agent_invalid_config():
     """Invalid core hyperparameters raise ValueError."""
     with pytest.raises(ValueError):

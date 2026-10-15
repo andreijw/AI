@@ -194,16 +194,6 @@ def test_actor_critic_agent_action_probabilities_sum_to_one():
     assert h.shape == (64,)
 
 
-def test_actor_critic_agent_compute_returns_discounting():
-    """Discounted returns decrease over time with γ < 1 and constant rewards."""
-    config = {**_AC_CONFIG, "gamma": 0.99}
-    agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=config)
-    rewards = np.ones(5)
-    returns = agent._compute_returns(rewards)
-    for t in range(len(returns) - 1):
-        assert returns[t] > returns[t + 1], f"G[{t}] should be > G[{t + 1}]"
-
-
 def test_actor_critic_agent_stores_config():
     """Config dictionary is accessible via agent.config."""
     config = {"learning_rate": 5e-4, "gamma": 0.95, "hidden_dim": 32}

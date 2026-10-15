@@ -166,17 +166,6 @@ def test_reinforce_agent_action_probabilities_sum_to_one():
     assert np.all(probs >= 0)
 
 
-def test_reinforce_agent_compute_returns_discounting():
-    """Discounted returns are larger for earlier timesteps (decrease over time) with rewards=1 and γ<1."""
-    config = {**_REINFORCE_CONFIG, "gamma": 0.99}
-    agent = ReinforceAgent(observation_dim=4, action_dim=2, config=config)
-    assert agent.gamma < 1.0, "Test requires gamma < 1.0 for strict monotone ordering"
-    rewards = np.ones(5)
-    returns = agent._compute_returns(rewards)
-    for t in range(len(returns) - 1):
-        assert returns[t] > returns[t + 1], f"G[{t}] should be > G[{t + 1}]"
-
-
 def test_reinforce_agent_stores_config():
     """Config dictionary is accessible via agent.config."""
     config = {"learning_rate": 5e-4, "gamma": 0.95, "hidden_dim": 32}

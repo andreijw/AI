@@ -376,43 +376,6 @@ class TestReinforceAgentExtended:
         probs, _ = agent._policy(np.array([100.0, -100.0, 0.0, 0.5]))
         assert np.all(probs > 0)
 
-    # --- Returns computation -------------------------------------------------
-
-    def test_compute_returns_single_step(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        returns = agent._compute_returns(np.array([3.0]))
-        np.testing.assert_allclose(returns, [3.0])
-
-    def test_compute_returns_zero_rewards(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        returns = agent._compute_returns(np.zeros(5))
-        np.testing.assert_array_equal(returns, np.zeros(5))
-
-    def test_compute_returns_gamma_one_is_sum(self):
-        """With gamma=1 the return at t=0 equals the total reward sum."""
-        agent = ReinforceAgent(
-            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "gamma": 1.0}
-        )
-        rewards = np.array([1.0, 2.0, 3.0])
-        returns = agent._compute_returns(rewards)
-        np.testing.assert_allclose(returns[0], 6.0, atol=1e-8)
-
-    def test_compute_returns_exact_values(self):
-        """Verify discounted returns against hand-computed values."""
-        agent = ReinforceAgent(
-            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "gamma": 0.5}
-        )
-        rewards = np.array([1.0, 1.0, 1.0])
-        returns = agent._compute_returns(rewards)
-        # G[2] = 1, G[1] = 1 + 0.5*1 = 1.5, G[0] = 1 + 0.5*1.5 = 1.75
-        np.testing.assert_allclose(returns, [1.75, 1.5, 1.0], atol=1e-8)
-
-    def test_compute_returns_length_preserved(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        for n in (1, 5, 50):
-            rewards = np.ones(n)
-            assert len(agent._compute_returns(rewards)) == n
-
     # --- Action selection ----------------------------------------------------
 
     def test_select_action_returns_integer(self):
@@ -779,24 +742,6 @@ class TestActorCriticAgentExtended:
         for _ in range(10):
             _, _, h = agent._forward(np.random.randn(4))
             assert np.all(h >= 0)
-
-    # --- Returns computation -------------------------------------------------
-
-    def test_compute_returns_exact_values(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "gamma": 0.5})
-        rewards = np.array([1.0, 1.0, 1.0])
-        returns = agent._compute_returns(rewards)
-        np.testing.assert_allclose(returns, [1.75, 1.5, 1.0], atol=1e-8)
-
-    def test_compute_returns_single_step(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        returns = agent._compute_returns(np.array([5.0]))
-        np.testing.assert_allclose(returns, [5.0])
-
-    def test_compute_returns_length_preserved(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        for n in (1, 10, 100):
-            assert len(agent._compute_returns(np.ones(n))) == n
 
     # --- Action selection ----------------------------------------------------
 

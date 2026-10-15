@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 
 from .actor_critic_base import ActorCriticBase
+from .returns import discounted_returns
 
 
 class PPOAgent(ActorCriticBase):
@@ -59,7 +60,7 @@ class PPOAgent(ActorCriticBase):
                 "clip_fraction": 0.0,
             }
 
-        returns = self._compute_returns(rewards)
+        returns = discounted_returns(rewards, self.gamma)
 
         old_log_probs = np.empty(n_steps, dtype=np.float64)
         old_values = np.empty(n_steps, dtype=np.float64)

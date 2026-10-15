@@ -153,38 +153,56 @@ Learns and Solves Pendulum-v1 → DDPG.
   - **Out of scope**: TensorBoard or other external logging backends; stopping a run on a non-finite value; plotting
     update metrics; making the 10-episode logging interval configurable; changing what any agent returns.
 
-- [ ] **Discounted-Return Tests That Can Fail**
+- [~] **Discounted-Return Tests That Can Fail**
   - **Description**: The `*_compute_returns_discounting` tests in `tests/test_ppo_agent.py`,
-    `tests/test_actor_critic_agent.py` and `tests/test_reinforce_agent.py` assert only that returns decrease over five
-    rewards of 1. They still pass with the discount removed, because 5, 4, 3, 2, 1 also decreases; only
-    `test_compute_returns_exact_values` in `tests/test_agents_extensive.py` notices.
+    `tests/test_actor_critic_agent.py` and `tests/test_reinforce_agent.py` asserted only that returns decrease over
+    five rewards of 1. They still passed with the discount removed, because 5, 4, 3, 2, 1 also decreases; only the
+    exact-value tests in `tests/test_agents_extensive.py` noticed.
   - **Acceptance criteria**:
-    - Each of the three tests asserts values worked out by hand, or is removed in favour of the exact-value tests,
-      with PPO covered by one.
-    - Replacing `self.gamma * cumulative` with `1.0 * cumulative` fails a named test in each agent's own test file
+    - The three tests are removed in favour of hand-computed tests of the one shared function
+      (`tests/test_returns.py`).
+    - Dropping the discount from the shared function fails a named test, and a test per agent (REINFORCE,
+      Actor-Critic, PPO and continuous Actor-Critic) fails if that agent stops passing its own `gamma`
       (checked with `mutation_check.py`).
-  - **Out of scope**: Changing `_compute_returns` itself.
+  - **Out of scope**: Nothing further; this ships together with the single implementation below.
 
-- [ ] **Softmax Stability Tests**
+- [~] **Softmax Stability Tests**
   - **Description**: Removing the `logits - np.max(logits)` line from the softmax in
-    `rl_core/agents/actor_critic_base.py` or `rl_core/agents/reinforce_agent.py` fails no test in the suite, so the
-    guard against overflow required by CONTRIBUTING.md §1 is not locked in.
+    `rl_core/agents/actor_critic_base.py` or `rl_core/agents/reinforce_agent.py` failed no test in the suite, so the
+    guard against overflow required by CONTRIBUTING.md §1 was not locked in.
   - **Acceptance criteria**:
-    - Tests drive each forward pass with weights large enough to produce logits near ±1000 and assert that the
-      probabilities are finite and sum to one.
+    - Tests force logits of ±1000 on each forward pass and assert, with warnings treated as errors, that the
+      probabilities are finite and sum to one and that `select_action` works in both modes. The logits are set
+      through the policy head's bias: scaling the weights does not reliably overflow.
     - Removing the stabilisation line in either file fails a named test (checked with `mutation_check.py`).
   - **Known edge cases**: All logits equal; one logit far above the rest.
-  - **Out of scope**: Gradient checks for the existing agents.
+  - **Out of scope**: Gradient checks for the existing agents (see "Split `update` into Loss-and-Gradients and
+    Apply"); sharing the softmax (see "One Softmax for the Discrete Policies").
 
-- [ ] **Single `_compute_returns` Implementation**
-  - **Description**: `ReinforceAgent._compute_returns` and `ActorCriticBase._compute_returns` are the same
-    discounted-return loop written twice, so a fix to one can miss the other.
+- [~] **Single `_compute_returns` Implementation**
+  - **Description**: `ReinforceAgent._compute_returns` and `ActorCriticBase._compute_returns` were the same
+    discounted-return loop written twice, with a third copy inline in `ContinuousActorCriticAgent.update`, so a fix
+    to one could miss the others.
   - **Acceptance criteria**:
-    - One implementation in `src/rl_core/agents/`, used by REINFORCE, Actor-Critic and PPO.
+    - One implementation, `rl_core.agents.returns.discounted_returns`, used by REINFORCE, Actor-Critic, PPO and
+      continuous Actor-Critic; no `_compute_returns` method remains.
     - Seeded runs give bit-identical weights before and after the change.
     - The duplicate-code audit reports nothing new.
   - **Known edge cases**: Empty reward array; `gamma` of 0 and of 1.
-  - **Out of scope**: Sharing the softmax or the network code between REINFORCE and the actor-critic family.
+  - **Out of scope**: Sharing the softmax or the network code between REINFORCE and the actor-critic family (see
+    "One Softmax for the Discrete Policies").
+
+- [ ] **One Softmax for the Discrete Policies**
+  - **Description**: The numerically stable softmax is written inline twice, in `ReinforceAgent._policy` and in
+    `ActorCriticBase._forward`. Both copies are now covered by the same stability tests, so they cannot silently
+    diverge, but a change to one still has to be made in the other.
+  - **Acceptance criteria**:
+    - One module-level `stable_softmax(logits)` under `src/rl_core/agents/`, with its own hand-computed tests, used
+      by both forward passes.
+    - Seeded runs give bit-identical weights before and after the change.
+    - `tests/test_discrete_policy_numerics.py` passes unchanged.
+  - **Known edge cases**: Batched logits (a 2-D input) if a later agent needs them; all logits equal.
+  - **Out of scope**: Sharing the network or forward pass between REINFORCE and the actor-critic family.
 
 ### Code Health
 
@@ -329,6 +347,10 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Each learning agent has a method that returns the loss and gradients for a batch and changes no state, and a
       separate step that applies them.
     - Each has a finite-difference test using `assert_gradients_match` from `tests/helpers.py`.
+    - The loss each agent computes is checked against a value worked out by hand, so a return that is misaligned
+      with its step is caught. Today the tests prove only that each `update` depends on `gamma`: passing the
+      rewards reversed, reversing the returns, or squaring the discount at a call site all survive the suite
+      (found on 2026-10-13).
     - Seeded runs give bit-identical weights before and after the change.
   - **Known edge cases**: PPO's multiple epochs over one batch; DQN's several mini-batches per call; ReLU kinks and
     clip boundaries in the gradient check.
@@ -336,7 +358,8 @@ Defects found while working on other items, then findings from the brooks-lint h
 
 - [ ] **Test Agents Through Their Public Behaviour**
   - **Description**: Tests reach into private attributes 274 times (124 in `tests/test_agents_extensive.py`), so a
-    refactor with no behaviour change breaks many of them; `_compute_returns` alone is called by 11 tests.
+    refactor with no behaviour change breaks many of them. (The 11 tests that called `_compute_returns` went with
+    that method on 2026-10-13; the count above predates that.)
   - **Acceptance criteria**:
     - Agent tests assert through `select_action`, the metrics `update` returns, and save/load round trips.
     - Private access remains only where a test checks the maths directly (gradient checks, exact returns), through
