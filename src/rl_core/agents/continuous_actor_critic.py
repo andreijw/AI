@@ -20,7 +20,9 @@ class ContinuousActorCriticBase(BaseAgent):
       1. Gaussian Actor Head: outputs state-dependent mean mu(s) and trainable log_std
       2. Critic Head: outputs state-value estimate V(s)
 
-    Actions are sampled from N(mu, sigma^2) and clipped to [action_low, action_high].
+    In training, actions are samples from N(mu, sigma^2) returned unclipped, so the batch holds the
+    action whose log-probability the update uses; the environment clips the torque it applies. In
+    evaluation the action is mu clipped to [action_low, action_high].
     """
 
     def __init__(
@@ -133,17 +135,18 @@ class ContinuousActorCriticBase(BaseAgent):
             evaluate: Legacy alias; if True, acts deterministically. Overrides training if passed.
 
         Returns:
-            Action vector of shape (action_dim,) clipped to [action_low, action_high].
+            Action vector of shape (action_dim,). In training: the unclipped sample, which may lie
+            outside [action_low, action_high] (clipping it here would make the stored action differ
+            from the sampled one, and its log-probability meaningless when mu is out of bounds).
+            In evaluation: mu clipped to [action_low, action_high].
         """
         mu, log_std, _, _ = self._forward(state)
         is_eval = evaluate if evaluate is not None else not training
         if is_eval:
-            action = mu
-        else:
-            std = np.exp(log_std)
-            noise = self._rng.standard_normal(self.action_dim)
-            action = mu + std * noise
-        return np.clip(action, self.action_low, self.action_high)
+            return np.clip(mu, self.action_low, self.action_high)
+        std = np.exp(log_std)
+        noise = self._rng.standard_normal(self.action_dim)
+        return mu + std * noise
 
     def _log_prob(self, action: np.ndarray, mu: np.ndarray, log_std: np.ndarray) -> np.ndarray:
         """Compute Gaussian log-likelihood log N(action; mu, sigma^2)."""

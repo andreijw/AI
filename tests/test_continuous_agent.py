@@ -57,11 +57,33 @@ def test_continuous_action_selection():
     assert np.allclose(act_eval1, act_eval2)
     assert -2.0 <= act_eval1[0] <= 2.0
 
-    # Stochastic exploration actions
+    # Stochastic exploration actions: the raw samples (the environment clips torque)
     actions = [agent.select_action(state, evaluate=False) for _ in range(20)]
     assert any(not np.allclose(actions[0], a) for a in actions[1:])
-    for a in actions:
-        assert -2.0 <= a[0] <= 2.0
+
+
+def _far_outside_agent(agent_cls, **config):
+    """An agent whose policy mean sits around +40, far beyond the action bounds of ±2."""
+    settings = {"action_low": -2.0, "action_high": 2.0, "seed": 3, **config}
+    agent = agent_cls(observation_dim=3, action_dim=1, config=settings)
+    agent._b_mu = np.array([40.0])
+    agent._W_mu = np.zeros_like(agent._W_mu)
+    return agent
+
+
+@pytest.mark.parametrize("agent_cls", [ContinuousActorCriticAgent, ContinuousPPOAgent])
+def test_training_actions_are_the_unclipped_sample(agent_cls):
+    """The batch must hold the action the log-probability was sampled for, not its clipped value."""
+    agent = _far_outside_agent(agent_cls)
+    std = float(np.exp(agent._log_std[0]))
+    state = np.array([0.5, -0.2, 1.0])
+    samples = np.array([agent.select_action(state, training=True)[0] for _ in range(200)])
+    assert np.all(np.abs(samples - 40.0) < 6 * std), (
+        "Training actions must be samples around the mean."
+    )
+    assert np.all(np.abs(agent.select_action(state, training=False)) <= 2.0), (
+        "Evaluation stays clipped."
+    )
 
 
 def test_continuous_save_load(tmp_path):

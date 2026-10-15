@@ -64,9 +64,11 @@ State the reduction once: averaging over the batch divides every gradient by `B`
   `ContinuousActorCriticBase`; anything else extends `BaseAgent`. Read the base class before writing: the
   network, forward pass, optimizer step and save/load may already exist.
 - **Contract.** `select_action(observation, training)` returns an `int` for a discrete space and a
-  float array inside the bounds for a continuous one, and is greedy (or the mean) when `training` is
-  false. `update(batch)` takes the trainer's batch and returns `dict[str, float]` with every quantity
-  worth watching. `save` and `load` round-trip every array and counter the agent needs to resume.
+  float array for a continuous one, and is greedy (or the clipped mean) when `training` is false. A
+  continuous training action is the unclipped sample, so the batch holds the action its
+  log-probability belongs to; the environment wrapper clips the torque it applies. `update(batch)`
+  takes the trainer's batch and returns `dict[str, float]` with every quantity worth watching.
+  `save` and `load` round-trip every array and counter the agent needs to resume.
 - **Separate computing from applying.** One method computes the loss and gradients for a batch and changes
   nothing; another applies the step. This is what makes a gradient check possible, and it keeps the
   optimizer swappable. Everything held constant when differentiating is an argument of that method.

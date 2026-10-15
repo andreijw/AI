@@ -340,7 +340,7 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Every evaluation uses the same fixed set of start states, so scores are comparable across a run.
   - **Out of scope**: Vectorized evaluation.
 
-- [ ] **Pendulum PPO Learns and Solves Pendulum-v1**
+- [~] **Pendulum PPO Learns and Solves Pendulum-v1**
   - **Description**: `ContinuousPPOAgent` with `configs/pendulum_ppo.yaml` does not learn. On 2026-10-13 the
     benchmark at its default 200 episodes gave evaluation rewards of -1632, -1673 and -1584 on seeds 1, 2 and 3
     (the same order of magnitude before the shuffle fix), against a solve threshold of -200 and a random agent
@@ -384,6 +384,28 @@ Defects found while working on other items, then findings from the brooks-lint h
       shared trunk the critic term swamps the actor term.
     - `configs/pendulum_ppo.yaml` sets `clip_epsilon`, but `ContinuousPPOAgent` reads `clip_ratio`, so the config
       value is ignored (both are 0.2 today). The discrete `PPOAgent` reads `clip_epsilon`.
+  - **Diagnosis (2026-10-15)**, committed configs, seeds 1 to 5, scratch outputs. Baseline at each config's budget:
+    final training averages: PPO -1314 to -1806 with NaN on seed 2 (episode 489); Actor-Critic -1031 to -1509; the
+    random agent -1155 to -1325. Five causes, each needed (γ and the learning rate are one change):
+    1. **Defect: log-probability of the clipped action.** `select_action` clipped the sample, so the batch held the
+       clipped value and its log-density. A negative advantage then pushed the mean further outside the bounds: on
+       seed 2 the median |mean| reached 268, every action clipped, PPO's ratio overflowed (losses up to 1e111), NaN.
+       Storing the unclipped sample removes the NaN on every seed but alone does not make either agent learn.
+    2. **Initial mean far outside the bounds**: 96 to 100% of actions clipped on seeds 1, 2 and 5 before training.
+    3. **Unscaled rewards**: the critic's gradient (norm 458 to 3349) swamps the actor's (0.2 to 65) in the shared
+       trunk; the value loss stays 4000 to 10000 and the policy settles on a constant one-sided torque.
+    4. **The 200-step time limit treated as terminal**: every Pendulum episode ends that way.
+    5. **γ 0.99 and learning rate 0.0003**, changed together to γ 0.9 and 0.001. γ is the essential half: with the
+       other four changes, γ 0.9 at the old learning rate gives 2 of 5, the new learning rate at γ 0.99 gives 0.
+    With all five changes (scratch patches): 5 of 5 seeds reach -200 (first at episodes 206 to 363) but drift back
+    (evaluation -210 to -766); leaving any one of the five out drops to at most 1 of 5 (counting γ and the
+    learning rate as one); on seeds 6 to 10, 3 of 5. Adding linear
+    annealing of the learning rate and clip range over 100,000 transitions: 4 of 5 reach -200 and hold near it
+    (evaluation -216 to -251 on those four). Gradients, direction (the mean moves toward rewarded actions) and Adam
+    were already ruled out.
+  - **Progress**: Part 1 (unclipped training samples; the Pendulum wrapper clips torque before action noise) fixes
+    the NaN. Part 2: small initial mean head, `reward_scale`, time-limit bootstrapping, annealing for continuous
+    PPO. Part 3: the measured config, learning gate and published results for both challenges.
   - **Out of scope**: DDPG and other new algorithms; changing the solve threshold; the discrete agents.
   - **Depends on**: Seeded Environments Replay One Start State, so the diagnosis is not confounded by it.
 
