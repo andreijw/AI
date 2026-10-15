@@ -148,3 +148,28 @@ def _zeros_like(value: np.ndarray | float) -> Any:
     if isinstance(value, np.ndarray) and value.ndim > 0:
         return np.zeros_like(value, dtype=np.float64)
     return 0.0
+
+
+def anneal_steps_from_config(config: Mapping[str, Any]) -> int | None:
+    """
+    Read ``anneal_steps``: decay the learning rate and clip range linearly to zero over this many
+    trained transitions. Unset (None) means no decay.
+
+    Raises:
+        ValueError: If it is set and not a positive integer.
+    """
+    raw = config.get("anneal_steps")
+    if raw is None:
+        return None
+    steps = int(raw)
+    if steps <= 0:
+        raise ValueError(f"anneal_steps must be a positive integer, got {steps!r}")
+    return steps
+
+
+def anneal_fraction(steps_trained: int, anneal_steps: int | None) -> float:
+    """The share of the learning rate and clip range still in use: 1 without annealing, else
+    ``max(0, 1 − steps_trained / anneal_steps)``, computed before the transitions of this update."""
+    if anneal_steps is None:
+        return 1.0
+    return max(0.0, 1.0 - steps_trained / anneal_steps)

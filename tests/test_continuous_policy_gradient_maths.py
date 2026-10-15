@@ -287,9 +287,9 @@ def _record_minibatch_inputs(agent) -> list[tuple[np.ndarray, np.ndarray]]:
     recorded: list[tuple[np.ndarray, np.ndarray]] = []
     original = agent._minibatch_loss_and_grads
 
-    def recording(states, actions, returns, advantages, old_log_probs):
+    def recording(states, actions, returns, advantages, old_log_probs, **kwargs):
         recorded.append((np.array(returns), np.array(advantages)))
-        return original(states, actions, returns, advantages, old_log_probs)
+        return original(states, actions, returns, advantages, old_log_probs, **kwargs)
 
     agent._minibatch_loss_and_grads = recording
     return recorded

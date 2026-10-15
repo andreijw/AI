@@ -231,13 +231,6 @@ class ActorCriticBase(BaseAgent):
         mean = {name: gradient / n_steps for name, gradient in grads.items()}
         self._apply_ac_gradients(self._optimizer.step(mean, lr), 1.0)
 
-    def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
-        """Arrays a subclass needs saved beyond the weights and optimizer state."""
-        return {}
-
-    def _load_extra_checkpoint_state(self, data: Any) -> None:
-        """Restore what :meth:`_extra_checkpoint_state` saved; ``data`` maps names to arrays."""
-
     # ------------------------------------------------------------------
     # BaseAgent interface
     # ------------------------------------------------------------------

@@ -23,6 +23,20 @@ class ContinuousActorCriticBase(BaseAgent):
     In training, actions are samples from N(mu, sigma^2) returned unclipped, so the batch holds the
     action whose log-probability the update uses; the environment clips the torque it applies. In
     evaluation the action is mu clipped to [action_low, action_high].
+
+    Config keys shared by both continuous agents (all optional):
+        learning_rate (float): Adam step size. Default: 3e-4.
+        gamma (float): Discount factor. Default: 0.99.
+        hidden_dim (int): Shared hidden layer width. Default: 128.
+        value_coef (float): Critic-loss weight. Default: 0.5.
+        entropy_coef (float): Entropy-bonus weight. Default: 0.001.
+        max_grad_norm (float): Global gradient-norm clip. Default: 0.5.
+        mean_init_scale (float): Scale of the mean head's initial weights relative to He scaling;
+            small keeps the initial mean inside the bounds. Default: 0.01.
+        reward_scale (float): Multiplier on rewards before returns are computed. Default: 1.0.
+        init_log_std (float): Initial log standard deviation. Default: -0.5.
+        action_low, action_high: Action bounds. Default: -1.0, 1.0.
+        seed (int): Seed for weights and sampling. Default: None.
     """
 
     def __init__(
@@ -38,6 +52,14 @@ class ContinuousActorCriticBase(BaseAgent):
         self.learning_rate: float = float(config.get("learning_rate", 3e-4))
         self.value_coef: float = float(config.get("value_coef", 0.5))
         self.entropy_coef: float = float(config.get("entropy_coef", 0.001))
+        # Scale of the mean head's initial weights relative to He scaling. Small (0.01, as in
+        # CleanRL) keeps the initial mean near zero, inside the action bounds.
+        self.mean_init_scale: float = float(config.get("mean_init_scale", 0.01))
+        # Rewards are multiplied by this before returns and advantages are computed.
+        self.reward_scale: float = float(config.get("reward_scale", 1.0))
+        for name in ("mean_init_scale", "reward_scale"):
+            if getattr(self, name) <= 0.0:
+                raise ValueError(f"{name} must be positive, got {getattr(self, name)!r}")
         self.max_grad_norm: float = float(config.get("max_grad_norm", 0.5))
 
         # Action bounds
@@ -70,7 +92,7 @@ class ContinuousActorCriticBase(BaseAgent):
         # Actor head: hidden -> mu
         self._W_mu: np.ndarray = (
             self._rng.standard_normal((self.hidden_dim, action_dim)) * scale_head
-        )
+        ) * self.mean_init_scale
         self._b_mu: np.ndarray = np.zeros(action_dim, dtype=np.float64)
 
         # Trainable log standard deviation: initialized to -0.5 (std ~ 0.6)
@@ -200,6 +222,7 @@ class ContinuousActorCriticBase(BaseAgent):
                 "W_v": self._W_v,
                 "b_v": np.array(self._b_v),
                 **self._optimizer.state(),
+                **self._extra_checkpoint_state(),
             }
             np.savez_compressed(f, **arrays)
 
@@ -220,6 +243,7 @@ class ContinuousActorCriticBase(BaseAgent):
             self._W_v = data["W_v"]
             self._b_v = float(data["b_v"])
             self._optimizer.load_state(data)
+            self._load_extra_checkpoint_state(data)
 
 
 class ContinuousActorCriticAgent(ContinuousActorCriticBase):
@@ -266,7 +290,7 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         else:
             return {}
 
-        returns = discounted_returns(rewards, self.gamma)
+        returns = discounted_returns(rewards * self.reward_scale, self.gamma)
 
         components, grads = self._loss_and_grads(states, actions, returns)
 

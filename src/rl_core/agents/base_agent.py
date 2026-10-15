@@ -52,6 +52,14 @@ class BaseAgent(ABC):
             return int(self._rng.choice(self.action_dim, p=probs))
         return int(np.argmax(probs))
 
+    def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
+        """Arrays a subclass needs saved beyond the weights and optimizer state."""
+        return {}
+
+    def _load_extra_checkpoint_state(self, data: Any) -> None:
+        """Restore what :meth:`_extra_checkpoint_state` saved; ``data`` maps names to arrays."""
+        return None  # nothing extra by default
+
     @staticmethod
     def _resolve_save_path(path: str) -> str:
         """

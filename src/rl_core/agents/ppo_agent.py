@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 
 from .actor_critic_base import ActorCriticBase
+from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import gae
 
 
@@ -55,8 +56,7 @@ class PPOAgent(ActorCriticBase):
         self.ppo_epochs: int = int(config.get("ppo_epochs", 4))
         self.gae_lambda: float = float(config.get("gae_lambda", 1.0))
         self.rollout_steps: int = int(config.get("rollout_steps", 1))
-        raw_anneal = config.get("anneal_steps")
-        self.anneal_steps: int | None = None if raw_anneal is None else int(raw_anneal)
+        self.anneal_steps: int | None = anneal_steps_from_config(config)
         raw_minibatch = config.get("minibatch_size")
         self.minibatch_size: int | None = None if raw_minibatch is None else int(raw_minibatch)
 
@@ -72,8 +72,6 @@ class PPOAgent(ActorCriticBase):
             raise ValueError(
                 f"rollout_steps must be a positive integer, got {self.rollout_steps!r}"
             )
-        if self.anneal_steps is not None and self.anneal_steps <= 0:
-            raise ValueError(f"anneal_steps must be a positive integer, got {self.anneal_steps!r}")
         if self.minibatch_size is not None and self.minibatch_size <= 0:
             raise ValueError(
                 f"minibatch_size must be a positive integer, got {self.minibatch_size!r}"
@@ -139,9 +137,7 @@ class PPOAgent(ActorCriticBase):
             advantages = advantages / (advantages.std() + 1e-8)
 
         minibatch_size = self.minibatch_size or n_steps
-        fraction = 1.0
-        if self.anneal_steps is not None:
-            fraction = max(0.0, 1.0 - self._steps_trained / self.anneal_steps)
+        fraction = anneal_fraction(self._steps_trained, self.anneal_steps)
         learning_rate = self.learning_rate * fraction
         clip_epsilon = self.clip_epsilon * fraction
         policy_losses: list[float] = []

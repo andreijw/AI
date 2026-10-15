@@ -181,7 +181,8 @@ classDiagram
     }
 
     class ContinuousPPOAgent {
-        +float clip_epsilon
+        +float clip_ratio
+        +int anneal_steps
         +int ppo_epochs
         +update(trajectory) dict
     }
