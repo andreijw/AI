@@ -11,8 +11,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from benchmark import (
-    CHALLENGES,
-    BenchmarkChallenge,
     BenchmarkRunner,
     classify_run,
     find_solved_episode,
@@ -22,6 +20,7 @@ from benchmark import (
 from rl_cartpole.benchmark import CartPoleChallenge
 from rl_cartpole.environments.cartpole_env import CartPoleEnv
 from rl_core.agents.random_agent import RandomAgent
+from rl_core.challenges import CHALLENGES, BenchmarkChallenge
 from rl_core.utils.config import load_config
 from rl_pendulum.benchmark import PendulumChallenge
 

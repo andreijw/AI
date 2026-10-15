@@ -446,7 +446,7 @@ Defects found while working on other items, then findings from the brooks-lint h
     buffer; CartPole's 500-step time limit is treated as terminal, as for every agent.
   - **Out of scope**: Value-loss clipping, KL early stopping, parallel environments.
 
-- [ ] **Break the Benchmark Import Cycle**
+- [~] **Break the Benchmark Import Cycle**
   - **Description**: `src/benchmark.py` imports `rl_cartpole.benchmark` and `rl_pendulum.benchmark` inside functions
     in two places, both import `benchmark` back, and a `sys.modules.setdefault("benchmark", ...)` alias holds the
     cycle together. A third challenge means editing the runner twice.

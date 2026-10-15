@@ -38,8 +38,9 @@ common in plans written by an eager author.
 | `src/rl_core/agents/` | Algorithms: networks, update rules, `ReplayBuffer` | NumPy and the standard library. No Gymnasium, no challenge package |
 | `src/rl_core/training/` | `Trainer`: the episode loop, evaluation, checkpoint cadence | Gymnasium as an interface only; it never names an environment or an algorithm |
 | `src/rl_core/utils/` | Config, logging, video, plots | The I/O libraries (PyYAML, Matplotlib, moviepy) stay here |
-| `src/rl_<challenge>/` | One environment: wrapper, noise, domain randomization, `make_env` factories, the `BenchmarkChallenge` adapter | `rl_core`; never another challenge |
-| `src/benchmark.py` | The benchmark runner and the challenge registry | `rl_core`, and challenges through the registry |
+| `src/rl_core/challenges/` | `BenchmarkChallenge`, the challenge registry and `discover_challenges` | `rl_core`; it finds challenge packages by scanning, never by name |
+| `src/rl_<challenge>/` | One environment: wrapper, noise, domain randomization, `make_env` factories, the `BenchmarkChallenge` adapter in `benchmark.py` | `rl_core`; never another challenge, never `src/benchmark.py` |
+| `src/benchmark.py` | The benchmark runner and its command line | `rl_core`; challenges only through `discover_challenges` |
 | `train.py`, `record.py` | Command line: parse, build, call | Everything; they hold no algorithm logic |
 
 Dependencies point one way: scripts and challenges import `rl_core`, never the reverse. No file in

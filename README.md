@@ -50,6 +50,7 @@ AI/
 │   │   │   └── returns.py       # Discounted returns shared by the episodic agents
 │   │   ├── training/            # Generic training pipeline (trainer.py)
 │   │   ├── utils/               # Config, logging, video recording & plotting utilities
+│   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges
 │   │   └── seeding.py           # Separate seeded random streams (derive_rng)
 │   ├── rl_cartpole/             # CartPole-v1 discrete balance control challenge
 │   │   ├── environments/        # CartPole wrappers and vectorization factories
@@ -57,7 +58,7 @@ AI/
 │   ├── rl_pendulum/             # Pendulum-v1 continuous torque control challenge
 │   │   ├── environments/        # Pendulum wrappers and continuous noise factories
 │   │   └── benchmark.py         # Pendulum benchmark challenge implementation
-│   └── benchmark.py             # General benchmark interface & runner engine
+│   └── benchmark.py             # Benchmark runner & CLI (finds challenges through rl_core)
 ├── tests/                       # Unit & integration test suites
 ├── configs/                     # YAML hyperparameter configurations
 │   ├── cartpole_*.yaml          # CartPole challenge configs (default, PPO, DQN, etc.)

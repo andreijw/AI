@@ -32,6 +32,9 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │  - Discrete Agents     - Checkpoint manager      - logger.py (JSONL)        │
 │  - Continuous Agents                             - video.py (MP4 recording) │
 │  - ReplayBuffer                                  - visualization.py (plots) │
+│                                                                             │
+│  challenges/                                                                │
+│  - BenchmarkChallenge, CHALLENGES registry, discover_challenges()           │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -290,7 +293,11 @@ plots/
 1. Create a new package under `src/rl_<challenge>/`:
    - `environments/<challenge>_env.py`: Gymnasium wrapper handling domain randomization and noise injection.
    - `environments/make_env.py`: Vectorized and single-environment factory functions.
-   - `benchmark.py`: Implementation of `BenchmarkChallenge` decorated with `@register_challenge`.
+   - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`.
+     `discover_challenges()` imports every `src/rl_*/benchmark.py`, so the runner needs no edit; a package that
+     fails to import is reported with a warning, in `run_benchmark`'s unknown-challenge error and at the end of
+     `src/benchmark.py --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the
+     base class provides one), and its `key` must not already be registered.
 2. Add reference YAML configurations under `configs/<challenge>_<agent>.yaml`.
 3. Add corresponding test suites in `tests/test_<challenge>.py`.
 

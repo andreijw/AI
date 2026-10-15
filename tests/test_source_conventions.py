@@ -118,3 +118,57 @@ def test_scan_allows_owned_generators():
     )
 
     assert global_numpy_random_uses(source) == []
+
+
+# ---------------------------------------------------------------------------
+# Package dependencies: rl_core never depends on a challenge, and nothing aliases modules
+# ---------------------------------------------------------------------------
+
+
+def _imported_modules(source: str) -> list[tuple[int, str]]:
+    """(line, module) for every static import statement in source."""
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            found.extend((node.lineno, alias.name) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            found.append((node.lineno, node.module))
+    return found
+
+
+def _source_files_under(package_glob: str) -> list[Path]:
+    return sorted(p for p in (REPO_ROOT / "src").glob(f"{package_glob}/**/*.py"))
+
+
+def test_challenge_packages_do_not_import_the_benchmark_script():
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}:{line}"
+        for path in _source_files_under("rl_*")
+        for line, module in _imported_modules(path.read_text(encoding="utf-8"))
+        if module == "benchmark" or module.startswith("benchmark.")
+    ]
+    assert offenders == [], f"Import the challenge API from rl_core.challenges: {offenders}"
+
+
+def test_rl_core_does_not_import_a_challenge_package():
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}:{line} imports {module}"
+        for path in _source_files_under("rl_core")
+        for line, module in _imported_modules(path.read_text(encoding="utf-8"))
+        if module.split(".")[0].startswith("rl_") and module.split(".")[0] != "rl_core"
+    ]
+    assert offenders == [], f"rl_core must not depend on a challenge: {offenders}"
+
+
+def test_no_source_file_registers_modules_under_another_name():
+    offenders = []
+    for path in SOURCE_FILES:
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Attribute) and _dotted_name(node) == "sys.modules":
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+    assert offenders == [], f"sys.modules aliasing hides import cycles: {offenders}"
+
+
+def test_import_scan_sees_both_import_forms():
+    source = "import benchmark\nfrom rl_cartpole.benchmark import X\nfrom . import y\n"
+    assert _imported_modules(source) == [(1, "benchmark"), (2, "rl_cartpole.benchmark")]
