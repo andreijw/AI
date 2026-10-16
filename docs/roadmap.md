@@ -530,7 +530,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: Running `src/benchmark.py` directly as `__main__`; a challenge package that fails to import.
   - **Out of scope**: Changing benchmark metrics or the report format.
 
-- [~] **Select the Challenge Through the Registry**
+- [x] **Select the Challenge Through the Registry**
+  - **Delivered in**: `feature/challenge-registry-cli` (stacked on #86). Confirmed by the maintainer on 2026-10-16.
   - **Description**: `train.py` and `record.py` choose the environment with `"pendulum" in env_name.lower()` in three
     places and hardcode `choices=["cartpole", "pendulum"]`, so an unknown challenge silently becomes CartPole.
   - **Acceptance criteria**:
