@@ -11,11 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rl_core.agents import DQNAgent, ReinforceAgent
 from tests.helpers import minimal_config, run_main
 
-
-@pytest.fixture(autouse=True)
-def _clear_sdl(monkeypatch):
-    monkeypatch.delenv("SDL_VIDEODRIVER", raising=False)
-    monkeypatch.delenv("SDL_AUDIODRIVER", raising=False)
+pytestmark = pytest.mark.usefixtures("clear_sdl")
 
 
 def _checkpoint(tmp_path):

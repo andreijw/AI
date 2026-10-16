@@ -238,6 +238,11 @@ python train.py --config configs/cartpole_default.yaml --agent-type ppo --num-ep
 python train.py --config configs/cartpole_default.yaml --agent-type dqn --num-episodes 200
 ```
 
+The challenge comes from the config's `environment.name`, which must be a registered challenge's environment id
+exactly (`CartPole-v1` or `Pendulum-v1`); any other name is an error that lists the options. `--challenge cartpole`
+or `--challenge pendulum` must agree with that name, and is required for a config that has no `environment.name`.
+An agent the challenge does not support (for example `--agent-type dqn` on Pendulum) is rejected before training.
+
 ### Visualization and video recording
 
 Outputs are partitioned into per-challenge and per-agent folders so runs never overwrite one another:
@@ -317,12 +322,12 @@ To get one longer video of a trained agent, record it from a checkpoint after tr
 does not slow training down:
 
 ```bash
-python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/ppo/agent_episode_1400.pt --episodes 5
+python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_1400.pt --episodes 5
 ```
 
 `record.py` loads the agent type from the config (or `--agent-type`), plays `--episodes`
 evaluation episodes (default 5) and saves them as one
-`videos/<agent_type>/cartpole-playback-full.mp4` (`--video-dir` to change).
+`videos/<challenge>/<agent_type>/<challenge>-playback-full.mp4` (`--video-dir` to change).
 A well-trained agent balances for the full 500 steps, i.e. 10 seconds per episode.
 
 After training, copy the videos to your local machine and open them in any video player:

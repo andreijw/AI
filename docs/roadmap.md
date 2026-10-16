@@ -530,7 +530,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: Running `src/benchmark.py` directly as `__main__`; a challenge package that fails to import.
   - **Out of scope**: Changing benchmark metrics or the report format.
 
-- [ ] **Select the Challenge Through the Registry**
+- [x] **Select the Challenge Through the Registry**
+  - **Delivered in**: `feature/challenge-registry-cli` (stacked on #86). Confirmed by the maintainer on 2026-10-16.
   - **Description**: `train.py` and `record.py` choose the environment with `"pendulum" in env_name.lower()` in three
     places and hardcode `choices=["cartpole", "pendulum"]`, so an unknown challenge silently becomes CartPole.
   - **Acceptance criteria**:
@@ -538,7 +539,19 @@ Defects found while working on other items, then findings from the brooks-lint h
     - `--challenge` choices come from the registry, and an unknown environment name is an error naming the options.
     - Adding a challenge requires no edit to `train.py` or `record.py`.
   - **Known edge cases**: Configs with no `environment.name`; `--challenge` disagreeing with the config.
-  - **Out of scope**: Merging the discrete and continuous agent maps (depends on the cycle item above).
+  - **Built (2026-10-16)**: `BenchmarkChallenge` gains abstract `make_env` and `make_agent` and a concrete
+    `setup_run` built from them; each challenge's `make_env` calls its package's `make_env_from_config`, where a YAML
+    `null` now takes the default (`rl_core.utils.config.config_get`). `rl_core.challenges.select_challenge` picks the
+    challenge whose environment id equals `environment.name` exactly, or the one `--challenge` names; it rejects an
+    unknown id (naming the options), a `--challenge` that disagrees, a config with neither, and an id shared by two
+    challenges without `--challenge`. `train.py` lost `AGENT_CLASSES`, `CONTINUOUS_AGENT_CLASSES`, `create_env` and
+    `create_agent`; its `--challenge` and `--agent-type` choices come from the registry, and `record.py` reuses the
+    same helpers. Seeded runs of all eight committed configs give identical metrics and checkpoints before and after.
+  - **Behaviour changes**: A config without `environment.name` needs `--challenge` (it used to default to
+    CartPole); ids the wrappers accept but no challenge registers, such as `CartPole-v0`, are rejected; an agent the
+    challenge does not support fails before any output folder is created.
+  - **Out of scope**: Merging the discrete and continuous agent maps (each challenge keeps its own, and the scripts
+    no longer hold copies); moving the shared `make_agent` steps into the base class.
 
 - [x] **Split `update` into Loss-and-Gradients and Apply**
   - **Delivered in**: open PRs #69, #71 and #72 (stack #70).

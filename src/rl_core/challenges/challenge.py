@@ -5,10 +5,29 @@ from __future__ import annotations
 import abc
 import os
 from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Protocol
 
+import gymnasium as gym
+
+from rl_core.agents.base_agent import BaseAgent
 from rl_core.training.budget import apply_budget_override
 from rl_core.utils.config import load_config
+
+
+class ChallengeEnv(Protocol):
+    """The environment wrapper a challenge builds, as ``train.py``, ``record.py`` and ``Trainer`` use it."""
+
+    env: gym.Env
+    observation_space: gym.Space
+    action_space: gym.Space
+
+    def wrap_env(self, wrapper: gym.Env) -> None: ...
+
+    def reset(self, seed: int | None = None) -> tuple[Any, dict[str, Any]]: ...
+
+    def step(self, action: Any) -> tuple[Any, float, bool, bool, dict[str, Any]]: ...
+
+    def close(self) -> None: ...
 
 
 class BenchmarkChallenge(abc.ABC):
@@ -18,7 +37,9 @@ class BenchmarkChallenge(abc.ABC):
     Allows benchmarking arbitrary environments and algorithms under identical conditions.
 
     A challenge built from YAML configs sets :attr:`CONFIG_MAP` (agent type to file name) and
-    ``config_dir``, and loads them with :meth:`load_run_config`.
+    ``config_dir``, and loads them with :meth:`load_run_config`. ``train.py``, ``record.py`` and
+    the benchmark build every environment and agent through :meth:`make_env` and
+    :meth:`make_agent`, so a challenge is the only place that knows its wrapper and agent classes.
     """
 
     CONFIG_MAP: ClassVar[Mapping[str, str]] = {}
@@ -61,6 +82,32 @@ class BenchmarkChallenge(abc.ABC):
         ...
 
     @abc.abstractmethod
+    def make_env(self, env_config: Mapping[str, Any], render_mode: str | None) -> ChallengeEnv:
+        """
+        Build the challenge's environment from a config's ``environment`` section.
+
+        A missing or ``null`` field takes the wrapper's default, whose environment id is
+        :attr:`name`.
+
+        Args:
+            env_config: The ``environment`` section (``name``, ``seed``, ``max_episode_steps``,
+                noise and domain randomization settings).
+            render_mode: Gymnasium render mode, or None.
+        """
+        ...
+
+    @abc.abstractmethod
+    def make_agent(
+        self, agent_type: str, agent_config: Mapping[str, Any], env: ChallengeEnv
+    ) -> BaseAgent:
+        """
+        Build an agent of ``agent_type`` sized for ``env``, leaving ``agent_config`` unchanged.
+
+        Raises:
+            ValueError: If ``agent_type`` is not in :attr:`supported_agents`.
+        """
+        ...
+
     def setup_run(
         self, agent_type: str, seed: int, episodes: int | None, steps: int | None = None
     ) -> tuple[Any, Any, dict[str, Any]]:
@@ -77,7 +124,17 @@ class BenchmarkChallenge(abc.ABC):
             Tuple of (initialized_env, initialized_agent, training_config_dict). The
             training config's ``num_episodes`` is the budget the run trains for.
         """
-        ...
+        config = self.load_run_config(agent_type, seed, episodes, steps)
+        env = self.make_env(config["environment"], render_mode=None)
+        agent = self.make_agent(agent_type, config["agent"]["config"], env)
+        return env, agent, config["training"]
+
+    def unsupported_agent_error(self, agent_type: str) -> ValueError:
+        """The error for an agent type this challenge cannot build, naming the ones it can."""
+        return ValueError(
+            f"Agent type {agent_type!r} is not supported by challenge '{self.key}' "
+            f"({self.name}). Supported: {sorted(self.supported_agents)}"
+        )
 
     def load_run_config(
         self, agent_type: str, seed: int, episodes: int | None, steps: int | None = None

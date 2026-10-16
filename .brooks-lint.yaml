@@ -52,7 +52,7 @@ custom_risks:
     question: "Is behaviour selected by checking which agent or challenge this is, instead of by its interface or its config?"
     symptoms:
       - "Comparisons against an agent or challenge name (agent_type == \"...\"), or isinstance checks on agent classes, outside the registry maps"
-      - "A new name-to-class or name-to-config map that must be kept in step with AGENT_CLASSES, CONTINUOUS_AGENT_CLASSES or a challenge's CONFIG_MAP"
+      - "A new name-to-class or name-to-config map that must be kept in step with a challenge's AGENT_CLASSES or CONFIG_MAP"
       - "A hyperparameter written as a literal inside update() or select_action() instead of read from config in __init__"
       - "A dimension written as a literal (4, 2, 3) instead of taken from the environment's spaces"
     severity:

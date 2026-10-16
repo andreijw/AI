@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
@@ -157,15 +158,21 @@ class CustomGenericChallenge(BenchmarkChallenge):
     def supported_agents(self) -> list[str]:
         return ["mock_agent"]
 
-    def setup_run(
-        self, agent_type: str, seed: int, episodes: int | None
-    ) -> tuple[Any, Any, dict[str, Any]]:
-        env = CartPoleEnv(seed=seed, max_episode_steps=25)
-        agent = RandomAgent(
+    def make_env(self, env_config: Mapping[str, Any], render_mode: str | None) -> CartPoleEnv:
+        return CartPoleEnv(seed=env_config["seed"], max_episode_steps=25, render_mode=render_mode)
+
+    def make_agent(self, agent_type: str, agent_config: Mapping[str, Any], env: Any) -> RandomAgent:
+        return RandomAgent(
             observation_dim=env.observation_space.shape[0],
             action_dim=env.action_space.n,
-            config={"seed": seed},
+            config=dict(agent_config),
         )
+
+    def setup_run(
+        self, agent_type: str, seed: int, episodes: int | None, steps: int | None = None
+    ) -> tuple[Any, Any, dict[str, Any]]:
+        env = self.make_env({"seed": seed}, render_mode=None)
+        agent = self.make_agent(agent_type, {"seed": seed}, env)
         budget = self.default_episodes if episodes is None else episodes
         train_cfg = {"num_episodes": budget, "save_frequency": 999}
         return env, agent, train_cfg
@@ -181,7 +188,7 @@ class PerAgentBudgetChallenge(CustomGenericChallenge):
         return sorted(self.BUDGETS)
 
     def setup_run(
-        self, agent_type: str, seed: int, episodes: int | None
+        self, agent_type: str, seed: int, episodes: int | None, steps: int | None = None
     ) -> tuple[Any, Any, dict[str, Any]]:
         own = self.BUDGETS[agent_type] if episodes is None else episodes
         return super().setup_run(agent_type, seed, own)

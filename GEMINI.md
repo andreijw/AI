@@ -58,7 +58,8 @@ To optimize token usage and context window limits:
   features (e.g., [demo_env_features.py](examples/demo_env_features.py)).
 * **`train.py`** (located at [train.py](train.py)): The main command-line entrypoint for
   initiating RL agent training runs.
-* **`record.py`**: Records a trained agent from a checkpoint into one MP4 (reuses `train.py` setup helpers).
+* **`record.py`**: Records a trained agent from a checkpoint into one MP4
+  (reuses `train.py`'s config loading and challenge selection).
 * **`example.py`**: Minimal standalone usage example of the framework.
 * **`ARCHITECTURE.md`** / **`TESTING.md`**: Component architecture reference and manual test procedures.
 * **`setup.ps1`**: Windows developer setup (installs Python 3.12, creates `.venv`, runs CI checks).

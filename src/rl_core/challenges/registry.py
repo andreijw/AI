@@ -98,8 +98,61 @@ def import_failures_text() -> str:
     return f"Failed to import: {failed}"
 
 
-def unknown_challenge_message(name: str) -> str:
-    """The error text for a challenge that is not registered, naming any import failures."""
-    message = f"Unknown challenge '{name}'. Supported: {sorted(CHALLENGES)}"
+def _with_import_failures(message: str) -> str:
+    """``message``, followed by the challenge packages that failed to import, if any."""
     failures = import_failures_text()
     return f"{message}. {failures}" if failures else message
+
+
+def unknown_challenge_message(name: str) -> str:
+    """The error text for a challenge that is not registered, naming any import failures."""
+    return _with_import_failures(f"Unknown challenge '{name}'. Supported: {sorted(CHALLENGES)}")
+
+
+def select_challenge(env_name: str | None, key: str | None) -> type[BenchmarkChallenge]:
+    """
+    The registered challenge for a run, from its config's ``environment.name`` and a chosen key.
+
+    The environment name must equal a challenge's ``name`` (its Gymnasium id) exactly. A key,
+    when given as well, must name a challenge on that environment, and is required when several
+    challenges share it; given alone, it decides. Call
+    :func:`discover_challenges` first.
+
+    Args:
+        env_name: The config's ``environment.name``, or None if it has none.
+        key: The challenge key chosen on the command line (``--challenge``), or None.
+
+    Raises:
+        ValueError: If the name or key is unknown, if they disagree, if the name is
+            ambiguous without a key, or if both are None.
+    """
+    if key is not None and key not in CHALLENGES:
+        raise ValueError(unknown_challenge_message(key))
+    if env_name is None:
+        if key is None:
+            raise ValueError(
+                "Cannot tell which challenge to run: set environment.name in the config "
+                f"or choose one of {sorted(CHALLENGES)} with --challenge."
+            )
+        return CHALLENGES[key]
+
+    names = {key_: cls().name for key_, cls in CHALLENGES.items()}
+    matches = sorted(key_ for key_, name in names.items() if name == env_name)
+    if not matches:
+        options = ", ".join(f"{name} ({key_})" for key_, name in sorted(names.items()))
+        raise ValueError(
+            _with_import_failures(f"Unknown environment '{env_name}'. Supported: {options}")
+        )
+    if key is not None:
+        if key not in matches:
+            raise ValueError(
+                f"--challenge {key} does not match the config's environment '{env_name}', "
+                f"which belongs to challenge {' or '.join(repr(m) for m in matches)}."
+            )
+        return CHALLENGES[key]
+    if len(matches) > 1:
+        raise ValueError(
+            f"Environment '{env_name}' belongs to several challenges; choose one of "
+            f"{matches} with --challenge."
+        )
+    return CHALLENGES[matches[0]]

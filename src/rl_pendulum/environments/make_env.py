@@ -8,6 +8,8 @@ from typing import Any
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
+from rl_core.utils.config import config_get
+
 from .pendulum_env import PendulumEnv
 
 
@@ -98,12 +100,12 @@ def make_vec_env(
 def make_env_from_config(config: dict[str, Any]) -> PendulumEnv:
     """Create a Pendulum environment from a configuration dictionary."""
     return make_env(
-        env_name=config.get("name", "Pendulum-v1"),
+        env_name=config_get(config, "name", "Pendulum-v1"),
         render_mode=config.get("render_mode"),
-        max_episode_steps=config.get("max_episode_steps", 200),
+        max_episode_steps=config_get(config, "max_episode_steps", 200),
         seed=config.get("seed"),
-        obs_noise_std=config.get("obs_noise_std", 0.0),
-        action_noise_std=config.get("action_noise_std", 0.0),
+        obs_noise_std=config_get(config, "obs_noise_std", 0.0),
+        action_noise_std=config_get(config, "action_noise_std", 0.0),
         domain_randomization=config.get("domain_randomization"),
     )
 
@@ -112,12 +114,12 @@ def make_vec_env_from_config(config: dict[str, Any], num_envs: int = 4) -> gym.v
     """Create vectorized Pendulum environments from a configuration dictionary."""
     return make_vec_env(
         num_envs=num_envs,
-        env_name=config.get("name", "Pendulum-v1"),
+        env_name=config_get(config, "name", "Pendulum-v1"),
         render_mode=config.get("render_mode"),
-        max_episode_steps=config.get("max_episode_steps", 200),
+        max_episode_steps=config_get(config, "max_episode_steps", 200),
         seed=config.get("seed"),
-        obs_noise_std=config.get("obs_noise_std", 0.0),
-        action_noise_std=config.get("action_noise_std", 0.0),
+        obs_noise_std=config_get(config, "obs_noise_std", 0.0),
+        action_noise_std=config_get(config, "action_noise_std", 0.0),
         domain_randomization=config.get("domain_randomization"),
         async_envs=config.get("async_envs", True),
     )

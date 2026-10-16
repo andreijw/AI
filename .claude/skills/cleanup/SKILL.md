@@ -48,7 +48,7 @@ A duplicate rarely shares a name with the original. For each candidate, search f
 | Takes an Adam step | `beta1`, `m_hat` | `ContinuousActorCriticBase._adam_step` |
 | Stores and samples transitions | a list of tuples, `random.sample` | `ReplayBuffer` |
 | Reads or merges a config | `yaml.safe_load`, `json.load` | `load_config`, `merge_configs`, `train.load_run_config` |
-| Builds an environment or agent from config | `gym.make(`, a class lookup by name | `train.create_env`, `train.create_agent`, a challenge's `make_env_from_config` |
+| Builds an environment or agent from config | `gym.make(`, a class lookup by name | `train.select_run_challenge`, then the challenge's `make_env` / `make_agent`; a package's `make_env_from_config` |
 | Builds a per-challenge, per-agent output path | `os.path.join(` with the agent type | `train.agent_output_dir` |
 | Smooths a reward curve, finds the solve episode | `np.convolve`, a rolling mean | `visualization._rolling_average`, `benchmark.find_solved_episode` |
 | Reports progress | `print(` under `src/` | `Logger` / `setup_logger` |
@@ -93,8 +93,8 @@ at the config or is checked by the `doc-sync` skill.
   Merging coincidental likeness produces a function with flags that nobody can change safely. Two
   occurrences are a note; the third is the signal to extract.
 - **Known duplication is not licence for more.** The numerically stable softmax is written inline in both
-  `ReinforceAgent` and `ActorCriticBase`, and the name-to-class maps are repeated in `train.py` and each
-  challenge. Do not add a further copy; if the change needs one, that is the moment to extract. The
+  `ReinforceAgent` and `ActorCriticBase`; the name-to-class maps live only in each challenge since
+  2026-10-16 (they used to be repeated in `train.py`). Do not add a further copy; if the change needs one, that is the moment to extract. The
   discounted-returns loop was once written three times and is now `discounted_returns`.
 - Shared maths with no state becomes a module-level function under `src/rl_core/` with its own unit test.
   Shared state and behaviour for a family of agents goes on the family's base class.

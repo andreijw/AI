@@ -295,6 +295,11 @@ plots/
    - `environments/<challenge>_env.py`: Gymnasium wrapper handling domain randomization and noise injection.
    - `environments/make_env.py`: Vectorized and single-environment factory functions.
    - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`.
+     It implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and
+     `make_agent(agent_type, agent_config, env)` (a lookup in its `AGENT_CLASSES`); the base class builds benchmark
+     runs from them. `train.py` and `record.py` pick the challenge whose `name` equals the config's
+     `environment.name` exactly (`select_challenge`), or the one `--challenge` names, and build through it, so no
+     script needs an edit. Two challenges may share an environment id; the config then needs `--challenge`.
      `discover_challenges()` imports every `src/rl_*/benchmark.py`, so the runner needs no edit; a package that
      fails to import is reported with a warning, in `run_benchmark`'s unknown-challenge error and at the end of
      `src/benchmark.py --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the

@@ -56,9 +56,9 @@ It does not know which algorithm it is driving. An agent that steps an environme
 branches on the agent's type, has crossed the line. If a new algorithm needs something the batch lacks,
 the plan widens the batch for everyone and says so.
 
-**An agent is a registry entry.** Agents are looked up by name in `AGENT_CLASSES` and
-`CONTINUOUS_AGENT_CLASSES` in `train.py`, and in each challenge's `AGENT_CLASSES` and `CONFIG_MAP`. A new
-agent today touches its own file, `rl_core/agents/__init__.py`, those maps, a YAML config, the `ALL_AGENTS`
+**An agent is a registry entry.** Agents are looked up by name in each challenge's `AGENT_CLASSES` and
+`CONFIG_MAP`; `train.py`, `record.py` and the benchmark build them through the challenge's `make_agent`. A
+new agent today touches its own file, `rl_core/agents/__init__.py`, those maps, a YAML config, the `ALL_AGENTS`
 list in `tests/test_agent_harness.py` and its own test file. That is already more places than it should be.
 Ask of any plan: when the next agent arrives, how many files change? A plan that adds another place to keep
 in step (an `if agent_type == "ddpg"`, an `isinstance` check, a second map) is a finding; a plan that

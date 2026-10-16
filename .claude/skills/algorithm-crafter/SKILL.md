@@ -99,8 +99,8 @@ A new agent is known in more than one place. Miss one and it works in a test and
 line:
 
 - `src/rl_core/agents/__init__.py` (import and export)
-- `AGENT_CLASSES` or `CONTINUOUS_AGENT_CLASSES` in `train.py` (also used by `record.py`)
-- `AGENT_CLASSES` and `CONFIG_MAP` in each challenge's `benchmark.py` that supports it
+- `AGENT_CLASSES` and `CONFIG_MAP` in each challenge's `benchmark.py` that supports it. `train.py`,
+  `record.py` and the benchmark build agents through the challenge's `make_agent`, so they need no edit
 - `configs/<challenge>_<agent>.yaml`, every key commented with its meaning and unit
 - `ALL_AGENTS` in `tests/test_agent_harness.py`, and `tests/test_<agent>_agent.py`
 - docs, through the `doc-sync` skill: the class diagram in ARCHITECTURE.md, the README agent list, a

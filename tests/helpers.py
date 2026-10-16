@@ -4,6 +4,7 @@ reference Adam optimiser."""
 import importlib
 import math
 import sys
+import uuid
 from collections.abc import Callable, Mapping
 
 import numpy as np
@@ -139,3 +140,18 @@ class ReferenceAdam:
             v_hat = self.v[name] / (1.0 - 0.999**self.t)
             steps[name] = self.learning_rate * m_hat / (np.sqrt(v_hat) + 1e-8)
         return steps
+
+
+def write_package(root, name, benchmark, init=True):
+    """Create package ``name`` under ``root``, with ``benchmark.py`` holding ``benchmark`` if given."""
+    package = root / name
+    package.mkdir()
+    if init:
+        (package / "__init__.py").write_text("", encoding="utf-8")
+    if benchmark is not None:
+        (package / "benchmark.py").write_text(benchmark, encoding="utf-8")
+
+
+def unique_name(prefix="rl_fake"):
+    """A package or key name no other test uses, so imports never collide."""
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
