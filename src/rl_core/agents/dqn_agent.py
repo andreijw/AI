@@ -242,20 +242,7 @@ class DQNAgent(BaseAgent):
         Returns:
             Dictionary with training metrics: 'loss', 'epsilon', 'mean_q'.
         """
-        terminal = batch.get("terminated", batch.get("dones"))
-        if "terminated" in batch and len(batch["terminated"]) != len(batch.get("actions", [])):
-            raise ValueError(
-                f"terminated has {len(batch['terminated'])} flags for "
-                f"{len(batch.get('actions', []))} actions"
-            )
-        if "next_observations" in batch and terminal is not None:
-            self.replay_buffer.add_batch(
-                batch["observations"],
-                batch["actions"],
-                batch["rewards"],
-                batch["next_observations"],
-                terminal,
-            )
+        self.replay_buffer.add_transitions(batch)
 
         if not self.replay_buffer.can_sample(self.min_buffer_size):
             return {"loss": 0.0, "epsilon": self.epsilon, "mean_q": 0.0}

@@ -32,7 +32,8 @@ To optimize token usage and context window limits:
 * **`src/rl_core/`**: Algorithm-agnostic reinforcement learning framework.
   * `src/rl_core/agents/`: Base agent interfaces (`BaseAgent`, `ActorCriticBase`, `ContinuousActorCriticBase`),
     discrete agents (`RandomAgent`, `ReinforceAgent`, `ActorCriticAgent`, `PPOAgent`, `DQNAgent`),
-    continuous agents (`ContinuousRandomAgent`, `ContinuousActorCriticAgent`, `ContinuousPPOAgent`), and `ReplayBuffer`.
+    continuous agents (`ContinuousRandomAgent`, `ContinuousActorCriticAgent`, `ContinuousPPOAgent`, `DDPGAgent`),
+    `ReplayBuffer`, and the shared `mlp.py` (multi-layer networks) and `bounds.py` (action bounds).
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).
   * `src/rl_core/utils/`: Configuration parsing (`config.py`), structured logging (`logger.py`),
     video recording (`video.py`), and visualization helpers (`visualization.py`).

@@ -135,3 +135,31 @@ def test_adam_state_with_a_wrongly_shaped_moment_is_rejected():
     state["adam_m_W"] = np.zeros((2, 3))
     with pytest.raises(ValueError, match=r"adam_m_W has shape \(2, 3\), expected \(3, 2\)"):
         Adam(_zeros()).load_state(state)
+
+
+def test_two_optimizers_saved_under_different_prefixes_keep_their_own_state():
+    """An agent with an actor and a critic optimizer saves both into one checkpoint."""
+    params = {"W": np.zeros(3)}
+    actor, critic = Adam(params), Adam(params)
+    actor.step({"W": np.ones(3)}, 0.1)
+    for _ in range(3):
+        critic.step({"W": np.full(3, 2.0)}, 0.1)
+    data = {**actor.state(prefix="actor_adam_"), **critic.state(prefix="critic_adam_")}
+
+    restored_actor, restored_critic = Adam(params), Adam(params)
+    restored_actor.load_state(data, prefix="actor_adam_")
+    restored_critic.load_state(data, prefix="critic_adam_")
+
+    assert (restored_actor.t, restored_critic.t) == (1, 3)
+    np.testing.assert_array_equal(restored_actor.m["W"], actor.m["W"])
+    np.testing.assert_array_equal(restored_critic.v["W"], critic.v["W"])
+
+
+def test_the_default_prefix_is_adam_so_existing_checkpoints_still_load():
+    params = {"W": np.zeros(2)}
+    adam = Adam(params)
+    adam.step({"W": np.ones(2)}, 0.1)
+    assert set(adam.state()) == {"adam_t", "adam_m_W", "adam_v_W"}
+    restored = Adam(params)
+    restored.load_state(adam.state())
+    assert restored.t == 1
