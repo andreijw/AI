@@ -27,6 +27,7 @@ from rl_core.challenges import (
     import_failures_text,
     unknown_challenge_message,
 )
+from rl_core.training.budget import apply_budget_override, budget_of
 from rl_core.training.trainer import Trainer
 from rl_core.utils.visualization import _rolling_average, plot_benchmark_comparison
 
@@ -38,7 +39,7 @@ from rl_core.utils.visualization import _rolling_average, plot_benchmark_compari
 def find_solved_episode(
     rewards: list[float],
     threshold: float | None = 475.0,
-    window: int = 10,
+    window: int = 100,
 ) -> int | None:
     """
     Find the first episode where the average of the last ``window`` rewards meets the threshold.
@@ -49,7 +50,7 @@ def find_solved_episode(
     Args:
         rewards: List of episode rewards.
         threshold: Score threshold defining task completion (None if unbounded).
-        window: Rolling-average window size (default: 10).
+        window: Rolling-average window size (default: 100).
 
     Returns:
         1-based episode index of first solve, or None if never reached.
@@ -63,11 +64,13 @@ def find_solved_episode(
     return None
 
 
-def _describe_budget(episodes: int | None) -> str:
-    """Say how many episodes each run trains for, in the words the console and report use."""
-    if episodes is None:
-        return "each agent's own config (`training.num_episodes`), shown per agent"
-    return f"{episodes} for every agent (`--episodes`)"
+def _describe_budget(episodes: int | None, steps: int | None = None) -> str:
+    """Say how long each run trains for, in the words the console and report use."""
+    if steps is not None:
+        return f"{steps} steps for every agent (`--steps`)"
+    if episodes is not None:
+        return f"{episodes} episodes for every agent (`--episodes`)"
+    return "each agent's own config (`training.total_steps` or `num_episodes`), shown per agent"
 
 
 def classify_run(
@@ -75,28 +78,41 @@ def classify_run(
     eval_mean: float,
     threshold: float | None,
     window: int,
+    episode_lengths: list[int] | None = None,
 ) -> dict[str, Any]:
     """
-    Decide whether one run solved the challenge.
+    Decide whether one run solved the challenge, and whether it held it.
 
-    A run is solved when its rolling training average reaches the threshold; the solve
-    episode is the first episode where it does. A final evaluation at or above the threshold
-    is recorded as ``eval_reached_threshold`` and is not a solve.
+    A run is solved when the average of ``window`` consecutive training rewards first reaches
+    the threshold; the solve episode is the last episode of that window, and ``solved_step`` the
+    training steps up to and including it. It is held when the run has at least ``window``
+    episodes and the average of its last ``window`` is at or above the threshold. A final
+    evaluation at or above the threshold is recorded as ``eval_reached_threshold`` and is not a
+    solve.
 
     Args:
         rewards: Training episode rewards.
         eval_mean: Mean reward of the final evaluation episodes.
         threshold: Solve threshold, or None if the challenge has none.
-        window: Rolling-average window size.
+        window: Episodes averaged.
+        episode_lengths: Steps of each training episode, for ``solved_step``.
 
     Returns:
-        Dict with ``is_solved``, ``solved_episode`` (1-based, or None) and
-        ``eval_reached_threshold``.
+        Dict with ``is_solved``, ``solved_episode`` (1-based, or None), ``solved_step`` (or None),
+        ``held`` (None without a threshold) and ``eval_reached_threshold``.
     """
     solved_ep = find_solved_episode(rewards, threshold=threshold, window=window)
+    solved_step = None
+    if solved_ep is not None and episode_lengths is not None:
+        solved_step = int(sum(episode_lengths[:solved_ep]))
+    held = None
+    if threshold is not None:
+        held = len(rewards) >= window and float(np.mean(rewards[-window:])) >= threshold
     return {
         "is_solved": solved_ep is not None,
         "solved_episode": solved_ep,
+        "solved_step": solved_step,
+        "held": held,
         "eval_reached_threshold": threshold is not None and eval_mean >= threshold,
     }
 
@@ -126,7 +142,8 @@ class BenchmarkRunner:
         output_dir: str | None = None,
         report_path: str | None = None,
         save_plot: bool = True,
-        window: int = 10,
+        window: int = 100,
+        steps: int | None = None,
         eval_episodes: int = 10,
     ) -> dict[str, Any]:
         """
@@ -161,6 +178,9 @@ class BenchmarkRunner:
 
         if episodes is not None and episodes <= 0:
             raise ValueError(f"episodes must be positive, got {episodes}")
+        if steps is not None and steps <= 0:
+            raise ValueError(f"steps must be positive, got {steps}")
+        apply_budget_override({}, episodes, steps)  # rejects both at once
         if not seeds:
             raise ValueError("seeds list must not be empty.")
 
@@ -168,13 +188,14 @@ class BenchmarkRunner:
 
         results: dict[str, list[dict[str, Any]]] = {}
         curve_data: dict[str, list[list[float]]] = {}
-        budgets: dict[str, int] = {}
+        length_data: dict[str, list[list[int]]] = {}
+        budgets: dict[str, tuple[int, str]] = {}
 
         print("=" * 70)
         print(f"Starting Benchmark Suite for Challenge: {self.challenge.name}")
         print(f"Agents: {agents}")
         print(f"Seeds:  {seeds}")
-        print(f"Episodes per run: {_describe_budget(episodes)}")
+        print(f"Budget per run: {_describe_budget(episodes, steps)}")
         if self.challenge.solve_threshold is not None:
             print(f"Solve Threshold:  {self.challenge.solve_threshold}")
         print("=" * 70)
@@ -182,12 +203,18 @@ class BenchmarkRunner:
         for agent_type in agents:
             results[agent_type] = []
             curve_data[agent_type] = []
+            length_data[agent_type] = []
 
             print(f"\n[Benchmarking] Agent: {agent_type.upper()} ({len(seeds)} seeds)")
 
             for seed in seeds:
-                env, agent, train_cfg = self.challenge.setup_run(agent_type, seed, episodes)
-                budgets[agent_type] = int(train_cfg["num_episodes"])
+                if steps is None:
+                    env, agent, train_cfg = self.challenge.setup_run(agent_type, seed, episodes)
+                else:
+                    env, agent, train_cfg = self.challenge.setup_run(
+                        agent_type, seed, episodes, steps=steps
+                    )
+                budgets[agent_type] = budget_of(train_cfg)
 
                 trainer = Trainer(
                     agent=agent,
@@ -204,11 +231,13 @@ class BenchmarkRunner:
                 eval_mean = float(eval_stats.get("mean_reward", 0.0))
 
                 episode_rewards = [float(r) for r in trainer.episode_rewards]
+                episode_lengths = [int(n) for n in trainer.episode_lengths]
                 outcome = classify_run(
                     episode_rewards,
                     eval_mean,
                     threshold=self.challenge.solve_threshold,
                     window=window,
+                    episode_lengths=episode_lengths,
                 )
                 solved_ep = outcome["solved_episode"]
                 is_solved = outcome["is_solved"]
@@ -221,12 +250,17 @@ class BenchmarkRunner:
                     if episode_rewards
                     else 0.0,
                     "solved_episode": solved_ep,
+                    "solved_step": outcome["solved_step"],
                     "is_solved": is_solved,
+                    "held": outcome["held"],
                     "eval_reached_threshold": outcome["eval_reached_threshold"],
                     "total_episodes": len(episode_rewards),
+                    "total_steps": int(sum(episode_lengths)),
+                    "window": window,
                 }
                 results[agent_type].append(run_result)
                 curve_data[agent_type].append(episode_rewards)
+                length_data[agent_type].append(episode_lengths)
 
                 env.close()
 
@@ -241,10 +275,16 @@ class BenchmarkRunner:
             eval_rewards = [r["eval_mean_reward"] for r in runs]
             durations = [r["duration"] for r in runs]
             solved_eps = [r["solved_episode"] for r in runs if r["is_solved"]]
+            solved_steps = [r["solved_step"] for r in runs if r["solved_step"] is not None]
             eval_reached = [r for r in runs if r["eval_reached_threshold"]]
+            held = [r for r in runs if r["held"]]
 
             summary[agent_type] = {
-                "episodes": budgets[agent_type],
+                "budget": budgets[agent_type][0],
+                "budget_unit": budgets[agent_type][1],
+                "episodes": float(np.mean([r["total_episodes"] for r in runs])),
+                "avg_solved_step": float(np.mean(solved_steps)) if solved_steps else None,
+                "held_rate": float(len(held) / len(runs)),
                 "mean_eval_reward": float(np.mean(eval_rewards)),
                 "std_eval_reward": float(np.std(eval_rewards)),
                 "mean_duration": float(np.mean(durations)),
@@ -263,6 +303,11 @@ class BenchmarkRunner:
                 save_path=plot_path,
                 target_score=self.challenge.solve_threshold,
                 title=f"{self.challenge.name} Multi-Agent Benchmark Comparison",
+                # Against steps only when every agent has a step budget: under episode budgets
+                # the shortest seed would cut every other seed's curve short.
+                episode_lengths=(
+                    length_data if all(u == "steps" for _, u in budgets.values()) else None
+                ),
             )
             print(f"\nBenchmark comparison plot saved to: {plot_file}")
 
@@ -277,7 +322,14 @@ class BenchmarkRunner:
                         "agents": agents,
                         "seeds": seeds,
                         "episodes": episodes,
-                        "episodes_per_agent": budgets,
+                        "steps": steps,
+                        "budgets_per_agent": {
+                            agent: {"value": value, "unit": unit}
+                            for agent, (value, unit) in budgets.items()
+                        },
+                        "episodes_per_agent": {
+                            agent: summary[agent]["episodes"] for agent in summary
+                        },
                         "window": window,
                         "eval_episodes": eval_episodes,
                     },
@@ -289,7 +341,15 @@ class BenchmarkRunner:
         if report_path:
             os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
             report_md = self._generate_markdown_report(
-                summary, agents, seeds, episodes, plot_file, report_path, window, eval_episodes
+                summary,
+                agents,
+                seeds,
+                episodes,
+                plot_file,
+                report_path,
+                window,
+                eval_episodes,
+                steps,
             )
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write(report_md)
@@ -312,8 +372,9 @@ class BenchmarkRunner:
         episodes: int | None,
         plot_file: str | None,
         report_path: str | None = None,
-        window: int = 10,
+        window: int = 100,
         eval_episodes: int = 10,
+        steps: int | None = None,
     ) -> str:
         """Generate formatted Markdown report text for this challenge."""
         threshold = self.challenge.solve_threshold
@@ -326,7 +387,7 @@ class BenchmarkRunner:
             "## Benchmark Configuration",
             "",
             f"- **Challenge / Environment**: `{self.challenge.name}` (Solved criteria: average reward {thresh_str})",
-            f"- **Episodes per Run**: {_describe_budget(episodes)}",
+            f"- **Budget per Run**: {_describe_budget(episodes, steps)}",
             f"- **Seeds Evaluated**: `{seeds}`",
             f"- **Algorithms**: `{agents}`",
             "",
@@ -340,20 +401,27 @@ class BenchmarkRunner:
             lines.extend(
                 [
                     f"A run is solved when its average training reward over {window} consecutive",
-                    f"episodes reaches {threshold:.0f}. **Avg Solve Episode** is the first episode at",
-                    "which that happens, averaged over the solved runs. **Eval ≥ Threshold** is the",
-                    f"share of runs whose final evaluation ({eval_desc}) averaged at least",
-                    f"{threshold:.0f}; it is reported on its own and does not count as a solve.",
+                    f"episodes reaches {threshold:.0f}. **Avg Solve Episode** is the last episode of",
+                    "the first such window, and **Avg Steps to Solve** the training steps up to it,",
+                    "averaged over the solved runs. **Held** is the share of runs with at least",
+                    f"{window} episodes whose last {window} average at least {threshold:.0f}.",
+                    "**Eval ≥ Threshold** is the share of runs whose final evaluation",
+                    f"({eval_desc}) averaged at least {threshold:.0f}; it does not count as a solve.",
                 ]
             )
+            if any(stats["budget_unit"] == "steps" for stats in summary.values()):
+                lines.append(
+                    "A step budget finishes the episode that crosses it, so a run can overshoot "
+                    "its budget by up to one episode."
+                )
         lines.extend(
             [
                 "",
                 "## Performance Summary",
                 "",
-                "| Algorithm | Episodes | Mean Eval Reward | Reward Std | Solve Rate "
-                "| Avg Solve Episode | Eval ≥ Threshold | Mean Time (s) |",
-                "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
+                "| Algorithm | Budget | Episodes | Mean Eval Reward | Reward Std | Solve Rate "
+                "| Avg Solve Episode | Avg Steps to Solve | Held | Eval ≥ Threshold | Mean Time (s) |",
+                "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
             ]
         )
 
@@ -361,15 +429,22 @@ class BenchmarkRunner:
             stats = summary[agent_type]
             solve_pct = f"{stats['solve_rate'] * 100:.0f}%"
             eval_pct = f"{stats['eval_threshold_rate'] * 100:.0f}%"
+            held_pct = f"{stats['held_rate'] * 100:.0f}%"
             avg_solve = (
                 f"{stats['avg_solved_episode']:.1f}"
                 if stats["avg_solved_episode"] is not None
                 else "N/A"
             )
+            avg_steps = (
+                f"{stats['avg_solved_step']:,.0f}"
+                if stats["avg_solved_step"] is not None
+                else "N/A"
+            )
             lines.append(
-                f"| **{agent_type}** | {stats['episodes']} | {stats['mean_eval_reward']:.1f} | "
-                f"±{stats['std_eval_reward']:.1f} | {solve_pct} | "
-                f"{avg_solve} | {eval_pct} | {stats['mean_duration']:.2f}s |"
+                f"| **{agent_type}** | {stats['budget']} {stats['budget_unit']} | "
+                f"{stats['episodes']:.0f} | {stats['mean_eval_reward']:.1f} | "
+                f"±{stats['std_eval_reward']:.1f} | {solve_pct} | {avg_solve} | {avg_steps} | "
+                f"{held_pct} | {eval_pct} | {stats['mean_duration']:.2f}s |"
             )
 
         if plot_file:
@@ -402,7 +477,8 @@ def run_benchmark(
     output_dir: str | None = None,
     report_path: str | None = None,
     save_plot: bool = True,
-    window: int = 10,
+    window: int = 100,
+    steps: int | None = None,
     eval_episodes: int = 10,
 ) -> dict[str, Any]:
     """
@@ -433,6 +509,7 @@ def run_benchmark(
     return runner.run(
         agents=agents,
         episodes=episodes,
+        steps=steps,
         seeds=seeds,
         output_dir=output_dir,
         report_path=report_path,
@@ -462,11 +539,18 @@ def main() -> None:
         default=None,
         help="List of agent types to benchmark (defaults to all supported for challenge)",
     )
-    parser.add_argument(
+    budget = parser.add_mutually_exclusive_group()
+    budget.add_argument(
         "--episodes",
         type=int,
         default=None,
-        help="Training episodes for every agent (default: each agent's config training.num_episodes)",
+        help="Training episodes for every agent (default: each agent's config budget)",
+    )
+    budget.add_argument(
+        "--steps",
+        type=int,
+        default=None,
+        help="Training environment steps for every agent (default: each agent's config budget)",
     )
     parser.add_argument(
         "--seeds",
@@ -496,8 +580,8 @@ def main() -> None:
     parser.add_argument(
         "--window",
         type=int,
-        default=10,
-        help="Rolling average window size for curves (default: 10)",
+        default=100,
+        help="Episodes averaged for the solve rule, held and the curves (default: 100)",
     )
     parser.add_argument(
         "--no-plot",
@@ -520,6 +604,7 @@ def main() -> None:
         challenge_name=args.challenge,
         agents=args.agents,
         episodes=args.episodes,
+        steps=args.steps,
         seeds=args.seeds,
         config_dir=args.config_dir,
         output_dir=args.output_dir,

@@ -343,10 +343,13 @@ python src/benchmark.py --challenge cartpole \
 python src/benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42
 ```
 
-Without `--episodes`, each agent trains for `training.num_episodes` in its config (`configs/<challenge>_<agent>.yaml`,
-or `<challenge>_default.yaml` for the random agent). A run counts as solved when its average training reward over
-`--window` episodes (default 10) reaches the challenge's threshold (475 for CartPole-v1, -200 for Pendulum-v1). The
-final greedy evaluation is reported in its own column and does not count as a solve.
+Without `--episodes` or `--steps`, each agent trains for its own config's budget (`configs/<challenge>_<agent>.yaml`,
+or `<challenge>_default.yaml` for the random agent): `training.total_steps` environment steps when set, else
+`training.num_episodes` episodes. A step budget finishes the episode that crosses it. A run counts as solved when its
+average training reward over `--window` consecutive episodes (default 100) reaches the challenge's threshold (475 for
+CartPole-v1, -200 for Pendulum-v1); the report gives the episode and the environment steps it took, and **Held**: the
+share of runs whose last `--window` episodes still average at or above the threshold. The final greedy evaluation is
+reported in its own column and does not count as a solve. `train.py --total-steps N` trains for a step budget too.
 
 Outputs:
 
@@ -375,6 +378,7 @@ agent:
 # Training settings
 training:
   num_episodes: 1000
+  # total_steps: 100000  # optional: train for this many environment steps instead (num_episodes is then ignored)
   max_steps_per_episode: 500
   eval_frequency: 100
   save_frequency: 100

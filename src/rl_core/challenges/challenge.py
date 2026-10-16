@@ -7,6 +7,7 @@ import os
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
+from rl_core.training.budget import apply_budget_override
 from rl_core.utils.config import load_config
 
 
@@ -61,7 +62,7 @@ class BenchmarkChallenge(abc.ABC):
 
     @abc.abstractmethod
     def setup_run(
-        self, agent_type: str, seed: int, episodes: int | None
+        self, agent_type: str, seed: int, episodes: int | None, steps: int | None = None
     ) -> tuple[Any, Any, dict[str, Any]]:
         """
         Setup and return (env, agent, training_config) for a single benchmark run.
@@ -70,6 +71,7 @@ class BenchmarkChallenge(abc.ABC):
             agent_type: Identifier of the agent to instantiate.
             seed: Random seed for environment and agent reproducibility.
             episodes: Training episodes for every agent, or None for this agent's own budget.
+            steps: Training environment steps for every agent, or None.
 
         Returns:
             Tuple of (initialized_env, initialized_agent, training_config_dict). The
@@ -77,12 +79,15 @@ class BenchmarkChallenge(abc.ABC):
         """
         ...
 
-    def load_run_config(self, agent_type: str, seed: int, episodes: int | None) -> dict[str, Any]:
+    def load_run_config(
+        self, agent_type: str, seed: int, episodes: int | None, steps: int | None = None
+    ) -> dict[str, Any]:
         """
         Load an agent's config from :attr:`config_dir` and prepare it for one benchmark run.
 
-        The seed replaces the environment and agent seeds. The budget is ``episodes`` when
-        given, else the config's ``training.num_episodes``, else :attr:`default_episodes`.
+        The seed replaces the environment and agent seeds. The budget is ``episodes`` or ``steps``
+        when given (see :func:`~rl_core.training.budget.apply_budget_override`), else the config's
+        ``training.total_steps`` or ``training.num_episodes``, else :attr:`default_episodes`.
         Checkpointing is pushed past the end of the run.
 
         Raises:
@@ -99,8 +104,7 @@ class BenchmarkChallenge(abc.ABC):
         config.setdefault("environment", {})["seed"] = seed
         config.setdefault("agent", {}).setdefault("config", {})["seed"] = seed
         training = config.setdefault("training", {})
-        if episodes is not None:
-            training["num_episodes"] = episodes
+        apply_budget_override(training, episodes, steps)
         training.setdefault("num_episodes", self.default_episodes)
         if training["num_episodes"] <= 0:
             raise ValueError(

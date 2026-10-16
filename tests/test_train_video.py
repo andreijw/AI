@@ -384,3 +384,39 @@ def test_environment_null_values_fall_back_to_defaults(tmp_path, monkeypatch):
     assert captured["env_name"] == "CartPole-v1"
     assert captured["obs_noise_std"] == pytest.approx(0.0)
     assert captured["action_noise_prob"] == pytest.approx(0.0)
+
+
+def test_total_steps_override_sets_a_step_budget(tmp_path):
+    from train import load_run_config
+
+    config, _ = load_run_config(minimal_config(tmp_path), total_steps=300)
+    assert config["training"]["total_steps"] == 300
+
+
+def test_num_episodes_override_clears_a_step_budget(tmp_path):
+    import yaml
+
+    from train import load_run_config
+
+    path = minimal_config(tmp_path)
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    data["training"]["total_steps"] = 900
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f)
+    config, _ = load_run_config(path, num_episodes=2)
+    assert config["training"]["num_episodes"] == 2 and "total_steps" not in config["training"]
+
+
+def test_num_episodes_and_total_steps_together_are_rejected(tmp_path, monkeypatch):
+    config_path = minimal_config(tmp_path)
+    with pytest.raises(SystemExit):
+        run_main(
+            ["--num-episodes", "2", "--total-steps", "50", "--config", config_path], monkeypatch
+        )
+
+
+def test_total_steps_override_requires_positive_int(tmp_path, monkeypatch):
+    config_path = minimal_config(tmp_path)
+    with pytest.raises(SystemExit):
+        run_main(["--total-steps", "0", "--config", config_path], monkeypatch)

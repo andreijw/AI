@@ -50,9 +50,9 @@ class PendulumChallenge(BenchmarkChallenge):
         return sorted(AGENT_CLASSES)
 
     def setup_run(
-        self, agent_type: str, seed: int, episodes: int | None
+        self, agent_type: str, seed: int, episodes: int | None, steps: int | None = None
     ) -> tuple[Any, Any, dict[str, Any]]:
-        config = self.load_run_config(agent_type, seed, episodes)
+        config = self.load_run_config(agent_type, seed, episodes, steps)
 
         env_cfg = config["environment"]
         env = PendulumEnv(
