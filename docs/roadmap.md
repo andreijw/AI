@@ -339,6 +339,9 @@ Defects found while working on other items, then findings from the brooks-lint h
       draw the same numbers, and a test fails if they do.
     - Runs stay reproducible for a seed.
   - **Known edge cases**: Every seeded result changes once more; checkpoints that store generator state.
+  - **Progress (2026-10-16)**: `DDPGAgent` already draws weights, exploration and replay sampling from named
+    streams (`AGENT_WEIGHTS_STREAM`, `AGENT_EXPLORATION_STREAM`, `AGENT_REPLAY_STREAM` in `rl_core.seeding`); the
+    other agents remain.
   - **Out of scope**: Regenerating `docs/benchmarks/`.
 
 - [ ] **Separate Evaluation Environment**
@@ -748,6 +751,10 @@ Defects found while working on other items, then findings from the brooks-lint h
     with continuous actions (`action_dim`); 2, `DDPGAgent` with a shared MLP helper (`rl_core/agents/mlp.py`), a
     shared `action_bounds` helper, prefixed Adam checkpoint keys, a continuous agent contract test and named random
     streams; 3, the config, a timed network size, the learning gate and docs.
+  - **Progress (2026-10-16)**: PR 1 (#90) stores continuous actions. PR 2 adds `DDPGAgent` with finite-difference
+    checks of the critic, the actor (through the critic's action input) and the shared MLP, hand-computed losses,
+    targets and Polyak updates, a replay of one `update`, and a continuous contract test for every continuous agent.
+    Not yet registered with the Pendulum challenge and not yet shown to learn: that is PR 3.
   - **Out of scope**: Twin Delayed DDPG (TD3) double Q-learning; stochastic entropy auto-tuning (SAC).
 
 - [ ] **Curriculum Learning & Domain Randomization Scheduling**

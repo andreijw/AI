@@ -171,6 +171,37 @@ class ReplayBuffer:
         self._idx = (self._idx + n) % self.capacity
         self._size = min(self._size + n, self.capacity)
 
+    def add_transitions(self, batch: dict[str, Any]) -> int:
+        """
+        Store a trainer batch: a transition is terminal only if the episode really ended there.
+
+        Uses the batch's ``terminated`` flags when present (the trainer sends them), else its
+        ``dones``, so a cut at the time limit still bootstraps from the next state. A batch
+        without ``next_observations`` or without either flag is not stored.
+
+        Returns:
+            The number of transitions stored (0 if the batch was not stored).
+
+        Raises:
+            ValueError: If ``terminated`` has a different length from ``actions``.
+        """
+        terminal = batch.get("terminated", batch.get("dones"))
+        if "terminated" in batch and len(batch["terminated"]) != len(batch.get("actions", [])):
+            raise ValueError(
+                f"terminated has {len(batch['terminated'])} flags for "
+                f"{len(batch.get('actions', []))} actions"
+            )
+        if "next_observations" not in batch or terminal is None:
+            return 0
+        self.add_batch(
+            batch["observations"],
+            batch["actions"],
+            batch["rewards"],
+            batch["next_observations"],
+            terminal,
+        )
+        return len(batch["actions"])
+
     def _actions_array(self, actions: Any, single: bool) -> npt.NDArray[Any]:
         """
         Actions as stored: int64 when discrete; float64 of shape (action_dim,) for one continuous

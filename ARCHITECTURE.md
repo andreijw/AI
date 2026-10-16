@@ -53,7 +53,9 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    clipped PPO, GAE) are implemented natively in NumPy without heavyweight external frameworks. One `Adam` in
    `rl_core/agents/optim.py` serves the continuous agents and, with `optimizer: adam` in the agent config,
    REINFORCE, Actor-Critic, PPO and DQN, which otherwise use plain SGD (DQN's SGD clips each gradient element at
-   `grad_clip_value`). Discrete PPO takes the standard form when its
+   `grad_clip_value`). DDPG's two-hidden-layer actor and critic use the shared `rl_core/agents/mlp.py`
+   (stateless forward and backward passes over named weights), and every continuous agent reads its bounds through
+   `rl_core/agents/bounds.py`. Discrete PPO takes the standard form when its
    config sets `rollout_steps`, `minibatch_size` and `gae_lambda`: it buffers whole episodes until it holds
    `rollout_steps` transitions, computes GAE over them (`rl_core/agents/returns.py`, shared with continuous PPO)
    and takes `ppo_epochs` passes of shuffled `minibatch_size` steps. Without those keys it trains on each episode
@@ -191,6 +193,15 @@ classDiagram
         +update(trajectory) dict
     }
 
+    class DDPGAgent {
+        +ReplayBuffer replay_buffer
+        +ndarray action_low
+        +ndarray action_high
+        #dict _actor, _critic, _target_actor, _target_critic
+        +select_action(obs, training) ndarray
+        +update(batch) dict
+    }
+
     BaseAgent <|-- RandomAgent
     BaseAgent <|-- ContinuousRandomAgent
     BaseAgent <|-- ReinforceAgent
@@ -201,6 +212,7 @@ classDiagram
     BaseAgent <|-- ContinuousActorCriticBase
     ContinuousActorCriticBase <|-- ContinuousActorCriticAgent
     ContinuousActorCriticBase <|-- ContinuousPPOAgent
+    BaseAgent <|-- DDPGAgent
 ```
 
 ---
