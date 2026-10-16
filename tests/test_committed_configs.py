@@ -15,33 +15,48 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rl_cartpole.benchmark import CartPoleChallenge  # noqa: E402
 from rl_core.agents.optim import Adam  # noqa: E402
 
-# agent type -> (optimizer, training budget)
-MEASURED = {
-    "reinforce": ("adam", 2000),
-    "actor_critic": ("adam", 1500),
-    "ppo": ("adam", 1000),
+# Step budgets (roadmap: Benchmark Budgets and Solve Rule in Environment Steps), from the
+# rl-baselines3-zoo references where one exists; CartPole PPO gets twice its reference.
+STEP_BUDGETS = {
+    ("cartpole", "reinforce"): 500_000,
+    ("cartpole", "actor_critic"): 500_000,
+    ("cartpole", "ppo"): 200_000,
+    ("cartpole", "dqn"): 50_000,
+    ("cartpole", "random"): 50_000,
+    ("pendulum", "ppo"): 100_000,
+    ("pendulum", "actor_critic"): 1_000_000,
+    ("pendulum", "random"): 40_000,
 }
 
 
-@pytest.mark.parametrize("agent_type", sorted(MEASURED))
-def test_policy_gradient_agents_use_the_measured_optimizer_and_budget(agent_type):
-    optimizer, budget = MEASURED[agent_type]
-    env, agent, train_cfg = CartPoleChallenge().setup_run(agent_type, seed=1, episodes=None)
+@pytest.mark.parametrize("challenge,agent_type", sorted(STEP_BUDGETS))
+def test_every_agent_trains_for_its_step_budget(challenge, agent_type):
+    from rl_pendulum.benchmark import PendulumChallenge
+
+    cls = {"cartpole": CartPoleChallenge, "pendulum": PendulumChallenge}[challenge]
+    env, agent, train_cfg = cls().setup_run(agent_type, seed=1, episodes=None)
     env.close()
-    assert isinstance(agent._optimizer, Adam) == (optimizer == "adam")
-    assert train_cfg["num_episodes"] == budget
+    assert train_cfg["total_steps"] == STEP_BUDGETS[(challenge, agent_type)]
+    anneal = getattr(agent, "anneal_steps", None)
+    assert anneal is None or anneal == train_cfg["total_steps"], "Anneal over the whole budget."
 
 
-def test_dqn_trains_for_the_measured_budget_and_keeps_its_epsilon_schedule():
-    env, agent, train_cfg = CartPoleChallenge().setup_run("dqn", seed=1, episodes=None)
+@pytest.mark.parametrize("agent_type", ["reinforce", "actor_critic", "ppo"])
+def test_cartpole_policy_gradient_agents_use_adam(agent_type):
+    env, agent, _ = CartPoleChallenge().setup_run(agent_type, seed=1, episodes=None)
     env.close()
-    assert train_cfg["num_episodes"] == 750
+    assert isinstance(agent._optimizer, Adam)
+
+
+def test_dqn_keeps_its_epsilon_schedule():
+    env, agent, _ = CartPoleChallenge().setup_run("dqn", seed=1, episodes=None)
+    env.close()
     # A faster decay (0.99) solved fewer seeds than this one in 500 episodes.
     assert agent.epsilon_decay == pytest.approx(0.995)
 
 
 def test_ppo_uses_standard_rollouts_with_an_annealed_learning_rate():
-    """rl-zoo CartPole settings with linear annealing: 5 of 5 seeds by episode 427 (roadmap)."""
+    """rl-zoo CartPole settings with linear annealing over the whole 200k-step budget (roadmap)."""
     env, agent, _ = CartPoleChallenge().setup_run("ppo", seed=1, episodes=None)
     env.close()
     assert (agent.rollout_steps, agent.minibatch_size, agent.ppo_epochs) == (256, 256, 20)
@@ -53,8 +68,8 @@ def test_ppo_uses_standard_rollouts_with_an_annealed_learning_rate():
 
 
 def test_pendulum_ppo_uses_the_measured_settings():
-    """γ 0.9, lr 0.001, reward scale 0.1, annealing over 100,000 transitions: 5 of 5 seeds reach -200
-    within 500 episodes (seeds 1–5, published; 4 of 5 on seeds 6–10 in a scratch run)."""
+    """γ 0.9, lr 0.001, reward scale 0.1, annealing over 100,000 transitions: the settings whose 10-episode
+    average touched -200 on 5 of 5 seeds (2026-10-15); 0 of 5 hold it under the 100-episode rule."""
     from rl_pendulum.benchmark import PendulumChallenge
 
     env, agent, train_cfg = PendulumChallenge().setup_run("ppo", seed=1, episodes=None)
@@ -63,4 +78,3 @@ def test_pendulum_ppo_uses_the_measured_settings():
         (0.9, 0.001, 0.1)
     )
     assert (agent.anneal_steps, agent.clip_ratio, agent.mean_init_scale) == (100_000, 0.2, 0.01)
-    assert train_cfg["num_episodes"] == 500

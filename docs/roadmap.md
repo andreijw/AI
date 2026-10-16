@@ -420,13 +420,27 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: DDPG and other new algorithms; changing the solve threshold; the discrete agents.
   - **Depends on**: Seeded Environments Replay One Start State, so the diagnosis is not confounded by it.
 
+- [ ] **Pendulum PPO Holds -200 Under the 100-Episode Rule**
+  - **Description**: Under the 10-episode rule Pendulum PPO reached -200 on 5 of 5 seeds; under the 100-episode
+    rule ("Benchmark Budgets and Solve Rule in Environment Steps", 2026-10-15) it reaches it on none: final 100-episode
+    training averages -241 to -313 at 100,000 steps (rl-zoo's budget), evaluation -285 ± 82. Doubling the budget and
+    the annealing to 200,000 steps does not help (0 of 5; two seeds end at -529 and -841). rl-zoo's Pendulum PPO
+    collects 1024-step rollouts on 4 parallel environments, uses state-dependent exploration (gSDE) and 10 epochs,
+    where ours trains on each 200-step episode with 8 epochs and no observation normalisation.
+  - **Acceptance criteria**:
+    - A diagnosis names what separates ours from the reference, each cause checked.
+    - With a maintainer-approved config, the 100-episode training average reaches -200 on at least 4 of 5 seeds
+      within the budget, and the report says whether it held.
+  - **Out of scope**: Changing the threshold or the window; SAC/TD3.
+
 - [ ] **Continuous Actor-Critic Learns Pendulum-v1**
-  - **Description**: Split out of "Pendulum PPO Learns and Solves Pendulum-v1". `ContinuousActorCriticAgent` takes
-    one Adam step per 200-step episode (about 300 in its whole budget, against continuous PPO's 32 per episode), and it
-    does not yet use time-limit bootstrapping or annealing. With the new defaults (small initial mean head) and γ 0.9,
-    learning rate 0.001 and `reward_scale` 0.1 (a scratch run, not published; the committed config still has γ 0.99
+  - **Description**: Split out of "Pendulum PPO Learns and Solves Pendulum-v1". `ContinuousActorCriticAgent` takes one
+    Adam step per 200-step episode (about 5000 in its 1,000,000-step budget, against continuous PPO's 32 per episode),
+    and it does not yet use time-limit bootstrapping or annealing. With the new defaults (small initial mean head) and γ
+    0.9, learning rate 0.001 and `reward_scale` 0.1 (a scratch run, not published; the committed config still has γ 0.99
     and learning rate 0.0003), its final training average on seeds 1 to 5 was -1429 to -1530 after 300 episodes
-    (2026-10-15), at or below the random agent. The published committed config scores -1383 ± 63 in evaluation.
+    (2026-10-15), at or below the random agent. The published committed config, at its 1,000,000-step budget, scores
+    -1422 ± 134 in evaluation (2026-10-16).
   - **Acceptance criteria**:
     - A diagnosis names why it does not learn, each cause confirmed by a check that fails before the fix.
     - It uses the batch's `terminated` flag like continuous PPO, with a test.
@@ -611,7 +625,9 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: Action squashing/tanh bounding; standard deviation vanishing or numerical overflow.
   - **Out of scope**: Off-policy continuous algorithms (DDPG/SAC); multi-discrete action spaces.
 
-- [~] **Benchmark Budgets and Solve Rule in Environment Steps**
+- [x] **Benchmark Budgets and Solve Rule in Environment Steps**
+  - **Delivered in**: #85 (step budgets, 100-episode window, Held) and the follow-up PR with the approved budgets
+    and both republished reports.
   - **Description**: Budgets are counted in episodes, and CartPole episodes run from about 10 to 500 steps, so an
     episode count says little about how much an agent trained; the reference setups everyone compares against
     (rl-baselines3-zoo) set budgets in environment steps. A run also counts as solved on a 10-episode average the
@@ -630,13 +646,21 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: An episode that crosses the step budget (finish it, or cut it); evaluation episodes are not
     counted as training steps; agents that train per episode keep doing so.
   - **Out of scope**: Changing thresholds; tuning agents that fall short (DQN has its own item).
+  - **Results** (2026-10-16, committed configs, seeds 1 to 5, 100-episode window): CartPole PPO 200k steps solves
+    5 of 5 (73k to 199k steps), holds 4 of 5; Actor-Critic 500k solves 5 of 5 (184k to 465k), holds 4 of 5;
+    REINFORCE 500k solves 4 of 5 (242k to 446k), holds 2 of 5; DQN 50k solves 0 of 5 (final averages 247 to 312).
+    Pendulum PPO 100k solves 0 of 5 (final -241 to -313); Actor-Critic 1M solves 0 of 5, evaluation -1422 ± 134
+    against the random agent's -1225. The default configs' budgets (50k CartPole, 40k Pendulum) only set the
+    random baseline's length.
 
 - [ ] **DQN Reaches the rl-zoo Reference**
-  - **Description**: CartPole DQN needs 73k to 117k steps to first reach 475 and one seed of five never does, against
-    rl-baselines3-zoo's 50k-step budget. rl-zoo's DQN uses a 256×256 network, 128 gradient steps every 256
-    environment steps, a 1000-step warm-up, a target update every 10 steps and exploration decayed over the first 16%
-    of training. Ours: one 128-unit hidden layer, at most 64 gradient steps per episode, epsilon decayed per episode,
-    time-limit cuts treated as terminal (see "CartPole Agents Learn Within Their Budgets" → DQN behaviours).
+  - **Description**: Under the old 10-episode rule (2026-10-15, 750 episodes) CartPole DQN needed 73k to 117k steps to
+    first reach 475 and one seed of five never did, against rl-baselines3-zoo's 50k-step budget. rl-zoo's DQN uses a
+    256×256 network, 128 gradient steps every 256 environment steps, a 1000-step warm-up, a target update every 10 steps
+    and exploration decayed over the first 16% of training. Ours: one 128-unit hidden layer, at most 64 gradient steps
+    per episode, epsilon decayed per episode, time-limit cuts treated as terminal (see "CartPole Agents Learn Within
+    Their Budgets" → DQN behaviours). Under the 100-episode rule at 50k steps (2026-10-16) it solves 0 of 5: final
+    averages 247 to 312, evaluation 368 ± 94.
   - **Acceptance criteria**:
     - A diagnosis names what separates our DQN from the reference, each cause checked.
     - Fixes are test-first; config changes are measured and maintainer-approved.
