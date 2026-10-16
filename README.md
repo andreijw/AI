@@ -206,12 +206,13 @@ not measured, so a single `train.py` run may land on the unlucky side of these n
 | CartPole-v1 | PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 200,000 | 5 of 5 | 73k to 199k | 4 of 5 |
 | CartPole-v1 | Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 500,000 | 5 of 5 | 184k to 465k | 4 of 5 |
 | CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 500,000 | 4 of 5 | 242k to 446k | 2 of 5 |
-| CartPole-v1 | DQN | `cartpole_dqn.yaml` | 50,000 | 0 of 5 | — | 0 of 5 |
+| CartPole-v1 | DQN | `cartpole_dqn.yaml` (Adam, per-step exploration) | 300,000 | 5 of 5 | 145k to 238k | 5 of 5 |
 | Pendulum-v1 | PPO | `pendulum_ppo.yaml` (annealed, rewards scaled) | 100,000 | 0 of 5 | — | 0 of 5 |
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` | 1,000,000 | 0 of 5 | — | 0 of 5 |
 
-CartPole DQN's final 100-episode averages are 247 to 312 at rl-zoo's 50,000-step budget (roadmap: "DQN Reaches
-the rl-zoo Reference"). Pendulum PPO's are -241 to -313 at rl-zoo's 100,000 steps; under the earlier 10-episode rule
+CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
+47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (roadmap: "DQN Reaches the rl-zoo
+Reference"). Pendulum PPO's are -241 to -313 at rl-zoo's 100,000 steps; under the earlier 10-episode rule
 it touched -200 on every seed (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode Rule"). Continuous
 Actor-Critic stays below the random agent even with 1,000,000 steps (roadmap: "Continuous Actor-Critic Learns
 Pendulum-v1").

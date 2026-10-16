@@ -21,7 +21,7 @@ STEP_BUDGETS = {
     ("cartpole", "reinforce"): 500_000,
     ("cartpole", "actor_critic"): 500_000,
     ("cartpole", "ppo"): 200_000,
-    ("cartpole", "dqn"): 50_000,
+    ("cartpole", "dqn"): 300_000,
     ("cartpole", "random"): 50_000,
     ("pendulum", "ppo"): 100_000,
     ("pendulum", "actor_critic"): 1_000_000,
@@ -48,11 +48,16 @@ def test_cartpole_policy_gradient_agents_use_adam(agent_type):
     assert isinstance(agent._optimizer, Adam)
 
 
-def test_dqn_keeps_its_epsilon_schedule():
+def test_dqn_uses_the_measured_rl_zoo_like_settings():
+    """Adam, a linear per-step exploration schedule and a slower target sync: 5 of 5 seeds solved
+    within 300k steps (roadmap: "DQN Reaches the rl-zoo Reference")."""
     env, agent, _ = CartPoleChallenge().setup_run("dqn", seed=1, episodes=None)
     env.close()
-    # A faster decay (0.99) solved fewer seeds than this one in 500 episodes.
-    assert agent.epsilon_decay == pytest.approx(0.995)
+    assert isinstance(agent._optimizer, Adam)
+    assert agent._optimizer.max_grad_norm == pytest.approx(10.0)
+    assert agent.learning_rate == pytest.approx(0.001)
+    assert agent.target_update_frequency == 128
+    assert (agent.exploration_steps, agent.epsilon_end) == (8000, pytest.approx(0.04))
 
 
 def test_ppo_uses_standard_rollouts_with_an_annealed_learning_rate():
