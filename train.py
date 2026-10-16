@@ -20,6 +20,7 @@ from rl_core.agents import (
     ReinforceAgent,
 )
 from rl_core.training import Trainer
+from rl_core.training.budget import apply_budget_override
 from rl_core.utils import load_config, plot_training_metrics, setup_logger
 from rl_core.utils.video import TrainingVideoRecorder
 
@@ -38,7 +39,7 @@ CONTINUOUS_AGENT_CLASSES = {
 }
 
 
-def load_run_config(config_path, agent_type=None, num_episodes=None):
+def load_run_config(config_path, agent_type=None, num_episodes=None, total_steps=None):
     """Load and validate a run config, applying CLI overrides. Returns (config, agent_type)."""
     print(f"Loading configuration from {config_path}")
     config = load_config(config_path)
@@ -57,8 +58,7 @@ def load_run_config(config_path, agent_type=None, num_episodes=None):
 
     if agent_type is not None:
         config["agent"]["type"] = agent_type
-    if num_episodes is not None:
-        config["training"]["num_episodes"] = num_episodes
+    apply_budget_override(config["training"], num_episodes, total_steps)
     agent_type = config["agent"].get("type")
     if not isinstance(agent_type, str):
         raise ValueError(
@@ -236,10 +236,16 @@ def main():
         choices=sorted(AGENT_CLASSES),
         help="Override the agent type from config (random, reinforce, actor_critic, ppo, dqn).",
     )
-    parser.add_argument(
+    budget = parser.add_mutually_exclusive_group()
+    budget.add_argument(
         "--num-episodes",
         type=int,
-        help="Override training.num_episodes from config (must be > 0).",
+        help="Train for this many episodes (must be > 0); replaces any training.total_steps.",
+    )
+    budget.add_argument(
+        "--total-steps",
+        type=int,
+        help="Train for this many environment steps (must be > 0); sets training.total_steps.",
     )
     parser.add_argument(
         "--challenge",
@@ -254,12 +260,16 @@ def main():
         parser.error("--render and --record-video are mutually exclusive. Use one or the other.")
     if args.num_episodes is not None and args.num_episodes <= 0:
         parser.error("--num-episodes must be a positive integer.")
+    if args.total_steps is not None and args.total_steps <= 0:
+        parser.error("--total-steps must be a positive integer.")
     if args.video_every is not None and not args.record_video:
         parser.error("--video-every requires --record-video.")
     if args.video_every is not None and args.video_every <= 0:
         parser.error("--video-every must be a positive integer.")
 
-    config, agent_type = load_run_config(args.config, args.agent_type, args.num_episodes)
+    config, agent_type = load_run_config(
+        args.config, args.agent_type, args.num_episodes, args.total_steps
+    )
     env_name = config["environment"].get("name") or "CartPole-v1"
     challenge = args.challenge or ("pendulum" if "pendulum" in env_name.lower() else "cartpole")
 

@@ -3,6 +3,7 @@
 import logging
 import math
 import os
+import warnings
 from collections.abc import Mapping
 from typing import Any
 
@@ -51,6 +52,22 @@ class Trainer:
         self.eval_frequency = self._get_int_config("eval_frequency", 100)
         self.save_frequency = self._get_int_config("save_frequency", 100)
         self.checkpoint_dir = config.get("checkpoint_dir", "./checkpoints")
+        # Step budget: when set, train until this many environment steps (finishing the episode that
+        # crosses it) and ignore num_episodes. Evaluation episodes do not count.
+        raw_steps = config.get("total_steps")
+        self.total_steps: int | None = None
+        if raw_steps is not None:
+            if isinstance(raw_steps, bool) or not isinstance(raw_steps, int) or raw_steps <= 0:
+                raise ValueError(f"total_steps must be a positive integer, got {raw_steps!r}")
+            self.total_steps = raw_steps
+            anneal = getattr(agent, "anneal_steps", None)
+            if anneal is not None and anneal > raw_steps:
+                warnings.warn(
+                    f"anneal_steps {anneal} exceeds the step budget {raw_steps}: training stops "
+                    "before the learning rate and clip range finish decaying",
+                    stacklevel=2,
+                )
+        self.total_steps_trained = 0
 
         if self.num_episodes <= 0:
             raise ValueError(f"num_episodes must be a positive integer, got {self.num_episodes!r}")
@@ -263,21 +280,28 @@ class Trainer:
         Returns:
             Dictionary of training statistics
         """
-        self._log_info(f"Starting training for {self.num_episodes} episodes...")
+        budget = (
+            f"{self.total_steps} environment steps"
+            if self.total_steps is not None
+            else f"{self.num_episodes} episodes"
+        )
+        self._log_info(f"Starting training for {budget}...")
 
-        for episode in range(self.num_episodes):
+        episode = 0
+        while self._budget_left(episode):
             self.current_episode = episode + 1
             episode_reward, episode_length = self._run_episode(training=True)
 
             self.episode_rewards.append(episode_reward)
             self.episode_lengths.append(episode_length)
+            self.total_steps_trained += episode_length
 
             # Log progress
             if (episode + 1) % _LOG_INTERVAL == 0:
                 avg_reward = np.mean(self.episode_rewards[-_LOG_INTERVAL:])
                 avg_length = np.mean(self.episode_lengths[-_LOG_INTERVAL:])
                 self._log_info(
-                    f"Episode {episode + 1}/{self.num_episodes} | "
+                    f"Episode {episode + 1}{self._progress_suffix()} | "
                     f"Avg Reward (last {_LOG_INTERVAL}): {avg_reward:.2f} | "
                     f"Avg Length (last {_LOG_INTERVAL}): {avg_length:.2f}"
                 )
@@ -302,14 +326,28 @@ class Trainer:
             if (episode + 1) % self.save_frequency == 0:
                 self._save_checkpoint(episode + 1)
 
+            episode += 1
+
         self._log_info("Training complete!")
 
         return {
-            "total_episodes": self.num_episodes,
+            "total_episodes": len(self.episode_rewards),
+            "total_steps": self.total_steps_trained,
             "avg_reward": np.mean(self.episode_rewards),
             "avg_length": np.mean(self.episode_lengths),
             "final_avg_reward": np.mean(self.episode_rewards[-100:]),
         }
+
+    def _budget_left(self, episodes_done: int) -> bool:
+        """Whether another training episode starts: steps when budgeted in steps, else episodes."""
+        if self.total_steps is not None:
+            return self.total_steps_trained < self.total_steps
+        return episodes_done < self.num_episodes
+
+    def _progress_suffix(self) -> str:
+        if self.total_steps is not None:
+            return f" | steps {self.total_steps_trained}/{self.total_steps}"
+        return f"/{self.num_episodes}"
 
     def _run_episode(self, training: bool = True) -> tuple[float, int]:
         """

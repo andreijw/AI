@@ -144,9 +144,11 @@ def plot_benchmark_comparison(
     show: bool = False,
     title: str = "CartPole Multi-Agent Benchmark Comparison",
     target_score: float | None = 475.0,
+    episode_lengths: dict[str, list[list[int]]] | None = None,
 ) -> str | None:
     """
-    Plot comparative reward trajectories for multiple agents across training episodes.
+    Plot comparative reward trajectories for multiple agents across training episodes, or across
+    environment steps when ``episode_lengths`` is given.
 
     For each agent, runs are smoothed using a rolling average, and the mean trajectory
     along with shaded +/- 1 standard deviation confidence bands are plotted.
@@ -159,6 +161,10 @@ def plot_benchmark_comparison(
         show: Whether to display the plot interactively.
         title: Figure title.
         target_score: Optional reference score threshold (e.g. 475.0 for CartPole-v1 solved criterion).
+        episode_lengths: Optional mapping like ``agent_curves`` holding each episode's step count.
+            When given, the x-axis is cumulative environment steps: each run's smoothed curve is
+            interpolated onto a common step grid up to the shortest run's total steps, so runs with
+            different episode counts (step budgets) are compared at equal training effort.
 
     Returns:
         Absolute path to the saved PNG, or None if save_path is not set.
@@ -196,12 +202,23 @@ def plot_benchmark_comparison(
     for idx, (name, runs) in enumerate(agent_curves.items()):
         color = palette[idx % len(palette)]
         smoothed_runs = [_rolling_average(run, window) for run in runs]
-        min_len = min(len(r) for r in smoothed_runs)
-        aligned = np.array([r[:min_len] for r in smoothed_runs], dtype=np.float64)
+        if episode_lengths is not None:
+            steps_runs = [np.cumsum(lengths) for lengths in episode_lengths[name]]
+            if [len(s) for s in steps_runs] != [len(r) for r in smoothed_runs]:
+                raise ValueError(f"episode_lengths for agent '{name}' do not match its runs.")
+            end = min(float(s[-1]) for s in steps_runs)
+            start = max(float(s[0]) for s in steps_runs)  # where every run has data
+            episodes = np.linspace(start, end, 200)
+            aligned = np.array(
+                [np.interp(episodes, s, r) for s, r in zip(steps_runs, smoothed_runs, strict=True)]
+            )
+        else:
+            min_len = min(len(r) for r in smoothed_runs)
+            aligned = np.array([r[:min_len] for r in smoothed_runs], dtype=np.float64)
+            episodes = np.arange(1, min_len + 1, dtype=np.float64)
 
         mean_curve = np.mean(aligned, axis=0)
         std_curve = np.std(aligned, axis=0)
-        episodes = np.arange(1, min_len + 1)
 
         final_mean = float(mean_curve[-1])
         final_std = float(std_curve[-1]) if len(runs) > 1 else 0.0
@@ -231,7 +248,7 @@ def plot_benchmark_comparison(
             label=f"Solved Threshold ({target_score:.0f})",
         )
 
-    ax.set_xlabel("Episode", fontsize=11)
+    ax.set_xlabel("Environment steps" if episode_lengths is not None else "Episode", fontsize=11)
     ax.set_ylabel(f"Reward (Rolling Avg w={window})", fontsize=11)
     ax.grid(True, alpha=0.3)
     ax.legend(loc="lower right", fontsize=10, framealpha=0.9)

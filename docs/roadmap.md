@@ -111,11 +111,12 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 
 ## Upcoming Milestones
 
-**Agreed order (2026-10-13, extended 2026-10-14):** Seed the Continuous PPO Mini-Batch Shuffle → Seeded Environments
-Replay One Start State → the test-gap items (Discounted-Return Tests That Can Fail, Softmax Stability Tests, Single
-`_compute_returns` Implementation) → Split `update` into Loss-and-Gradients and Apply → CartPole Agents Learn Within
-Their Budgets → Actor-Critic Trains with Adam → Standard PPO for Discrete Actions → Break the Benchmark Import Cycle →
-Pendulum PPO Learns and Solves Pendulum-v1 → DDPG.
+**Agreed order (2026-10-13, extended 2026-10-14 and 2026-10-15):** Seed the Continuous PPO Mini-Batch Shuffle →
+Seeded Environments Replay One Start State → the test-gap items (Discounted-Return Tests That Can Fail, Softmax
+Stability Tests, Single `_compute_returns` Implementation) → Split `update` into Loss-and-Gradients and Apply →
+CartPole Agents Learn Within Their Budgets → Actor-Critic Trains with Adam → Standard PPO for Discrete Actions → Break
+the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 → Benchmark Budgets and Solve Rule in
+Environment Steps → DQN Reaches the rl-zoo Reference → DDPG.
 
 ### Workflow Tooling
 
@@ -496,7 +497,8 @@ Defects found while working on other items, then findings from the brooks-lint h
     buffer; CartPole's 500-step time limit is treated as terminal, as for every agent.
   - **Out of scope**: Value-loss clipping, KL early stopping, parallel environments.
 
-- [~] **Break the Benchmark Import Cycle**
+- [x] **Break the Benchmark Import Cycle**
+  - **Delivered in**: merged in #81.
   - **Description**: `src/benchmark.py` imports `rl_cartpole.benchmark` and `rl_pendulum.benchmark` inside functions
     in two places, both import `benchmark` back, and a `sys.modules.setdefault("benchmark", ...)` alias holds the
     cycle together. A third challenge means editing the runner twice.
@@ -608,6 +610,39 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Unit tests in `tests/test_continuous_agent.py` and `tests/test_pendulum.py` achieving >95% coverage.
   - **Known edge cases**: Action squashing/tanh bounding; standard deviation vanishing or numerical overflow.
   - **Out of scope**: Off-policy continuous algorithms (DDPG/SAC); multi-discrete action spaces.
+
+- [~] **Benchmark Budgets and Solve Rule in Environment Steps**
+  - **Description**: Budgets are counted in episodes, and CartPole episodes run from about 10 to 500 steps, so an
+    episode count says little about how much an agent trained; the reference setups everyone compares against
+    (rl-baselines3-zoo) set budgets in environment steps. A run also counts as solved on a 10-episode average the
+    first time it touches the threshold, where the usual CartPole convention averages 100 episodes, and nothing reports
+    whether the agent held it. Measured 2026-10-15 (committed configs, seeds 1 to 5, steps to first solve): CartPole PPO
+    35k to 86k (rl-zoo budget 100k), DQN 73k to 117k with one seed never (rl-zoo 50k), Actor-Critic 78k to 174k (rl-zoo
+    A2C 500k), REINFORCE 157k to 247k (no rl-zoo entry); Pendulum PPO 42k to 64k (rl-zoo 100k), Actor-Critic never in
+    60k (rl-zoo A2C 1,000,000).
+  - **Acceptance criteria**:
+    - Training can be budgeted in environment steps; the benchmark reports steps to solve beside episodes.
+    - The solve window is 100 episodes by default, and the report has a "held" measure (for example the final
+      100-episode training average at or above the threshold), with the rule written in the report.
+    - Each agent's budget is chosen against its rl-zoo reference where one exists, recorded in the config comment;
+      the values are the maintainer's to approve.
+    - Both published reports and the README solve table are regenerated under the new rule.
+  - **Known edge cases**: An episode that crosses the step budget (finish it, or cut it); evaluation episodes are not
+    counted as training steps; agents that train per episode keep doing so.
+  - **Out of scope**: Changing thresholds; tuning agents that fall short (DQN has its own item).
+
+- [ ] **DQN Reaches the rl-zoo Reference**
+  - **Description**: CartPole DQN needs 73k to 117k steps to first reach 475 and one seed of five never does, against
+    rl-baselines3-zoo's 50k-step budget. rl-zoo's DQN uses a 256×256 network, 128 gradient steps every 256
+    environment steps, a 1000-step warm-up, a target update every 10 steps and exploration decayed over the first 16%
+    of training. Ours: one 128-unit hidden layer, at most 64 gradient steps per episode, epsilon decayed per episode,
+    time-limit cuts treated as terminal (see "CartPole Agents Learn Within Their Budgets" → DQN behaviours).
+  - **Acceptance criteria**:
+    - A diagnosis names what separates our DQN from the reference, each cause checked.
+    - Fixes are test-first; config changes are measured and maintainer-approved.
+    - Under the step-based rule, DQN solves CartPole-v1 on at least 4 of 5 seeds within the rl-zoo budget, or the
+      item records how close it gets and why.
+  - **Out of scope**: Double, dueling and prioritised-replay DQN (each its own item if wanted); DDPG.
 
 - [ ] **Continuous Off-Policy Learning & DDPG (Deep Deterministic Policy Gradient)**
   - **Description**: Implement a pure NumPy `DDPGAgent` utilizing a deterministic actor network $\mu_\theta(s)$,

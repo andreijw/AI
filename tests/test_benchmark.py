@@ -283,6 +283,8 @@ def test_classify_run_training_average_reaching_threshold_is_a_solve():
     assert result == {
         "is_solved": True,
         "solved_episode": 10,
+        "solved_step": None,
+        "held": True,
         "eval_reached_threshold": False,
     }
 
@@ -320,6 +322,8 @@ def test_classify_run_evaluation_alone_is_not_a_solve():
     assert result == {
         "is_solved": False,
         "solved_episode": None,
+        "solved_step": None,
+        "held": False,
         "eval_reached_threshold": True,
     }
 
@@ -336,6 +340,8 @@ def test_classify_run_without_threshold_never_solves():
     assert result == {
         "is_solved": False,
         "solved_episode": None,
+        "solved_step": None,
+        "held": None,
         "eval_reached_threshold": False,
     }
 
@@ -440,8 +446,8 @@ def test_runner_trains_each_agent_for_its_own_budget(tmp_path):
 
     md = report.read_text(encoding="utf-8")
     assert "each agent's own config" in md
-    assert "| **short** | 2 |" in md
-    assert "| **long** | 3 |" in md
+    assert "| **short** | 2 episodes | 2 |" in md
+    assert "| **long** | 3 episodes | 3 |" in md
 
 
 def test_runner_override_applies_to_every_agent(tmp_path):
@@ -460,7 +466,7 @@ def test_runner_override_applies_to_every_agent(tmp_path):
         metadata = json.load(f)["metadata"]
     assert metadata["episodes"] == 4
     assert metadata["episodes_per_agent"] == {"long": 4, "short": 4}
-    assert "4 for every agent" in report.read_text(encoding="utf-8")
+    assert "4 episodes for every agent" in report.read_text(encoding="utf-8")
 
 
 class _ScriptedTrainer:
@@ -476,6 +482,7 @@ class _ScriptedTrainer:
 
     def train(self) -> None:
         self.episode_rewards = [self.OUTCOMES[self.seed][0]] * self.num_episodes
+        self.episode_lengths = [1] * self.num_episodes
 
     def evaluate(self, num_episodes: int) -> dict[str, float]:
         return {"mean_reward": self.OUTCOMES[self.seed][1]}
@@ -513,7 +520,7 @@ def test_runner_reports_evaluation_successes_separately(tmp_path, monkeypatch):
     assert stats["eval_threshold_rate"] == pytest.approx(2 / 3)
 
     md = report.read_text(encoding="utf-8")
-    assert "| **long** | 3 | 21.7 | ±11.8 | 33% | 1.0 | 67% |" in md
+    assert "| **long** | 3 episodes | 3 | 21.7 | ±11.8 | 33% | 1.0 | 1 | 33% | 67% |" in md
     assert "## How a Run Counts as Solved" in md
     assert "does not count as a solve" in md
     assert "(1 greedy episode)" in md
@@ -539,3 +546,93 @@ def test_report_without_threshold_says_nothing_can_solve(tmp_path):
     md = report.read_text(encoding="utf-8")
     assert "no solve threshold, so no run counts as solved" in md
     assert "greedy episodes" not in md
+
+
+# ---------------------------------------------------------------------------
+# Step budgets, steps to solve and held in the runner, report and CLI
+# ---------------------------------------------------------------------------
+
+
+def test_runner_trains_for_a_step_budget_and_records_steps(tmp_path):
+    res = BenchmarkRunner(CartPoleChallenge()).run(
+        agents=["random"],
+        steps=60,
+        seeds=[1],
+        output_dir=str(tmp_path / "steps"),
+        report_path=str(tmp_path / "steps.md"),
+        save_plot=True,
+        eval_episodes=1,
+    )
+    run = res["results"]["random"][0]
+    assert run["total_steps"] >= 60
+    assert run["window"] == 100
+    assert {"solved_step", "held"} <= set(run)
+    stats = res["summary"]["random"]
+    assert (stats["budget"], stats["budget_unit"]) == (60, "steps")
+    assert stats["episodes"] == run["total_episodes"]
+    assert {"avg_solved_step", "held_rate"} <= set(stats)
+    with open(res["metrics_json"]) as f:
+        metadata = json.load(f)["metadata"]
+    assert (metadata["episodes"], metadata["steps"]) == (None, 60)
+    assert metadata["budgets_per_agent"] == {"random": {"value": 60, "unit": "steps"}}
+    md = (tmp_path / "steps.md").read_text(encoding="utf-8")
+    assert "60 steps for every agent (`--steps`)" in md
+    assert "| **random** | 60 steps |" in md
+    assert "Avg Steps to Solve" in md and "| Held |" in md
+
+
+def test_runner_rejects_an_episode_and_a_step_budget_together(tmp_path):
+    with pytest.raises(ValueError, match="either an episode or a step budget"):
+        BenchmarkRunner(CartPoleChallenge()).run(
+            agents=["random"],
+            episodes=2,
+            steps=60,
+            seeds=[1],
+            output_dir=str(tmp_path / "x"),
+            save_plot=False,
+        )
+
+
+def test_report_states_the_window_used(tmp_path):
+    for window, text in ((100, "100 consecutive"), (7, "7 consecutive")):
+        report = tmp_path / f"w{window}.md"
+        BenchmarkRunner(PerAgentBudgetChallenge()).run(
+            agents=["short"],
+            seeds=[1],
+            output_dir=str(tmp_path / f"w{window}"),
+            report_path=str(report),
+            save_plot=False,
+            eval_episodes=1,
+            window=window,
+        )
+        md = report.read_text(encoding="utf-8")
+        assert text in md
+        assert "held" in md.lower()
+
+
+def test_cli_rejects_episodes_and_steps_together(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["benchmark", "--episodes", "2", "--steps", "60"])
+    with pytest.raises(SystemExit):
+        main()
+    assert "not allowed with argument" in capsys.readouterr().err
+
+
+def test_cli_default_window_is_100(monkeypatch):
+    called = {}
+    import benchmark
+
+    monkeypatch.setattr(benchmark, "run_benchmark", lambda **kwargs: called.update(kwargs) or {})
+    monkeypatch.setattr(sys, "argv", ["benchmark", "--agents", "random", "--steps", "60"])
+    main()
+    assert (called["window"], called["steps"], called["episodes"]) == (100, 60, None)
+
+
+def test_load_run_config_applies_a_step_budget(tmp_path):
+    (tmp_path / CartPoleChallenge.CONFIG_MAP["random"]).write_text(
+        "agent:\n  config: {}\ntraining:\n  num_episodes: 7\n  total_steps: 900\n", encoding="utf-8"
+    )
+    challenge = CartPoleChallenge(config_dir=str(tmp_path))
+    assert challenge.load_run_config("random", 1, None)["training"]["total_steps"] == 900
+    assert challenge.load_run_config("random", 1, None, steps=50)["training"]["total_steps"] == 50
+    by_episodes = challenge.load_run_config("random", 1, 3)["training"]
+    assert by_episodes["num_episodes"] == 3 and "total_steps" not in by_episodes

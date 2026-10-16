@@ -45,10 +45,12 @@ python src/benchmark.py --challenge cartpole --agents dqn ppo --seeds 1 2 3 4 5 
 
 - Without `--report`, it rewrites the tracked file `docs/benchmarks/<challenge>_results.md`. Without
   `--output-dir`, it writes under the repository. Neither is acceptable for an experiment.
-- Without `--episodes`, each agent trains for its own config's `training.num_episodes`; `--episodes N` gives
-  every agent N. A run counts as solved only on its rolling training average; the final evaluation is
-  reported apart. `--window` is the rolling-average window for the solve rule (default 10);
-  `--eval-episodes` is how many greedy episodes score each run (default 10).
+- Without `--episodes` or `--steps`, each agent trains for its own config's budget (`training.total_steps`
+  environment steps when set, else `training.num_episodes`); `--episodes N` or `--steps N` gives every agent
+  N (not both). A run counts as solved only on its training average over `--window` episodes (default 100);
+  the final evaluation is reported apart, and Held says whether the last window still averages at or above
+  the threshold. `--eval-episodes` is how many greedy episodes score each run (default 10). A run with fewer
+  episodes than the window can never solve, so short smoke runs report 0%.
 - The default is two seeds (42 and 123). That is enough to see that something runs, not enough to compare.
   Use at least three for "it learns" and five for "A is better than B".
 - **To try a hyperparameter**, copy `configs/` to `<scratch>/configs`, edit the copy, and pass
@@ -79,12 +81,14 @@ CartPole agent improves, so expect the full run to cost more than the linear est
 | Field | Meaning |
 | :--- | :--- |
 | `summary.<agent>.mean_eval_reward`, `std_eval_reward` | Mean and spread across seeds of the evaluation reward after training |
-| `summary.<agent>.episodes` | Episodes each run of this agent trained for |
+| `summary.<agent>.budget`, `budget_unit` | The budget each run of this agent got, in `steps` or `episodes` |
+| `summary.<agent>.episodes` | Mean episodes each run of this agent actually trained for |
+| `summary.<agent>.avg_solved_step`, `held_rate` | Mean training steps to the solve, over the seeds that solved; fraction of seeds whose last `window` episodes held the threshold |
 | `summary.<agent>.solve_rate` | Fraction of seeds whose rolling training average reached the challenge's `solve_threshold` |
 | `summary.<agent>.avg_solved_episode` | Mean first episode at which that happened, over the seeds that solved |
 | `summary.<agent>.eval_threshold_rate` | Fraction of seeds whose final evaluation reached the threshold (not a solve) |
-| `detailed_runs.<agent>[i]` | One seed: `eval_mean_reward`, `final_rolling_avg`, `solved_episode`, `is_solved`, `eval_reached_threshold`, `duration` |
-| `metadata.episodes`, `episodes_per_agent` | The `--episodes` override (`null` without one), and the budget each agent got |
+| `detailed_runs.<agent>[i]` | One seed: `eval_mean_reward`, `final_rolling_avg`, `solved_episode`, `solved_step`, `is_solved`, `held`, `eval_reached_threshold`, `total_episodes`, `total_steps`, `window`, `duration` |
+| `metadata.episodes`, `steps`, `budgets_per_agent`, `episodes_per_agent` | The `--episodes` / `--steps` overrides (`null` without one), each agent's budget and unit, and the mean episodes each trained |
 
 Read the per-seed rows, not only the mean. Things to look for:
 
