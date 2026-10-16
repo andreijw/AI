@@ -13,6 +13,8 @@ from typing import Any
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
+from rl_core.utils.config import config_get
+
 from .cartpole_env import CartPoleEnv
 
 
@@ -210,12 +212,12 @@ def make_env_from_config(config: dict) -> CartPoleEnv:
     domain_rand = _validate_domain_randomization(config.get("domain_randomization"))
 
     return make_env(
-        env_name=config.get("name", "CartPole-v1"),
+        env_name=config_get(config, "name", "CartPole-v1"),
         render_mode=config.get("render_mode"),
-        max_episode_steps=config.get("max_episode_steps", 500),
+        max_episode_steps=config_get(config, "max_episode_steps", 500),
         seed=config.get("seed"),
-        obs_noise_std=config.get("obs_noise_std", 0.0),
-        action_noise_prob=config.get("action_noise_prob", 0.0),
+        obs_noise_std=config_get(config, "obs_noise_std", 0.0),
+        action_noise_prob=config_get(config, "action_noise_prob", 0.0),
         domain_randomization=domain_rand,
     )
 
@@ -248,12 +250,12 @@ def make_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.Vect
 
     return make_vec_env(
         num_envs=num_envs,
-        env_name=config.get("name", "CartPole-v1"),
+        env_name=config_get(config, "name", "CartPole-v1"),
         render_mode=config.get("render_mode"),
-        max_episode_steps=config.get("max_episode_steps", 500),
+        max_episode_steps=config_get(config, "max_episode_steps", 500),
         seed=config.get("seed"),
-        obs_noise_std=config.get("obs_noise_std", 0.0),
-        action_noise_prob=config.get("action_noise_prob", 0.0),
+        obs_noise_std=config_get(config, "obs_noise_std", 0.0),
+        action_noise_prob=config_get(config, "action_noise_prob", 0.0),
         domain_randomization=domain_rand,
         async_envs=config.get("async_envs", True),
     )

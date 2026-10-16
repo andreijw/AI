@@ -1,4 +1,4 @@
-"""Record a trained CartPole agent from a checkpoint into one video."""
+"""Record a trained agent from a checkpoint into one video, on any registered challenge."""
 
 import argparse
 import os
@@ -13,22 +13,19 @@ from rl_core.training import Trainer
 from rl_core.utils import setup_logger
 from rl_core.utils.video import merge_episode_clips
 from train import (
-    AGENT_CLASSES,
+    add_challenge_arguments,
     agent_output_dir,
     close_env,
-    create_agent,
-    create_env,
     headless_rendering,
     load_run_config,
     require_moviepy,
+    select_run_challenge,
 )
-
-PLAYBACK_NAME_PREFIX = "cartpole-playback"
 
 
 def main():
     """Play evaluation episodes with a checkpointed agent and save them as one MP4."""
-    parser = argparse.ArgumentParser(description="Record a trained CartPole agent")
+    parser = argparse.ArgumentParser(description="Record a trained RL agent")
     parser.add_argument(
         "--config",
         type=str,
@@ -52,19 +49,7 @@ def main():
         type=str,
         help="Directory to save the video (default: ./videos/<agent_type>)",
     )
-    parser.add_argument(
-        "--agent-type",
-        type=str,
-        choices=sorted(AGENT_CLASSES),
-        help="Override the agent type from config (random, reinforce, actor_critic, ppo, dqn).",
-    )
-    parser.add_argument(
-        "--challenge",
-        type=str,
-        choices=["cartpole", "pendulum"],
-        default=None,
-        help="Challenge type (cartpole or pendulum).",
-    )
+    add_challenge_arguments(parser)
     args = parser.parse_args()
 
     if args.episodes <= 0:
@@ -72,16 +57,16 @@ def main():
 
     require_moviepy()
     config, agent_type = load_run_config(args.config, args.agent_type)
-    env_name = config["environment"].get("name") or "CartPole-v1"
-    challenge = args.challenge or ("pendulum" if "pendulum" in env_name.lower() else "cartpole")
+    run_challenge = select_run_challenge(config, agent_type, args.challenge)
+    challenge = run_challenge.key
     video_dir = args.video_dir or agent_output_dir("./videos", agent_type, challenge=challenge)
     playback_prefix = f"{challenge}-playback"
     logger = setup_logger(name=f"rl_{challenge}", log_dir=config["training"]["log_dir"])
 
     with headless_rendering():
-        env = create_env(config, render_mode="rgb_array")
+        env = run_challenge.make_env(config["environment"], render_mode="rgb_array")
         try:
-            agent = create_agent(agent_type, config, env)
+            agent = run_challenge.make_agent(agent_type, config["agent"]["config"], env)
             agent.load(args.checkpoint)
             logger.info(f"Loaded {agent_type} agent from '{args.checkpoint}'")
 

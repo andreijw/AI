@@ -44,12 +44,15 @@ of adding prints to `src/`:
 
 ```python
 import numpy as np
-from train import create_agent, create_env, load_run_config
+from rl_core.challenges import discover_challenges
+from train import load_run_config, select_run_challenge
 
 np.seterr(all="raise")  # turn the first overflow, divide-by-zero or invalid value into a traceback
+discover_challenges()
 config, agent_type = load_run_config("configs/cartpole_dqn.yaml")
-env = create_env(config, render_mode=None)
-agent = create_agent(agent_type, config, env)
+challenge = select_run_challenge(config, agent_type)  # from environment.name
+env = challenge.make_env(config["environment"], render_mode=None)
+agent = challenge.make_agent(agent_type, config["agent"]["config"], env)
 # roll out one episode by hand, build the batch the Trainer builds, then:
 #     metrics = agent.update(batch); print(episode, metrics)
 env.close()

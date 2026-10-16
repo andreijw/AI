@@ -2,6 +2,7 @@
 
 import json
 import os
+from collections.abc import Mapping
 from typing import Any
 
 import yaml
@@ -84,3 +85,9 @@ def save_config(config: dict[str, Any], save_path: str) -> None:
 
     with open(save_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config, f, default_flow_style=False)
+
+
+def config_get(config: Mapping[str, Any], key: str, default: Any) -> Any:
+    """``config[key]``, or ``default`` when the key is missing or set to ``null`` in YAML."""
+    value = config.get(key)
+    return default if value is None else value

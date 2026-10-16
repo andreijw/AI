@@ -10,6 +10,7 @@ import pytest
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+import rl_cartpole.benchmark
 from rl_cartpole.environments import CartPoleEnv
 from tests.helpers import minimal_config, run_main
 
@@ -105,7 +106,7 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
         def train(self):
             return {"ok": True}
 
-    monkeypatch.setitem(train.AGENT_CLASSES, "reinforce", _StubReinforce)
+    monkeypatch.setitem(rl_cartpole.benchmark.AGENT_CLASSES, "reinforce", _StubReinforce)
     monkeypatch.setattr(train, "Trainer", _StubTrainer)
 
     train.main()
@@ -331,11 +332,11 @@ def test_environment_config_is_forwarded_to_cartpole_env(tmp_path, monkeypatch):
     assert captured["seed"] == 123
     assert captured["obs_noise_std"] == pytest.approx(0.05)
     assert captured["action_noise_prob"] == pytest.approx(0.1)
-    assert captured["domain_randomization"] == {"gravity": [8.0, 12.0]}
+    assert captured["domain_randomization"] == {"gravity": (8.0, 12.0)}
 
 
 def test_environment_null_values_fall_back_to_defaults(tmp_path, monkeypatch):
-    """Explicit YAML nulls for selected environment fields should use defaults."""
+    """Explicit YAML nulls for environment fields use defaults; --challenge supplies the name."""
     import yaml
 
     config = {
@@ -379,7 +380,7 @@ def test_environment_null_values_fall_back_to_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(_ce_mod.CartPoleEnv, "__init__", patched_init)
 
     with pytest.raises(_StopAfterCaptureError):
-        run_main(["--config", config_path], monkeypatch)
+        run_main(["--config", config_path, "--challenge", "cartpole"], monkeypatch)
 
     assert captured["env_name"] == "CartPole-v1"
     assert captured["obs_noise_std"] == pytest.approx(0.0)
