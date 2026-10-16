@@ -6,6 +6,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .base_agent import BaseAgent
+from .optim import Adam, anneal_fraction, optimizer_from_config
 from .replay_buffer import ReplayBuffer
 
 
@@ -19,7 +20,11 @@ class DQNAgent(BaseAgent):
 
     Features:
     * Separate online and target Q-networks for stable gradient updates.
-    * Epsilon-greedy action selection with exponential decay.
+    * Epsilon-greedy action selection, decayed once per update call (``epsilon_decay``) or
+      linearly per training action (``exploration_steps``).
+    * Bootstrapping through time-limit cuts: only a true termination ends the Bellman target.
+    * Plain SGD with an element-wise clip (``grad_clip_value``), or Adam with an optional
+      global-norm clip (``optimizer: adam``, ``max_grad_norm``).
     * Ring-buffered experience replay for uncorrelated mini-batch updates.
     * Hard or Polyak soft target network synchronization.
     """
@@ -46,7 +51,8 @@ class DQNAgent(BaseAgent):
         self.epsilon_decay: float = float(config.get("epsilon_decay", 0.995))
         self.target_update_frequency: int = int(config.get("target_update_frequency", 100))
         self.tau: float | None = float(config["tau"]) if config.get("tau") is not None else None
-        self.max_grad_norm: float = float(config.get("max_grad_norm", 10.0))
+        self.grad_clip_value: float = float(config.get("grad_clip_value", 10.0))
+        self.exploration_steps: int | None = self._read_exploration_steps(config)
         self.updates_per_step: float | None = (
             float(config["updates_per_step"])
             if config.get("updates_per_step") is not None
@@ -78,8 +84,12 @@ class DQNAgent(BaseAgent):
                 f"max_updates_per_call must be positive, got {self.max_updates_per_call!r}"
             )
 
+        if self.grad_clip_value <= 0.0:
+            raise ValueError(f"grad_clip_value must be positive, got {self.grad_clip_value!r}")
+
         self.epsilon: float = self.epsilon_start
         self._update_counter: int = 0
+        self._exploration_step: int = 0
         self._rng: np.random.Generator = np.random.default_rng(config.get("seed"))
 
         # He weight initialization
@@ -109,6 +119,42 @@ class DQNAgent(BaseAgent):
             seed=config.get("seed"),
         )
 
+        if str(config.get("optimizer", "sgd")).lower() != "sgd" and "grad_clip_value" in config:
+            raise ValueError(
+                "grad_clip_value is the element-wise clip of plain SGD; "
+                "with Adam, clip the global norm with max_grad_norm"
+            )
+        self._optimizer: Adam | None = optimizer_from_config(config, self._parameters())
+
+    @staticmethod
+    def _read_exploration_steps(config: dict[str, Any]) -> int | None:
+        """
+        Read ``exploration_steps``: decay epsilon linearly over this many training actions.
+
+        Raises:
+            ValueError: If it is not a positive integer, or if ``epsilon_decay`` is set too.
+        """
+        value = config.get("exploration_steps")
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int | np.integer) or value <= 0:
+            raise ValueError(f"exploration_steps must be a positive integer, got {value!r}")
+        if config.get("epsilon_decay") is not None:
+            raise ValueError(
+                "Set epsilon_decay (once per update call) or exploration_steps "
+                "(linear per training action), not both"
+            )
+        return int(value)
+
+    def _parameters(self) -> dict[str, npt.NDArray[np.float64]]:
+        """The online network's parameters by gradient name."""
+        return {"W1": self._W1, "b1": self._b1, "W2": self._W2, "b2": self._b2}
+
+    def _scheduled_epsilon(self) -> float:
+        """Epsilon after ``_exploration_step`` training actions on the linear schedule."""
+        remaining = anneal_fraction(self._exploration_step, self.exploration_steps)
+        return self.epsilon_end + (self.epsilon_start - self.epsilon_end) * remaining
+
     def _forward_q(self, obs: np.ndarray, target: bool = False) -> tuple[np.ndarray, np.ndarray]:
         """
         Compute forward pass Q-values for an observation or batch of observations.
@@ -133,8 +179,9 @@ class DQNAgent(BaseAgent):
         """
         Select an action given an observation.
 
-        During training, applies epsilon-greedy action selection.
-        During evaluation, acts greedily (argmax Q).
+        During training, applies epsilon-greedy action selection; with ``exploration_steps``
+        set, each training action then advances the linear epsilon schedule by one step.
+        During evaluation, acts greedily (argmax Q) and leaves epsilon alone.
 
         Args:
             observation: Current observation vector.
@@ -144,10 +191,15 @@ class DQNAgent(BaseAgent):
             Selected action index.
         """
         if training and self._rng.random() < self.epsilon:
-            return int(self._rng.integers(0, self.action_dim))
+            action = int(self._rng.integers(0, self.action_dim))
+        else:
+            q_vals, _ = self._forward_q(observation, target=False)
+            action = int(np.argmax(q_vals))
 
-        q_vals, _ = self._forward_q(observation, target=False)
-        return int(np.argmax(q_vals))
+        if training and self.exploration_steps is not None:
+            self._exploration_step += 1
+            self.epsilon = self._scheduled_epsilon()
+        return action
 
     def _compute_bellman_targets(
         self,
@@ -179,20 +231,30 @@ class DQNAgent(BaseAgent):
         Ingests transitions into the replay buffer, samples a mini-batch,
         computes the Bellman loss, and applies gradient descent.
 
+        A transition is stored as terminal only if it ended the episode for real: the batch's
+        ``terminated`` flags when present (the trainer sends them), else its ``dones``. A cut at
+        the time limit therefore still bootstraps from the next state.
+
         Args:
             batch: Trajectory dictionary with 'observations', 'actions', 'rewards',
-                   and optionally 'next_observations' and 'dones'.
+                   and optionally 'next_observations', 'terminated' and 'dones'.
 
         Returns:
             Dictionary with training metrics: 'loss', 'epsilon', 'mean_q'.
         """
-        if "next_observations" in batch and "dones" in batch:
+        terminal = batch.get("terminated", batch.get("dones"))
+        if "terminated" in batch and len(batch["terminated"]) != len(batch.get("actions", [])):
+            raise ValueError(
+                f"terminated has {len(batch['terminated'])} flags for "
+                f"{len(batch.get('actions', []))} actions"
+            )
+        if "next_observations" in batch and terminal is not None:
             self.replay_buffer.add_batch(
                 batch["observations"],
                 batch["actions"],
                 batch["rewards"],
                 batch["next_observations"],
-                batch["dones"],
+                terminal,
             )
 
         if not self.replay_buffer.can_sample(self.min_buffer_size):
@@ -244,8 +306,9 @@ class DQNAgent(BaseAgent):
             total_loss += components["loss"]
             total_q += components["mean_q"]
 
-        # 5. Epsilon decay
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+        # 5. Epsilon decay (the linear schedule advances in select_action instead)
+        if self.exploration_steps is None:
+            self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
         return {
             "loss": total_loss / num_updates,
@@ -303,16 +366,23 @@ class DQNAgent(BaseAgent):
 
     def _apply_gradients(self, grads: dict[str, np.ndarray]) -> None:
         """
-        Take one gradient-descent step on the online network.
+        Take one optimizer step on the online network.
 
-        Each gradient element is clipped to ``[-max_grad_norm, max_grad_norm]`` before the step
-        (an element-wise clip, despite the name). The arrays in ``grads`` are not modified.
+        With Adam, the step comes from the shared optimizer (global-norm clip ``max_grad_norm``
+        if set). With plain SGD, each gradient element is clipped to
+        ``[-grad_clip_value, grad_clip_value]`` before the step. The arrays in ``grads`` are not
+        modified.
 
         Args:
             grads: Gradients keyed ``W1``, ``b1``, ``W2``, ``b2``, as returned by
                    :meth:`_loss_and_grads`.
         """
-        limit = self.max_grad_norm
+        if self._optimizer is not None:
+            steps = self._optimizer.step(grads, self.learning_rate)
+            for name, parameter in self._parameters().items():
+                parameter -= steps[name]  # in place: the attribute holds this same array
+            return
+        limit = self.grad_clip_value
         self._W1 -= self.learning_rate * np.clip(grads["W1"], -limit, limit)
         self._b1 -= self.learning_rate * np.clip(grads["b1"], -limit, limit)
         self._W2 -= self.learning_rate * np.clip(grads["W2"], -limit, limit)
@@ -320,29 +390,38 @@ class DQNAgent(BaseAgent):
 
     def save(self, path: str) -> None:
         """
-        Save network parameters and epsilon state to disk.
+        Save everything training needs to resume: both networks, epsilon, the exploration and
+        target-sync counters, and the optimizer's state.
 
         Args:
             path: Destination checkpoint path (.pt or .npz).
         """
+        arrays: dict[str, Any] = {
+            "W1": self._W1,
+            "b1": self._b1,
+            "W2": self._W2,
+            "b2": self._b2,
+            "target_W1": self._target_W1,
+            "target_b1": self._target_b1,
+            "target_W2": self._target_W2,
+            "target_b2": self._target_b2,
+            "epsilon": np.array(self.epsilon),
+            "exploration_step": np.array(self._exploration_step),
+            "update_counter": np.array(self._update_counter),
+        }
+        if self._optimizer is not None:
+            arrays.update(self._optimizer.state())
         save_path = self._resolve_save_path(path)
         with open(save_path, "wb") as f:
-            np.savez(
-                f,
-                W1=self._W1,
-                b1=self._b1,
-                W2=self._W2,
-                b2=self._b2,
-                target_W1=self._target_W1,
-                target_b1=self._target_b1,
-                target_W2=self._target_W2,
-                target_b2=self._target_b2,
-                epsilon=np.array(self.epsilon),
-            )
+            np.savez(f, **arrays)
 
     def load(self, path: str) -> None:
         """
-        Load network parameters and epsilon state from disk.
+        Load a checkpoint written by :meth:`save`, or by an older version.
+
+        An older checkpoint has no counters or optimizer state: the target-sync counter is left
+        as it is, Adam starts from zero moments, and with ``exploration_steps`` the exploration
+        step is rebuilt from the saved epsilon so that exploration does not restart.
 
         Args:
             path: Source checkpoint path (.pt or .npz).
@@ -359,3 +438,18 @@ class DQNAgent(BaseAgent):
             self._target_b2 = data["target_b2"]
             if "epsilon" in data:
                 self.epsilon = float(data["epsilon"])
+            if "update_counter" in data:
+                self._update_counter = int(data["update_counter"])
+            if "exploration_step" in data:
+                self._exploration_step = int(data["exploration_step"])
+            else:
+                self._exploration_step = self._exploration_step_for(self.epsilon)
+            if self._optimizer is not None:
+                self._optimizer.load_state(data)
+
+    def _exploration_step_for(self, epsilon: float) -> int:
+        """The step of the linear schedule at which epsilon equals ``epsilon`` (0 without one)."""
+        if self.exploration_steps is None or self.epsilon_start == self.epsilon_end:
+            return 0
+        share = (self.epsilon_start - epsilon) / (self.epsilon_start - self.epsilon_end)
+        return int(np.clip(round(share * self.exploration_steps), 0, self.exploration_steps))

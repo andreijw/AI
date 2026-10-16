@@ -80,8 +80,9 @@ because the one that fails is the regression test for the fix.
 
 Print one real batch and read it:
 
-- **`dones`**: true on the last step only. The trainer sets it for `terminated` *or* `truncated`, so a
-  bootstrapping agent treats a time-limit cut as a true end. Pendulum only ever ends that way.
+- **`dones` and `terminated`**: true on the last step only. `dones` is `terminated` *or* `truncated`; a
+  bootstrapping agent that reads `dones` treats a time-limit cut as a true end (DQN reads `terminated`).
+  Pendulum only ever ends by truncation.
 - **Rewards**: their scale. CartPole pays 1 per step; Pendulum pays between about -16 and 0. A learning
   rate tuned for one is wrong by an order of magnitude for the other.
 - **Actions**: the dtype and range the environment expects; a continuous action inside its bounds.

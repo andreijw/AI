@@ -74,7 +74,8 @@ class ReplayBuffer:
             action: Discrete action taken.
             reward: Scalar reward received.
             next_obs: Observation vector after transition.
-            done: Whether the episode terminated/truncated at this step.
+            done: Whether the transition is terminal, so its Bellman target must not bootstrap
+                from ``next_obs``. Store a time-limit cut as not terminal.
         """
         self.observations[self._idx] = np.asarray(obs, dtype=np.float64)
         self.actions[self._idx] = int(action)
@@ -101,7 +102,8 @@ class ReplayBuffer:
             actions: Array of discrete actions of shape (N,).
             rewards: Array of scalar rewards of shape (N,).
             next_obs: Array of next observations of shape (N, observation_dim).
-            dones: Array of boolean termination flags of shape (N,).
+            dones: Terminal flags of shape (N,): True means no bootstrap from the next
+                observation (a true termination, not a time-limit cut).
 
         Raises:
             ValueError: If input array lengths do not match.

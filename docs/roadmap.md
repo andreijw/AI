@@ -313,7 +313,8 @@ Defects found while working on other items, then findings from the brooks-lint h
       which is once per episode, not "per update"; and `updates_per_step: 1.0` is capped at 64 gradient steps per
       episode by `max_updates_per_call`, so a 500-step episode gets about 0.13 steps per transition.
     - `max_grad_norm` clips each gradient element, not the gradient's norm, and is absent from the config
-      (default 10.0).
+      (default 10.0). Resolved 2026-10-16: the element-wise clip is `grad_clip_value` (plain SGD only), and
+      `max_grad_norm` is Adam's global-norm clip, as in the other agents.
     - While the replay buffer is warming up, `update` returns a loss and mean Q-value of 0, which the training log
       averages in.
     - Not validated at construction: `target_update_frequency: 0` raises `ZeroDivisionError` during training;
@@ -322,8 +323,10 @@ Defects found while working on other items, then findings from the brooks-lint h
       `batch_size` fails there too if `min_buffer_size` fits in the buffer, and otherwise (as with the default
       `min_buffer_size`) the buffer never counts as warm, so the agent silently never trains and epsilon never
       decays.
-    - A batch without `dones` is not stored, but gradient steps still run.
-    - A time-limit cut is stored as terminal, so the bootstrap is zeroed at CartPole's 500-step limit.
+    - A batch without `dones` is not stored, but gradient steps still run. (Since 2026-10-16 a batch with
+      `terminated` and no `dones` is stored; one with neither still is not.)
+    - A time-limit cut is stored as terminal, so the bootstrap is zeroed at CartPole's 500-step limit. Resolved
+      2026-10-16: DQN stores the trainer's `terminated` flag ("DQN Reaches the rl-zoo Reference").
   - **Out of scope**: The Pendulum agents (their own item below); new algorithms; changing the solve threshold.
 
 - [ ] **Separate Random Streams for Agents and Buffers**
@@ -603,6 +606,8 @@ Defects found while working on other items, then findings from the brooks-lint h
 - [ ] **Complete Optimizer State in Checkpoints**
   - **Description**: The continuous agents save the Adam step count `adam_t` but not the moment estimates, so a run
     resumed from a checkpoint takes mis-scaled first steps. DQN does not save its target-sync counter.
+  - **Progress (2026-10-16)**: DQN now saves and restores its target-sync counter, its exploration step and its
+    Adam state, with a resume test (`tests/test_dqn_options.py`); the continuous agents remain.
   - **Acceptance criteria**:
     - Everything an agent needs to resume training round-trips through `save` and `load`.
     - A test trains, saves, loads into a fresh agent, and gets the same weights after one more seeded update.
@@ -673,7 +678,7 @@ Defects found while working on other items, then findings from the brooks-lint h
     against the random agent's -1225. The default configs' budgets (50k CartPole, 40k Pendulum) only set the
     random baseline's length.
 
-- [ ] **DQN Reaches the rl-zoo Reference**
+- [~] **DQN Reaches the rl-zoo Reference**
   - **Description**: Under the old 10-episode rule (2026-10-15, 750 episodes) CartPole DQN needed 73k to 117k steps to
     first reach 475 and one seed of five never did, against rl-baselines3-zoo's 50k-step budget. rl-zoo's DQN uses a
     256×256 network, 128 gradient steps every 256 environment steps, a 1000-step warm-up, a target update every 10 steps
@@ -684,9 +689,33 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Acceptance criteria**:
     - A diagnosis names what separates our DQN from the reference, each cause checked.
     - Fixes are test-first; config changes are measured and maintainer-approved.
-    - Under the step-based rule, DQN solves CartPole-v1 on at least 4 of 5 seeds within the rl-zoo budget, or the
-      item records how close it gets and why.
-  - **Out of scope**: Double, dueling and prioritised-replay DQN (each its own item if wanted); DDPG.
+    - Under the 100-episode rule, DQN solves CartPole-v1 on at least 4 of 5 seeds within its config's step budget.
+      (Reworded 2026-10-16 with the maintainer: 50k steps cannot satisfy the rule, see the diagnosis; rl-zoo's 500 at
+      50k is a greedy evaluation after training, from one run.)
+  - **Diagnosis (2026-10-16)**: seeds 1 to 5, CartPole, benchmark solve rule, causes checked one at a time by patching
+    `DQNAgent` in a scratch script.
+    - The 50k budget cannot satisfy the rule: 100 episodes averaging 475 take at least 47,500 steps, so the agent would
+      have to be near-perfect by step 2,500, while rl-zoo itself explores until step 8,000.
+    - Exploration decays ×0.995 per episode: epsilon is 0.50 at episode 150 and 0.19 at the end of 50k steps (seed 1).
+      rl-zoo decays linearly per environment step to 0.04 over the first 8,000.
+    - Time-limit cuts are stored as terminal, zeroing the bootstrap at step 500; rl-zoo bootstraps through them.
+    - Learning is unstable with plain SGD at 0.005 and a target sync every 50 gradient steps: the mean Q-value reaches
+      146 to 190 against a true maximum of 100, and doubling the gradient steps sends it to about 970.
+    - Each alone does not explain it: a 256-unit layer, a 1,000-step warm-up and a 100k buffer change little; Huber
+      loss with SGD diverges. rl-zoo's full setup (two 256-unit layers, Adam, Huber, both fixes) at 50k reaches a
+      greedy evaluation of 475 on 3 of 5 seeds. `max_updates_per_call: 64` gives about 0.13 gradient steps per
+      transition on 500-step episodes against rl-zoo's 0.5; not tuned here.
+  - **Measured at 200k steps unless stated** (solved / held at the end; final 100-episode average; greedy evaluation):
+    committed config 1 / 0, 431, 407 ± 57; both fixes with SGD 0.005, 0 / 0, 333; both fixes with Adam (global-norm
+    clip 10) at 0.001 and a target sync every 128 steps, 3 / 3, 462, 500 ± 0; the same at 0.0007, 4 / 4 (steps 142k
+    to 179k), 487, 500 ± 1; the same at 0.001 for 300k steps, 5 / 5 (steps 168k to 238k), 498, 500 ± 0.
+  - **Decided (2026-10-16)**: keep the 100-episode rule for every agent (option B); fix exploration per step and
+    time-limit bootstrapping; add the shared `optimizer` option to DQN. Committed config: Adam, learning rate 0.001,
+    target sync every 128 gradient steps, epsilon to 0.04 over 8,000 steps, 300,000 steps.
+  - **Plan**: two stacked PRs. 1: `exploration_steps`, bootstrapping through time-limit cuts, `optimizer` (with the
+    element-wise clip renamed `grad_clip_value`), and complete DQN checkpoints. 2: the config and republished numbers.
+  - **Out of scope**: Double, dueling and prioritised-replay DQN (each its own item if wanted); DDPG; a second hidden
+    layer.
 
 - [ ] **Continuous Off-Policy Learning & DDPG (Deep Deterministic Policy Gradient)**
   - **Description**: Implement a pure NumPy `DDPGAgent` utilizing a deterministic actor network $\mu_\theta(s)$,
