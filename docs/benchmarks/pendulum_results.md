@@ -5,25 +5,28 @@ Comparative benchmark evaluation across reinforcement learning algorithms.
 ## Benchmark Configuration
 
 - **Challenge / Environment**: `Pendulum-v1` (Solved criteria: average reward >= -200)
-- **Episodes per Run**: each agent's own config (`training.num_episodes`), shown per agent
+- **Budget per Run**: each agent's own config (`training.total_steps` or `num_episodes`), shown per agent
 - **Seeds Evaluated**: `[1, 2, 3, 4, 5]`
 - **Algorithms**: `['actor_critic', 'ppo', 'random']`
 
 ## How a Run Counts as Solved
 
-A run is solved when its average training reward over 10 consecutive
-episodes reaches -200. **Avg Solve Episode** is the first episode at
-which that happens, averaged over the solved runs. **Eval ≥ Threshold** is the
-share of runs whose final evaluation (10 greedy episodes) averaged at least
--200; it is reported on its own and does not count as a solve.
+A run is solved when its average training reward over 100 consecutive
+episodes reaches -200. **Avg Solve Episode** is the last episode of
+the first such window, and **Avg Steps to Solve** the training steps up to it,
+averaged over the solved runs. **Held** is the share of runs with at least
+100 episodes whose last 100 average at least -200.
+**Eval ≥ Threshold** is the share of runs whose final evaluation
+(10 greedy episodes) averaged at least -200; it does not count as a solve.
+A step budget finishes the episode that crosses it, so a run can overshoot its budget by up to one episode.
 
 ## Performance Summary
 
-| Algorithm | Episodes | Mean Eval Reward | Reward Std | Solve Rate | Avg Solve Episode | Eval ≥ Threshold | Mean Time (s) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **actor_critic** | 300 | -1382.8 | ±62.5 | 0% | N/A | 0% | 10.01s |
-| **ppo** | 500 | -284.6 | ±82.2 | 100% | 259.2 | 20% | 27.76s |
-| **random** | 200 | -1224.5 | ±76.1 | 0% | N/A | 0% | 5.78s |
+| Algorithm | Budget | Episodes | Mean Eval Reward | Reward Std | Solve Rate | Avg Solve Episode | Avg Steps to Solve | Held | Eval ≥ Threshold | Mean Time (s) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **actor_critic** | 1000000 steps | 5000 | -1422.1 | ±134.0 | 0% | N/A | N/A | 0% | 0% | 158.43s |
+| **ppo** | 100000 steps | 500 | -284.6 | ±82.2 | 0% | N/A | N/A | 0% | 20% | 27.69s |
+| **random** | 40000 steps | 200 | -1224.5 | ±76.1 | 0% | N/A | N/A | 0% | 0% | 5.77s |
 
 ## Learning Trajectories
 

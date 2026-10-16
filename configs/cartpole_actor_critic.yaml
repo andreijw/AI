@@ -24,7 +24,7 @@ agent:
 
 # Training settings
 training:
-  num_episodes: 1500
+  total_steps: 500000  # Environment steps (rl-zoo A2C CartPole-v1 n_timesteps)
   max_steps_per_episode: 500
   eval_frequency: 100   # Evaluate every N episodes
   save_frequency: 200   # Save checkpoint every N episodes

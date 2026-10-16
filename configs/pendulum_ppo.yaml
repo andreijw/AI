@@ -1,6 +1,8 @@
 # Pendulum Continuous PPO Training Configuration
-# Measured 2026-10-15 (roadmap: Pendulum PPO Learns): the 10-episode training average reaches -200 on 5 of 5
-# seeds (1-5, docs/benchmarks/pendulum_results.md) within 500 episodes; 4 of 5 on seeds 6-10 in a scratch run.
+# Measured 2026-10-15 under the old 10-episode rule: the training average touched -200 on 5 of 5 seeds within
+# 500 episodes. Under the 100-episode rule at 100,000 steps (2026-10-16, seeds 1-5,
+# docs/benchmarks/pendulum_results.md) it solves 0 of 5, final averages -241 to -313 (roadmap: "Pendulum PPO
+# Holds -200 Under the 100-Episode Rule").
 
 environment:
   name: "Pendulum-v1"
@@ -27,7 +29,7 @@ agent:
     seed: 42
 
 training:
-  num_episodes: 500
+  total_steps: 100000  # Environment steps (rl-zoo PPO Pendulum-v1 n_timesteps; equals anneal_steps)
   max_steps_per_episode: 200
   eval_frequency: 25
   save_frequency: 50

@@ -14,7 +14,7 @@ agent:
     action_high: 2.0
 
 training:
-  num_episodes: 200
+  total_steps: 40000  # Environment steps (random baseline: sets only its length)
   max_steps_per_episode: 200
   eval_frequency: 20
   save_frequency: 50

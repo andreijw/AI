@@ -126,11 +126,9 @@ random-agent baseline configuration:
 python train.py --config configs/cartpole_default.yaml
 ```
 
-By default, `configs/cartpole_default.yaml` uses `num_episodes: 1000`, so this run may take a while to complete.
+By default, `configs/cartpole_default.yaml` trains for `total_steps: 50000` environment steps.
 
-For a quick smoke-test you can override `num_episodes` by editing
-`configs/cartpole_default.yaml` (change `num_episodes: 1000` to e.g. `50`) or by
-creating a minimal config:
+For a quick smoke-test pass `--num-episodes 50` (or `--total-steps 2000`), or create a minimal config:
 
 ```yaml
 # configs/quick_test.yaml
@@ -195,24 +193,28 @@ python train.py --config configs/pendulum_ppo.yaml
 
 ### Which agents solve which challenge
 
-A run solves the challenge when its average training reward over 10 episodes reaches the threshold: 475 for
-CartPole-v1, -200 for Pendulum-v1. Measured with the committed configs on seeds 1 to 5 on 2026-10-15
+A run solves the challenge when its average training reward over 100 episodes reaches the threshold: 475 for
+CartPole-v1, -200 for Pendulum-v1. It **holds** when the average over its last 100 episodes is still at or above the
+threshold. Each agent trains for a budget of environment steps set against its rl-baselines3-zoo reference (see the
+config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-16
 ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md)). `train.py` uses seed 42, which was
 not measured, so a single `train.py` run may land on the unlucky side of these numbers:
 
-| Challenge | Agent | Config | Episodes | Seeds solved | First solve (episode) |
-| :--- | :--- | :--- | :---: | :---: | :---: |
-| CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 2000 | 5 of 5 | 645 to 1012 |
-| CartPole-v1 | Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 1500 | 5 of 5 | 490 to 839 |
-| CartPole-v1 | PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 1000 | 5 of 5 | 323 to 427 |
-| CartPole-v1 | DQN | `cartpole_dqn.yaml` | 750 | 4 of 5 | 378 to 576 |
-| Pendulum-v1 | PPO | `pendulum_ppo.yaml` (annealed, rewards scaled) | 500 | 5 of 5 | 211 to 318 |
-| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` | 300 | 0 of 5 | — |
+| Challenge | Agent | Config | Budget (steps) | Seeds solved | Steps to solve | Held |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: |
+| CartPole-v1 | PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 200,000 | 5 of 5 | 73k to 199k | 4 of 5 |
+| CartPole-v1 | Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 500,000 | 5 of 5 | 184k to 465k | 4 of 5 |
+| CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 500,000 | 4 of 5 | 242k to 446k | 2 of 5 |
+| CartPole-v1 | DQN | `cartpole_dqn.yaml` | 50,000 | 0 of 5 | — | 0 of 5 |
+| Pendulum-v1 | PPO | `pendulum_ppo.yaml` (annealed, rewards scaled) | 100,000 | 0 of 5 | — | 0 of 5 |
+| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` | 1,000,000 | 0 of 5 | — | 0 of 5 |
 
-"Solved" means the average reached the threshold at least once; it does not mean the agent held it to the end of
-training. Pendulum PPO's final greedy evaluation averages -285, with 1 of 5 seeds at -200 or better. Continuous
-Actor-Critic does not learn Pendulum-v1 yet (roadmap: "Continuous Actor-Critic Learns Pendulum-v1").
+CartPole DQN's final 100-episode averages are 247 to 312 at rl-zoo's 50,000-step budget (roadmap: "DQN Reaches
+the rl-zoo Reference"). Pendulum PPO's are -241 to -313 at rl-zoo's 100,000 steps; under the earlier 10-episode rule
+it touched -200 on every seed (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode Rule"). Continuous
+Actor-Critic stays below the random agent even with 1,000,000 steps (roadmap: "Continuous Actor-Critic Learns
+Pendulum-v1").
 
 ### Run any agent from one base config (quick overrides)
 

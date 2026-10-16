@@ -414,12 +414,12 @@ def test_setup_run_applies_the_seed(challenge_cls, tmp_path):
 
 def test_committed_configs_give_each_cartpole_agent_its_own_budget():
     """Without an override, each CartPole agent's budget is the one in its committed config."""
+    from rl_core.training.budget import budget_of
+
     challenge = CartPoleChallenge()
     for agent_type, config_file in CartPoleChallenge.CONFIG_MAP.items():
-        expected = load_config(os.path.join("configs", config_file))["training"]["num_episodes"]
-        assert (
-            challenge.load_run_config(agent_type, 1, None)["training"]["num_episodes"] == expected
-        )
+        expected = budget_of(load_config(os.path.join("configs", config_file))["training"])
+        assert budget_of(challenge.load_run_config(agent_type, 1, None)["training"]) == expected
 
 
 def test_runner_trains_each_agent_for_its_own_budget(tmp_path):

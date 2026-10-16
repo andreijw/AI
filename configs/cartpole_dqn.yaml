@@ -29,7 +29,7 @@ agent:
 
 # Training settings
 training:
-  num_episodes: 750
+  total_steps: 50000  # Environment steps (rl-zoo DQN CartPole-v1 n_timesteps)
   max_steps_per_episode: 500
   eval_frequency: 50             # Evaluate every N episodes
   save_frequency: 100            # Save checkpoint every N episodes

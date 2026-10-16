@@ -19,7 +19,7 @@ agent:
     seed: 42
 
 training:
-  num_episodes: 300
+  total_steps: 1000000  # Environment steps (rl-zoo A2C Pendulum-v1 n_timesteps)
   max_steps_per_episode: 200
   eval_frequency: 25
   save_frequency: 50

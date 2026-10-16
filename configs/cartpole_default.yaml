@@ -24,7 +24,7 @@ agent:
 
 # Training settings
 training:
-  num_episodes: 1000
+  total_steps: 50000  # Environment steps (random baseline: sets only its length)
   max_steps_per_episode: 500
   eval_frequency: 100  # Evaluate every N episodes
   save_frequency: 100  # Save checkpoint every N episodes

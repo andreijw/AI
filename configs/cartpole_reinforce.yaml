@@ -21,7 +21,7 @@ agent:
 
 # Training settings
 training:
-  num_episodes: 2000
+  total_steps: 500000  # Environment steps (no rl-zoo REINFORCE entry; same as A2C)
   max_steps_per_episode: 500
   eval_frequency: 100   # Evaluate every N episodes
   save_frequency: 200   # Save checkpoint every N episodes
