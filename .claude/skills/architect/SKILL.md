@@ -85,11 +85,12 @@ environment wrappers use it; agents and `ReplayBuffer` still call `default_rng(s
 same seed they draw the environment's numbers (a roadmap item). A plan that adds a source of randomness says
 where its seed comes from and which stream it uses.
 
-**`terminated` and `truncated` are different facts.** The trainer folds them into one `done` flag and the
-batch carries only `dones`. For Monte Carlo returns that is harmless. For anything that bootstraps from the
-next state's value (DQN, DDPG, TD targets, GAE) a time-limit cut is not a terminal state, and treating it
-as one teaches the critic that the future is worth nothing at the limit. Pendulum never terminates: every
-episode ends by truncation at 200 steps. A plan for a bootstrapping agent must say how it handles this.
+**`terminated` and `truncated` are different facts.** The trainer's batch carries both `dones` (terminated
+or truncated) and `terminated`. For Monte Carlo returns the difference is harmless. For anything that
+bootstraps from the next state's value (DQN, DDPG, TD targets, GAE) a time-limit cut is not a terminal state,
+and treating it as one teaches the critic that the future is worth nothing at the limit. Pendulum never
+terminates: every episode ends by truncation at 200 steps. DQN stores `terminated` in its replay buffer and
+continuous PPO uses it for the last step; a plan for a new bootstrapping agent must say how it handles this.
 
 **A checkpoint is a file format.** Weights are saved as NumPy `.npz` archives (the trainer names them
 `agent_episode_<n>.pt`; `BaseAgent._resolve_save_path` and `_resolve_load_path` own the extension rules).

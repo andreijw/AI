@@ -165,7 +165,7 @@ def test_loss_and_grads_changes_no_state():
 
 
 def test_apply_gradients_clips_each_element_then_descends():
-    agent = _agent(learning_rate=0.1, max_grad_norm=0.5)
+    agent = _agent(learning_rate=0.1, grad_clip_value=0.5)
     rng = np.random.default_rng(9)
     grads = {name: rng.standard_normal(getattr(agent, a).shape) for name, a in ONLINE.items()}
     grads["W1"] *= 5.0  # most of these lie outside the clip range; the others mostly inside
@@ -222,7 +222,7 @@ def _replay(reference: DQNAgent, batch: dict[str, np.ndarray], updates: int) -> 
         )
         losses.append(components["loss"])
         mean_qs.append(components["mean_q"])
-        limit = reference.max_grad_norm
+        limit = reference.grad_clip_value
         for name, attribute in ONLINE.items():
             any_clipped |= bool((np.abs(grads[name]) > limit).any())
             any_unclipped |= bool((np.abs(grads[name]) <= limit).any())
@@ -270,7 +270,7 @@ BASE = {"batch_size": 4, "min_buffer_size": 5, "learning_rate": 0.05, "gamma": 0
     [
         # 6 transitions * 0.5 = 3 updates; hard sync after the 2nd, so the run ends between syncs.
         # The tight clip makes some gradient elements clipped and leaves others alone.
-        ({"updates_per_step": 0.5, "target_update_frequency": 2, "max_grad_norm": 0.05}, 3),
+        ({"updates_per_step": 0.5, "target_update_frequency": 2, "grad_clip_value": 0.05}, 3),
         # 6 transitions * 1.0 = 6 updates, capped at 2; soft target update (tau is not 0.5, where
         # swapping tau and 1 - tau would change nothing).
         ({"updates_per_step": 1.0, "max_updates_per_call": 2, "tau": 0.3}, 2),
@@ -302,7 +302,7 @@ def test_update_replays_as_sample_target_step_sync(config, expected_updates):
     assert metrics["mean_q"] == pytest.approx(expected["mean_q"], rel=1e-12)
     assert metrics["epsilon"] == pytest.approx(agent.epsilon_start * agent.epsilon_decay, rel=1e-12)
     assert agent.epsilon == metrics["epsilon"]
-    if "max_grad_norm" in config:
+    if "grad_clip_value" in config:
         assert expected["any_clipped"] and expected["any_unclipped"], "The clip must bite partly."
 
 

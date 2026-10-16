@@ -168,8 +168,9 @@ def anneal_steps_from_config(config: Mapping[str, Any]) -> int | None:
 
 
 def anneal_fraction(steps_trained: int, anneal_steps: int | None) -> float:
-    """The share of the learning rate and clip range still in use: 1 without annealing, else
-    ``max(0, 1 − steps_trained / anneal_steps)``, computed before the transitions of this update."""
+    """The share of a linearly annealed quantity still in use: 1 without annealing, else
+    ``max(0, 1 − steps_trained / anneal_steps)``. PPO anneals its learning rate and clip range with
+    it (counting trained transitions); DQN anneals epsilon (counting training actions)."""
     if anneal_steps is None:
         return 1.0
     return max(0.0, 1.0 - steps_trained / anneal_steps)
