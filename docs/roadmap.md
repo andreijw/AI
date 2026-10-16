@@ -717,9 +717,9 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Delivered in**: #88 (agent options), then the config PR stacked on it. Confirmed by the maintainer on
     2026-10-16.
   - **Learning gate (2026-10-16)**: committed config, the real implementation, benchmark seeds 1 to 5: 5 of 5 solve
-    (steps 145,401 to 238,149, episodes 548 to 1167) and hold, final averages 496 to 500, evaluation 500 ± 0. Only the
-    DQN row of `docs/benchmarks/cartpole_results.md` was republished (maintainer's choice); the other agents' rows are
-    from the run of 2026-10-16 before this change, with unchanged configs.
+    (steps 145,401 to 238,149, episodes 548 to 1167) and hold, final averages 496 to 500, evaluation 500 ± 0. The full
+    CartPole benchmark was then rerun on seeds 1 to 5 (2026-10-16): every agent's numbers matched the earlier run,
+    only the timings changed, and `docs/benchmarks/cartpole_results.md` and its plot come from that one run.
   - **Out of scope**: Double, dueling and prioritised-replay DQN (each its own item if wanted); DDPG; a second hidden
     layer.
 
