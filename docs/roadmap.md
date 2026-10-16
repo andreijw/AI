@@ -111,12 +111,19 @@ Targeting value-learning baseline for direct comparison against policy-gradient 
 
 ## Upcoming Milestones
 
-**Agreed order (2026-10-13, extended 2026-10-14 and 2026-10-15):** Seed the Continuous PPO Mini-Batch Shuffle →
-Seeded Environments Replay One Start State → the test-gap items (Discounted-Return Tests That Can Fail, Softmax
-Stability Tests, Single `_compute_returns` Implementation) → Split `update` into Loss-and-Gradients and Apply →
-CartPole Agents Learn Within Their Budgets → Actor-Critic Trains with Adam → Standard PPO for Discrete Actions → Break
-the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 → Benchmark Budgets and Solve Rule in
-Environment Steps → DQN Reaches the rl-zoo Reference → DDPG.
+**Agreed order (2026-10-13, extended 2026-10-14 and 2026-10-15, reordered 2026-10-16):** Seed the Continuous PPO
+Mini-Batch Shuffle → Seeded Environments Replay One Start State → the test-gap items (Discounted-Return Tests That
+Can Fail, Softmax Stability Tests, Single `_compute_returns` Implementation) → Split `update` into Loss-and-Gradients
+and Apply → CartPole Agents Learn Within Their Budgets → Actor-Critic Trains with Adam → Standard PPO for Discrete
+Actions → Break the Benchmark Import Cycle → Pendulum PPO Learns and Solves Pendulum-v1 → Benchmark Budgets and Solve
+Rule in Environment Steps → Select the Challenge Through the Registry → DQN Reaches the rl-zoo Reference → DDPG →
+Pendulum PPO Holds -200 Under the 100-Episode Rule → Continuous Actor-Critic Learns Pendulum-v1.
+
+Why this order: the registry item is small and fixes a silent fallback to CartPole before DDPG adds another agent to
+`train.py` and `record.py`. DQN's fixes (time-limit bootstrapping, a per-step exploration schedule, replay and
+target-network settings) carry straight into DDPG, which reuses its replay buffer and target network. DDPG is the
+off-policy method that solves Pendulum-v1 cheaply in the reference setups, so it comes before the two on-policy
+Pendulum items; continuous Actor-Critic is last because even the reference needs 1,000,000 steps for it.
 
 ### Workflow Tooling
 
