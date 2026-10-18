@@ -657,6 +657,50 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Checkpoints written before the change still load.
   - **Out of scope**: A resume option for `train.py`.
 
+- [ ] **PPO Episode Ends and Validation**
+  - **Description**: Found 2026-10-18 while giving continuous PPO multi-episode rollouts. Discrete `PPOAgent`'s
+    rollouts end every episode's GAE trace without a bootstrap, so CartPole's 500-step time limit counts as a true
+    end; continuous PPO adds γ·V(next state) to the last reward of a cut episode. Discrete PPO also reads
+    `rollout_steps` with `int(...)`, so 2.5 becomes 2, where continuous PPO rejects it.
+  - **Acceptance criteria**:
+    - Discrete PPO bootstraps a time-limit cut like continuous PPO, with a hand-computed test; a true termination
+      does not bootstrap.
+    - `rollout_steps` is validated the same way in both PPO agents.
+    - CartPole PPO is rerun on seeds 1 to 5 and still meets its published claim (5 of 5 solved).
+  - **Out of scope**: Sharing one rollout buffer between the two PPO agents (until a third user appears).
+
+- [ ] **DQN Config Validation**
+  - **Description**: Listed under "CartPole Agents Learn Within Their Budgets" → DQN behaviours and never given
+    its own item. Not validated at construction: `target_update_frequency: 0` raises `ZeroDivisionError` during
+    training; `tau` of 1 or more silently falls back to hard sync, 0 freezes the target network and a negative
+    value extrapolates; `min_buffer_size` below `batch_size` fails at the first sample; a `buffer_capacity` below
+    `batch_size` can leave the agent never training. While the buffer warms up, `update` returns a loss and mean
+    Q-value of 0, which the training log averages in.
+  - **Acceptance criteria**:
+    - Each invalid setting raises a `ValueError` naming the key at construction, with a test per case.
+    - During warm-up `update` returns no loss or Q-value (as DDPG does), so the log averages only real updates.
+    - The committed DQN config and its seeded results are unchanged.
+  - **Out of scope**: Changing DQN's defaults.
+
+- [ ] **Quiet Video Recorder Cleanup in Tests**
+  - **Description**: `TrainingVideoRecorder` validates its arguments before calling Gymnasium's `RecordVideo`
+    constructor, so a rejected recorder has no `recorded_frames` and Gymnasium's `__del__` raises an
+    `AttributeError` that pytest reports as an unraisable-exception warning (`tests/test_video.py`). Harmless, but it
+    hides real warnings in the test output.
+  - **Acceptance criteria**: The test suite prints no unraisable-exception warning from the recorder; invalid
+    arguments still raise the same errors.
+  - **Out of scope**: Other third-party deprecation warnings.
+
+- [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
+  - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
+    - The continuous Actor-Critic's greedy policy matches rl-zoo's A2C, but its 100-episode training average stays
+      at about -300 ("Continuous Actor-Critic Learns Pendulum-v1"). True A2C updates every n steps, which needs the
+      trainer to call `update` mid-episode for every agent; gSDE exploration is the other untried difference.
+    - The maintainer expects to use the Jetson's GPU later, so PyTorch should be allowed then. That would make
+      rl-zoo's 400×300 DDPG networks practical (about 16 times slower than 64×64 in NumPy here) and pixel-based or
+      larger tasks possible. It would be an optional backend beside the NumPy agents, with the NumPy versions kept
+      as the gradient reference, and needs the pure-NumPy rule in CLAUDE.md and CONTRIBUTING.md updated.
+
 ### Phase 5 — Multi-Agent Benchmarking & Comparative Evaluation
 
 - [x] **Cross-Agent Benchmark Suite & Comparative Visualizer**
