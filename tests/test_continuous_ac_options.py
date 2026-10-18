@@ -307,7 +307,9 @@ def test_terminated_wins_over_done_and_done_alone_ends_the_episode(
 
 def test_the_default_update_reproduces_the_previous_weights():
     """bounded_mean off and n_steps 0 must train exactly as before the options existed: these values were
-    recorded from the code before the change (and match it bit for bit)."""
+    recorded from the code before the change, and matched it bit for bit on the machine they were recorded
+    on. Other CPUs' BLAS can round the last bit differently (CI on x86 differs by 2e-16 relative), so the
+    comparison allows 1e-12, far below what any change to the update would move them."""
     from rl_core.agents import ContinuousPPOAgent
 
     rng = np.random.default_rng(0)
@@ -338,8 +340,8 @@ def test_the_default_update_reproduces_the_previous_weights():
             {"seed": 3, "hidden_dim": 4, "learning_rate": 0.01, "batch_size": 3, "ppo_epochs": 2},
         )
         agent.update(episode)
-        np.testing.assert_array_equal(agent._W_mu.ravel(), w_mu)
-        assert agent._b_v == b_v
+        np.testing.assert_allclose(agent._W_mu.ravel(), w_mu, rtol=1e-12, atol=0)
+        assert agent._b_v == pytest.approx(b_v, rel=1e-12, abs=0)
 
 
 def test_without_next_observations_chunks_bootstrap_from_the_next_state_and_the_last_is_terminal(
