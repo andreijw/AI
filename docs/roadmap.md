@@ -465,7 +465,9 @@ Defects found while working on other items, then findings from the brooks-lint h
     where continuous PPO rejects it; worth aligning when a third rollout user appears.
   - **Out of scope**: Changing the threshold or the window; SAC/TD3.
 
-- [~] **Continuous Actor-Critic Learns Pendulum-v1**
+- [x] **Continuous Actor-Critic Learns Pendulum-v1**
+  - **Delivered in**: #94 (fallback criterion: beats random on 5 of 5, does not solve). Confirmed by the maintainer
+    on 2026-10-18.
   - **Description**: Split out of "Pendulum PPO Learns and Solves Pendulum-v1". `ContinuousActorCriticAgent` takes one
     Adam step per 200-step episode (about 5000 in its 1,000,000-step budget, against continuous PPO's 32 per episode),
     and it does not yet use time-limit bootstrapping or annealing. With the new defaults (small initial mean head) and γ
