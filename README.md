@@ -13,7 +13,7 @@ control loops and can be extended later.
 The architecture is designed to support:
 
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO
-  with Gaussian policies for Pendulum)
+  with Gaussian policies, and DDPG with a deterministic policy, for Pendulum)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -62,7 +62,7 @@ AI/
 ├── tests/                       # Unit & integration test suites
 ├── configs/                     # YAML hyperparameter configurations
 │   ├── cartpole_*.yaml          # CartPole challenge configs (default, PPO, DQN, etc.)
-│   └── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C)
+│   └── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── setup.ps1                   # Windows developer setup
@@ -189,6 +189,9 @@ python train.py --config configs/pendulum_actor_critic.yaml
 
 # Pendulum Continuous PPO
 python train.py --config configs/pendulum_ppo.yaml
+
+# Pendulum DDPG
+python train.py --config configs/pendulum_ddpg.yaml
 ```
 
 ### Which agents solve which challenge
@@ -199,7 +202,8 @@ threshold. Each agent trains for a budget of environment steps set against its r
 config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-16
 ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md)). `train.py` uses seed 42, which was
-not measured, so a single `train.py` run may land on the unlucky side of these numbers:
+not measured (except for DDPG: see `TR-8` in TESTING.md), so a single `train.py` run may land on the unlucky side of
+these numbers:
 
 | Challenge | Agent | Config | Budget (steps) | Seeds solved | Steps to solve | Held |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -207,15 +211,19 @@ not measured, so a single `train.py` run may land on the unlucky side of these n
 | CartPole-v1 | Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 500,000 | 5 of 5 | 184k to 465k | 4 of 5 |
 | CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 500,000 | 4 of 5 | 242k to 446k | 2 of 5 |
 | CartPole-v1 | DQN | `cartpole_dqn.yaml` (Adam, per-step exploration) | 300,000 | 5 of 5 | 145k to 238k | 5 of 5 |
+| Pendulum-v1 | DDPG | `pendulum_ddpg.yaml` (rl-zoo settings, 64×64 networks) | 40,000 | 5 of 5 | 31k to 32k | 5 of 5 |
 | Pendulum-v1 | PPO | `pendulum_ppo.yaml` (annealed, rewards scaled) | 100,000 | 0 of 5 | — | 0 of 5 |
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` | 1,000,000 | 0 of 5 | — | 0 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (roadmap: "DQN Reaches the rl-zoo
-Reference"). Pendulum PPO's are -241 to -313 at rl-zoo's 100,000 steps; under the earlier 10-episode rule
-it touched -200 on every seed (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode Rule"). Continuous
-Actor-Critic stays below the random agent even with 1,000,000 steps (roadmap: "Continuous Actor-Critic Learns
-Pendulum-v1").
+Reference"). Pendulum DDPG uses rl-zoo's settings with 64×64 networks instead of 400×300, which take about 16 times
+longer in NumPy; its greedy evaluation averages -150 (± 27 across the 5 seeds' means) against rl-zoo's -152
+(± 94 across episodes of one run) (roadmap: "Continuous Off-Policy
+Learning & DDPG"). Pendulum PPO's final averages are -241 to -313 at rl-zoo's 100,000 steps; under the earlier
+10-episode rule it touched -200 on every seed (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode Rule").
+Continuous Actor-Critic stays below the random agent even with 1,000,000 steps (roadmap: "Continuous Actor-Critic
+Learns Pendulum-v1").
 
 ### Run any agent from one base config (quick overrides)
 
@@ -538,6 +546,7 @@ Implemented agents (in `src/rl_core/agents/`):
   - `ContinuousRandomAgent`: Uniform random continuous torque baseline policy
   - `ContinuousActorCriticAgent`: Continuous Gaussian policy A2C with state-value critic
   - `ContinuousPPOAgent`: Continuous Gaussian policy PPO with clipped surrogate objective
+  - `DDPGAgent`: Deep Deterministic Policy Gradient with replay, a Q critic and Polyak target networks
 
 ### Training Pipeline
 
@@ -551,13 +560,13 @@ The `Trainer` class orchestrates the training process:
 ## Next AI Progression
 
 With discrete control (CartPole: Random, REINFORCE, Actor-Critic, PPO, DQN) and continuous
-control (Pendulum: Random, Actor-Critic, PPO) fully operational, the framework provides
+control (Pendulum: Random, Actor-Critic, PPO, DDPG) fully operational, the framework provides
 a decoupled foundation for future AI challenges.
 
 ### Next Steps
 
-1. **Continuous Off-Policy Learning**: Implement DDPG (Deep Deterministic Policy Gradient) or
-   SAC (Soft Actor-Critic) with experience replay for sample-efficient continuous torque control.
+1. **More Continuous Off-Policy Learning**: TD3 (twin critics, delayed actor updates) or SAC (Soft Actor-Critic) on
+   the replay buffer, networks and target updates DDPG already uses.
 2. **Advanced Environments**: BipedalWalker, MountainCar, or Acrobot challenges.
 3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 

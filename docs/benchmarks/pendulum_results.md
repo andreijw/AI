@@ -7,7 +7,7 @@ Comparative benchmark evaluation across reinforcement learning algorithms.
 - **Challenge / Environment**: `Pendulum-v1` (Solved criteria: average reward >= -200)
 - **Budget per Run**: each agent's own config (`training.total_steps` or `num_episodes`), shown per agent
 - **Seeds Evaluated**: `[1, 2, 3, 4, 5]`
-- **Algorithms**: `['actor_critic', 'ppo', 'random']`
+- **Algorithms**: `['actor_critic', 'ddpg', 'ppo', 'random']`
 
 ## How a Run Counts as Solved
 
@@ -24,9 +24,10 @@ A step budget finishes the episode that crosses it, so a run can overshoot its b
 
 | Algorithm | Budget | Episodes | Mean Eval Reward | Reward Std | Solve Rate | Avg Solve Episode | Avg Steps to Solve | Held | Eval ≥ Threshold | Mean Time (s) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **actor_critic** | 1000000 steps | 5000 | -1422.1 | ±134.0 | 0% | N/A | N/A | 0% | 0% | 158.43s |
-| **ppo** | 100000 steps | 500 | -284.6 | ±82.2 | 0% | N/A | N/A | 0% | 20% | 27.69s |
-| **random** | 40000 steps | 200 | -1224.5 | ±76.1 | 0% | N/A | N/A | 0% | 0% | 5.77s |
+| **actor_critic** | 1000000 steps | 5000 | -1422.1 | ±134.0 | 0% | N/A | N/A | 0% | 0% | 158.84s |
+| **ddpg** | 40000 steps | 200 | -149.9 | ±26.6 | 100% | 156.4 | 31,280 | 100% | 100% | 203.58s |
+| **ppo** | 100000 steps | 500 | -284.6 | ±82.2 | 0% | N/A | N/A | 0% | 20% | 27.46s |
+| **random** | 40000 steps | 200 | -1224.5 | ±76.1 | 0% | N/A | N/A | 0% | 0% | 5.71s |
 
 ## Learning Trajectories
 

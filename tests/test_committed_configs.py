@@ -8,6 +8,7 @@ measurement, and this test makes that change visible in review.
 import os
 import sys
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -24,6 +25,7 @@ STEP_BUDGETS = {
     ("cartpole", "dqn"): 300_000,
     ("cartpole", "random"): 50_000,
     ("pendulum", "ppo"): 100_000,
+    ("pendulum", "ddpg"): 40_000,
     ("pendulum", "actor_critic"): 1_000_000,
     ("pendulum", "random"): 40_000,
 }
@@ -83,3 +85,22 @@ def test_pendulum_ppo_uses_the_measured_settings():
         (0.9, 0.001, 0.1)
     )
     assert (agent.anneal_steps, agent.clip_ratio, agent.mean_init_scale) == (100_000, 0.2, 0.01)
+
+
+def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
+    """rl-zoo's DDPG for Pendulum-v1 with 64x64 networks: 5 of 5 seeds solved within 40,000 steps
+    (roadmap: "Continuous Off-Policy Learning & DDPG")."""
+    from rl_pendulum.benchmark import PendulumChallenge
+
+    env, agent, _ = PendulumChallenge().setup_run("ddpg", seed=1, episodes=None)
+    env.close()
+    assert agent.hidden_sizes == [64, 64]
+    assert (agent.learning_rate, agent.gamma, agent.tau) == pytest.approx((0.001, 0.98, 0.005))
+    assert (agent.batch_size, agent.learning_starts, agent.buffer_capacity) == (
+        256,
+        10_000,
+        200_000,
+    )
+    assert (agent.noise_std, agent.updates_per_step) == pytest.approx((0.1, 1.0))
+    np.testing.assert_allclose(agent.action_low, [-2.0])
+    np.testing.assert_allclose(agent.action_high, [2.0])
