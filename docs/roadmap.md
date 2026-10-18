@@ -723,7 +723,7 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: Double, dueling and prioritised-replay DQN (each its own item if wanted); DDPG; a second hidden
     layer.
 
-- [ ] **Continuous Off-Policy Learning & DDPG (Deep Deterministic Policy Gradient)**
+- [~] **Continuous Off-Policy Learning & DDPG (Deep Deterministic Policy Gradient)**
   - **Description**: Implement a pure NumPy `DDPGAgent` utilizing a deterministic actor network $\mu_\theta(s)$,
     an action-value critic $Q_\phi(s, a)$, continuous transition experience replay via `ReplayBuffer`, exploration
     noise (Gaussian or Ornstein-Uhlenbeck), and Polyak soft target updates to solve `Pendulum-v1`
@@ -735,11 +735,19 @@ Defects found while working on other items, then findings from the brooks-lint h
       ($\nabla_\theta Q(s, \mu_\theta(s))$).
     - Polyak soft target weight synchronization ($\theta' \leftarrow \tau \theta + (1-\tau) \theta'$ with
       $\tau \approx 0.005$).
-    - Reference configuration `configs/pendulum_ddpg.yaml` solving `Pendulum-v1` (mean reward $\ge -200$)
-      in $\le 100$ episodes.
+    - Reference configuration `configs/pendulum_ddpg.yaml` solving `Pendulum-v1` under the 100-episode rule
+      (average training reward $\ge -200$ over 100 episodes) on at least 4 of 5 seeds within its step budget, with
+      the greedy evaluation reported against rl-zoo's -152 ± 94. (Reworded 2026-10-16 with the maintainer: "in
+      ≤ 100 episodes" would need the first 100 episodes, including 50 of random warm-up, to average -200.)
     - CLI dispatch support in `train.py`, `record.py`, and `src/benchmark.py`.
     - Unit and integration tests in `tests/test_ddpg_agent.py` achieving $>90\%$ coverage.
   - **Known edge cases**: Q-value overestimation; divergence from non-smooth actor gradients; torque saturation.
+  - **Plan (2026-10-16)**: rl-zoo's DDPG for Pendulum-v1 (SB3 DDPG: tanh actor scaled to the bounds, critic on
+    `[s, a]`, two 400×300 ReLU layers, Adam 1e-3, batch 256, γ 0.98, τ 0.005, Gaussian noise 0.1 in scaled action
+    space, 10,000 uniform warm-up steps, bootstrapping through time-limit cuts). Three stacked PRs: 1, `ReplayBuffer`
+    with continuous actions (`action_dim`); 2, `DDPGAgent` with a shared MLP helper (`rl_core/agents/mlp.py`), a
+    shared `action_bounds` helper, prefixed Adam checkpoint keys, a continuous agent contract test and named random
+    streams; 3, the config, a timed network size, the learning gate and docs.
   - **Out of scope**: Twin Delayed DDPG (TD3) double Q-learning; stochastic entropy auto-tuning (SAC).
 
 - [ ] **Curriculum Learning & Domain Randomization Scheduling**

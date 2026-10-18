@@ -15,6 +15,9 @@ class ReplayBuffer:
 
     Transitions are represented as:
         (observation, action, reward, next_observation, done)
+
+    Actions are discrete (int64 scalars) by default, or continuous float64 vectors of length
+    ``action_dim`` when it is given.
     """
 
     def __init__(
@@ -22,6 +25,8 @@ class ReplayBuffer:
         capacity: int,
         observation_dim: int,
         seed: int | None = None,
+        *,
+        action_dim: int | None = None,
     ) -> None:
         """
         Initialise the ReplayBuffer.
@@ -30,23 +35,32 @@ class ReplayBuffer:
             capacity: Maximum number of transitions to store.
             observation_dim: Dimensionality of observation vectors.
             seed: Optional RNG seed for reproducible random sampling.
+            action_dim: Length of a continuous action vector, or None for discrete actions.
 
         Raises:
-            ValueError: If capacity or observation_dim is non-positive.
+            ValueError: If capacity, observation_dim or action_dim is non-positive.
         """
         if capacity <= 0:
             raise ValueError(f"capacity must be a positive integer, got {capacity!r}")
         if observation_dim <= 0:
             raise ValueError(f"observation_dim must be a positive integer, got {observation_dim!r}")
 
+        if action_dim is not None and action_dim <= 0:
+            raise ValueError(f"action_dim must be a positive integer, got {action_dim!r}")
+
         self.capacity: int = int(capacity)
+        self.action_dim: int | None = None if action_dim is None else int(action_dim)
         self.observation_dim: int = int(observation_dim)
         self._rng: np.random.Generator = np.random.default_rng(seed)
 
         self.observations: npt.NDArray[np.float64] = np.zeros(
             (self.capacity, self.observation_dim), dtype=np.float64
         )
-        self.actions: npt.NDArray[np.int64] = np.zeros(self.capacity, dtype=np.int64)
+        self.actions: npt.NDArray[Any] = (
+            np.zeros(self.capacity, dtype=np.int64)
+            if self.action_dim is None
+            else np.zeros((self.capacity, self.action_dim), dtype=np.float64)
+        )
         self.rewards: npt.NDArray[np.float64] = np.zeros(self.capacity, dtype=np.float64)
         self.next_observations: npt.NDArray[np.float64] = np.zeros(
             (self.capacity, self.observation_dim), dtype=np.float64
@@ -59,7 +73,7 @@ class ReplayBuffer:
     def add(
         self,
         obs: npt.ArrayLike,
-        action: int,
+        action: int | npt.ArrayLike,
         reward: float,
         next_obs: npt.ArrayLike,
         done: bool,
@@ -71,14 +85,14 @@ class ReplayBuffer:
 
         Args:
             obs: Observation vector before transition.
-            action: Discrete action taken.
+            action: Discrete action taken, or a continuous action vector of length ``action_dim``.
             reward: Scalar reward received.
             next_obs: Observation vector after transition.
             done: Whether the transition is terminal, so its Bellman target must not bootstrap
                 from ``next_obs``. Store a time-limit cut as not terminal.
         """
         self.observations[self._idx] = np.asarray(obs, dtype=np.float64)
-        self.actions[self._idx] = int(action)
+        self.actions[self._idx] = self._actions_array(action, single=True)
         self.rewards[self._idx] = float(reward)
         self.next_observations[self._idx] = np.asarray(next_obs, dtype=np.float64)
         self.dones[self._idx] = bool(done)
@@ -99,17 +113,18 @@ class ReplayBuffer:
 
         Args:
             obs: Array of observations of shape (N, observation_dim).
-            actions: Array of discrete actions of shape (N,).
+            actions: Discrete actions of shape (N,), or continuous ones of shape (N, action_dim).
             rewards: Array of scalar rewards of shape (N,).
             next_obs: Array of next observations of shape (N, observation_dim).
             dones: Terminal flags of shape (N,): True means no bootstrap from the next
                 observation (a true termination, not a time-limit cut).
 
         Raises:
-            ValueError: If input array lengths do not match.
+            ValueError: If input array lengths do not match, or continuous actions are not
+                shaped (N, action_dim).
         """
         obs_arr = np.asarray(obs, dtype=np.float64)
-        actions_arr = np.asarray(actions, dtype=np.int64)
+        actions_arr = self._actions_array(actions, single=False)
         rewards_arr = np.asarray(rewards, dtype=np.float64)
         next_obs_arr = np.asarray(next_obs, dtype=np.float64)
         dones_arr = np.asarray(dones, dtype=bool)
@@ -155,6 +170,27 @@ class ReplayBuffer:
 
         self._idx = (self._idx + n) % self.capacity
         self._size = min(self._size + n, self.capacity)
+
+    def _actions_array(self, actions: Any, single: bool) -> npt.NDArray[Any]:
+        """
+        Actions as stored: int64 when discrete; float64 of shape (action_dim,) for one continuous
+        action or (N, action_dim) for a batch, never reshaped to fit.
+
+        Raises:
+            ValueError: If a continuous action array has any other shape.
+        """
+        if self.action_dim is None:
+            return np.asarray(actions, dtype=np.int64)
+        arr = np.asarray(actions, dtype=np.float64)
+        batch_length = arr.shape[0] if arr.ndim else 0
+        expected = (self.action_dim,) if single else (batch_length, self.action_dim)
+        if arr.shape != expected:
+            kind = "action" if single else "actions"
+            raise ValueError(
+                f"Continuous {kind} must have shape {expected} (action_dim={self.action_dim}), "
+                f"got {arr.shape}"
+            )
+        return arr
 
     def sample(self, batch_size: int) -> dict[str, Any]:
         """
