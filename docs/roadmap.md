@@ -678,7 +678,7 @@ Defects found while working on other items, then findings from the brooks-lint h
     against the random agent's -1225. The default configs' budgets (50k CartPole, 40k Pendulum) only set the
     random baseline's length.
 
-- [~] **DQN Reaches the rl-zoo Reference**
+- [x] **DQN Reaches the rl-zoo Reference**
   - **Description**: Under the old 10-episode rule (2026-10-15, 750 episodes) CartPole DQN needed 73k to 117k steps to
     first reach 475 and one seed of five never did, against rl-baselines3-zoo's 50k-step budget. rl-zoo's DQN uses a
     256×256 network, 128 gradient steps every 256 environment steps, a 1000-step warm-up, a target update every 10 steps
@@ -714,6 +714,12 @@ Defects found while working on other items, then findings from the brooks-lint h
     target sync every 128 gradient steps, epsilon to 0.04 over 8,000 steps, 300,000 steps.
   - **Plan**: two stacked PRs. 1: `exploration_steps`, bootstrapping through time-limit cuts, `optimizer` (with the
     element-wise clip renamed `grad_clip_value`), and complete DQN checkpoints. 2: the config and republished numbers.
+  - **Delivered in**: #88 (agent options), then the config PR stacked on it. Confirmed by the maintainer on
+    2026-10-16.
+  - **Learning gate (2026-10-16)**: committed config, the real implementation, benchmark seeds 1 to 5: 5 of 5 solve
+    (steps 145,401 to 238,149, episodes 548 to 1167) and hold, final averages 496 to 500, evaluation 500 ± 0. The full
+    CartPole benchmark was then rerun on seeds 1 to 5 (2026-10-16): every agent's numbers matched the earlier run,
+    only the timings changed, and `docs/benchmarks/cartpole_results.md` and its plot come from that one run.
   - **Out of scope**: Double, dueling and prioritised-replay DQN (each its own item if wanted); DDPG; a second hidden
     layer.
 

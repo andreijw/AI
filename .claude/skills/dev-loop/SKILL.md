@@ -64,10 +64,11 @@ Explore before designing. Search for what already does part of the job: the base
 Check Gymnasium and NumPy signatures in Context7, not from memory.
 
 For anything that changes a hyperparameter, a schedule or an update rule, **walk the numbers** before
-proposing them: play the real values through a typical run. `configs/cartpole_dqn.yaml` decays epsilon by
-0.995 "per update" from 1.0 to a floor of 0.02, and `DQNAgent` applies that once per `update()` call, which
-the trainer makes once per episode. Reaching the floor takes ln(0.02) / ln(0.995) ≈ 780 episodes, but the
-config trains for 500, so epsilon ends near 0.08 and the floor is never reached. Read as "per gradient
+proposing them: play the real values through a typical run. Until 2026-10-16 `configs/cartpole_dqn.yaml`
+decayed epsilon by 0.995 "per update" from 1.0 to a floor of 0.02, and `DQNAgent` applied that once per
+`update()` call, which the trainer makes once per episode. Reaching the floor takes ln(0.02) / ln(0.995) ≈ 780
+episodes, but the config trained for 500, so epsilon ended near 0.08 and the floor was never reached (the
+config now decays it linearly per environment step with `exploration_steps`). Read as "per gradient
 step" the same line would end exploration within the first 40 episodes. Whether either is right is a
 judgement; not knowing which one the code does is a mistake, and the logged `epsilon` settles it. Do the
 same for learning
