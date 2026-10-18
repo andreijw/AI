@@ -31,6 +31,8 @@ class Trainer:
         agent: BaseAgent,
         config: dict[str, Any],
         logger: Any | None = None,
+        eval_env: gym.Env | Any | None = None,
+        eval_seed: int | None = None,
     ):
         """
         Initialize the trainer.
@@ -40,8 +42,28 @@ class Trainer:
             agent: Agent to train
             config: Training configuration
             logger: Optional logger for training metrics
+            eval_env: Environment to evaluate in, apart from the training environment, so that
+                evaluating does not consume training start states. Without it evaluation runs on
+                ``env`` and continues its sequence.
+            eval_seed: Required with ``eval_env``: episode i of every evaluation resets ``eval_env``
+                with ``eval_seed + i``, so all evaluations in a run play the same start states
+                (see ``rl_core.seeding.eval_seed_for``).
+
+        Raises:
+            ValueError: If ``eval_env`` is given without a non-negative integer ``eval_seed``.
         """
+        if eval_env is not None and (
+            eval_seed is None
+            or isinstance(eval_seed, bool)
+            or not isinstance(eval_seed, int | np.integer)
+            or eval_seed < 0
+        ):
+            raise ValueError(f"eval_env needs eval_seed, a non-negative integer; got {eval_seed!r}")
         self.env = env
+        self.eval_env = eval_env
+        self.eval_seed: int | None = (
+            int(eval_seed) if eval_env is not None and eval_seed is not None else None
+        )
         self.agent = agent
         self.config = config
         self.logger = logger
@@ -349,17 +371,22 @@ class Trainer:
             return f" | steps {self.total_steps_trained}/{self.total_steps}"
         return f"/{self.num_episodes}"
 
-    def _run_episode(self, training: bool = True) -> tuple[float, int]:
+    def _run_episode(
+        self, training: bool = True, env: Any | None = None, reset_seed: int | None = None
+    ) -> tuple[float, int]:
         """
         Run a single episode.
 
         Args:
             training: Whether to train during the episode
+            env: Environment to run in; the training environment by default
+            reset_seed: Seed for the episode's reset, or None to continue the env's sequence
 
         Returns:
             Tuple of (episode_reward, episode_length)
         """
-        obs, _ = self.env.reset()
+        env = self.env if env is None else env
+        obs, _ = env.reset(seed=reset_seed) if reset_seed is not None else env.reset()
         episode_reward = 0.0
         episode_length = 0
 
@@ -377,7 +404,7 @@ class Trainer:
             action = self.agent.select_action(obs, training=training)
 
             # Take step
-            next_obs, reward, terminated, truncated, info = self.env.step(action)
+            next_obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
 
             # Store trajectory transitions
@@ -408,7 +435,11 @@ class Trainer:
 
     def evaluate(self, num_episodes: int = 10) -> dict[str, float]:
         """
-        Evaluate the agent.
+        Evaluate the agent greedily.
+
+        With an evaluation environment, episode i resets it with ``eval_seed + i``, so every
+        evaluation in a run plays the same start states and leaves the training environment alone.
+        Without one, evaluation runs on the training environment and continues its sequence.
 
         Args:
             num_episodes: Number of episodes to evaluate over
@@ -421,8 +452,13 @@ class Trainer:
 
         self.evaluating = True
         try:
-            for _ in range(num_episodes):
-                episode_reward, episode_length = self._run_episode(training=False)
+            for i in range(num_episodes):
+                if self.eval_env is not None and self.eval_seed is not None:
+                    episode_reward, episode_length = self._run_episode(
+                        training=False, env=self.eval_env, reset_seed=self.eval_seed + i
+                    )
+                else:
+                    episode_reward, episode_length = self._run_episode(training=False)
                 eval_rewards.append(episode_reward)
                 eval_lengths.append(episode_length)
         finally:

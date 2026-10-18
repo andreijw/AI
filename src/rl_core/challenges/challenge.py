@@ -129,6 +129,21 @@ class BenchmarkChallenge(abc.ABC):
         agent = self.make_agent(agent_type, config["agent"]["config"], env)
         return env, agent, config["training"]
 
+    def setup_eval_env(self, agent_type: str, seed: int) -> ChallengeEnv | None:
+        """
+        A fresh environment for evaluating a benchmark run, apart from its training environment.
+
+        Config-driven challenges (with ``agent_type`` in :attr:`CONFIG_MAP`) build it with
+        :meth:`make_env` from the run's environment section. Others return None, and their runs
+        evaluate on the training environment as before. A subclass that overrides
+        :meth:`setup_run` to build its environment differently should override this too, or its
+        evaluation environment will differ from its training one.
+        """
+        if agent_type not in self.CONFIG_MAP:
+            return None
+        config = self.load_run_config(agent_type, seed, None)
+        return self.make_env(config["environment"], render_mode=None)
+
     def unsupported_agent_error(self, agent_type: str) -> ValueError:
         """The error for an agent type this challenge cannot build, naming the ones it can."""
         return ValueError(

@@ -5,6 +5,8 @@ from typing import Any
 
 import numpy as np
 
+from rl_core.seeding import AGENT_EVAL_STREAM, derive_rng
+
 from .base_agent import BaseAgent
 
 
@@ -34,6 +36,8 @@ class RandomAgent(BaseAgent):
 
         seed: int | None = config.get("seed")
         self._rng = np.random.default_rng(seed)
+        # Evaluation actions draw from their own stream, so evaluating does not shift training actions.
+        self._eval_rng = derive_rng(seed, AGENT_EVAL_STREAM)
 
     def select_action(self, observation: np.ndarray, training: bool = True) -> int:
         """
@@ -41,12 +45,13 @@ class RandomAgent(BaseAgent):
 
         Args:
             observation: Current observation (ignored)
-            training: Whether in training mode (ignored)
+            training: Whether in training mode; evaluation draws from a separate generator
 
         Returns:
             Random action
         """
-        return int(self._rng.integers(0, self.action_dim))
+        rng = self._rng if training else self._eval_rng
+        return int(rng.integers(0, self.action_dim))
 
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
@@ -70,6 +75,7 @@ class RandomAgent(BaseAgent):
                 observation_dim=np.int64(self.observation_dim),
                 action_dim=np.int64(self.action_dim),
                 rng_state=state_json,
+                eval_rng_state=json.dumps(self._eval_rng.bit_generator.state),
             )
 
     def load(self, path: str) -> None:
@@ -92,6 +98,14 @@ class RandomAgent(BaseAgent):
                     "RandomAgent checkpoint rng_state must be stored as a JSON string."
                 )
             rng_state = json.loads(rng_state_text)
+            eval_state = (  # checkpoints from before 2026-10-18 have none
+                json.loads(str(np.asarray(data["eval_rng_state"]).item()))
+                if "eval_rng_state" in data
+                else None
+            )
 
         self._rng = np.random.default_rng()
         self._rng.bit_generator.state = rng_state
+        if eval_state is not None:
+            self._eval_rng = np.random.default_rng()
+            self._eval_rng.bit_generator.state = eval_state

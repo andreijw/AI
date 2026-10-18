@@ -344,7 +344,7 @@ Defects found while working on other items, then findings from the brooks-lint h
     other agents remain.
   - **Out of scope**: Regenerating `docs/benchmarks/`.
 
-- [ ] **Separate Evaluation Environment**
+- [~] **Separate Evaluation Environment**
   - **Description**: `Trainer.evaluate` runs on the training environment, so evaluation episodes advance the same
     random sequence and `eval_frequency` changes which start states later training episodes see. Runs stay
     reproducible, but evaluation is not independent of training.
@@ -352,6 +352,16 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Evaluation uses its own environment with its own seeded sequence; changing `eval_frequency` leaves the
       training episodes unchanged for a given seed.
     - Every evaluation uses the same fixed set of start states, so scores are comparable across a run.
+  - **Plan (2026-10-18, reviewed)**: `Trainer` takes `eval_env` and `eval_seed`; evaluation episode i resets the
+    evaluation environment with `eval_seed + i` (start state, wrapper noise and domain randomization all fixed).
+    `eval_seed` comes from the run's seed on a dedicated stream (`EVAL_STREAM`), drawn once and logged when the
+    run has no seed. record.py passes its playback environment as `eval_env` with `eval_seed_for(seed)`, so a
+    playback shows the training run's evaluation start states. Without `eval_env` (direct `Trainer` callers,
+    tests), evaluation stays on the training environment.
+    Challenges gain a non-abstract `setup_eval_env`, so `setup_run` and custom challenges are unchanged. The random
+    agents act from a separate evaluation stream, so evaluation does not shift their training actions either
+    (maintainer's choice, option A). Afterwards: a learning check of every published claim, then both benchmarks
+    rerun on seeds 1 to 5 and republished, in a separate PR.
   - **Out of scope**: Vectorized evaluation.
 
 - [x] **Pendulum PPO Learns and Solves Pendulum-v1**

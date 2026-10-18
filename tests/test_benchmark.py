@@ -482,7 +482,7 @@ class _ScriptedTrainer:
     # seed -> (training reward per episode, evaluation mean); the challenge's threshold is 20
     OUTCOMES = {1: (5.0, 30.0), 2: (25.0, 30.0), 3: (5.0, 5.0)}
 
-    def __init__(self, agent, env, config, logger):
+    def __init__(self, agent, env, config, logger, **_eval):
         self.seed = agent.config["seed"]
         self.num_episodes = config["num_episodes"]
         self.episode_rewards: list[float] = []

@@ -44,3 +44,21 @@ def derive_rng(seed: int | None, stream: int) -> np.random.Generator:
     # is zero-padded to the same state as entropy 1, so default_rng([stream, seed]) would make
     # seed 0 on stream 1 identical to default_rng(1).
     return np.random.default_rng(np.random.SeedSequence(int(seed), spawn_key=(int(stream),)))
+
+
+# Stream for the seed of a run's fixed evaluation start states (see eval_seed_for).
+EVAL_STREAM = 20
+# Stream a random agent draws its evaluation actions from, apart from its training actions.
+AGENT_EVAL_STREAM = 13
+
+
+def eval_seed_for(seed: int | None) -> int:
+    """
+    The first reset seed of a run's evaluation episodes; episode i of every evaluation resets with
+    ``eval_seed_for(seed) + i``, so all evaluations in a run play the same start states.
+
+    The value is drawn from the run's seed on its own stream and lies in [2**31, 2**32), far above the
+    small seeds runs train with, so evaluation start states do not repeat a training sequence. A run
+    without a seed gets an entropy-drawn value: fixed within that run, not reproducible across runs.
+    """
+    return int(derive_rng(seed, EVAL_STREAM).integers(2**31, 2**32))

@@ -118,3 +118,23 @@ def test_record_with_dqn_agent(tmp_path, monkeypatch):
         module="record",
     )
     assert os.path.exists(video_dir / "cartpole-playback-full.mp4")
+
+
+def test_playback_uses_the_runs_fixed_evaluation_start_states(tmp_path, monkeypatch):
+    """record.py evaluates on its playback env with eval_seed_for(seed): the training run's evaluation set."""
+    pytest.importorskip("moviepy")
+    import rl_core.training as training_mod
+    from rl_core.seeding import eval_seed_for
+
+    seen = []
+    original = training_mod.Trainer
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(training_mod, "Trainer", spy)
+    _record(["--checkpoint", _checkpoint(tmp_path), "--episodes", "1"], tmp_path, monkeypatch)
+    (kwargs,) = seen
+    assert kwargs["eval_env"] is kwargs["env"]
+    assert kwargs["eval_seed"] == eval_seed_for(42)  # minimal_config's environment seed

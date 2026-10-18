@@ -15,6 +15,7 @@ from rl_core.challenges import (
     import_failures_text,
     select_challenge,
 )
+from rl_core.seeding import eval_seed_for
 from rl_core.training import Trainer
 from rl_core.training.budget import apply_budget_override
 from rl_core.utils import load_config, plot_training_metrics, setup_logger
@@ -233,11 +234,16 @@ def main():
 
     with headless_rendering(enabled=args.record_video):
         env = None
+        eval_env = None
         try:
             env = run_challenge.make_env(config["environment"], render_mode)
+            # Evaluation runs on its own environment with fixed start states, so how often a run
+            # evaluates does not change which start states its training episodes see.
+            eval_env = run_challenge.make_env(config["environment"], render_mode=None)
+            eval_seed = eval_seed_for(config["environment"].get("seed"))
             if args.record_video:
                 require_moviepy()
-            logger.info("Environment created")
+            logger.info(f"Environments created (evaluation start states from seed {eval_seed})")
 
             agent = run_challenge.make_agent(agent_type, config["agent"]["config"], env)
             logger.info(f"Agent created: {agent_type}")
@@ -247,13 +253,16 @@ def main():
                 agent=agent,
                 config=config["training"],
                 logger=logger,
+                eval_env=eval_env,
+                eval_seed=eval_seed,
             )
             logger.info("Trainer created")
 
             # Wrap with TrainingVideoRecorder when --record-video is set. It captures
             # rgb_array frames and saves them as mp4 files, so it works on headless
             # machines where no display is available. It follows the trainer's episode
-            # counter, so it must be created after the trainer. The wrapper's wrap_env()
+            # counter, so it must be created after the trainer, and wraps only the training
+            # environment, never the evaluation one. The wrapper's wrap_env()
             # injects the wrapper through the proper interface rather than bypassing it
             # via direct attribute assignment.
             if args.record_video:
@@ -287,8 +296,9 @@ def main():
             except KeyboardInterrupt:
                 logger.info("Training interrupted by user")
         finally:
-            if env is not None:
-                close_env(env, logger)
+            for opened in (env, eval_env):
+                if opened is not None:
+                    close_env(opened, logger)
 
 
 if __name__ == "__main__":

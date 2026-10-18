@@ -177,16 +177,17 @@ class TestRandomAgentExtended:
         action = agent.select_action(np.zeros(4))
         assert isinstance(action, int)
 
-    def test_training_flag_ignored(self):
-        """The training flag has no effect on RandomAgent – identical sequences for same seed."""
+    def test_evaluation_draws_from_its_own_reproducible_generator(self):
+        """Since 2026-10-18 evaluation actions come from a separate stream (roadmap: "Separate
+        Evaluation Environment"): different from the training sequence, reproducible per seed."""
         obs = np.zeros(4)
-        # Two agents seeded identically: one called with training=True, the other with training=False.
-        # Because the flag is ignored, both must produce the exact same sequence.
-        agent_train = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 5})
-        agent_eval = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 5})
-        seq_train = [agent_train.select_action(obs, training=True) for _ in range(30)]
-        seq_eval = [agent_eval.select_action(obs, training=False) for _ in range(30)]
-        assert seq_train == seq_eval
+
+        def actions(training):
+            agent = RandomAgent(observation_dim=4, action_dim=2, config={"seed": 5})
+            return [agent.select_action(obs, training=training) for _ in range(30)]
+
+        assert actions(False) == actions(False)
+        assert actions(True) != actions(False)
 
     def test_update_always_returns_empty_dict(self):
         agent = RandomAgent(observation_dim=4, action_dim=2, config={})

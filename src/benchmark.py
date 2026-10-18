@@ -27,6 +27,7 @@ from rl_core.challenges import (
     import_failures_text,
     unknown_challenge_message,
 )
+from rl_core.seeding import eval_seed_for
 from rl_core.training.budget import apply_budget_override, budget_of
 from rl_core.training.trainer import Trainer
 from rl_core.utils.visualization import _rolling_average, plot_benchmark_comparison
@@ -200,6 +201,8 @@ class BenchmarkRunner:
             print(f"Solve Threshold:  {self.challenge.solve_threshold}")
         print("=" * 70)
 
+        # Whether every run evaluated on a separate environment (challenges without configs do not).
+        separate_eval = True
         for agent_type in agents:
             results[agent_type] = []
             curve_data[agent_type] = []
@@ -215,54 +218,61 @@ class BenchmarkRunner:
                         agent_type, seed, episodes, steps=steps
                     )
                 budgets[agent_type] = budget_of(train_cfg)
+                eval_env = self.challenge.setup_eval_env(agent_type, seed)
+                separate_eval = separate_eval and eval_env is not None
+                try:
+                    trainer = Trainer(
+                        agent=agent,
+                        env=env,
+                        config=train_cfg,
+                        logger=self.logger,
+                        eval_env=eval_env,
+                        eval_seed=None if eval_env is None else eval_seed_for(seed),
+                    )
 
-                trainer = Trainer(
-                    agent=agent,
-                    env=env,
-                    config=train_cfg,
-                    logger=self.logger,
-                )
+                    start_time = time.perf_counter()
+                    trainer.train()
+                    duration = time.perf_counter() - start_time
 
-                start_time = time.perf_counter()
-                trainer.train()
-                duration = time.perf_counter() - start_time
+                    eval_stats = trainer.evaluate(num_episodes=eval_episodes)
+                    eval_mean = float(eval_stats.get("mean_reward", 0.0))
 
-                eval_stats = trainer.evaluate(num_episodes=eval_episodes)
-                eval_mean = float(eval_stats.get("mean_reward", 0.0))
+                    episode_rewards = [float(r) for r in trainer.episode_rewards]
+                    episode_lengths = [int(n) for n in trainer.episode_lengths]
+                    outcome = classify_run(
+                        episode_rewards,
+                        eval_mean,
+                        threshold=self.challenge.solve_threshold,
+                        window=window,
+                        episode_lengths=episode_lengths,
+                    )
+                    solved_ep = outcome["solved_episode"]
+                    is_solved = outcome["is_solved"]
 
-                episode_rewards = [float(r) for r in trainer.episode_rewards]
-                episode_lengths = [int(n) for n in trainer.episode_lengths]
-                outcome = classify_run(
-                    episode_rewards,
-                    eval_mean,
-                    threshold=self.challenge.solve_threshold,
-                    window=window,
-                    episode_lengths=episode_lengths,
-                )
-                solved_ep = outcome["solved_episode"]
-                is_solved = outcome["is_solved"]
+                    run_result = {
+                        "seed": seed,
+                        "duration": duration,
+                        "eval_mean_reward": eval_mean,
+                        "final_rolling_avg": float(_rolling_average(episode_rewards, window)[-1])
+                        if episode_rewards
+                        else 0.0,
+                        "solved_episode": solved_ep,
+                        "solved_step": outcome["solved_step"],
+                        "is_solved": is_solved,
+                        "held": outcome["held"],
+                        "eval_reached_threshold": outcome["eval_reached_threshold"],
+                        "total_episodes": len(episode_rewards),
+                        "total_steps": int(sum(episode_lengths)),
+                        "window": window,
+                    }
+                    results[agent_type].append(run_result)
+                    curve_data[agent_type].append(episode_rewards)
+                    length_data[agent_type].append(episode_lengths)
 
-                run_result = {
-                    "seed": seed,
-                    "duration": duration,
-                    "eval_mean_reward": eval_mean,
-                    "final_rolling_avg": float(_rolling_average(episode_rewards, window)[-1])
-                    if episode_rewards
-                    else 0.0,
-                    "solved_episode": solved_ep,
-                    "solved_step": outcome["solved_step"],
-                    "is_solved": is_solved,
-                    "held": outcome["held"],
-                    "eval_reached_threshold": outcome["eval_reached_threshold"],
-                    "total_episodes": len(episode_rewards),
-                    "total_steps": int(sum(episode_lengths)),
-                    "window": window,
-                }
-                results[agent_type].append(run_result)
-                curve_data[agent_type].append(episode_rewards)
-                length_data[agent_type].append(episode_lengths)
-
-                env.close()
+                finally:
+                    env.close()
+                    if eval_env is not None:
+                        eval_env.close()
 
                 status = f"Solved @ ep {solved_ep}" if is_solved else "Did not solve"
                 print(
@@ -350,6 +360,7 @@ class BenchmarkRunner:
                 window,
                 eval_episodes,
                 steps,
+                separate_eval=separate_eval,
             )
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write(report_md)
@@ -375,6 +386,7 @@ class BenchmarkRunner:
         window: int = 100,
         eval_episodes: int = 10,
         steps: int | None = None,
+        separate_eval: bool = False,
     ) -> str:
         """Generate formatted Markdown report text for this challenge."""
         threshold = self.challenge.solve_threshold
@@ -409,6 +421,13 @@ class BenchmarkRunner:
                     f"({eval_desc}) averaged at least {threshold:.0f}; it does not count as a solve.",
                 ]
             )
+            if separate_eval:
+                lines.extend(
+                    [
+                        "Evaluation runs on a separate environment and plays the same start states",
+                        "every time for a seed, so it does not change the training episodes.",
+                    ]
+                )
             if any(stats["budget_unit"] == "steps" for stats in summary.values()):
                 lines.append(
                     "A step budget finishes the episode that crosses it, so a run can overshoot "
