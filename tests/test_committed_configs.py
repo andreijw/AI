@@ -105,3 +105,19 @@ def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
     assert (agent.noise_std, agent.updates_per_step) == pytest.approx((0.1, 1.0))
     np.testing.assert_allclose(agent.action_low, [-2.0])
     np.testing.assert_allclose(agent.action_high, [2.0])
+
+
+def test_pendulum_actor_critic_uses_the_measured_settings():
+    """Bounded mean, 8-step chunked updates, entropy 0.01 and rewards x 0.05: evaluation -152 +/- 45 on
+    seeds 1-5, beating the random agent on 5 of 5 (roadmap: "Continuous Actor-Critic Learns Pendulum-v1")."""
+    from rl_pendulum.benchmark import PendulumChallenge
+
+    env, agent, _ = PendulumChallenge().setup_run("actor_critic", seed=1, episodes=None)
+    env.close()
+    assert agent.bounded_mean and agent.n_steps == 8
+    assert (agent.gae_lambda, agent.gamma, agent.learning_rate) == pytest.approx((0.9, 0.9, 0.0007))
+    assert (agent.anneal_steps, agent.normalize_advantages) == (1_000_000, False)
+    assert (agent.value_coef, agent.entropy_coef, agent.reward_scale) == pytest.approx(
+        (0.4, 0.01, 0.05)
+    )
+    np.testing.assert_allclose(agent._log_std, [-2.0])

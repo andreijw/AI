@@ -265,7 +265,7 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
 
         # Forward pass
         b_h = np.maximum(0.0, b_states @ self._W1 + self._b1)  # (b_size, hidden_dim)
-        b_mu = b_h @ self._W_mu + self._b_mu  # (b_size, action_dim)
+        b_mu, dmu_dz, _ = self._mean(b_h)  # (b_size, action_dim)
         b_log_std = np.clip(self._log_std, -20.0, 2.0)
         b_values = b_h @ self._W_v + self._b_v  # (b_size,)
 
@@ -295,10 +295,11 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         variance = np.exp(2.0 * b_log_std)
         residual = b_actions - b_mu
         d_mu = (residual / (variance + 1e-8)) * d_log_p[:, np.newaxis]
+        d_z = d_mu * dmu_dz  # through tanh when the mean is bounded
         d_log_std = (((residual**2) / (variance + 1e-8)) - 1.0) * d_log_p[:, np.newaxis]
 
-        grad_w_mu = (b_h.T @ d_mu) / b_size
-        grad_b_mu = np.mean(d_mu, axis=0)
+        grad_w_mu = (b_h.T @ d_z) / b_size
+        grad_b_mu = np.mean(d_z, axis=0)
         grad_log_std = np.mean(d_log_std, axis=0) - self.entropy_coef
 
         # Critic loss: 0.5 * (V - R)^2
@@ -307,7 +308,7 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         grad_b_v = float(np.mean(v_diff) * self.value_coef)
 
         # Backprop to trunk
-        d_h_actor = d_mu @ self._W_mu.T
+        d_h_actor = d_z @ self._W_mu.T
         d_h_critic = (v_diff[:, np.newaxis] * self.value_coef) @ self._W_v[np.newaxis, :]
         d_h = (d_h_actor + d_h_critic) * (b_h > 0) / b_size
 

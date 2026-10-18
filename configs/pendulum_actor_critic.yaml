@@ -1,4 +1,9 @@
 # Pendulum Continuous Actor-Critic Training Configuration
+# rl-baselines3-zoo's A2C settings for Pendulum-v1 where they apply (8-step updates, GAE 0.9, gamma 0.9, lr 7e-4
+# annealed, value coefficient 0.4, log std -2), with a bounded policy mean, an entropy bonus and a fixed reward
+# scale. Measured 2026-10-18 (scratch harness, seeds 1-5, 1,000,000 steps): greedy evaluation -152 +/- 45 across
+# seed means, beating the random agent's -1224 on 5 of 5 seeds; the 100-episode training average stays at -286 to
+# -341 and does not reach -200 (roadmap: "Continuous Actor-Critic Learns Pendulum-v1").
 
 environment:
   name: "Pendulum-v1"
@@ -9,11 +14,18 @@ environment:
 agent:
   type: "actor_critic"
   config:
-    learning_rate: 0.0003
-    gamma: 0.99
+    bounded_mean: true          # Policy mean = bias + scale * tanh(z): stays inside the torque bounds
+    n_steps: 8                  # Steps per update: each episode is replayed in 25 chunks of 8 (rl-zoo n_steps)
+    gae_lambda: 0.9             # GAE lambda within each chunk (rl-zoo)
+    gamma: 0.9                  # Discount factor (rl-zoo)
+    learning_rate: 0.0007       # Adam step size at the start (rl-zoo: RMSprop 7e-4)
+    anneal_steps: 1000000       # Learning rate decays linearly to 0 over the whole training budget (rl-zoo lin_)
+    normalize_advantages: false # rl-zoo normalize_advantage: False
+    value_coef: 0.4             # Critic loss weight (rl-zoo vf_coef)
+    entropy_coef: 0.01          # Entropy bonus: without it the log std collapses (0.003 and 0.001 measured worse)
+    init_log_std: -2.0          # Initial log standard deviation (rl-zoo log_std_init)
+    reward_scale: 0.05          # Rewards x 0.05; matched a running reward normaliser, 0.1 was worse
     hidden_dim: 128
-    value_coef: 0.5
-    entropy_coef: 0.001
     action_low: -2.0
     action_high: 2.0
     seed: 42

@@ -9,8 +9,8 @@ import numpy as np
 
 from .base_agent import BaseAgent
 from .bounds import action_bounds
-from .optim import Adam
-from .returns import discounted_returns
+from .optim import Adam, anneal_fraction, anneal_steps_from_config
+from .returns import discounted_returns, gae
 
 
 class ContinuousActorCriticBase(BaseAgent):
@@ -37,6 +37,8 @@ class ContinuousActorCriticBase(BaseAgent):
         reward_scale (float): Multiplier on rewards before returns are computed. Default: 1.0.
         init_log_std (float): Initial log standard deviation. Default: -0.5.
         action_low, action_high: Action bounds. Default: -1.0, 1.0.
+        bounded_mean (bool): Policy mean bias + scale * tanh(z), inside the action bounds; needs
+            finite bounds with action_low < action_high. Default: False.
         seed (int): Seed for weights and sampling. Default: None.
     """
 
@@ -63,7 +65,15 @@ class ContinuousActorCriticBase(BaseAgent):
                 raise ValueError(f"{name} must be positive, got {getattr(self, name)!r}")
         self.max_grad_norm: float = float(config.get("max_grad_norm", 0.5))
 
-        self.action_low, self.action_high = action_bounds(config, action_dim)
+        # bounded_mean: mu = bias + scale * tanh(z) keeps the policy mean inside the bounds. Without it
+        # the mean is the linear head and can drift past a bound, where every executed action is the same.
+        self.bounded_mean: bool = bool(config.get("bounded_mean", False))
+        self.action_low, self.action_high = action_bounds(
+            config, action_dim, require_finite=self.bounded_mean
+        )
+        low, high = self.action_low.astype(np.float64), self.action_high.astype(np.float64)
+        self._mean_scale: np.ndarray = (high - low) / 2.0
+        self._mean_bias: np.ndarray = (high + low) / 2.0
 
         self._validate_dims(observation_dim, action_dim, self.hidden_dim)
 
@@ -115,6 +125,21 @@ class ContinuousActorCriticBase(BaseAgent):
         if hidden_dim <= 0:
             raise ValueError(f"hidden_dim must be positive, got {hidden_dim}")
 
+    def _mean(self, h: np.ndarray) -> tuple[np.ndarray, np.ndarray | float, np.ndarray | None]:
+        """
+        The policy mean from hidden activations, its derivative with respect to the mean head's
+        output z, and tanh(z) when bounded.
+
+        Unbounded, mu = z and the derivative is 1. With ``bounded_mean``, mu = bias + scale *
+        tanh(z) with scale and bias from the action bounds, and the derivative is
+        scale * (1 - tanh(z)^2). Both backward passes multiply d(loss)/d(mu) by it.
+        """
+        z = h @ self._W_mu + self._b_mu
+        if not self.bounded_mean:
+            return z, 1.0, None
+        u = np.tanh(z)
+        return self._mean_bias + self._mean_scale * u, self._mean_scale * (1.0 - u**2), u
+
     def _forward(
         self, state: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, float | np.ndarray, np.ndarray]:
@@ -129,7 +154,7 @@ class ContinuousActorCriticBase(BaseAgent):
         """
         s = np.asarray(state, dtype=np.float64)
         h = np.maximum(0.0, s @ self._W1 + self._b1)  # ReLU
-        mu = h @ self._W_mu + self._b_mu
+        mu, _, _ = self._mean(h)
         log_std = np.clip(self._log_std, -20.0, 2.0)
         v = (h @ self._W_v + self._b_v).item() if s.ndim == 1 else h @ self._W_v + self._b_v
         return mu, log_std, v, h
@@ -210,6 +235,7 @@ class ContinuousActorCriticBase(BaseAgent):
                 "log_std": self._log_std,
                 "W_v": self._W_v,
                 "b_v": np.array(self._b_v),
+                "bounded_mean": np.array(self.bounded_mean),
                 **self._optimizer.state(),
                 **self._extra_checkpoint_state(),
             }
@@ -221,9 +247,20 @@ class ContinuousActorCriticBase(BaseAgent):
 
         Supported extensions are ``.pt`` and ``.npz``. If *path* has no
         extension, ``.npz`` is preferred.
+
+        Raises:
+            ValueError: If the checkpoint's ``bounded_mean`` differs from this agent's (a
+                checkpoint without the key was saved unbounded): the same weights would act
+                differently.
         """
         resolved_path = self._resolve_load_path(path)
         with np.load(resolved_path) as data:
+            stored = bool(data["bounded_mean"]) if "bounded_mean" in data else False
+            if stored != self.bounded_mean:
+                raise ValueError(
+                    f"Checkpoint was saved with bounded_mean={stored}, this agent has "
+                    f"bounded_mean={self.bounded_mean}"
+                )
             self._W1 = data["W1"]
             self._b1 = data["b1"]
             self._W_mu = data["W_mu"]
@@ -239,10 +276,25 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
     """
     Advantage Actor-Critic (A2C) agent for continuous control.
 
-    Updates parameters using discounted returns and advantage estimates:
-      A(s, a) = G_t - V(s)
+    By default each episode makes one update from Monte Carlo returns:
+      A(s, a) = G_t - V(s)   (normalised over the episode)
       L_policy = -log_prob(a|s) * A(s, a) - entropy_coef * H
       L_critic = 0.5 * (G_t - V(s))^2
+
+    With ``n_steps`` > 0 the episode is replayed in consecutive chunks of that many steps (the last
+    may be shorter). Each chunk takes GAE targets (``gamma``, ``gae_lambda``) from the current critic,
+    bootstrapped from the value of the chunk's next state unless the episode truly terminated there
+    (the batch's ``terminated`` flag, so a time-limit cut bootstraps), and makes one optimizer step.
+    The chunks of one episode were all collected before its first step, so later chunks are slightly
+    off-policy; true A2C would need the trainer to call ``update`` every ``n_steps``.
+
+    Config keys, beyond those of :class:`ContinuousActorCriticBase` (all optional):
+        n_steps (int): Steps per update within an episode; 0 for one Monte Carlo update per
+            episode. Default: 0.
+        gae_lambda (float): GAE lambda for ``n_steps`` updates, in [0, 1]. Default: 1.0.
+        normalize_advantages (bool): Normalise advantages over each update. Default: True.
+        anneal_steps (int): Decay the learning rate linearly to zero over this many trained
+            transitions; unset keeps it constant. Default: unset.
     """
 
     def __init__(
@@ -252,45 +304,163 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         config: dict[str, Any],
     ) -> None:
         super().__init__(observation_dim, action_dim, config)
-        self.learning_rate: float = float(config.get("learning_rate", 3e-4))
+        raw_n_steps = config.get("n_steps", 0)
+        if (
+            isinstance(raw_n_steps, bool)
+            or not isinstance(raw_n_steps, int | np.integer)
+            or raw_n_steps < 0
+        ):
+            raise ValueError(f"n_steps must be a non-negative integer, got {raw_n_steps!r}")
+        self.n_steps: int = int(raw_n_steps)
+        self.gae_lambda: float = float(config.get("gae_lambda", 1.0))
+        if not 0.0 <= self.gae_lambda <= 1.0:
+            raise ValueError(f"gae_lambda must be in [0, 1], got {self.gae_lambda!r}")
+        self.normalize_advantages: bool = bool(config.get("normalize_advantages", True))
+        self.anneal_steps: int | None = anneal_steps_from_config(config)
+        self._steps_trained = 0
 
     def update(self, trajectory: Any) -> dict[str, float]:
         """
-        Update policy and value networks on an episode trajectory or batch.
+        Update policy and value networks on one episode.
+
+        Whether the episode truly ended (no bootstrap after its last step) is read from its final
+        ``terminated`` flag, or, when the batch has none, from its final ``done``: a batch with
+        only ``dones`` treats a time-limit cut as terminal, as before.
 
         Args:
-            trajectory: List of transition dicts or batch dictionary.
+            trajectory: Batch dictionary ("observations", "actions", "rewards", optionally
+                "next_observations", "dones", "terminated") or a list of transition dicts ("state",
+                "action", "reward", optionally "next_state", "done", "terminated").
 
         Returns:
-            Dictionary with training loss metrics.
+            Means over the updates of ``loss``, ``policy_loss``, ``value_loss`` and ``entropy``;
+            with ``bounded_mean`` also ``saturation``, the share of steps whose mean was at a
+            bound (|tanh| > 0.99) before training; with ``anneal_steps`` also
+            ``anneal_fraction``, the share of the learning rate used at the episode's first update.
         """
+        parsed = self._parse_episode(trajectory)
+        if parsed is None:
+            return {}
+        states, actions, rewards, next_obs, terminated_last = parsed
+        n = len(rewards)
+        rewards = rewards * self.reward_scale
+        first_fraction = anneal_fraction(self._steps_trained, self.anneal_steps)
+        saturation: float | None = None
+        if self.bounded_mean:
+            _, _, _, hidden = self._forward(states)
+            _, _, u = self._mean(hidden)
+            saturation = None if u is None else float(np.mean(np.abs(u) > 0.99))
+
+        if self.n_steps == 0:
+            returns = discounted_returns(rewards, self.gamma)
+            advantages = None
+            if not self.normalize_advantages:
+                _, _, values, _ = self._forward(states)
+                advantages = returns - np.asarray(values, dtype=np.float64)
+            chunks = [self._train_step(states, actions, returns, advantages)]
+        else:
+            chunks = []
+            for start in range(0, n, self.n_steps):
+                end = min(start + self.n_steps, n)
+                if next_obs is not None:
+                    bootstrap_obs: np.ndarray | None = next_obs[end - 1]
+                else:
+                    bootstrap_obs = states[end] if end < n else None
+                terminal = end == n and (terminated_last or bootstrap_obs is None)
+                advantages, returns = self._chunk_targets(
+                    states[start:end], rewards[start:end], bootstrap_obs, terminal
+                )
+                if self.normalize_advantages and end - start > 1:
+                    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+                chunks.append(
+                    self._train_step(states[start:end], actions[start:end], returns, advantages)
+                )
+
+        metrics = {
+            "loss": float(np.mean([c["total"] for c in chunks])),
+            "policy_loss": float(np.mean([c["policy"] for c in chunks])),
+            "value_loss": float(np.mean([c["value"] for c in chunks])),
+            "entropy": float(np.mean([c["entropy"] for c in chunks])),
+        }
+        if saturation is not None:
+            metrics["saturation"] = saturation
+        if self.anneal_steps is not None:
+            metrics["anneal_fraction"] = first_fraction
+        return metrics
+
+    def _parse_episode(
+        self, trajectory: Any
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None, bool] | None:
+        """``(states, actions, raw rewards, next observations or None, terminated at the end)``."""
         if isinstance(trajectory, dict):
             if len(trajectory.get("observations", [])) == 0:
-                return {}
-            states = np.asarray(trajectory["observations"], dtype=np.float64)
-            actions = np.asarray(trajectory["actions"], dtype=np.float64)
-            rewards = np.asarray(trajectory["rewards"], dtype=np.float64)
-        elif isinstance(trajectory, list):
-            if not trajectory:
-                return {}
-            states = np.array([t["state"] for t in trajectory], dtype=np.float64)
-            actions = np.array([t["action"] for t in trajectory], dtype=np.float64)
-            rewards = np.array([t["reward"] for t in trajectory], dtype=np.float64)
-        else:
-            return {}
+                return None
+            next_obs = trajectory.get("next_observations")
+            ends = trajectory.get("terminated", trajectory.get("dones"))
+            return (
+                np.asarray(trajectory["observations"], dtype=np.float64),
+                np.asarray(trajectory["actions"], dtype=np.float64),
+                np.asarray(trajectory["rewards"], dtype=np.float64),
+                None
+                if next_obs is None or len(next_obs) == 0
+                else np.asarray(next_obs, dtype=np.float64),
+                bool(np.asarray(ends)[-1]) if ends is not None and len(ends) > 0 else False,
+            )
+        if isinstance(trajectory, list) and trajectory:
+            last = trajectory[-1]
+            has_next = all("next_state" in t for t in trajectory)
+            return (
+                np.array([t["state"] for t in trajectory], dtype=np.float64),
+                np.array([t["action"] for t in trajectory], dtype=np.float64),
+                np.array([t["reward"] for t in trajectory], dtype=np.float64),
+                np.array([t["next_state"] for t in trajectory], dtype=np.float64)
+                if has_next
+                else None,
+                bool(last.get("terminated", last.get("done", False))),
+            )
+        return None
 
-        returns = discounted_returns(rewards * self.reward_scale, self.gamma)
+    def _chunk_targets(
+        self,
+        states: np.ndarray,
+        rewards: np.ndarray,
+        bootstrap_obs: np.ndarray | None,
+        terminal: bool,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        GAE advantages (not normalised) and return targets for one chunk of (scaled) rewards.
 
-        components, grads = self._loss_and_grads(states, actions, returns)
+        The last step bootstraps from V(``bootstrap_obs``) unless ``terminal`` (or no next state).
+        """
+        _, _, values_raw, _ = self._forward(states)
+        values = np.asarray(values_raw, dtype=np.float64)
+        last_value = 0.0
+        if not terminal and bootstrap_obs is not None:
+            _, _, v_next, _ = self._forward(bootstrap_obs)
+            last_value = float(v_next)
+        dones = np.zeros(len(rewards), dtype=bool)
+        advantages = gae(rewards, values, dones, self.gamma, self.gae_lambda, last_value=last_value)
+        return advantages, advantages + values
 
-        self._adam_step(grads, self.learning_rate)
+    def _train_step(
+        self,
+        states: np.ndarray,
+        actions: np.ndarray,
+        returns: np.ndarray,
+        advantages: np.ndarray | None,
+    ) -> dict[str, float]:
+        """One optimizer step on one update's loss, at the annealed learning rate."""
+        fraction = anneal_fraction(self._steps_trained, self.anneal_steps)
+        components, grads = self._loss_and_grads(states, actions, returns, advantages)
+        self._adam_step(grads, self.learning_rate * fraction)
+        self._steps_trained += len(returns)
+        return components
 
-        return {
-            "loss": components["total"],
-            "policy_loss": components["policy"],
-            "value_loss": components["value"],
-            "entropy": components["entropy"],
-        }
+    def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
+        return {"ac_steps_trained": np.array(self._steps_trained)}
+
+    def _load_extra_checkpoint_state(self, data: Any) -> None:
+        self._steps_trained = int(data["ac_steps_trained"]) if "ac_steps_trained" in data else 0
 
     def _loss_and_grads(
         self,
@@ -332,7 +502,7 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
 
         # Forward pass over batch
         h = np.maximum(0.0, states @ self._W1 + self._b1)  # (n_steps, hidden_dim)
-        mu = h @ self._W_mu + self._b_mu  # (n_steps, action_dim)
+        mu, dmu_dz, _ = self._mean(h)  # (n_steps, action_dim)
         log_std = np.clip(self._log_std, -20.0, 2.0)
         values = h @ self._W_v + self._b_v  # (n_steps,)
 
@@ -350,11 +520,12 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         # Policy gradients
         # d(log_prob)/d(mu) = residual / variance
         d_mu = (residual / (variance + 1e-8)) * advantages[:, np.newaxis]
+        d_z = d_mu * dmu_dz  # through tanh when the mean is bounded
         d_log_std = (((residual**2) / (variance + 1e-8)) - 1.0) * advantages[:, np.newaxis]
 
         # Negative log-likelihood objective: L_pi = -sum(log_prob * A)
-        grad_w_mu = -(h.T @ d_mu) / n_steps
-        grad_b_mu = -np.mean(d_mu, axis=0)
+        grad_w_mu = -(h.T @ d_z) / n_steps
+        grad_b_mu = -np.mean(d_z, axis=0)
         grad_log_std = -np.mean(d_log_std, axis=0) - self.entropy_coef
 
         # Critic loss: 0.5 * (V - G)^2
@@ -363,7 +534,7 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         grad_b_v = float(np.mean(v_diff) * self.value_coef)
 
         # Backpropagation into hidden layer
-        d_h_actor = -d_mu @ self._W_mu.T  # (n_steps, hidden_dim)
+        d_h_actor = -d_z @ self._W_mu.T  # (n_steps, hidden_dim)
         d_h_critic = (v_diff[:, np.newaxis] * self.value_coef) @ self._W_v[np.newaxis, :]
         d_h = (d_h_actor + d_h_critic) * (h > 0) / n_steps  # ReLU gradient
 
