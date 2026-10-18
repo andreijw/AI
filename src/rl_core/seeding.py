@@ -6,6 +6,12 @@ import numpy as np
 # randomization, kept apart from the stream the wrapped environment draws start states from.
 WRAPPER_STREAM = 1
 
+# Streams of an agent that keeps separate generators. Committed configs give an agent the same
+# seed as its environment, so these must differ from WRAPPER_STREAM.
+AGENT_WEIGHTS_STREAM = 10
+AGENT_EXPLORATION_STREAM = 11
+AGENT_REPLAY_STREAM = 12
+
 
 def derive_rng(seed: int | None, stream: int) -> np.random.Generator:
     """

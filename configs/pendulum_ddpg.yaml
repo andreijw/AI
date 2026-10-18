@@ -1,0 +1,39 @@
+# Pendulum DDPG Training Configuration
+# rl-baselines3-zoo's DDPG settings for Pendulum-v1 (hyperparams/ddpg.yml; SB3 DDPG defaults for the rest),
+# except the network: 64x64 instead of rl-zoo's 400x300, which takes about 16x longer in NumPy here.
+# Measured 2026-10-16, seeds 1-5, 100-episode rule: 5 of 5 solve at 31,000 to 31,600 steps and hold; greedy
+# evaluation -150 (+/- 27 across seed means) against rl-zoo's -152 (+/- 94 across episodes)
+# (roadmap: "Continuous Off-Policy Learning & DDPG").
+
+environment:
+  name: "Pendulum-v1"
+  render_mode: null
+  max_episode_steps: 200
+  seed: 42
+
+agent:
+  type: "ddpg"
+  config:
+    hidden_sizes: [64, 64]     # Actor and critic hidden layers (rl-zoo: [400, 300]; see the header)
+    learning_rate: 0.001       # Adam step size for actor and critic (rl-zoo)
+    gamma: 0.98                # Discount factor (rl-zoo)
+    tau: 0.005                 # Polyak rate per gradient step; target half-life ln 2 / tau = 139 steps
+    batch_size: 256            # Mini-batch size (SB3 DDPG default)
+    buffer_capacity: 200000    # Replay buffer size (rl-zoo buffer_size)
+    learning_starts: 10000     # Uniform random training actions before learning (rl-zoo): 50 episodes
+    noise_std: 0.1             # Gaussian exploration noise in the scaled [-1, 1] action space (rl-zoo)
+    updates_per_step: 1.0      # Gradient steps per stored transition (rl-zoo train_freq 1, gradient_steps 1)
+    optimizer: adam
+    seed: 42
+
+training:
+  total_steps: 40000  # Environment steps: twice rl-zoo's 20,000, as a 100-episode window needs room
+  max_steps_per_episode: 200
+  eval_frequency: 25
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

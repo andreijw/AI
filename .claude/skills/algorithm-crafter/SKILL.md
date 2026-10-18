@@ -65,8 +65,10 @@ State the reduction once: averaging over the batch divides every gradient by `B`
   network, forward pass, optimizer step and save/load may already exist.
 - **Contract.** `select_action(observation, training)` returns an `int` for a discrete space and a
   float array for a continuous one, and is greedy (or the clipped mean) when `training` is false. A
-  continuous training action is the unclipped sample, so the batch holds the action its
-  log-probability belongs to; the environment wrapper clips the torque it applies. `update(batch)`
+  continuous training action of a Gaussian policy is the unclipped sample, so the batch holds the
+  action its log-probability belongs to; the environment wrapper clips the torque it applies. A
+  deterministic policy (DDPG) has no log-probability: it stores the clipped action it executed, so its
+  critic learns the value of what the environment received. `update(batch)`
   takes the trainer's batch and returns `dict[str, float]` with every quantity worth watching.
   `save` and `load` round-trip every array and counter the agent needs to resume.
 - **Separate computing from applying.** One method computes the loss and gradients for a batch and changes

@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from .base_agent import BaseAgent
+from .bounds import action_bounds
 
 
 class ContinuousRandomAgent(BaseAgent):
@@ -42,18 +43,7 @@ class ContinuousRandomAgent(BaseAgent):
         if action_dim <= 0:
             raise ValueError(f"action_dim must be positive, got {action_dim!r}")
 
-        raw_low = config.get("action_low", -1.0)
-        raw_high = config.get("action_high", 1.0)
-        self.action_low: np.ndarray = (
-            np.full(action_dim, raw_low, dtype=np.float32)
-            if np.isscalar(raw_low)
-            else np.asarray(raw_low, dtype=np.float32)
-        )
-        self.action_high: np.ndarray = (
-            np.full(action_dim, raw_high, dtype=np.float32)
-            if np.isscalar(raw_high)
-            else np.asarray(raw_high, dtype=np.float32)
-        )
+        self.action_low, self.action_high = action_bounds(config, action_dim)
 
         seed: int | None = config.get("seed")
         self._rng = np.random.default_rng(seed)

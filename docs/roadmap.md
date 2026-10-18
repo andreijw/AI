@@ -339,6 +339,9 @@ Defects found while working on other items, then findings from the brooks-lint h
       draw the same numbers, and a test fails if they do.
     - Runs stay reproducible for a seed.
   - **Known edge cases**: Every seeded result changes once more; checkpoints that store generator state.
+  - **Progress (2026-10-16)**: `DDPGAgent` already draws weights, exploration and replay sampling from named
+    streams (`AGENT_WEIGHTS_STREAM`, `AGENT_EXPLORATION_STREAM`, `AGENT_REPLAY_STREAM` in `rl_core.seeding`); the
+    other agents remain.
   - **Out of scope**: Regenerating `docs/benchmarks/`.
 
 - [ ] **Separate Evaluation Environment**
@@ -748,6 +751,20 @@ Defects found while working on other items, then findings from the brooks-lint h
     with continuous actions (`action_dim`); 2, `DDPGAgent` with a shared MLP helper (`rl_core/agents/mlp.py`), a
     shared `action_bounds` helper, prefixed Adam checkpoint keys, a continuous agent contract test and named random
     streams; 3, the config, a timed network size, the learning gate and docs.
+  - **Progress (2026-10-16)**: PR 1 (#90) stores continuous actions. PR 2 adds `DDPGAgent` with finite-difference
+    checks of the critic, the actor (through the critic's action input) and the shared MLP, hand-computed losses,
+    targets and Polyak updates, a replay of one `update`, and a continuous contract test for every continuous agent.
+    Not yet registered with the Pendulum challenge and not yet shown to learn: that is PR 3.
+  - **Network size (2026-10-16)**: one Pendulum episode (200 gradient steps, batch 256) takes 19.6 s with
+    rl-zoo's 400×300 networks, 11.0 s with 256×256 and 1.2 s with 64×64 in NumPy on this machine; 400×300 would
+    need about 1.6 hours per seed. With 64×64 and rl-zoo's other settings, seeds 1 to 5 all solve at 31,000 to
+    31,600 steps and hold, at 60,000 and at 40,000 steps. Decided with the maintainer: 64×64, 40,000 steps (twice
+    rl-zoo's 20,000); 400×300 not measured. A GPU backend (PyTorch) for larger networks is a later idea.
+  - **Learning gate (2026-10-16)**: committed config, full Pendulum benchmark on seeds 1 to 5: 5 of 5 solve (steps
+    31,000 to 31,600, episodes 155 to 158) and hold, final averages -146 to -168, evaluation averaging -150 (± 27
+    across seed means) against rl-zoo's -152 (± 94 across episodes of one run); the other agents' rows are
+    unchanged. Seed 42 with `train.py`: final average -159, and its recorded video averages -196 over 5 greedy
+    episodes.
   - **Out of scope**: Twin Delayed DDPG (TD3) double Q-learning; stochastic entropy auto-tuning (SAC).
 
 - [ ] **Curriculum Learning & Domain Randomization Scheduling**

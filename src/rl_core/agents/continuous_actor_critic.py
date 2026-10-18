@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from .base_agent import BaseAgent
+from .bounds import action_bounds
 from .optim import Adam
 from .returns import discounted_returns
 
@@ -62,19 +63,7 @@ class ContinuousActorCriticBase(BaseAgent):
                 raise ValueError(f"{name} must be positive, got {getattr(self, name)!r}")
         self.max_grad_norm: float = float(config.get("max_grad_norm", 0.5))
 
-        # Action bounds
-        raw_low = config.get("action_low", -1.0)
-        raw_high = config.get("action_high", 1.0)
-        self.action_low: np.ndarray = (
-            np.full(action_dim, raw_low, dtype=np.float32)
-            if np.isscalar(raw_low)
-            else np.asarray(raw_low, dtype=np.float32)
-        )
-        self.action_high: np.ndarray = (
-            np.full(action_dim, raw_high, dtype=np.float32)
-            if np.isscalar(raw_high)
-            else np.asarray(raw_high, dtype=np.float32)
-        )
+        self.action_low, self.action_high = action_bounds(config, action_dim)
 
         self._validate_dims(observation_dim, action_dim, self.hidden_dim)
 

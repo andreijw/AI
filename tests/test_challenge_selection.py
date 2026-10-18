@@ -10,6 +10,7 @@ from rl_core.agents import (
     ContinuousActorCriticAgent,
     ContinuousPPOAgent,
     ContinuousRandomAgent,
+    DDPGAgent,
     DQNAgent,
     PPOAgent,
     RandomAgent,
@@ -31,6 +32,7 @@ EXPECTED_AGENTS = {
         "random": ContinuousRandomAgent,
         "actor_critic": ContinuousActorCriticAgent,
         "ppo": ContinuousPPOAgent,
+        "ddpg": DDPGAgent,
     },
 }
 

@@ -12,6 +12,7 @@ from rl_core.agents import (
     ContinuousActorCriticAgent,
     ContinuousPPOAgent,
     ContinuousRandomAgent,
+    DDPGAgent,
 )
 from rl_core.challenges import BenchmarkChallenge, ChallengeEnv, register_challenge
 from rl_pendulum.environments import make_env_from_config
@@ -21,6 +22,7 @@ AGENT_CLASSES: dict[str, type[BaseAgent]] = {
     "random": ContinuousRandomAgent,
     "actor_critic": ContinuousActorCriticAgent,
     "ppo": ContinuousPPOAgent,
+    "ddpg": DDPGAgent,
 }
 
 
@@ -32,6 +34,7 @@ class PendulumChallenge(BenchmarkChallenge):
         "random": "pendulum_default.yaml",
         "actor_critic": "pendulum_actor_critic.yaml",
         "ppo": "pendulum_ppo.yaml",
+        "ddpg": "pendulum_ddpg.yaml",
     }
 
     @property

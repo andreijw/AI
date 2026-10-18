@@ -11,6 +11,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rl_core.agents import (
     ActorCriticAgent,
     BaseAgent,
+    ContinuousActorCriticAgent,
+    ContinuousPPOAgent,
+    ContinuousRandomAgent,
+    DDPGAgent,
     DQNAgent,
     PPOAgent,
     RandomAgent,
@@ -95,3 +99,82 @@ def test_agent_dimension_validation(agent_cls: type[BaseAgent], config: dict[str
 
     with pytest.raises(ValueError):
         agent_cls(observation_dim=4, action_dim=-1, config=config)
+
+
+# ---------------------------------------------------------------------------
+# Continuous-action agents: float action vectors inside the bounds
+# ---------------------------------------------------------------------------
+
+OBS_DIM, ACT_DIM = 3, 2
+CONTINUOUS_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
+    (ContinuousRandomAgent, {"seed": 42}),
+    (ContinuousActorCriticAgent, {"seed": 42}),
+    (ContinuousPPOAgent, {"seed": 42}),
+    (DDPGAgent, {"seed": 42, "batch_size": 2, "learning_starts": 0}),
+]
+
+
+@pytest.mark.parametrize("agent_cls,config", CONTINUOUS_AGENTS)
+def test_continuous_select_action_contract(
+    agent_cls: type[BaseAgent], config: dict[str, object]
+) -> None:
+    """A continuous agent returns a float vector of length action_dim inside its bounds."""
+    agent = agent_cls(observation_dim=OBS_DIM, action_dim=ACT_DIM, config=config)
+    obs = np.array([0.3, -0.2, 0.1])
+    for training_mode in (True, False):
+        action = agent.select_action(obs, training=training_mode)
+        assert isinstance(action, np.ndarray) and action.shape == (ACT_DIM,)
+        assert np.issubdtype(action.dtype, np.floating)
+        if not training_mode or agent_cls in (ContinuousRandomAgent, DDPGAgent):
+            # Gaussian agents train on the unclipped sample; the wrapper clips what it applies.
+            assert np.all(action >= -1.0) and np.all(action <= 1.0)
+
+
+@pytest.mark.parametrize("agent_cls,config", CONTINUOUS_AGENTS)
+def test_continuous_update_batch_contract(
+    agent_cls: type[BaseAgent], config: dict[str, object]
+) -> None:
+    """update accepts the trainer's batch: float (T, A) actions, dones and terminated."""
+    agent = agent_cls(observation_dim=OBS_DIM, action_dim=ACT_DIM, config=config)
+    rng = np.random.default_rng(0)
+    n = 5
+    batch = {
+        "observations": rng.standard_normal((n, OBS_DIM)),
+        "actions": rng.uniform(-1.0, 1.0, size=(n, ACT_DIM)).astype(np.float32),
+        "rewards": -np.ones(n, dtype=np.float64),
+        "next_observations": rng.standard_normal((n, OBS_DIM)),
+        "dones": np.array([False] * (n - 1) + [True]),
+        "terminated": np.zeros(n, dtype=bool),
+    }
+    metrics = agent.update(batch)
+    assert isinstance(metrics, dict)
+    for name, value in metrics.items():
+        assert isinstance(name, str)
+        assert isinstance(value, (float, int, np.floating, np.integer)) and np.isfinite(value)
+
+
+@pytest.mark.parametrize("agent_cls,config", CONTINUOUS_AGENTS)
+def test_continuous_save_load_roundtrip_contract(
+    agent_cls: type[BaseAgent], config: dict[str, object], tmp_path
+) -> None:
+    """A checkpoint loaded into a fresh agent built with default settings acts the same."""
+    agent = agent_cls(observation_dim=OBS_DIM, action_dim=ACT_DIM, config=config)
+    path = str(tmp_path / f"{agent_cls.__name__}.pt")
+    agent.save(path)
+    restored = agent_cls(observation_dim=OBS_DIM, action_dim=ACT_DIM, config={})
+    restored.load(path)
+    obs = np.array([0.1, -0.2, 0.3])
+    if agent_cls is not ContinuousRandomAgent:  # its action is random even when evaluating
+        np.testing.assert_array_equal(
+            agent.select_action(obs, training=False), restored.select_action(obs, training=False)
+        )
+
+
+@pytest.mark.parametrize("agent_cls,config", CONTINUOUS_AGENTS)
+def test_continuous_dimension_validation(
+    agent_cls: type[BaseAgent], config: dict[str, object]
+) -> None:
+    with pytest.raises(ValueError):
+        agent_cls(observation_dim=0, action_dim=ACT_DIM, config=config)
+    with pytest.raises(ValueError):
+        agent_cls(observation_dim=OBS_DIM, action_dim=-1, config=config)

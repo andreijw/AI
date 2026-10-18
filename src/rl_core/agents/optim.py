@@ -77,17 +77,22 @@ class Adam:
             steps[k] = lr * m_hat / (np.sqrt(v_hat) + self.EPS)
         return steps
 
-    def state(self) -> dict[str, np.ndarray]:
-        """The optimiser state as arrays to store in a checkpoint, under ``adam_`` keys."""
-        state = {"adam_t": np.array(self.t)}
+    def state(self, prefix: str = "adam_") -> dict[str, np.ndarray]:
+        """
+        The optimiser state as arrays to store in a checkpoint, under keys starting ``prefix``.
+
+        An agent with more than one optimiser gives each its own prefix, so that their step
+        counts and moments do not overwrite each other in one checkpoint.
+        """
+        state = {f"{prefix}t": np.array(self.t)}
         for name in self.m:
-            state[f"adam_m_{name}"] = np.asarray(self.m[name])
-            state[f"adam_v_{name}"] = np.asarray(self.v[name])
+            state[f"{prefix}m_{name}"] = np.asarray(self.m[name])
+            state[f"{prefix}v_{name}"] = np.asarray(self.v[name])
         return state
 
-    def load_state(self, data: Mapping[str, Any]) -> None:
+    def load_state(self, data: Mapping[str, Any], prefix: str = "adam_") -> None:
         """
-        Restore state written by :meth:`state`.
+        Restore state written by :meth:`state` with the same ``prefix``.
 
         A checkpoint without optimiser state (one saved with plain SGD) resets the moments to
         zero and the step count to 0. A checkpoint with only ``adam_t`` (continuous agents saved
@@ -97,9 +102,9 @@ class Adam:
         Raises:
             ValueError: If a stored moment's shape differs from its parameter's.
         """
-        self.t = int(data["adam_t"]) if "adam_t" in data else 0
+        self.t = int(data[f"{prefix}t"]) if f"{prefix}t" in data else 0
         for name in self.m:
-            m_key, v_key = f"adam_m_{name}", f"adam_v_{name}"
+            m_key, v_key = f"{prefix}m_{name}", f"{prefix}v_{name}"
             if m_key in data and v_key in data:
                 expected = np.shape(self.m[name])
                 for key in (m_key, v_key):
