@@ -726,7 +726,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: Double, dueling and prioritised-replay DQN (each its own item if wanted); DDPG; a second hidden
     layer.
 
-- [~] **Continuous Off-Policy Learning & DDPG (Deep Deterministic Policy Gradient)**
+- [x] **Continuous Off-Policy Learning & DDPG (Deep Deterministic Policy Gradient)**
+  - **Delivered in**: #90, #91 and #92. Confirmed by the maintainer on 2026-10-18.
   - **Description**: Implement a pure NumPy `DDPGAgent` utilizing a deterministic actor network $\mu_\theta(s)$,
     an action-value critic $Q_\phi(s, a)$, continuous transition experience replay via `ReplayBuffer`, exploration
     noise (Gaussian or Ornstein-Uhlenbeck), and Polyak soft target updates to solve `Pendulum-v1`
