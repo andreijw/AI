@@ -433,7 +433,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: DDPG and other new algorithms; changing the solve threshold; the discrete agents.
   - **Depends on**: Seeded Environments Replay One Start State, so the diagnosis is not confounded by it.
 
-- [~] **Pendulum PPO Holds -200 Under the 100-Episode Rule**
+- [x] **Pendulum PPO Holds -200 Under the 100-Episode Rule**
+  - **Delivered in**: `feature/pendulum-ppo-rollouts`. Confirmed by the maintainer on 2026-10-18.
   - **Description**: Under the 10-episode rule Pendulum PPO reached -200 on 5 of 5 seeds; under the 100-episode
     rule ("Benchmark Budgets and Solve Rule in Environment Steps", 2026-10-15) it reaches it on none: final 100-episode
     training averages -241 to -313 at 100,000 steps (rl-zoo's budget), evaluation -285 ± 82. Doubling the budget and
