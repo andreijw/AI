@@ -24,10 +24,10 @@ A step budget finishes the episode that crosses it, so a run can overshoot its b
 
 | Algorithm | Budget | Episodes | Mean Eval Reward | Reward Std | Solve Rate | Avg Solve Episode | Avg Steps to Solve | Held | Eval ≥ Threshold | Mean Time (s) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **actor_critic** | 1000000 steps | 5000 | -1422.1 | ±134.0 | 0% | N/A | N/A | 0% | 0% | 158.84s |
-| **ddpg** | 40000 steps | 200 | -149.9 | ±26.6 | 100% | 156.4 | 31,280 | 100% | 100% | 203.58s |
-| **ppo** | 100000 steps | 500 | -284.6 | ±82.2 | 0% | N/A | N/A | 0% | 20% | 27.46s |
-| **random** | 40000 steps | 200 | -1224.5 | ±76.1 | 0% | N/A | N/A | 0% | 0% | 5.71s |
+| **actor_critic** | 1000000 steps | 5000 | -1422.1 | ±134.0 | 0% | N/A | N/A | 0% | 0% | 155.09s |
+| **ddpg** | 40000 steps | 200 | -149.9 | ±26.6 | 100% | 156.4 | 31,280 | 100% | 100% | 201.04s |
+| **ppo** | 200000 steps | 1000 | -150.0 | ±27.5 | 100% | 569.8 | 113,960 | 80% | 100% | 54.91s |
+| **random** | 40000 steps | 200 | -1224.5 | ±76.1 | 0% | N/A | N/A | 0% | 0% | 5.60s |
 
 ## Learning Trajectories
 

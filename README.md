@@ -212,7 +212,7 @@ these numbers:
 | CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 500,000 | 4 of 5 | 242k to 446k | 2 of 5 |
 | CartPole-v1 | DQN | `cartpole_dqn.yaml` (Adam, per-step exploration) | 300,000 | 5 of 5 | 145k to 238k | 5 of 5 |
 | Pendulum-v1 | DDPG | `pendulum_ddpg.yaml` (rl-zoo settings, 64×64 networks) | 40,000 | 5 of 5 | 31k to 32k | 5 of 5 |
-| Pendulum-v1 | PPO | `pendulum_ppo.yaml` (annealed, rewards scaled) | 100,000 | 0 of 5 | — | 0 of 5 |
+| Pendulum-v1 | PPO | `pendulum_ppo.yaml` (2048-step rollouts, annealed) | 200,000 | 5 of 5 | 78k to 155k | 4 of 5 |
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` | 1,000,000 | 0 of 5 | — | 0 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
@@ -220,8 +220,9 @@ CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100
 Reference"). Pendulum DDPG uses rl-zoo's settings with 64×64 networks instead of 400×300, which take about 16 times
 longer in NumPy; its greedy evaluation averages -150 (± 27 across the 5 seeds' means) against rl-zoo's -152
 (± 94 across episodes of one run) (roadmap: "Continuous Off-Policy
-Learning & DDPG"). Pendulum PPO's final averages are -241 to -313 at rl-zoo's 100,000 steps; under the earlier
-10-episode rule it touched -200 on every seed (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode Rule").
+Learning & DDPG"). Pendulum PPO trains on rollouts of whole episodes for 200,000 steps, twice rl-zoo's 100,000;
+updating on one episode at a time it solved no seed (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode
+Rule").
 Continuous Actor-Critic stays below the random agent even with 1,000,000 steps (roadmap: "Continuous Actor-Critic
 Learns Pendulum-v1").
 

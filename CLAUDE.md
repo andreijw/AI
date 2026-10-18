@@ -144,9 +144,9 @@ Treat the repository as the source of truth when docs disagree:
 - `requirements.txt` lists `matplotlib>=3.5.0` and `pytest-cov>=4.0.0`, lagging `pyproject.toml`
   (`matplotlib>=3.9.4`, `pytest-cov>=7.1.0`). Install from `pyproject.toml` (`pip install -e ".[dev,video]"`).
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
-- The roadmap's completed Phase 6 entry describes `configs/pendulum_ppo.yaml` as solving Pendulum-v1. Under the
-  10-episode rule PPO reached -200 on 5 of 5 seeds after the fixes of 2026-10-15; under the current rule (100-episode
-  window, step budgets, 2026-10-16) it solves 0 of 5 at 100,000 steps (`docs/benchmarks/pendulum_results.md`; roadmap
+- The roadmap's completed Phase 6 entry describes `configs/pendulum_ppo.yaml` as solving Pendulum-v1. It did under
+  the 10-episode rule, then solved 0 of 5 under the 100-episode rule (2026-10-16), and since 2026-10-18 solves 5 of 5
+  again with 2048-step rollouts and 200,000 steps, holding on 4 of 5 (`docs/benchmarks/pendulum_results.md`; roadmap
   item "Pendulum PPO Holds -200 Under the 100-Episode Rule"). Continuous Actor-Critic still scores below the random
   agent (its own open roadmap item). CartPole PPO does solve CartPole-v1: standard PPO with annealing solves 5 of 5
   seeds within 200,000 steps and holds on 4 of 5 (TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).

@@ -20,9 +20,13 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
       r_t(theta) = exp(log_prob(a_t|s_t) - old_log_prob(a_t|s_t))
       L_clip = -min(r_t * A_t, clip(r_t, 1-eps, 1+eps) * A_t)
 
-    Each ``update`` call is one rollout (one episode from the Trainer). When the batch carries
-    ``terminated``, a final step cut by the time limit (done but not terminated) bootstraps from
-    V(next state); without it every ``done`` ends the episode.
+    Each ``update`` call brings one episode from the Trainer. The agent buffers whole episodes
+    until it holds at least ``rollout_steps`` transitions (1: train on every episode), then trains
+    once on all of them. Training waits for whole episodes, so a rollout can exceed
+    ``rollout_steps`` by up to one episode, and the transitions of a last unfilled rollout are not
+    trained on. When an episode was cut by the time limit (done but not ``terminated``),
+    ``gamma * V(next state)`` is added to its last scaled reward; a terminated episode does not
+    bootstrap. A partly filled rollout is not saved in checkpoints.
 
     Config keys, beyond those of :class:`ContinuousActorCriticBase` (all optional):
         clip_epsilon (float): PPO clip range; ``clip_ratio`` is accepted as an alias. Default: 0.2.
@@ -31,6 +35,7 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         gae_lambda (float): GAE lambda. Default: 0.95.
         anneal_steps (int): Decay the learning rate and clip range linearly to zero over this many
             trained transitions; unset keeps both constant. Default: unset.
+        rollout_steps (int): Transitions to buffer, in whole episodes, before training. Default: 1.
     """
 
     def __init__(
@@ -58,43 +63,82 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         # transitions (counted per update); unset keeps both constant.
         self.anneal_steps: int | None = anneal_steps_from_config(config)
         self._steps_trained = 0
+        raw_rollout = config.get("rollout_steps", 1)
+        if (
+            isinstance(raw_rollout, bool)
+            or not isinstance(raw_rollout, int | np.integer)
+            or raw_rollout <= 0
+        ):
+            raise ValueError(f"rollout_steps must be a positive integer, got {raw_rollout!r}")
+        self.rollout_steps: int = int(raw_rollout)
+        self._rollout: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
+        self._rollout_length = 0
 
     def update(self, trajectory: Any) -> dict[str, float]:
         """
-        Perform PPO clipped policy updates over collected trajectory rollout.
+        Buffer one episode, and train once the rollout holds ``rollout_steps`` transitions.
 
         Args:
-            trajectory: Batch dictionary ("observations", "actions", "rewards", optionally "dones",
-                "next_observations", "terminated") or a list of transition dicts ("state",
-                "action", "reward", "done", optionally "next_state", "terminated"). Only the final
-                step's ``terminated`` is used: if it is False, that step bootstraps from
-                V(next state). Without a next state it is treated as terminal.
+            trajectory: One episode, as a batch dictionary ("observations", "actions", "rewards",
+                optionally "dones", "next_observations", "terminated") or a list of transition
+                dicts ("state", "action", "reward", "done", optionally "next_state",
+                "terminated"). See :meth:`_rollout_episode` for how its end is treated.
 
         Returns:
-            Mean ``policy_loss``, ``value_loss`` and ``entropy`` over the mini-batch steps, and
-            ``anneal_fraction`` (the share of the learning rate and clip range used).
+            ``{}`` while buffering (or for an empty episode). After training: mean
+            ``policy_loss``, ``value_loss`` and ``entropy`` over the mini-batch steps,
+            ``anneal_fraction`` (the share of the learning rate and clip range used) and
+            ``rollout_steps`` (transitions trained on).
+        """
+        part = self._rollout_episode(trajectory)
+        if part is None:
+            return {}
+        self._rollout.append(part)
+        self._rollout_length += len(part[2])
+        if self._rollout_length < self.rollout_steps:
+            return {}
+        states, actions, rewards, dones = (
+            np.concatenate(column) for column in zip(*self._rollout, strict=True)
+        )
+        self._rollout, self._rollout_length = [], 0
+        return self._train_on_rollout(states, actions, rewards, dones)
+
+    def _rollout_episode(
+        self, trajectory: Any
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+        """
+        One episode as ``(states, actions, rewards, dones)`` ready to join a rollout.
+
+        Rewards are scaled by ``reward_scale``. The last step always ends the advantage estimate
+        (``dones[-1]`` is True), so that no episode borrows from the next. If the episode was cut
+        rather than terminated (its final ``terminated``, or else ``done``, is False) and the next
+        state is known, ``gamma * V(next state)`` is added to its last scaled reward, as
+        Stable-Baselines3 does for timeouts. Without a next state the cut is treated as terminal.
+        The caller's arrays are not modified.
+
+        Returns:
+            The four arrays, or None for an empty or unrecognised episode.
         """
         last_next_obs: np.ndarray | None = None
         if isinstance(trajectory, dict):
             if len(trajectory.get("observations", [])) == 0:
-                return {}
+                return None
             states = np.asarray(trajectory["observations"], dtype=np.float64)
             actions = np.asarray(trajectory["actions"], dtype=np.float64)
             rewards = np.asarray(trajectory["rewards"], dtype=np.float64)
-            dones = np.asarray(
+            dones = np.array(
                 trajectory.get("dones", np.zeros(len(rewards), dtype=bool)), dtype=bool
             )
             terminated = trajectory.get("terminated")
             if terminated is not None and len(terminated) > 0 and len(dones) > 0:
                 # A final step cut by the time limit is done but not terminated: bootstrap it.
-                dones = dones.copy()
                 dones[-1] = bool(np.asarray(terminated, dtype=bool)[-1])
             next_obs = trajectory.get("next_observations")
             if next_obs is not None and len(next_obs) > 0:
                 last_next_obs = np.asarray(next_obs[-1], dtype=np.float64)
         elif isinstance(trajectory, list):
             if not trajectory:
-                return {}
+                return None
             states = np.array([t["state"] for t in trajectory], dtype=np.float64)
             actions = np.array([t["action"] for t in trajectory], dtype=np.float64)
             rewards = np.array([t["reward"] for t in trajectory], dtype=np.float64)
@@ -104,27 +148,34 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
             if "next_state" in trajectory[-1]:
                 last_next_obs = np.asarray(trajectory[-1]["next_state"], dtype=np.float64)
         else:
-            return {}
+            return None
 
-        n_steps = len(rewards)
         rewards = rewards * self.reward_scale
+        if not dones[-1] and last_next_obs is not None:
+            _, _, last_v, _ = self._forward(last_next_obs)
+            rewards[-1] += self.gamma * float(last_v)
+        dones[-1] = True
+        return states, actions, rewards, dones
+
+    def _rollout_targets(
+        self, states: np.ndarray, rewards: np.ndarray, dones: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """GAE advantages (not yet normalised) and the critic's return targets for a rollout."""
+        _, _, values_raw, _ = self._forward(states)
+        values = np.asarray(values_raw, dtype=np.float64)
+        advantages = gae(rewards, values, dones, self.gamma, self.gae_lambda, last_value=0.0)
+        return advantages, advantages + values
+
+    def _train_on_rollout(
+        self, states: np.ndarray, actions: np.ndarray, rewards: np.ndarray, dones: np.ndarray
+    ) -> dict[str, float]:
+        """Run the PPO epochs over one rollout of whole episodes."""
+        n_steps = len(rewards)
         fraction = anneal_fraction(self._steps_trained, self.anneal_steps)
         learning_rate = self.learning_rate * fraction
         clip_epsilon = self.clip_ratio * fraction
 
-        # Compute values for all states
-        _, _, values_raw, _ = self._forward(states)
-        values = np.asarray(values_raw, dtype=np.float64)
-
-        # Value of final next state for bootstrap
-        next_val = 0.0
-        if not dones[-1] and last_next_obs is not None:
-            _, _, last_v, _ = self._forward(last_next_obs)
-            next_val = float(last_v)
-
-        advantages = gae(rewards, values, dones, self.gamma, self.gae_lambda, last_value=next_val)
-
-        returns = advantages + values
+        advantages, returns = self._rollout_targets(states, rewards, dones)
 
         # Normalize advantages
         if n_steps > 1:
@@ -146,18 +197,12 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
 
             for start in range(0, n_steps, self.batch_size):
                 batch_idx = indices[start : start + self.batch_size]
-                b_states = states[batch_idx]
-                b_actions = actions[batch_idx]
-                b_advantages = advantages[batch_idx]
-                b_returns = returns[batch_idx]
-                b_old_log_probs = old_log_probs[batch_idx]
-
                 components, grads = self._minibatch_loss_and_grads(
-                    b_states,
-                    b_actions,
-                    b_returns,
-                    b_advantages,
-                    b_old_log_probs,
+                    states[batch_idx],
+                    actions[batch_idx],
+                    returns[batch_idx],
+                    advantages[batch_idx],
+                    old_log_probs[batch_idx],
                     clip_epsilon=clip_epsilon,
                 )
                 self._adam_step(grads, learning_rate)
@@ -172,7 +217,13 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
             "value_loss": float(np.mean(epoch_value_losses)),
             "entropy": float(np.mean(epoch_entropies)),
             "anneal_fraction": float(fraction),
+            "rollout_steps": float(n_steps),
         }
+
+    def load(self, path: str) -> None:
+        """Load a checkpoint; a partly filled rollout is dropped, as it is not saved."""
+        super().load(path)
+        self._rollout, self._rollout_length = [], 0
 
     def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
         return {"ppo_steps_trained": np.array(self._steps_trained)}

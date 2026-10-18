@@ -1,8 +1,7 @@
 # Pendulum Continuous PPO Training Configuration
-# Measured 2026-10-15 under the old 10-episode rule: the training average touched -200 on 5 of 5 seeds within
-# 500 episodes. Under the 100-episode rule at 100,000 steps (2026-10-16, seeds 1-5,
-# docs/benchmarks/pendulum_results.md) it solves 0 of 5, final averages -241 to -313 (roadmap: "Pendulum PPO
-# Holds -200 Under the 100-Episode Rule").
+# Trains on rollouts of whole episodes (at least 2048 transitions: 11 episodes of 200 steps), each time-limit cut
+# bootstrapped. Measured 2026-10-18 under the 100-episode rule: 9 of seeds 1-10 solve within 200,000 steps and 8
+# hold; one episode per update solved 0 of 5 (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode Rule").
 
 environment:
   name: "Pendulum-v1"
@@ -21,15 +20,16 @@ agent:
     entropy_coef: 0.001
     clip_epsilon: 0.2
     reward_scale: 0.1        # Rewards of -16..0 per step scaled before returns; keeps the critic in range
-    anneal_steps: 100000     # Learning rate and clip decay to 0 over the 500 x 200 training transitions
-    ppo_epochs: 8
+    anneal_steps: 200000     # Learning rate and clip decay to 0 over the whole training budget
+    rollout_steps: 2048      # Transitions buffered, in whole episodes, per update (rl-zoo: 4 x 1024)
+    ppo_epochs: 10           # Passes over each rollout (rl-zoo)
     batch_size: 64
     action_low: -2.0
     action_high: 2.0
     seed: 42
 
 training:
-  total_steps: 100000  # Environment steps (rl-zoo PPO Pendulum-v1 n_timesteps; equals anneal_steps)
+  total_steps: 200000  # Environment steps: twice rl-zoo's 100,000 (as CartPole PPO); equals anneal_steps
   max_steps_per_episode: 200
   eval_frequency: 25
   save_frequency: 50
