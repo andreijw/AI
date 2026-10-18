@@ -433,7 +433,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: DDPG and other new algorithms; changing the solve threshold; the discrete agents.
   - **Depends on**: Seeded Environments Replay One Start State, so the diagnosis is not confounded by it.
 
-- [ ] **Pendulum PPO Holds -200 Under the 100-Episode Rule**
+- [x] **Pendulum PPO Holds -200 Under the 100-Episode Rule**
+  - **Delivered in**: `feature/pendulum-ppo-rollouts`. Confirmed by the maintainer on 2026-10-18.
   - **Description**: Under the 10-episode rule Pendulum PPO reached -200 on 5 of 5 seeds; under the 100-episode
     rule ("Benchmark Budgets and Solve Rule in Environment Steps", 2026-10-15) it reaches it on none: final 100-episode
     training averages -241 to -313 at 100,000 steps (rl-zoo's budget), evaluation -285 ± 82. Doubling the budget and
@@ -441,9 +442,27 @@ Defects found while working on other items, then findings from the brooks-lint h
     collects 1024-step rollouts on 4 parallel environments, uses state-dependent exploration (gSDE) and 10 epochs,
     where ours trains on each 200-step episode with 8 epochs and no observation normalisation.
   - **Acceptance criteria**:
-    - A diagnosis names what separates ours from the reference, each cause checked.
+    - A diagnosis names what separates ours from the reference; the causes needed to meet the bar are checked,
+      and those left unchecked are listed (reworded 2026-10-18 with the maintainer).
     - With a maintainer-approved config, the 100-episode training average reaches -200 on at least 4 of 5 seeds
       within the budget, and the report says whether it held.
+  - **Diagnosis (2026-10-18)**: scratch harness patching `ContinuousPPOAgent`, benchmark solve rule. The cause is
+    training on one 200-step episode at a time. Buffering whole episodes into multi-episode rollouts, with each
+    time-limit cut bootstrapped by adding γ·V(next state) to its last (scaled) reward as SB3 does, fixes it at
+    200,000 steps: rollouts of 1024 / 2048 / 4096 transitions (10 epochs, annealing over 200k) solve 8 / 9 / 10 of
+    seeds 1 to 10 and hold 7 / 8 / 4. At 100,000 steps the best is 2 of 5. Removing the annealing or the reward
+    scale of 0.1 makes it worse. Not checked (the bar is met without them): gSDE exploration, separate tanh
+    actor and critic networks, observation normalisation. Discrete PPO's rollouts treat every episode end as
+    terminal, including CartPole's 500-step cut; left as it is.
+  - **Decided (2026-10-18)**: `rollout_steps` for `ContinuousPPOAgent` (default 1, unchanged behaviour);
+    `configs/pendulum_ppo.yaml` with rollouts of 2048, 10 epochs, annealing over and a budget of 200,000 steps
+    (twice rl-zoo's 100,000, as CartPole PPO).
+  - **Learning gate (2026-10-18)**: the real implementation with the committed config, benchmark seeds 1 to 5: 5 of 5
+    reach -200 (steps 78,200 to 155,200) and 4 hold (seed 3 ends at -216); final averages -169 to -216, evaluation
+    -150 ± 28 across seed means, identical to the scratch harness seed by seed. `rollout_steps: 1` reproduces the
+    previous weights bit for bit.
+  - **Follow-up noted (2026-10-18)**: discrete `PPOAgent` reads `rollout_steps` with `int(...)`, so 2.5 becomes 2,
+    where continuous PPO rejects it; worth aligning when a third rollout user appears.
   - **Out of scope**: Changing the threshold or the window; SAC/TD3.
 
 - [ ] **Continuous Actor-Critic Learns Pendulum-v1**
@@ -726,7 +745,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Out of scope**: Double, dueling and prioritised-replay DQN (each its own item if wanted); DDPG; a second hidden
     layer.
 
-- [~] **Continuous Off-Policy Learning & DDPG (Deep Deterministic Policy Gradient)**
+- [x] **Continuous Off-Policy Learning & DDPG (Deep Deterministic Policy Gradient)**
+  - **Delivered in**: #90, #91 and #92. Confirmed by the maintainer on 2026-10-18.
   - **Description**: Implement a pure NumPy `DDPGAgent` utilizing a deterministic actor network $\mu_\theta(s)$,
     an action-value critic $Q_\phi(s, a)$, continuous transition experience replay via `ReplayBuffer`, exploration
     noise (Gaussian or Ornstein-Uhlenbeck), and Polyak soft target updates to solve `Pendulum-v1`

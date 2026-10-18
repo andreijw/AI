@@ -61,7 +61,9 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    and takes `ppo_epochs` passes of shuffled `minibatch_size` steps. Without those keys it trains on each episode
    alone, full batch, with return-minus-value advantages. The Trainer still calls `update` once per episode; PPO
    returns no metrics on the episodes it only stores. Each episode ends its GAE trace, so CartPole's 500-step time
-   limit counts as terminal, as it does for every agent here.
+   limit counts as terminal for discrete PPO. Continuous PPO buffers whole episodes the same way with its own
+   `rollout_steps`, but adds γ·V(next state) to the last reward of an episode cut by the time limit; DQN and DDPG
+   store the trainer's `terminated` flag, so they bootstrap through time limits too.
 
 ---
 

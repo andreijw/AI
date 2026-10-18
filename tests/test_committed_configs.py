@@ -24,7 +24,7 @@ STEP_BUDGETS = {
     ("cartpole", "ppo"): 200_000,
     ("cartpole", "dqn"): 300_000,
     ("cartpole", "random"): 50_000,
-    ("pendulum", "ppo"): 100_000,
+    ("pendulum", "ppo"): 200_000,
     ("pendulum", "ddpg"): 40_000,
     ("pendulum", "actor_critic"): 1_000_000,
     ("pendulum", "random"): 40_000,
@@ -75,8 +75,8 @@ def test_ppo_uses_standard_rollouts_with_an_annealed_learning_rate():
 
 
 def test_pendulum_ppo_uses_the_measured_settings():
-    """γ 0.9, lr 0.001, reward scale 0.1, annealing over 100,000 transitions: the settings whose 10-episode
-    average touched -200 on 5 of 5 seeds (2026-10-15); 0 of 5 hold it under the 100-episode rule."""
+    """γ 0.9, lr 0.001, reward scale 0.1, rollouts of 2048 transitions over 10 epochs, annealing over the
+    200,000-step budget: 9 of seeds 1-10 solved under the 100-episode rule (2026-10-18)."""
     from rl_pendulum.benchmark import PendulumChallenge
 
     env, agent, train_cfg = PendulumChallenge().setup_run("ppo", seed=1, episodes=None)
@@ -84,7 +84,8 @@ def test_pendulum_ppo_uses_the_measured_settings():
     assert (agent.gamma, agent.learning_rate, agent.reward_scale) == pytest.approx(
         (0.9, 0.001, 0.1)
     )
-    assert (agent.anneal_steps, agent.clip_ratio, agent.mean_init_scale) == (100_000, 0.2, 0.01)
+    assert (agent.anneal_steps, agent.clip_ratio, agent.mean_init_scale) == (200_000, 0.2, 0.01)
+    assert (agent.rollout_steps, agent.ppo_epochs) == (2048, 10)
 
 
 def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
