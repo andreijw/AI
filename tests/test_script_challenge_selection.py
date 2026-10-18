@@ -79,7 +79,8 @@ def test_train_runs_a_challenge_it_does_not_name(fake_challenge, tmp_path, monke
     )
 
     calls = module.CALLS
-    assert calls == [("env", env_name, None), ("agent", "scripted")]
+    # the training environment, then the separate evaluation environment, then the agent
+    assert calls == [("env", env_name, None), ("env", env_name, None), ("agent", "scripted")]
     assert os.path.isdir(tmp_path / "logs" / key / "scripted"), "outputs go under the challenge key"
 
 

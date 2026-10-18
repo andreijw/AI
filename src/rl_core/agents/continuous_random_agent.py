@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+from rl_core.seeding import AGENT_EVAL_STREAM, derive_rng
+
 from .base_agent import BaseAgent
 from .bounds import action_bounds
 
@@ -47,6 +49,8 @@ class ContinuousRandomAgent(BaseAgent):
 
         seed: int | None = config.get("seed")
         self._rng = np.random.default_rng(seed)
+        # Evaluation actions draw from their own stream, so evaluating does not shift training actions.
+        self._eval_rng = derive_rng(seed, AGENT_EVAL_STREAM)
 
     def select_action(self, observation: np.ndarray, training: bool = True) -> np.ndarray:
         """
@@ -54,12 +58,13 @@ class ContinuousRandomAgent(BaseAgent):
 
         Args:
             observation: Current observation (ignored).
-            training: Whether in training mode (ignored).
+            training: Whether in training mode; evaluation draws from a separate generator.
 
         Returns:
             Continuous action vector of shape (action_dim,).
         """
-        return self._rng.uniform(self.action_low, self.action_high).astype(np.float32)
+        rng = self._rng if training else self._eval_rng
+        return rng.uniform(self.action_low, self.action_high).astype(np.float32)
 
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
@@ -86,6 +91,7 @@ class ContinuousRandomAgent(BaseAgent):
                 action_low=self.action_low,
                 action_high=self.action_high,
                 rng_state=state_json,
+                eval_rng_state=json.dumps(self._eval_rng.bit_generator.state),
             )
 
     def load(self, path: str) -> None:
@@ -102,3 +108,8 @@ class ContinuousRandomAgent(BaseAgent):
                 if isinstance(rng_state_text, str):
                     self._rng = np.random.default_rng()
                     self._rng.bit_generator.state = json.loads(rng_state_text)
+            if "eval_rng_state" in data:  # checkpoints from before 2026-10-18 have none
+                self._eval_rng = np.random.default_rng()
+                self._eval_rng.bit_generator.state = json.loads(
+                    str(np.asarray(data["eval_rng_state"]).item())
+                )

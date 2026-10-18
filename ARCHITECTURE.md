@@ -227,7 +227,14 @@ classDiagram
 ## Training and Rollout Execution Flow
 
 The sequence diagram illustrates how `Trainer` coordinates episode rollouts, trajectory tracking, gradient updates,
-evaluation checkpoints, and video captures:
+evaluation checkpoints, and video captures. `train.py` and the benchmark give the trainer a separate evaluation
+environment (built by the challenge's `make_env`, or `setup_eval_env` in the benchmark) and an evaluation seed from
+`rl_core.seeding.eval_seed_for`: evaluation episode i resets that environment with `eval_seed + i`, so every
+evaluation in a run plays the same start states and how often a run evaluates does not change its training episodes.
+The random agents draw their evaluation actions from a separate generator for the same reason. Without an evaluation
+environment (direct `Trainer` callers and tests) evaluation runs on the training environment. `record.py` passes its
+playback environment as the evaluation environment with the same seed, so a playback shows the training run's
+evaluation start states.
 
 ```mermaid
 sequenceDiagram
@@ -253,7 +260,7 @@ sequenceDiagram
         Trainer->>Agent: update(trajectory / batch)
         Agent-->>Trainer: loss_metrics
         opt Periodic Evaluation
-            Trainer->>Trainer: evaluate(eval_episodes)
+            Trainer->>Trainer: evaluate(eval_episodes) on the evaluation env, reset(seed=eval_seed + i)
             Trainer->>Logger: log eval stats & rewards
         end
         opt Periodic Checkpoint

@@ -97,7 +97,7 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
             captured["agent_config"] = dict(config)
 
     class _StubTrainer:
-        def __init__(self, env, agent, config, logger=None):
+        def __init__(self, env, agent, config, logger=None, **_eval):
             captured["trainer_agent_type"] = type(agent).__name__
             captured["trainer_num_episodes"] = config.get("num_episodes")
             self.episode_rewards = []

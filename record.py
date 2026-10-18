@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from gymnasium.wrappers import RecordVideo
 
+from rl_core.seeding import eval_seed_for
 from rl_core.training import Trainer
 from rl_core.utils import setup_logger
 from rl_core.utils.video import merge_episode_clips
@@ -79,7 +80,15 @@ def main():
                     disable_logger=True,
                 )
             )
-            trainer = Trainer(env=env, agent=agent, config=config["training"], logger=logger)
+            # The same fixed start states as the training run's evaluations (for the same seed).
+            trainer = Trainer(
+                env=env,
+                agent=agent,
+                config=config["training"],
+                logger=logger,
+                eval_env=env,
+                eval_seed=eval_seed_for(config["environment"].get("seed")),
+            )
             stats = trainer.evaluate(num_episodes=args.episodes)
             logger.info(f"Recorded {args.episodes} episodes: {stats}")
         finally:
