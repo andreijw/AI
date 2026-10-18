@@ -63,7 +63,11 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    returns no metrics on the episodes it only stores. Each episode ends its GAE trace, so CartPole's 500-step time
    limit counts as terminal for discrete PPO. Continuous PPO buffers whole episodes the same way with its own
    `rollout_steps`, but adds γ·V(next state) to the last reward of an episode cut by the time limit; DQN and DDPG
-   store the trainer's `terminated` flag, so they bootstrap through time limits too.
+   store the trainer's `terminated` flag, so they bootstrap through time limits too. The continuous Actor-Critic
+   replays each episode in `n_steps` chunks, each with GAE targets bootstrapped from the chunk's next state unless
+   the episode truly terminated. Both continuous Gaussian agents can bound their policy mean inside the action
+   bounds (`bounded_mean`: bias + scale·tanh(z)); without it the linear mean head can drift past a bound, where every
+   executed action is the same.
 
 ---
 
@@ -178,6 +182,7 @@ classDiagram
         <<abstract>>
         +ndarray action_low
         +ndarray action_high
+        +bool bounded_mean
         #ndarray _W1, _b1, _W_mu, _b_mu, _log_std, _W_v, _b_v
         +forward_actor(obs) tuple
         +forward_critic(obs) float

@@ -149,6 +149,10 @@ an aliased target only shows on the update after a sync.
 - **Exact values for maths, relationships for sampling.** A discounted return has one right answer. "Action
   0 is drawn more often than action 1" over a thousand seeded draws holds; "it is drawn 713 times" pins the
   generator's internals.
+- **Bit-for-bit only within one machine.** Comparing two code paths in one run with `assert_array_equal` is
+  fine. Weights recorded on one machine and asserted exactly on another are not: this ARM board and the x86 CI
+  runner round matrix products differently in the last bit (a recorded-weights test failed CI by 2e-16 relative,
+  2026-10-18). Pin recorded values with `rtol=1e-12`; that still catches any real change.
 - **No training to convergence in pytest.** The suite must stay fast. A test may run a handful of updates
   on a fixed batch; whether CartPole is solved belongs to a learning run.
 - **Close what you open.** `env.close()` in a `finally` or a fixture, including when the assertion fails.

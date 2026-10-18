@@ -465,7 +465,7 @@ Defects found while working on other items, then findings from the brooks-lint h
     where continuous PPO rejects it; worth aligning when a third rollout user appears.
   - **Out of scope**: Changing the threshold or the window; SAC/TD3.
 
-- [ ] **Continuous Actor-Critic Learns Pendulum-v1**
+- [~] **Continuous Actor-Critic Learns Pendulum-v1**
   - **Description**: Split out of "Pendulum PPO Learns and Solves Pendulum-v1". `ContinuousActorCriticAgent` takes one
     Adam step per 200-step episode (about 5000 in its 1,000,000-step budget, against continuous PPO's 32 per episode),
     and it does not yet use time-limit bootstrapping or annealing. With the new defaults (small initial mean head) and γ
@@ -482,6 +482,25 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Two runs with the same seeds agree; TESTING.md `TR-5` states the measured result, and
       `docs/benchmarks/pendulum_results.md` is regenerated from a maintainer-approved run.
   - **Known edge cases**: Its `update` takes the whole episode in one step; a larger budget may be needed.
+  - **Diagnosis (2026-10-18)**: traces and a scratch harness, seeds 1 to 5, 1,000,000 steps, random agent -1224.
+    (1) The Gaussian mean is an unbounded linear head: it leaves the ±2 torque bounds (9 to 12 in the committed
+    config, about 9,000 with rl-zoo's A2C settings), every executed torque is then the same, and nothing pulls it
+    back; without a bounded mean even the best variant scores -1593. (2) Without an entropy bonus the log std
+    collapses (from -2 to -17.6); entropy 0.003 and 0.001 give -589 and -967 against -152 at 0.01. (3) One
+    Monte Carlo step per 200-step episode is weaker than short bootstrapped updates (-421 ± 246 against -152 ± 45).
+    (4) Scale: rewards × 0.05 (-152 ± 45) match a running reward normaliser (-151 ± 45); × 0.1 gives -496 ± 374.
+    Observation normalisation adds nothing measurable; annealing the entropy hurts.
+  - **Decided (2026-10-18)**: the fallback criterion. Bounded mean, 8-step chunked updates with GAE 0.9 and
+    bootstrapping (not strictly on-policy: later chunks were collected before the episode's first update), γ 0.9,
+    lr 7e-4 annealed over 1,000,000 steps, no advantage normalisation, value coefficient 0.4, entropy 0.01, log
+    std -2, rewards × 0.05. Harness result: evaluation -152 ± 45 (rl-zoo A2C -163), beating random on 5 of 5 seeds;
+    the training average stays at -286 to -341 and does not reach -200. What might close the gap (not attempted):
+    true A2C with updates every n steps, which needs the trainer to call `update` mid-episode for every agent; gSDE;
+    a longer budget.
+  - **Learning gate (2026-10-18)**: the real implementation with the committed config, benchmark seeds 1 to 5,
+    1,000,000 steps: evaluation -152 ± 45 across seed means (-136, -157, -213, -78, -175), beating the random agent
+    on 5 of 5; 0 of 5 solve (final 100-episode averages -286 to -341). Identical to the scratch harness seed by seed,
+    and the default settings reproduce the previous weights of both continuous agents bit for bit.
   - **Out of scope**: Turning it into PPO; DDPG.
 
 - [x] **Seed the Continuous PPO Mini-Batch Shuffle**

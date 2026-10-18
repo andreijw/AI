@@ -125,10 +125,15 @@ def _ppo_old_log_probs(agent, states: np.ndarray, actions: np.ndarray) -> np.nda
 # ---------------------------------------------------------------------------
 
 
+BOUNDED = {"bounded_mean": True, "action_low": -2.0, "action_high": 3.0}
+
+
+@pytest.mark.parametrize("bounded", [False, True])
 @pytest.mark.parametrize("action_dim", [1, 2])
-def test_actor_critic_gradients_match_finite_differences(action_dim):
-    agent = _agent(ContinuousActorCriticAgent, action_dim)
+def test_actor_critic_gradients_match_finite_differences(action_dim, bounded):
+    agent = _agent(ContinuousActorCriticAgent, action_dim, **(BOUNDED if bounded else {}))
     agent._b_v = 0.2
+    agent._b_mu[...] = 0.7  # away from 0, so tanh's (1 - u^2) factor is not about 1
     states, actions = _batch(action_dim)
     _assert_away_from_kinks(agent, states)
     parameters, boxed_value_bias = _parameters(agent)
@@ -143,10 +148,12 @@ def test_actor_critic_gradients_match_finite_differences(action_dim):
     assert_gradients_match(loss, parameters, _boxed(grads))
 
 
+@pytest.mark.parametrize("bounded", [False, True])
 @pytest.mark.parametrize("action_dim", [1, 2])
-def test_ppo_gradients_match_finite_differences(action_dim):
-    agent = _agent(ContinuousPPOAgent, action_dim)
+def test_ppo_gradients_match_finite_differences(action_dim, bounded):
+    agent = _agent(ContinuousPPOAgent, action_dim, **(BOUNDED if bounded else {}))
     agent._b_v = 0.2
+    agent._b_mu[...] = 0.7  # away from 0, so tanh's (1 - u^2) factor is not about 1
     states, actions = _batch(action_dim)
     _assert_away_from_kinks(agent, states)
     old_log_probs = _ppo_old_log_probs(agent, states, actions)
