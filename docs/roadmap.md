@@ -329,7 +329,8 @@ Defects found while working on other items, then findings from the brooks-lint h
       2026-10-16: DQN stores the trainer's `terminated` flag ("DQN Reaches the rl-zoo Reference").
   - **Out of scope**: The Pendulum agents (their own item below); new algorithms; changing the solve threshold.
 
-- [~] **Separate Random Streams for Agents and Buffers**
+- [x] **Separate Random Streams for Agents and Buffers**
+  - **Delivered in**: #98, benchmarks republished in #99. Confirmed by the maintainer on 2026-10-19.
   - **Description**: Agents and `ReplayBuffer` create their generators with `np.random.default_rng(seed)`, and the
     committed configs and both benchmark adapters give the agent the same seed as the environment. Weight
     initialisation, exploration, replay sampling and the environment's start states therefore draw from one
