@@ -349,6 +349,9 @@ Defects found while working on other items, then findings from the brooks-lint h
     agent's generators against each other and the environment's; a source rule bans `default_rng(seed)` in
     agents. Random agents' old checkpoints still load and continue their old sequence. Every seeded result
     changes; the benchmarks are republished in a following PR (maintainer's decision).
+  - **Republished (2026-10-18)**: both benchmarks on seeds 1 to 5 with named streams; every agent still meets its
+    claim. CartPole: REINFORCE 4 of 5 (holding on 3), Actor-Critic 5 of 5 (4), PPO 5 of 5 (5), DQN 5 of 5 (5).
+    Pendulum: DDPG 5 of 5 (5), PPO 5 of 5 (4), Actor-Critic beats random on 5 of 5 (evaluation -172 ± 27).
   - **Finding (2026-10-18)**: on the one-state overfit batch of `tests/test_policy_gradient_maths.py`, the
     discrete Actor-Critic (SGD, learning rate 0.05) reaches probability 1.0 and then can collapse to the other
     action (seeds 6 and 7; 9 of 30 seeds under the old seeding too), once the rejected action's log-probability
