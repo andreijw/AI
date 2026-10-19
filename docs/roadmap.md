@@ -701,7 +701,8 @@ Defects found while working on other items, then findings from the brooks-lint h
     - CartPole PPO is rerun on seeds 1 to 5 and still meets its published claim (5 of 5 solved).
   - **Out of scope**: Sharing one rollout buffer between the two PPO agents (until a third user appears).
 
-- [~] **DQN Config Validation**
+- [x] **DQN Config Validation**
+  - **Delivered in**: #100. Confirmed by the maintainer on 2026-10-19.
   - **Description**: Listed under "CartPole Agents Learn Within Their Budgets" → DQN behaviours and never given
     its own item. Not validated at construction: `target_update_frequency: 0` raises `ZeroDivisionError` during
     training; `tau` of 1 or more silently falls back to hard sync, 0 freezes the target network and a negative
