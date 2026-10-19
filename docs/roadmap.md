@@ -728,6 +728,10 @@ Defects found while working on other items, then findings from the brooks-lint h
     `PytestUnraisableExceptionWarning` into an error, so any future unraisable exception fails the suite. Tests in
     `tests/test_video.py`. The three Gymnasium "Overwriting existing videos" warnings from older video tests remain
     (out of scope).
+  - **Gymnasium floor (2026-10-19)**: found in review. `TrainingVideoRecorder` relies on `RecordVideo`'s 1.0 API
+    (`start_recording`, `recorded_frames`), so `pyproject.toml` and `requirements.txt` now require
+    `gymnasium>=1.0.0` instead of `>=0.29.0`. The full suite passes on Gymnasium 1.0.0; on 0.29.1, 9 recording
+    tests fail (`test_video.py`, `test_train_video.py`, `test_record.py`).
   - **Out of scope**: Other third-party deprecation warnings.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
