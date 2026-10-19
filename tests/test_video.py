@@ -1,5 +1,6 @@
 """Tests for training video recording and clip merging (rl_core.utils.video)."""
 
+import gc
 import logging
 import os
 import sys
@@ -7,6 +8,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from gymnasium.wrappers import RecordVideo
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -29,6 +31,14 @@ def _headless_sdl(monkeypatch):
     """Render CartPole frames without a display."""
     monkeypatch.setenv("SDL_VIDEODRIVER", "offscreen")
     monkeypatch.setenv("SDL_AUDIODRIVER", "dummy")
+
+
+@pytest.fixture
+def unraisable(monkeypatch):
+    """Collect exceptions raised in ``__del__`` during the test instead of letting pytest warn."""
+    caught = []
+    monkeypatch.setattr(sys, "unraisablehook", caught.append)
+    return caught
 
 
 def _play_episode(env):
@@ -125,13 +135,54 @@ def test_recorder_accepts_progress_that_cannot_be_copied(tmp_path):
     assert _mp4_names(tmp_path) == ["cartpole-training-episode-1.mp4"]
 
 
-@pytest.mark.parametrize("every", [0, -1])
-def test_recorder_rejects_non_positive_every(tmp_path, every):
+@pytest.mark.parametrize(
+    "render_mode, every, match",
+    [
+        ("rgb_array", 0, "every"),
+        ("rgb_array", -1, "every"),
+        # Rejected by RecordVideo.__init__ itself, after part of its state is set.
+        (None, 1, "render_mode"),
+    ],
+)
+def test_rejected_recorder_raises_without_unraisable_error(
+    tmp_path, unraisable, render_mode, every, match
+):
+    env = CartPoleEnv(render_mode=render_mode, seed=42)
+    progress = SimpleNamespace(current_episode=0, evaluating=False)
+    # Do not bind the exception (``as excinfo``): its traceback would keep the half-built
+    # recorder alive past the assertion below, so the test could no longer fail.
+    with pytest.raises(ValueError, match=match):
+        TrainingVideoRecorder(env.env, video_folder=str(tmp_path), progress=progress, every=every)
+    gc.collect()
+    env.close()
+    assert unraisable == []
+
+
+def test_recorder_dropped_mid_recording_still_warns_about_unsaved_video(tmp_path):
+    env = CartPoleEnv(render_mode="rgb_array", seed=42)
+    progress = SimpleNamespace(current_episode=1, evaluating=False)
+    recorder = TrainingVideoRecorder(
+        env.env, video_folder=str(tmp_path / "videos"), progress=progress, every=1
+    )
+    recorder.reset()
+    recorder.step(0)
+    with pytest.warns(UserWarning, match="Unable to save last video"):
+        del recorder
+        gc.collect()
+    env.close()
+
+
+def test_recorder_collected_quietly_when_record_video_has_no_del(tmp_path, monkeypatch, unraisable):
+    monkeypatch.delattr(RecordVideo, "__del__")
     env = CartPoleEnv(render_mode="rgb_array", seed=42)
     progress = SimpleNamespace(current_episode=0, evaluating=False)
-    with pytest.raises(ValueError, match="every"):
-        TrainingVideoRecorder(env.env, video_folder=str(tmp_path), progress=progress, every=every)
+    recorder = TrainingVideoRecorder(
+        env.env, video_folder=str(tmp_path / "videos"), progress=progress, every=1
+    )
+    del recorder
+    gc.collect()
     env.close()
+    assert unraisable == []
 
 
 # ---------------------------------------------------------------------------

@@ -81,7 +81,7 @@ Always consult [CONTRIBUTING.md](CONTRIBUTING.md) when writing, refactoring, or 
 * **PEP 8 Compliance & Ruff**: Follow PEP 8 guidelines. Format code using Ruff and run static checking before
   submission.
 * **Gymnasium API Best Practices**:
-  * Adhere to Gymnasium v0.29+ signatures. Always expect `terminated` and `truncated` as separate boolean outputs from
+  * Adhere to Gymnasium v1.0+ signatures. Always expect `terminated` and `truncated` as separate boolean outputs from
     environment step calls.
   * Always ensure environments are correctly closed with `.close()` when done to prevent resource leaks.
 * **Vectorized Training**: Use `make_vec_env` for parallelized environment steps to speed up rollouts when

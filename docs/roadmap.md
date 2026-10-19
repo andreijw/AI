@@ -725,13 +725,25 @@ Defects found while working on other items, then findings from the brooks-lint h
     the change, so the published DQN results stand without a rerun.
   - **Out of scope**: Changing DQN's defaults.
 
-- [ ] **Quiet Video Recorder Cleanup in Tests**
+- [x] **Quiet Video Recorder Cleanup in Tests**
+  - **Delivered in**: #102. Confirmed by the maintainer on 2026-10-19.
   - **Description**: `TrainingVideoRecorder` validates its arguments before calling Gymnasium's `RecordVideo`
     constructor, so a rejected recorder has no `recorded_frames` and Gymnasium's `__del__` raises an
     `AttributeError` that pytest reports as an unraisable-exception warning (`tests/test_video.py`). Harmless, but it
     hides real warnings in the test output.
   - **Acceptance criteria**: The test suite prints no unraisable-exception warning from the recorder; invalid
     arguments still raise the same errors.
+  - **Built (2026-10-19)**: `TrainingVideoRecorder.__del__` calls Gymnasium's `RecordVideo.__del__` only once
+    `RecordVideo.__init__` has finished (and only if Gymnasium defines one), so a recorder rejected by its own
+    `every` check or by Gymnasium (an environment without `render_mode="rgb_array"`) is collected silently. The
+    `every` check still runs first, so a rejected recorder creates no video folder. `pyproject.toml` now turns
+    `PytestUnraisableExceptionWarning` into an error, so any future unraisable exception fails the suite. Tests in
+    `tests/test_video.py`. The three Gymnasium "Overwriting existing videos" warnings from older video tests remain
+    (out of scope).
+  - **Gymnasium floor (2026-10-19)**: found in review. `TrainingVideoRecorder` relies on `RecordVideo`'s 1.0 API
+    (`start_recording`, `recorded_frames`), so `pyproject.toml` and `requirements.txt` now require
+    `gymnasium>=1.0.0` instead of `>=0.29.0`. The full suite passes on Gymnasium 1.0.0; on 0.29.1, 9 recording
+    tests fail (`test_video.py`, `test_train_video.py`, `test_record.py`).
   - **Out of scope**: Other third-party deprecation warnings.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**

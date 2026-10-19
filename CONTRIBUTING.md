@@ -17,7 +17,7 @@ contributing, writing code, refactoring components, or submitting pull requests.
 
 ### Gymnasium API Conventions
 
-- **Gymnasium v0.29+ Signatures**: Always expect and process `terminated` (task completion/failure) and `truncated`
+- **Gymnasium v1.0+ Signatures**: Always expect and process `terminated` (task completion/failure) and `truncated`
   (time limit expiration) as separate boolean outputs from environment steps:
   `obs, reward, terminated, truncated, info = env.step(action)`
 - **Resource Management**: Always ensure environments are closed cleanly using `env.close()` or context managers to
@@ -90,6 +90,9 @@ pytest -q
 
 - **Coverage Goal**: New features must include tests achieving >=80% branch coverage.
 - All tests must pass cleanly (`0 failed`) before submitting a pull request.
+- An exception raised in a `__del__` during the tests fails the test that triggered it: `pyproject.toml` turns
+  pytest's `PytestUnraisableExceptionWarning` into an error, so such a failure means an object is torn down
+  half-built or a resource is left open.
 
 ---
 
@@ -140,7 +143,7 @@ git checkout -b feature/<kebab-case-name>   # or fix/<kebab-case-name> for bugs
 ### Step 2 — Finalize the work item
 
 - Incorporate any feedback from the confirmation step into `docs/roadmap.md`.
-- Clarify scope, algorithmic constraints (pure NumPy, Gymnasium v0.29+ API), and explicit out-of-scope items.
+- Clarify scope, algorithmic constraints (pure NumPy, Gymnasium v1.0+ API), and explicit out-of-scope items.
 - The work item is now locked — no scope changes without repeating steps 1–2.
 
 ### Step 3 — Plan the solution

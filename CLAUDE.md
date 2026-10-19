@@ -11,7 +11,7 @@
 
 ## Project Standards
 
-Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥0.29**
+Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥1.0**
 · **pure NumPy** agents (no PyTorch/TensorFlow) · **pytest** · **Ruff** (line length 100) · **mypy**.
 
 - **Coding standards** → **[CONTRIBUTING.md](CONTRIBUTING.md)** §1–3.
@@ -118,7 +118,7 @@ eternal-descent repo). Setup and troubleshooting:
 ### MCP Safety Rules
 
 - **Check Gymnasium APIs in Context7 rather than from memory.** Older Gym tutorials return `done` from `step()`;
-  this repo uses the v0.29+ `terminated`/`truncated` split and `reset(seed=...)` returning `(obs, info)`.
+  this repo uses the v1.0+ `terminated`/`truncated` split and `reset(seed=...)` returning `(obs, info)`.
 - **If a server is disconnected or a tool returns an auth error, point the user to the
   [README setup steps](README.md#ai-assistant-mcp-servers) rather than working around it.** Context7 reports
   "Connected" even with a missing key; an "Invalid API key" tool result means `CONTEXT7_API_KEY` is not set.
