@@ -316,13 +316,13 @@ Defects found while working on other items, then findings from the brooks-lint h
       (default 10.0). Resolved 2026-10-16: the element-wise clip is `grad_clip_value` (plain SGD only), and
       `max_grad_norm` is Adam's global-norm clip, as in the other agents.
     - While the replay buffer is warming up, `update` returns a loss and mean Q-value of 0, which the training log
-      averages in.
+      averages in. Resolved 2026-10-19: warm-up returns `epsilon` only ("DQN Config Validation").
     - Not validated at construction: `target_update_frequency: 0` raises `ZeroDivisionError` during training;
       `tau` of 1 or more silently falls back to hard sync, 0 freezes the target network, and a negative value
       extrapolates; `min_buffer_size` below `batch_size` fails at the first sample; `buffer_capacity` below
       `batch_size` fails there too if `min_buffer_size` fits in the buffer, and otherwise (as with the default
       `min_buffer_size`) the buffer never counts as warm, so the agent silently never trains and epsilon never
-      decays.
+      decays. Resolved 2026-10-19: each raises a `ValueError` at construction ("DQN Config Validation").
     - A batch without `dones` is not stored, but gradient steps still run. (Since 2026-10-16 a batch with
       `terminated` and no `dones` is stored; one with neither still is not.)
     - A time-limit cut is stored as terminal, so the bootstrap is zeroed at CartPole's 500-step limit. Resolved
@@ -701,7 +701,7 @@ Defects found while working on other items, then findings from the brooks-lint h
     - CartPole PPO is rerun on seeds 1 to 5 and still meets its published claim (5 of 5 solved).
   - **Out of scope**: Sharing one rollout buffer between the two PPO agents (until a third user appears).
 
-- [ ] **DQN Config Validation**
+- [~] **DQN Config Validation**
   - **Description**: Listed under "CartPole Agents Learn Within Their Budgets" → DQN behaviours and never given
     its own item. Not validated at construction: `target_update_frequency: 0` raises `ZeroDivisionError` during
     training; `tau` of 1 or more silently falls back to hard sync, 0 freezes the target network and a negative
@@ -712,6 +712,16 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Each invalid setting raises a `ValueError` naming the key at construction, with a test per case.
     - During warm-up `update` returns no loss or Q-value (as DDPG does), so the log averages only real updates.
     - The committed DQN config and its seeded results are unchanged.
+  - **Built (2026-10-19)**: `hidden_dim`, `buffer_capacity`, `batch_size`, `min_buffer_size`,
+    `target_update_frequency`, `max_updates_per_call` and `exploration_steps` must be positive integers (a float
+    or boolean is no longer truncated); `tau` and `updates_per_step` must be numbers (not booleans, strings or NaN);
+    `tau` must lie in (0, 1], and 1 now copies the online network after every step instead of falling back to
+    hard syncs; `updates_per_step` must be positive when set; and
+    `batch_size <= min_buffer_size <= buffer_capacity`. Warm-up updates return `{"epsilon": ...}`, so the training
+    log's `loss` and `mean_q` average only real updates (TESTING.md `LOG-1`). Tests in
+    `tests/test_dqn_validation.py`; three older tests that pinned the warm-up zeros and the `tau: 1` fallback were
+    rewritten. A seeded 40-episode run of `configs/cartpole_dqn.yaml` gives bit-identical weights before and after
+    the change, so the published DQN results stand without a rerun.
   - **Out of scope**: Changing DQN's defaults.
 
 - [ ] **Quiet Video Recorder Cleanup in Tests**

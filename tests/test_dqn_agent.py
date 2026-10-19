@@ -107,7 +107,7 @@ def test_dqn_epsilon_decay():
 
 
 def test_dqn_insufficient_buffer_no_update():
-    """Verify update returns zero loss if buffer does not meet min_buffer_size."""
+    """Below min_buffer_size the update reports epsilon only: no loss or Q-value to log."""
     agent = DQNAgent(
         observation_dim=4,
         action_dim=2,
@@ -124,8 +124,7 @@ def test_dqn_insufficient_buffer_no_update():
     }
 
     metrics = agent.update(batch)
-    assert metrics["loss"] == 0.0
-    assert metrics["mean_q"] == 0.0
+    assert "loss" not in metrics and "mean_q" not in metrics
 
 
 def test_dqn_target_network_hard_sync():
