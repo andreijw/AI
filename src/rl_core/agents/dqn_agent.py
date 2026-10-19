@@ -12,6 +12,24 @@ from .optim import Adam, anneal_fraction, optimizer_from_config
 from .replay_buffer import ReplayBuffer
 
 
+def _positive_int(config: dict[str, Any], key: str, default: int) -> int:
+    """``config[key]`` (or ``default``) as an int, rejecting booleans, non-integers and values <= 0."""
+    value = config.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int | np.integer) or value <= 0:
+        raise ValueError(f"{key} must be a positive integer, got {value!r}")
+    return int(value)
+
+
+def _optional_real(config: dict[str, Any], key: str) -> float | None:
+    """``config[key]`` as a float, or None if unset, rejecting booleans, strings and NaN."""
+    value = config.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int | float | np.number) or np.isnan(value):
+        raise ValueError(f"{key} must be a number, got {value!r}")
+    return float(value)
+
+
 class DQNAgent(BaseAgent):
     """
     Deep Q-Network (DQN) agent with experience replay and target network.
@@ -28,7 +46,11 @@ class DQNAgent(BaseAgent):
     * Plain SGD with an element-wise clip (``grad_clip_value``), or Adam with an optional
       global-norm clip (``optimizer: adam``, ``max_grad_norm``).
     * Ring-buffered experience replay for uncorrelated mini-batch updates.
-    * Hard or Polyak soft target network synchronization.
+    * Hard target syncs every ``target_update_frequency`` gradient steps, or Polyak averaging
+      with ``tau`` in (0, 1] after every step (``tau`` 1 copies the network; the frequency is then
+      unused).
+    * Settings validated at construction: positive integer sizes and frequencies, ``tau`` in
+      (0, 1], ``min_buffer_size >= batch_size`` and ``buffer_capacity >= min_buffer_size``.
     """
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
@@ -44,23 +66,24 @@ class DQNAgent(BaseAgent):
 
         self.learning_rate: float = float(config.get("learning_rate", 1e-3))
         self.gamma: float = float(config.get("gamma", 0.99))
-        self.hidden_dim: int = int(config.get("hidden_dim", 128))
-        self.buffer_capacity: int = int(config.get("buffer_capacity", 10000))
-        self.batch_size: int = int(config.get("batch_size", 64))
-        self.min_buffer_size: int = int(config.get("min_buffer_size", self.batch_size))
+        self.hidden_dim: int = _positive_int(config, "hidden_dim", 128)
+        self.buffer_capacity: int = _positive_int(config, "buffer_capacity", 10000)
+        self.batch_size: int = _positive_int(config, "batch_size", 64)
+        self.min_buffer_size: int = _positive_int(config, "min_buffer_size", self.batch_size)
         self.epsilon_start: float = float(config.get("epsilon_start", 1.0))
         self.epsilon_end: float = float(config.get("epsilon_end", 0.02))
         self.epsilon_decay: float = float(config.get("epsilon_decay", 0.995))
-        self.target_update_frequency: int = int(config.get("target_update_frequency", 100))
-        self.tau: float | None = float(config["tau"]) if config.get("tau") is not None else None
+        self.target_update_frequency: int = _positive_int(config, "target_update_frequency", 100)
+        self.tau: float | None = _optional_real(config, "tau")
+        if self.tau is not None and not 0.0 < self.tau <= 1.0:
+            raise ValueError(
+                f"tau must be in (0, 1] (1 copies the target every gradient step; for periodic hard "
+                f"syncs leave tau unset and use target_update_frequency), got {self.tau!r}"
+            )
         self.grad_clip_value: float = float(config.get("grad_clip_value", 10.0))
         self.exploration_steps: int | None = self._read_exploration_steps(config)
-        self.updates_per_step: float | None = (
-            float(config["updates_per_step"])
-            if config.get("updates_per_step") is not None
-            else None
-        )
-        self.max_updates_per_call: int = int(config.get("max_updates_per_call", 64))
+        self.updates_per_step: float | None = _optional_real(config, "updates_per_step")
+        self.max_updates_per_call: int = _positive_int(config, "max_updates_per_call", 64)
 
         self._validate_dims(observation_dim, action_dim, self.hidden_dim)
         if self.learning_rate <= 0.0:
@@ -73,17 +96,20 @@ class DQNAgent(BaseAgent):
             raise ValueError(f"epsilon_end must be in [0, 1], got {self.epsilon_end!r}")
         if not (0.0 < self.epsilon_decay <= 1.0):
             raise ValueError(f"epsilon_decay must be in (0, 1], got {self.epsilon_decay!r}")
-        if self.buffer_capacity <= 0:
-            raise ValueError(f"buffer_capacity must be positive, got {self.buffer_capacity!r}")
-        if self.batch_size <= 0:
-            raise ValueError(f"batch_size must be positive, got {self.batch_size!r}")
-        if self.updates_per_step is not None and self.updates_per_step < 0:
+        if self.min_buffer_size < self.batch_size:
             raise ValueError(
-                f"updates_per_step must be non-negative, got {self.updates_per_step!r}"
+                f"min_buffer_size ({self.min_buffer_size}) must be at least batch_size "
+                f"({self.batch_size}): the first sample needs a full batch"
             )
-        if self.max_updates_per_call <= 0:
+        if self.buffer_capacity < self.min_buffer_size:
             raise ValueError(
-                f"max_updates_per_call must be positive, got {self.max_updates_per_call!r}"
+                f"buffer_capacity ({self.buffer_capacity}) must be at least min_buffer_size "
+                f"({self.min_buffer_size}), or the buffer never warms up and the agent never trains"
+            )
+        if self.updates_per_step is not None and self.updates_per_step <= 0:
+            raise ValueError(
+                f"updates_per_step must be positive (leave it unset for one update per call), "
+                f"got {self.updates_per_step!r}"
             )
 
         if self.grad_clip_value <= 0.0:
@@ -139,17 +165,15 @@ class DQNAgent(BaseAgent):
         Raises:
             ValueError: If it is not a positive integer, or if ``epsilon_decay`` is set too.
         """
-        value = config.get("exploration_steps")
-        if value is None:
+        if config.get("exploration_steps") is None:
             return None
-        if isinstance(value, bool) or not isinstance(value, int | np.integer) or value <= 0:
-            raise ValueError(f"exploration_steps must be a positive integer, got {value!r}")
+        value = _positive_int(config, "exploration_steps", 0)
         if config.get("epsilon_decay") is not None:
             raise ValueError(
                 "Set epsilon_decay (once per update call) or exploration_steps "
                 "(linear per training action), not both"
             )
-        return int(value)
+        return value
 
     def _parameters(self) -> dict[str, npt.NDArray[np.float64]]:
         """The online network's parameters by gradient name."""
@@ -245,12 +269,14 @@ class DQNAgent(BaseAgent):
                    and optionally 'next_observations', 'terminated' and 'dones'.
 
         Returns:
-            Dictionary with training metrics: 'loss', 'epsilon', 'mean_q'.
+            Dictionary with training metrics: 'loss', 'epsilon', 'mean_q'; during warm-up (the
+            buffer below ``min_buffer_size``) only 'epsilon', as no update happened.
         """
         self.replay_buffer.add_transitions(batch)
 
         if not self.replay_buffer.can_sample(self.min_buffer_size):
-            return {"loss": 0.0, "epsilon": self.epsilon, "mean_q": 0.0}
+            # Warm-up: no update, so no loss or Q-value for the log to average in.
+            return {"epsilon": self.epsilon}
 
         n_transitions = len(batch.get("actions", [])) if isinstance(batch, dict) else 0
         if self.updates_per_step is not None and self.updates_per_step > 0 and n_transitions > 0:
@@ -284,7 +310,7 @@ class DQNAgent(BaseAgent):
 
             # 4. Target network synchronization
             self._update_counter += 1
-            if self.tau is not None and self.tau < 1.0:
+            if self.tau is not None:
                 self._target_W1 = self.tau * self._W1 + (1.0 - self.tau) * self._target_W1
                 self._target_b1 = self.tau * self._b1 + (1.0 - self.tau) * self._target_b1
                 self._target_W2 = self.tau * self._W2 + (1.0 - self.tau) * self._target_W2

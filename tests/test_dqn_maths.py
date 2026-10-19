@@ -234,7 +234,7 @@ def _replay(reference: DQNAgent, batch: dict[str, np.ndarray], updates: int) -> 
         counter += 1
         for name, attribute in TARGET.items():
             online = getattr(reference, ONLINE[name])
-            if reference.tau is not None and reference.tau < 1.0:
+            if reference.tau is not None:
                 blended = reference.tau * online + (1.0 - reference.tau) * getattr(
                     reference, attribute
                 )
@@ -280,8 +280,8 @@ BASE = {"batch_size": 4, "min_buffer_size": 5, "learning_rate": 0.05, "gamma": 0
         ({"updates_per_step": 0.1, "target_update_frequency": 5}, 1),
         # 6 transitions * 0.25 = 1.5 rounds DOWN to 1 (rounding to nearest or up would give 2).
         ({"updates_per_step": 0.25, "target_update_frequency": 5}, 1),
-        # tau of exactly 1.0 is not a soft update: it falls back to hard sync at the frequency,
-        # so with 3 updates and frequency 5 the target network must not move at all.
+        # tau of exactly 1.0 copies the online network after every one of the 3 steps; the
+        # frequency (5) is unused, so a fallback to hard sync would leave the target unmoved.
         ({"updates_per_step": 0.5, "tau": 1.0, "target_update_frequency": 5}, 3),
     ],
 )
@@ -321,14 +321,14 @@ def test_hard_sync_copies_the_online_network_and_then_leaves_it_alone():
         assert not np.shares_memory(target, online), f"Target {name} aliases the online array."
 
 
-def test_buffer_that_is_not_warm_returns_zeros_and_changes_nothing_but_the_buffer():
-    """Current behaviour: the batch is stored, nothing is learned, epsilon does not decay."""
+def test_buffer_that_is_not_warm_reports_epsilon_and_changes_nothing_but_the_buffer():
+    """The batch is stored, nothing is learned, epsilon does not decay, and no loss is reported."""
     agent = _agent(batch_size=4, min_buffer_size=10)
     before = _state(agent)
 
     metrics = agent.update(_batch())
 
-    assert metrics == {"loss": 0.0, "epsilon": agent.epsilon_start, "mean_q": 0.0}
+    assert metrics == {"epsilon": agent.epsilon_start}
     assert len(agent.replay_buffer) == N_STEPS
     after = _state(agent)
     for name, value in before.items():
