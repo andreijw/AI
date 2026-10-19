@@ -145,11 +145,11 @@ Treat the repository as the source of truth when docs disagree:
   (`matplotlib>=3.9.4`, `pytest-cov>=7.1.0`). Install from `pyproject.toml` (`pip install -e ".[dev,video]"`).
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
 - The roadmap's completed Phase 6 entry describes `configs/pendulum_ppo.yaml` as solving Pendulum-v1. It did under
-  the 10-episode rule, then solved 0 of 5 under the 100-episode rule (2026-10-16), and since 2026-10-18 solves 4 of 5
+  the 10-episode rule, then solved 0 of 5 under the 100-episode rule (2026-10-16), and since 2026-10-18 solves 5 of 5
   with 2048-step rollouts and 200,000 steps, holding on 4 of 5 (`docs/benchmarks/pendulum_results.md`; roadmap
   item "Pendulum PPO Holds -200 Under the 100-Episode Rule"). Continuous Actor-Critic beats the random agent in
   evaluation since 2026-10-18 but does not solve under the 100-episode rule (its roadmap item records why).
-  CartPole PPO does solve CartPole-v1: standard PPO with annealing solves 4 of 5 seeds within 200,000 steps and holds
-  on those 4 (TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
+  CartPole PPO does solve CartPole-v1: standard PPO with annealing solves 5 of 5 seeds within 200,000 steps and holds
+  on all 5 (TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
 - CONTRIBUTING.md §5 and TESTING.md `CKPT-*` describe `.npz` checkpoints; `Trainer` names them
   `agent_episode_<n>.pt` (NumPy archive content, resolved by `BaseAgent._resolve_save_path`).
