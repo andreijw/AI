@@ -714,7 +714,8 @@ Defects found while working on other items, then findings from the brooks-lint h
     - The committed DQN config and its seeded results are unchanged.
   - **Out of scope**: Changing DQN's defaults.
 
-- [~] **Quiet Video Recorder Cleanup in Tests**
+- [x] **Quiet Video Recorder Cleanup in Tests**
+  - **Delivered in**: #102. Confirmed by the maintainer on 2026-10-19.
   - **Description**: `TrainingVideoRecorder` validates its arguments before calling Gymnasium's `RecordVideo`
     constructor, so a rejected recorder has no `recorded_frames` and Gymnasium's `__del__` raises an
     `AttributeError` that pytest reports as an unraisable-exception warning (`tests/test_video.py`). Harmless, but it
