@@ -59,8 +59,9 @@ finding, however good the code.
   wrong dtype.
 - **Numerics.** Every `log`, division, `exp` and square root has an answer for zero, for a huge value and
   for a standard deviation of zero.
-- **Randomness.** Draws come from the object's own `default_rng`, seeded from config. No `np.random.seed`
-  and no bare `np.random.*`.
+- **Randomness.** Draws come from the object's own generators, each a named stream of the config seed
+  (`rl_core.seeding.derive_rng`). No `np.random.seed`, no bare `np.random.*`, and no `default_rng(seed)` in an
+  agent.
 - **Gymnasium.** `reset` returns `(obs, info)`; `step` returns five values. The environment is closed on
   every path, including the one where training raises. Vector environments return batches and reset
   themselves. Check signatures in Context7, not from memory.

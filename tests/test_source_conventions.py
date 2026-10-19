@@ -67,7 +67,7 @@ def test_no_bare_global_numpy_random_calls_in_source():
     ]
 
     assert not offenders, (
-        "Use the object's own np.random.default_rng(seed) instead of the global generator:\n"
+        "Use the object's own generator (rl_core.seeding.derive_rng) instead of the global one:\n"
         + "\n".join(offenders)
     )
 
@@ -172,3 +172,41 @@ def test_no_source_file_registers_modules_under_another_name():
 def test_import_scan_sees_both_import_forms():
     source = "import benchmark\nfrom rl_cartpole.benchmark import X\nfrom . import y\n"
     assert _imported_modules(source) == [(1, "benchmark"), (2, "rl_cartpole.benchmark")]
+
+
+# Building a generator from a seed with any of these equals default_rng(seed).
+SEEDED_GENERATOR_CONSTRUCTORS = ("default_rng", "Generator", "PCG64", "SeedSequence")
+
+
+def seeded_default_rng_calls(source: str) -> list[int]:
+    """Lines that build a generator from an argument (a seed) directly, instead of with ``derive_rng``."""
+    lines = []
+    for node in ast.walk(ast.parse(source)):
+        is_call = isinstance(node, ast.Call) and _dotted_name(node.func).endswith(
+            SEEDED_GENERATOR_CONSTRUCTORS
+        )
+        if is_call and (node.args or node.keywords):
+            lines.append(node.lineno)
+    return lines
+
+
+def test_agents_seed_generators_through_named_streams():
+    """An agent's generators come from rl_core.seeding.derive_rng(seed, <stream>): default_rng(seed) would repeat
+    the environment's start-state numbers (roadmap: "Separate Random Streams for Agents and Buffers")."""
+    agent_files = sorted((REPO_ROOT / "src" / "rl_core" / "agents").glob("*.py"))
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}:{line}"
+        for path in agent_files
+        for line in seeded_default_rng_calls(path.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, (
+        "Use derive_rng(seed, <stream>) instead of default_rng(seed):\n" + "\n".join(offenders)
+    )
+
+
+def test_the_seeded_default_rng_scan_flags_what_it_claims():
+    source = (
+        "import numpy as np\nnp.random.default_rng(3)\nnp.random.default_rng()\ndefault_rng(seed=1)\n"
+        "np.random.Generator(np.random.PCG64(5))\n"
+    )
+    assert seeded_default_rng_calls(source) == [2, 4, 5, 5]

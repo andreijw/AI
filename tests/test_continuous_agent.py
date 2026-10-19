@@ -280,13 +280,13 @@ def test_continuous_ppo_shuffle_draws_from_the_agents_own_generator():
     """Replacing the agent's generator changes the mini-batch order, and so the weights."""
     trajectory = _shuffle_sensitive_trajectory()
     first, second = _ppo_agent(seed=7), _ppo_agent(seed=7)
-    second._rng = np.random.default_rng(999)
+    second._shuffle_rng = np.random.default_rng(999)
 
     first.update(trajectory)
     second.update(trajectory)
 
     assert _params_differ(first, second), (
-        "Weights are identical with a different generator: the shuffle is not using self._rng."
+        "Weights are identical with a different generator: the shuffle is not using _shuffle_rng."
     )
 
 

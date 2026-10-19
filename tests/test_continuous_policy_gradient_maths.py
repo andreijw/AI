@@ -579,7 +579,7 @@ def test_ppo_update_replays_as_minibatch_steps_on_fixed_inputs(last_done, batch_
     indices = np.arange(N_STEPS)
     seen: list[dict[str, float]] = []
     for _ in range(2):
-        reference._rng.shuffle(indices)
+        reference._shuffle_rng.shuffle(indices)
         for start in range(0, N_STEPS, batch_size):
             chosen = indices[start : start + batch_size]
             components, grads = reference._minibatch_loss_and_grads(
@@ -617,9 +617,10 @@ def test_checkpoint_resumes_with_the_same_adam_state(agent_cls, tmp_path):
     resumed = _agent(agent_cls, gamma=0.5, seed=99)  # different initial weights
     resumed.load(path)
     assert resumed._optimizer.t == agent._optimizer.t > 0
-    # Checkpoints do not hold the sampling generator (PPO's shuffle); share it so only the
+    # Checkpoints do not hold the generators (action noise, PPO's shuffle); share them so only the
     # optimiser state is under test.
-    resumed._rng = copy.deepcopy(agent._rng)
+    resumed._shuffle_rng = copy.deepcopy(agent._shuffle_rng)
+    resumed._explore_rng = copy.deepcopy(agent._explore_rng)
 
     agent.update(batch)
     resumed.update(batch)

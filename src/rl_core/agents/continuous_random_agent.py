@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from rl_core.seeding import AGENT_EVAL_STREAM, derive_rng
+from rl_core.seeding import AGENT_EVAL_STREAM, AGENT_EXPLORATION_STREAM, derive_rng
 
 from .base_agent import BaseAgent
 from .bounds import action_bounds
@@ -48,7 +48,8 @@ class ContinuousRandomAgent(BaseAgent):
         self.action_low, self.action_high = action_bounds(config, action_dim)
 
         seed: int | None = config.get("seed")
-        self._rng = np.random.default_rng(seed)
+        # Training actions on the exploration stream, apart from the environment's numbers.
+        self._rng = derive_rng(seed, AGENT_EXPLORATION_STREAM)
         # Evaluation actions draw from their own stream, so evaluating does not shift training actions.
         self._eval_rng = derive_rng(seed, AGENT_EVAL_STREAM)
 

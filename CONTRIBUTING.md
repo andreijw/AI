@@ -38,11 +38,13 @@ contributing, writing code, refactoring components, or submitting pull requests.
 ### Determinism & Reproducibility
 
 - **Seeding**: Support deterministic runs by propagating explicit random seeds to environments, agents and buffers.
-  Every component that draws random numbers owns a generator created with `np.random.default_rng(seed)`; never call
-  `np.random.seed` or the global `np.random.*` functions (`tests/test_source_conventions.py` fails if one appears).
-  New components built from a seed another component already uses take their own stream with
-  `rl_core.seeding.derive_rng(seed, stream)`, as the environment wrappers do. Agents and `ReplayBuffer` do not yet:
-  they use `default_rng(seed)` directly (see the roadmap).
+  Every component that draws random numbers owns a generator from `rl_core.seeding.derive_rng(seed, stream)`, one
+  named stream per role (`WRAPPER_STREAM`, `AGENT_WEIGHTS_STREAM`, `AGENT_EXPLORATION_STREAM`, `AGENT_REPLAY_STREAM`,
+  `AGENT_EVAL_STREAM`, `EVAL_STREAM`): Gymnasium seeds an environment's start states exactly like
+  `np.random.default_rng(seed)`, so a component seeded that way would draw the environment's numbers. Never call
+  `np.random.seed`, the global `np.random.*` functions, or `default_rng(seed)` in an agent
+  (`tests/test_source_conventions.py` fails if one appears; `tests/test_random_streams.py` checks that no two
+  generators of an agent repeat each other's numbers).
 - **Seeded environments**: A wrapper applies its constructor seed on the first `reset()` and then continues the
   sequence, so a seeded run is reproducible and every episode starts from a different state. Pass `reset(seed=...)`
   only to restart that sequence deliberately.

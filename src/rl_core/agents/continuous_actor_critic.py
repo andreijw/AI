@@ -7,6 +7,13 @@ from typing import Any
 
 import numpy as np
 
+from rl_core.seeding import (
+    AGENT_EXPLORATION_STREAM,
+    AGENT_REPLAY_STREAM,
+    AGENT_WEIGHTS_STREAM,
+    derive_rng,
+)
+
 from .base_agent import BaseAgent
 from .bounds import action_bounds
 from .optim import Adam, anneal_fraction, anneal_steps_from_config
@@ -39,7 +46,7 @@ class ContinuousActorCriticBase(BaseAgent):
         action_low, action_high: Action bounds. Default: -1.0, 1.0.
         bounded_mean (bool): Policy mean bias + scale * tanh(z), inside the action bounds; needs
             finite bounds with action_low < action_high. Default: False.
-        seed (int): Seed for weights and sampling. Default: None.
+        seed (int): Seed of the weights, action-noise and shuffle streams. Default: None.
     """
 
     def __init__(
@@ -78,19 +85,22 @@ class ContinuousActorCriticBase(BaseAgent):
         self._validate_dims(observation_dim, action_dim, self.hidden_dim)
 
         # Initialize network parameters using He initialization
-        self._rng = np.random.default_rng(config.get("seed"))
+        weights_rng = derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM)
+        # Action noise on its own stream; the shuffle generator is used only by continuous PPO.
+        self._explore_rng = derive_rng(config.get("seed"), AGENT_EXPLORATION_STREAM)
+        self._shuffle_rng = derive_rng(config.get("seed"), AGENT_REPLAY_STREAM)
         scale1 = np.sqrt(2.0 / observation_dim)
         scale_head = np.sqrt(2.0 / self.hidden_dim)
 
         # Trunk: obs -> hidden
         self._W1: np.ndarray = (
-            self._rng.standard_normal((observation_dim, self.hidden_dim)) * scale1
+            weights_rng.standard_normal((observation_dim, self.hidden_dim)) * scale1
         )
         self._b1: np.ndarray = np.zeros(self.hidden_dim, dtype=np.float64)
 
         # Actor head: hidden -> mu
         self._W_mu: np.ndarray = (
-            self._rng.standard_normal((self.hidden_dim, action_dim)) * scale_head
+            weights_rng.standard_normal((self.hidden_dim, action_dim)) * scale_head
         ) * self.mean_init_scale
         self._b_mu: np.ndarray = np.zeros(action_dim, dtype=np.float64)
 
@@ -99,7 +109,7 @@ class ContinuousActorCriticBase(BaseAgent):
         self._log_std: np.ndarray = np.full(action_dim, init_log_std, dtype=np.float64)
 
         # Critic head: hidden -> value
-        self._W_v: np.ndarray = self._rng.standard_normal(self.hidden_dim) * scale_head
+        self._W_v: np.ndarray = weights_rng.standard_normal(self.hidden_dim) * scale_head
         self._b_v: float = 0.0
 
         # Adam with global gradient-norm clipping
@@ -181,7 +191,7 @@ class ContinuousActorCriticBase(BaseAgent):
         if is_eval:
             return np.clip(mu, self.action_low, self.action_high)
         std = np.exp(log_std)
-        noise = self._rng.standard_normal(self.action_dim)
+        noise = self._explore_rng.standard_normal(self.action_dim)
         return mu + std * noise
 
     def _log_prob(self, action: np.ndarray, mu: np.ndarray, log_std: np.ndarray) -> np.ndarray:

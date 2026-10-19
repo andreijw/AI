@@ -76,14 +76,13 @@ That is the pattern for a family of agents. Stateless maths shared across famili
 optimizer step) is a module-level function, not a mixin. Two occurrences are a note; the third is the
 signal to extract. An abstract base with one subclass and no second one on the roadmap is ceremony.
 
-**Randomness is owned and seeded.** Every object that draws random numbers holds its own
-`np.random.default_rng(seed)`, seeded from its config. No `np.random.seed`, no bare `np.random.*` calls:
-global state makes two agents in one benchmark run disturb each other. Environments are seeded through
-the wrapper's constructor seed, applied on the first reset and continued after that. Two components built
-from one seed should not share a stream: `rl_core.seeding.derive_rng(seed, stream)` gives each its own. The
-environment wrappers use it; agents and `ReplayBuffer` still call `default_rng(seed)` directly, so with the
-same seed they draw the environment's numbers (a roadmap item). A plan that adds a source of randomness says
-where its seed comes from and which stream it uses.
+**Randomness is owned and seeded.** Every object that draws random numbers holds its own generator from
+`rl_core.seeding.derive_rng(seed, stream)`, one named stream per role: weights, exploration (action sampling,
+noise, epsilon), replay and minibatch order, evaluation. No `np.random.seed`, no bare `np.random.*` calls, and no
+`default_rng(seed)` in an agent: Gymnasium seeds start states exactly like `default_rng(seed)`, and configs give
+agent and environment the same seed. Environments are seeded through the wrapper's constructor seed, applied on
+the first reset and continued after that. A plan that adds a source of randomness says where its seed comes from
+and which stream it uses; `tests/test_random_streams.py` fails if two generators of an agent repeat each other.
 
 **`terminated` and `truncated` are different facts.** The trainer's batch carries both `dones` (terminated
 or truncated) and `terminated`. For Monte Carlo returns the difference is harmless. For anything that

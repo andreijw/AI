@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 
+from rl_core.seeding import AGENT_EXPLORATION_STREAM, derive_rng
+
 
 class BaseAgent(ABC):
     """
@@ -45,11 +47,11 @@ class BaseAgent(ABC):
         Returns:
             Selected action index.
         """
-        if not hasattr(self, "_rng"):
+        if not hasattr(self, "_explore_rng"):
             seed = self.config.get("seed") if isinstance(self.config, dict) else None
-            self._rng = np.random.default_rng(seed)
+            self._explore_rng = derive_rng(seed, AGENT_EXPLORATION_STREAM)
         if training:
-            return int(self._rng.choice(self.action_dim, p=probs))
+            return int(self._explore_rng.choice(self.action_dim, p=probs))
         return int(np.argmax(probs))
 
     def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:

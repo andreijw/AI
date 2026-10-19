@@ -5,6 +5,8 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, derive_rng
+
 from .base_agent import BaseAgent
 from .optim import Adam, anneal_fraction, optimizer_from_config
 from .replay_buffer import ReplayBuffer
@@ -90,7 +92,10 @@ class DQNAgent(BaseAgent):
         self.epsilon: float = self.epsilon_start
         self._update_counter: int = 0
         self._exploration_step: int = 0
-        self._rng: np.random.Generator = np.random.default_rng(config.get("seed"))
+        weights_rng = derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM)
+        self._explore_rng: np.random.Generator = derive_rng(
+            config.get("seed"), AGENT_EXPLORATION_STREAM
+        )
 
         # He weight initialization
         scale1 = np.sqrt(2.0 / observation_dim)
@@ -98,11 +103,11 @@ class DQNAgent(BaseAgent):
 
         # Online Q-network parameters
         self._W1: npt.NDArray[np.float64] = (
-            self._rng.standard_normal((observation_dim, self.hidden_dim)) * scale1
+            weights_rng.standard_normal((observation_dim, self.hidden_dim)) * scale1
         )
         self._b1: npt.NDArray[np.float64] = np.zeros(self.hidden_dim)
         self._W2: npt.NDArray[np.float64] = (
-            self._rng.standard_normal((self.hidden_dim, action_dim)) * scale2
+            weights_rng.standard_normal((self.hidden_dim, action_dim)) * scale2
         )
         self._b2: npt.NDArray[np.float64] = np.zeros(action_dim)
 
@@ -190,8 +195,8 @@ class DQNAgent(BaseAgent):
         Returns:
             Selected action index.
         """
-        if training and self._rng.random() < self.epsilon:
-            action = int(self._rng.integers(0, self.action_dim))
+        if training and self._explore_rng.random() < self.epsilon:
+            action = int(self._explore_rng.integers(0, self.action_dim))
         else:
             q_vals, _ = self._forward_q(observation, target=False)
             action = int(np.argmax(q_vals))

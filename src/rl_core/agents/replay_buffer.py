@@ -5,6 +5,8 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from rl_core.seeding import AGENT_REPLAY_STREAM, derive_rng
+
 
 class ReplayBuffer:
     """
@@ -51,7 +53,8 @@ class ReplayBuffer:
         self.capacity: int = int(capacity)
         self.action_dim: int | None = None if action_dim is None else int(action_dim)
         self.observation_dim: int = int(observation_dim)
-        self._rng: np.random.Generator = np.random.default_rng(seed)
+        # Sampling on the agent's replay stream of the seed, apart from the environment's numbers.
+        self._rng: np.random.Generator = derive_rng(seed, AGENT_REPLAY_STREAM)
 
         self.observations: npt.NDArray[np.float64] = np.zeros(
             (self.capacity, self.observation_dim), dtype=np.float64

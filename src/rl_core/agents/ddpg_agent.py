@@ -9,7 +9,6 @@ import numpy.typing as npt
 
 from rl_core.seeding import (
     AGENT_EXPLORATION_STREAM,
-    AGENT_REPLAY_STREAM,
     AGENT_WEIGHTS_STREAM,
     derive_rng,
 )
@@ -104,11 +103,9 @@ class DDPGAgent(BaseAgent):
         self._critic_optimizer = Adam(self._critic, self.max_grad_norm)
 
         self._explore_rng = derive_rng(seed, AGENT_EXPLORATION_STREAM)
-        replay_seed = (
-            None if seed is None else int(derive_rng(seed, AGENT_REPLAY_STREAM).integers(2**62))
-        )
+        # The buffer samples on the replay stream of the seed itself.
         self.replay_buffer = ReplayBuffer(
-            self.buffer_capacity, observation_dim, seed=replay_seed, action_dim=action_dim
+            self.buffer_capacity, observation_dim, seed=seed, action_dim=action_dim
         )
         self._training_actions = 0
         self._gradient_steps = 0

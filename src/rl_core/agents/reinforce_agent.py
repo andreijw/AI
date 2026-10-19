@@ -4,6 +4,8 @@ from typing import Any
 
 import numpy as np
 
+from rl_core.seeding import AGENT_WEIGHTS_STREAM, derive_rng
+
 from .base_agent import BaseAgent
 from .optim import Adam, optimizer_from_config
 from .returns import discounted_returns
@@ -58,7 +60,7 @@ class ReinforceAgent(BaseAgent):
             raise ValueError(f"gamma must be in the interval (0, 1], got {self.gamma!r}")
 
         # He-initialised weights for ReLU activations
-        rng = np.random.default_rng(config.get("seed"))
+        rng = derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM)
         scale1 = np.sqrt(2.0 / observation_dim)
         scale2 = np.sqrt(2.0 / self.hidden_dim)
 
