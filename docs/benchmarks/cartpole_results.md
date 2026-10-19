@@ -18,17 +18,19 @@ averaged over the solved runs. **Held** is the share of runs with at least
 100 episodes whose last 100 average at least 475.
 **Eval ≥ Threshold** is the share of runs whose final evaluation
 (10 greedy episodes) averaged at least 475; it does not count as a solve.
+Evaluation runs on a separate environment and plays the same start states
+every time for a seed, so it does not change the training episodes.
 A step budget finishes the episode that crosses it, so a run can overshoot its budget by up to one episode.
 
 ## Performance Summary
 
 | Algorithm | Budget | Episodes | Mean Eval Reward | Reward Std | Solve Rate | Avg Solve Episode | Avg Steps to Solve | Held | Eval ≥ Threshold | Mean Time (s) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **actor_critic** | 500000 steps | 1486 | 499.6 | ±0.9 | 100% | 1072.8 | 308,973 | 80% | 100% | 127.79s |
-| **dqn** | 300000 steps | 992 | 500.0 | ±0.0 | 100% | 754.0 | 181,723 | 100% | 100% | 64.00s |
-| **ppo** | 200000 steps | 693 | 500.0 | ±0.0 | 100% | 530.2 | 121,197 | 80% | 100% | 50.13s |
-| **random** | 50000 steps | 2236 | 22.0 | ±2.6 | 0% | N/A | N/A | 0% | 0% | 1.41s |
-| **reinforce** | 500000 steps | 1541 | 497.5 | ±5.0 | 80% | 1257.8 | 365,311 | 40% | 100% | 104.19s |
+| **actor_critic** | 500000 steps | 1485 | 497.8 | ±4.5 | 100% | 948.4 | 249,766 | 40% | 100% | 125.64s |
+| **dqn** | 300000 steps | 1003 | 500.0 | ±0.0 | 100% | 803.0 | 200,881 | 100% | 100% | 63.15s |
+| **ppo** | 200000 steps | 719 | 499.6 | ±0.8 | 80% | 590.8 | 138,906 | 80% | 100% | 49.95s |
+| **random** | 50000 steps | 2243 | 23.2 | ±2.5 | 0% | N/A | N/A | 0% | 0% | 1.43s |
+| **reinforce** | 500000 steps | 1559 | 497.0 | ±6.0 | 100% | 1222.0 | 347,498 | 40% | 100% | 103.93s |
 
 ## Learning Trajectories
 

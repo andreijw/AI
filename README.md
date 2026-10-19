@@ -199,32 +199,31 @@ python train.py --config configs/pendulum_ddpg.yaml
 A run solves the challenge when its average training reward over 100 episodes reaches the threshold: 475 for
 CartPole-v1, -200 for Pendulum-v1. It **holds** when the average over its last 100 episodes is still at or above the
 threshold. Each agent trains for a budget of environment steps set against its rl-baselines3-zoo reference (see the
-config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-16
-([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
+config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18, with evaluation on its own
+environment ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md)). `train.py` uses seed 42, which was
-not measured (except for DDPG: see `TR-8` in TESTING.md), so a single `train.py` run may land on the unlucky side of
-these numbers:
+not measured, so a single `train.py` run may land on the unlucky side of these numbers:
 
 | Challenge | Agent | Config | Budget (steps) | Seeds solved | Steps to solve | Held |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
-| CartPole-v1 | PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 200,000 | 5 of 5 | 73k to 199k | 4 of 5 |
-| CartPole-v1 | Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 500,000 | 5 of 5 | 184k to 465k | 4 of 5 |
-| CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 500,000 | 4 of 5 | 242k to 446k | 2 of 5 |
-| CartPole-v1 | DQN | `cartpole_dqn.yaml` (Adam, per-step exploration) | 300,000 | 5 of 5 | 145k to 238k | 5 of 5 |
-| Pendulum-v1 | DDPG | `pendulum_ddpg.yaml` (rl-zoo settings, 64×64 networks) | 40,000 | 5 of 5 | 31k to 32k | 5 of 5 |
-| Pendulum-v1 | PPO | `pendulum_ppo.yaml` (2048-step rollouts, annealed) | 200,000 | 5 of 5 | 78k to 155k | 4 of 5 |
+| CartPole-v1 | PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 200,000 | 4 of 5 | 97k to 185k | 4 of 5 |
+| CartPole-v1 | Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 500,000 | 5 of 5 | 195k to 332k | 2 of 5 |
+| CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 500,000 | 5 of 5 | 297k to 430k | 2 of 5 |
+| CartPole-v1 | DQN | `cartpole_dqn.yaml` (Adam, per-step exploration) | 300,000 | 5 of 5 | 152k to 295k | 5 of 5 |
+| Pendulum-v1 | DDPG | `pendulum_ddpg.yaml` (rl-zoo settings, 64×64 networks) | 40,000 | 5 of 5 | 31k | 5 of 5 |
+| Pendulum-v1 | PPO | `pendulum_ppo.yaml` (2048-step rollouts, annealed) | 200,000 | 4 of 5 | 76k to 134k | 4 of 5 |
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates) | 1,000,000 | 0 of 5 | — | 0 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (roadmap: "DQN Reaches the rl-zoo
 Reference"). Pendulum DDPG uses rl-zoo's settings with 64×64 networks instead of 400×300, which take about 16 times
-longer in NumPy; its greedy evaluation averages -150 (± 27 across the 5 seeds' means) against rl-zoo's -152
+longer in NumPy; its greedy evaluation averages -159 (± 22 across the 5 seeds' means) against rl-zoo's -152
 (± 94 across episodes of one run) (roadmap: "Continuous Off-Policy
 Learning & DDPG"). Pendulum PPO trains on rollouts of whole episodes for 200,000 steps, twice rl-zoo's 100,000;
 updating on one episode at a time it solved no seed (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode
 Rule").
-Continuous Actor-Critic does not solve: its training average ends at -286 to -341, though its greedy evaluation
-of -152 ± 45 beats the random agent on every seed (roadmap: "Continuous Actor-Critic Learns Pendulum-v1").
+Continuous Actor-Critic does not solve: its training average ends at -271 to -314, though its greedy evaluation
+of -168 ± 30 beats the random agent on every seed (roadmap: "Continuous Actor-Critic Learns Pendulum-v1").
 
 ### Run any agent from one base config (quick overrides)
 

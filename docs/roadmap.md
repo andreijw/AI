@@ -344,7 +344,13 @@ Defects found while working on other items, then findings from the brooks-lint h
     other agents remain.
   - **Out of scope**: Regenerating `docs/benchmarks/`.
 
-- [~] **Separate Evaluation Environment**
+- [x] **Separate Evaluation Environment**
+  - **Delivered in**: #96, with the benchmarks republished afterwards. Confirmed by the maintainer on 2026-10-18.
+  - **Republished (2026-10-18)**: both benchmarks on seeds 1 to 5, approved by the maintainer. Every seed now trains
+    on a different start-state sequence, so seed-level results moved; every agent still meets the at-least-4-of-5
+    bar. CartPole: REINFORCE 5 of 5 (was 4), Actor-Critic 5 of 5 holding on 2 (was 4), PPO 4 of 5 (was 5; seed 2 ends
+    at 423), DQN 5 of 5. Pendulum: DDPG 5 of 5, PPO 4 of 5 (was 5; seed 4 ends at -415), Actor-Critic beats random
+    on 5 of 5 (evaluation -168 ± 30).
   - **Description**: `Trainer.evaluate` runs on the training environment, so evaluation episodes advance the same
     random sequence and `eval_frequency` changes which start states later training episodes see. Runs stay
     reproducible, but evaluation is not independent of training.
