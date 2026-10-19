@@ -5,6 +5,8 @@ from typing import Any
 
 import numpy as np
 
+from rl_core.seeding import AGENT_WEIGHTS_STREAM, derive_rng
+
 from .base_agent import BaseAgent
 from .optim import Adam, optimizer_from_config
 
@@ -49,7 +51,7 @@ class ActorCriticBase(BaseAgent):
             raise ValueError(f"entropy_coef must be non-negative, got {self.entropy_coef!r}")
 
         # He-initialised weights for ReLU activations.
-        rng = np.random.default_rng(config.get("seed"))
+        rng = derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM)
         scale1 = np.sqrt(2.0 / observation_dim)
         scale_head = np.sqrt(2.0 / self.hidden_dim)
 

@@ -6,8 +6,11 @@ import numpy as np
 # randomization, kept apart from the stream the wrapped environment draws start states from.
 WRAPPER_STREAM = 1
 
-# Streams of an agent that keeps separate generators. Committed configs give an agent the same
-# seed as its environment, so these must differ from WRAPPER_STREAM.
+# An agent's generators, one per role. Committed configs give an agent the same seed as its
+# environment, whose start states Gymnasium draws exactly like np.random.default_rng(seed), so every
+# agent generator comes from one of these streams (and differs from WRAPPER_STREAM).
+# WEIGHTS: weight initialisation. EXPLORATION: action sampling, action noise, epsilon-greedy, random
+# agents' training actions. REPLAY: replay-buffer sampling and minibatch order.
 AGENT_WEIGHTS_STREAM = 10
 AGENT_EXPLORATION_STREAM = 11
 AGENT_REPLAY_STREAM = 12

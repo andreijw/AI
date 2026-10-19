@@ -77,7 +77,9 @@ State the reduction once: averaging over the batch divides every gradient by `B`
   `ReinforceAgent._loss_and_grads`, `ActorCriticAgent._loss_and_grads` and
   `PPOAgent._epoch_loss_and_grads` are the pattern to follow.
 - **Hyperparameters** come from `config.get(name, default)` in `__init__`, validated there.
-- **Randomness** comes from the agent's own `np.random.default_rng(config.get("seed"))`.
+- **Randomness** comes from the agent's own generators, one per role, each `derive_rng(config.get("seed"),
+  <stream>)` from `rl_core.seeding` (weights, exploration, replay or minibatch order); add the agent to
+  `tests/test_random_streams.py`.
 - **Episode ends.** The batch has one `dones` flag covering both `terminated` and `truncated`. If the
   algorithm bootstraps, say in the plan what it does at a time limit.
 - **Stability**: subtract the max before a softmax, bound a log standard deviation, add an epsilon inside

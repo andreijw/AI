@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from rl_core.seeding import AGENT_EVAL_STREAM, derive_rng
+from rl_core.seeding import AGENT_EVAL_STREAM, AGENT_EXPLORATION_STREAM, derive_rng
 
 from .base_agent import BaseAgent
 
@@ -35,7 +35,8 @@ class RandomAgent(BaseAgent):
             raise ValueError(f"action_dim must be a positive integer, got {action_dim!r}")
 
         seed: int | None = config.get("seed")
-        self._rng = np.random.default_rng(seed)
+        # Training actions on the exploration stream, apart from the environment's numbers.
+        self._rng = derive_rng(seed, AGENT_EXPLORATION_STREAM)
         # Evaluation actions draw from their own stream, so evaluating does not shift training actions.
         self._eval_rng = derive_rng(seed, AGENT_EVAL_STREAM)
 

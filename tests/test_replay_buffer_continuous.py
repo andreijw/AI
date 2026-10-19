@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from rl_core.agents import ReplayBuffer
+from rl_core.seeding import AGENT_REPLAY_STREAM, derive_rng
 
 OBS_DIM, ACTION_DIM = 3, 2
 
@@ -95,5 +96,5 @@ def test_the_discrete_default_is_unchanged():
     t = _transitions(10)
     actions = np.arange(10) % 2
     buffer.add_batch(t["obs"], actions, t["rewards"], t["next_obs"], t["dones"])
-    expected_indices = np.random.default_rng(7).choice(10, size=4, replace=False)
+    expected_indices = derive_rng(7, AGENT_REPLAY_STREAM).choice(10, size=4, replace=False)
     np.testing.assert_array_equal(buffer.sample(4)["actions"], actions[expected_indices])

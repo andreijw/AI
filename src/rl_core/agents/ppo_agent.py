@@ -4,6 +4,8 @@ from typing import Any
 
 import numpy as np
 
+from rl_core.seeding import AGENT_REPLAY_STREAM, derive_rng
+
 from .actor_critic_base import ActorCriticBase
 from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import gae
@@ -44,7 +46,7 @@ class PPOAgent(ActorCriticBase):
         hidden_dim (int): Shared hidden layer width. Default: 128.
         value_coef (float): Critic-loss weight. Default: 0.5.
         entropy_coef (float): Entropy-bonus weight. Default: 0.01.
-        seed (int): Seed for weights, action sampling and mini-batch shuffling. Default: None.
+        seed (int): Seed of the weights, action-sampling and mini-batch-order streams. Default: None.
     """
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
@@ -79,7 +81,8 @@ class PPOAgent(ActorCriticBase):
 
         # One generator for action sampling and mini-batch shuffling (the same one
         # BaseAgent would create lazily for sampling).
-        self._rng = np.random.default_rng(config.get("seed"))
+        # Minibatch order on its own stream; action sampling uses the base class's exploration stream.
+        self._shuffle_rng = derive_rng(config.get("seed"), AGENT_REPLAY_STREAM)
         self._rollout: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
         self._rollout_length = 0
         self._steps_trained = 0
@@ -146,7 +149,7 @@ class PPOAgent(ActorCriticBase):
         clipped_total = 0
 
         for _ in range(self.ppo_epochs):
-            order = self._rng.permutation(n_steps)
+            order = self._shuffle_rng.permutation(n_steps)
             for start in range(0, n_steps, minibatch_size):
                 idx = order[start : start + minibatch_size]
                 components, grads, clipped = self._minibatch_loss_and_grads(

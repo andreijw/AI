@@ -293,7 +293,7 @@ def test_update_replays_gae_and_shuffled_minibatches(optimizer):
     if optimizer == "adam":
         config["max_grad_norm"] = 0.5
     agent, reference = _agent(**config), _agent(**config)
-    rng = copy.deepcopy(agent._rng)
+    rng = copy.deepcopy(agent._shuffle_rng)
     adam = ReferenceAdam(0.05, 0.5) if optimizer == "adam" else None
     episodes = [_episode(4, seed=1), _episode(5, seed=2)]
 
@@ -314,7 +314,7 @@ def test_update_replays_gae_and_shuffled_minibatches(optimizer):
 def test_minibatch_larger_than_the_rollout_takes_one_step_per_epoch():
     config = {"rollout_steps": 5, "minibatch_size": 64, "ppo_epochs": 3, "learning_rate": 0.05}
     agent, reference = _agent(**config), _agent(**config)
-    rng = copy.deepcopy(agent._rng)
+    rng = copy.deepcopy(agent._shuffle_rng)
     episode = _episode(5, seed=3)
 
     agent.update(episode)
@@ -344,7 +344,7 @@ def test_defaults_train_on_every_episode_with_monte_carlo_advantages_on_the_whol
     """
     agent = _agent(learning_rate=0.05, ppo_epochs=2)
     reference = _agent(learning_rate=0.05, ppo_epochs=2)
-    rng = copy.deepcopy(agent._rng)
+    rng = copy.deepcopy(agent._shuffle_rng)
     assert (agent.rollout_steps, agent.minibatch_size, agent.gae_lambda) == (1, None, 1.0)
     episode = _episode(70, seed=1)  # longer than any fixed mini-batch default would be
 
@@ -394,7 +394,7 @@ def test_annealing_scales_learning_rate_and_clip_by_the_remaining_fraction():
         "gae_lambda": 0.9,
     }
     agent, reference = _agent(**config), _agent(**config)
-    rng = copy.deepcopy(agent._rng)
+    rng = copy.deepcopy(agent._shuffle_rng)
     episodes = [_episode(5, seed=1), _episode(5, seed=2)]
 
     for episode in episodes:
@@ -420,7 +420,7 @@ def test_annealing_stops_learning_once_the_schedule_is_spent():
 def test_without_anneal_steps_the_learning_rate_stays_constant():
     config = {"rollout_steps": 5, "ppo_epochs": 1, "learning_rate": 0.05}
     agent, reference = _agent(**config), _agent(**config)
-    rng = copy.deepcopy(agent._rng)
+    rng = copy.deepcopy(agent._shuffle_rng)
     episodes = [_episode(5, seed=1), _episode(5, seed=2)]
     for episode in episodes:
         agent.update(episode)

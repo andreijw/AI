@@ -306,10 +306,11 @@ def test_terminated_wins_over_done_and_done_alone_ends_the_episode(
 
 
 def test_the_default_update_reproduces_the_previous_weights():
-    """bounded_mean off and n_steps 0 must train exactly as before the options existed: these values were
-    recorded from the code before the change, and matched it bit for bit on the machine they were recorded
-    on. Other CPUs' BLAS can round the last bit differently (CI on x86 differs by 2e-16 relative), so the
-    comparison allows 1e-12, far below what any change to the update would move them."""
+    """bounded_mean off and n_steps 0 train as before the options existed (bit for bit when they were added,
+    2026-10-18). The values were re-recorded when agents moved to named random streams (roadmap: "Separate
+    Random Streams for Agents and Buffers"), which legitimately changed every seeded weight. Other CPUs' BLAS
+    can round the last bit differently (CI on x86 differs by 2e-16 relative), so the comparison allows 1e-12,
+    far below what any change to the update would move them."""
     from rl_core.agents import ContinuousPPOAgent
 
     rng = np.random.default_rng(0)
@@ -321,16 +322,16 @@ def test_the_default_update_reproduces_the_previous_weights():
     expected = {
         ContinuousActorCriticAgent: (
             [
-                0.00801099118673676,
-                0.0052761923705033605,
-                0.0025389415989348577,
-                0.007236606701524043,
+                0.02018477752485912,
+                0.005797121972952909,
+                -0.0011780786197601398,
+                0.029668696793881844,
             ],
-            -0.009999999633618445,
+            -0.009999999667289254,
         ),
         ContinuousPPOAgent: (
-            [0.024370651716639404, 0.03031677414285624, 0.03144439237784427, 0.03171367604853355],
-            -0.03964092190687535,
+            [0.035114459622755764, 0.033382242554407346, 0.015701151162615997, 0.0447953456592937],
+            -0.039761046476797166,
         ),
     }
     for cls, (w_mu, b_v) in expected.items():

@@ -234,7 +234,7 @@ def test_a_loaded_agent_resumes_exactly(tmp_path):
     resumed.load(path)
     # Training continues from the same replay data and generator state in both.
     resumed.replay_buffer = copy.deepcopy(agent.replay_buffer)
-    resumed._rng = copy.deepcopy(agent._rng)
+    resumed._explore_rng = copy.deepcopy(agent._explore_rng)
 
     for run in (agent, resumed):
         _act(run, 6)

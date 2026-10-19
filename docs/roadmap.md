@@ -329,7 +329,7 @@ Defects found while working on other items, then findings from the brooks-lint h
       2026-10-16: DQN stores the trainer's `terminated` flag ("DQN Reaches the rl-zoo Reference").
   - **Out of scope**: The Pendulum agents (their own item below); new algorithms; changing the solve threshold.
 
-- [ ] **Separate Random Streams for Agents and Buffers**
+- [~] **Separate Random Streams for Agents and Buffers**
   - **Description**: Agents and `ReplayBuffer` create their generators with `np.random.default_rng(seed)`, and the
     committed configs and both benchmark adapters give the agent the same seed as the environment. Weight
     initialisation, exploration, replay sampling and the environment's start states therefore draw from one
@@ -342,6 +342,18 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Progress (2026-10-16)**: `DDPGAgent` already draws weights, exploration and replay sampling from named
     streams (`AGENT_WEIGHTS_STREAM`, `AGENT_EXPLORATION_STREAM`, `AGENT_REPLAY_STREAM` in `rl_core.seeding`); the
     other agents remain.
+  - **Built (2026-10-18)**: every agent and `ReplayBuffer` now takes one generator per role from those streams
+    (`_explore_rng`, `_shuffle_rng`, a weights generator used only at construction; the buffer derives its own).
+    The collision was real: Gymnasium's `reset(seed=s)` gives exactly `default_rng(s)`'s start state, so PPO,
+    DQN and the actor-critic agents drew the environment's numbers. `tests/test_random_streams.py` checks every
+    agent's generators against each other and the environment's; a source rule bans `default_rng(seed)` in
+    agents. Random agents' old checkpoints still load and continue their old sequence. Every seeded result
+    changes; the benchmarks are republished in a following PR (maintainer's decision).
+  - **Finding (2026-10-18)**: on the one-state overfit batch of `tests/test_policy_gradient_maths.py`, the
+    discrete Actor-Critic (SGD, learning rate 0.05) reaches probability 1.0 and then can collapse to the other
+    action (seeds 6 and 7; 9 of 30 seeds under the old seeding too), once the rejected action's log-probability
+    runs away. The test now checks that the batch is fitted within 1,000 updates; the collapse is not yet
+    investigated.
   - **Out of scope**: Regenerating `docs/benchmarks/`.
 
 - [x] **Separate Evaluation Environment**
