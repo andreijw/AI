@@ -90,6 +90,9 @@ pytest -q
 
 - **Coverage Goal**: New features must include tests achieving >=80% branch coverage.
 - All tests must pass cleanly (`0 failed`) before submitting a pull request.
+- An exception raised in a `__del__` during the tests fails the test that triggered it: `pyproject.toml` turns
+  pytest's `PytestUnraisableExceptionWarning` into an error, so such a failure means an object is torn down
+  half-built or a resource is left open.
 
 ---
 

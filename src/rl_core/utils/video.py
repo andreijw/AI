@@ -50,6 +50,8 @@ class TrainingVideoRecorder(RecordVideo):
             progress: Source of the current training episode and evaluation state
             every: Record every ``every``-th training episode (must be > 0)
         """
+        # Validate before RecordVideo.__init__ so a rejected recorder creates no video folder;
+        # __del__ below copes with the half-built object this leaves behind.
         if every <= 0:
             raise ValueError(f"every must be a positive integer, got {every!r}")
         self._progress = progress
@@ -67,6 +69,14 @@ class TrainingVideoRecorder(RecordVideo):
             name_prefix=TRAINING_NAME_PREFIX,
             disable_logger=True,
         )
+        self._initialised = True
+
+    def __del__(self) -> None:
+        # A recorder rejected in __init__ never ran RecordVideo.__init__, so it has none of the
+        # state RecordVideo.__del__ reads.
+        parent_del = getattr(super(), "__del__", None)
+        if parent_del is not None and getattr(self, "_initialised", False):
+            parent_del()
 
     def start_recording(self, video_name: str) -> None:
         """Start a recording named after the training episode instead of the reset count."""

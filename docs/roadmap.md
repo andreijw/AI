@@ -714,13 +714,20 @@ Defects found while working on other items, then findings from the brooks-lint h
     - The committed DQN config and its seeded results are unchanged.
   - **Out of scope**: Changing DQN's defaults.
 
-- [ ] **Quiet Video Recorder Cleanup in Tests**
+- [~] **Quiet Video Recorder Cleanup in Tests**
   - **Description**: `TrainingVideoRecorder` validates its arguments before calling Gymnasium's `RecordVideo`
     constructor, so a rejected recorder has no `recorded_frames` and Gymnasium's `__del__` raises an
     `AttributeError` that pytest reports as an unraisable-exception warning (`tests/test_video.py`). Harmless, but it
     hides real warnings in the test output.
   - **Acceptance criteria**: The test suite prints no unraisable-exception warning from the recorder; invalid
     arguments still raise the same errors.
+  - **Built (2026-10-19)**: `TrainingVideoRecorder.__del__` calls Gymnasium's `RecordVideo.__del__` only once
+    `RecordVideo.__init__` has finished (and only if Gymnasium defines one), so a recorder rejected by its own
+    `every` check or by Gymnasium (an environment without `render_mode="rgb_array"`) is collected silently. The
+    `every` check still runs first, so a rejected recorder creates no video folder. `pyproject.toml` now turns
+    `PytestUnraisableExceptionWarning` into an error, so any future unraisable exception fails the suite. Tests in
+    `tests/test_video.py`. The three Gymnasium "Overwriting existing videos" warnings from older video tests remain
+    (out of scope).
   - **Out of scope**: Other third-party deprecation warnings.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
