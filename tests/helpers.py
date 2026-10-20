@@ -142,6 +142,20 @@ class ReferenceAdam:
         return steps
 
 
+def assert_same_checkpoint(expected, actual, tmp_path) -> None:
+    """Assert two agents hold the same state by saving both and comparing every stored array.
+
+    Goes through ``save`` only, so it holds for any agent and survives renamed attributes.
+    """
+    expected_path, actual_path = tmp_path / "expected.npz", tmp_path / "actual.npz"
+    expected.save(str(expected_path))
+    actual.save(str(actual_path))
+    with np.load(expected_path) as want, np.load(actual_path) as got:
+        assert sorted(got.files) == sorted(want.files), "The checkpoints hold different keys."
+        for key in want.files:
+            np.testing.assert_array_equal(got[key], want[key], err_msg=f"{key} differs.")
+
+
 def write_package(root, name, benchmark, init=True):
     """Create package ``name`` under ``root``, with ``benchmark.py`` holding ``benchmark`` if given."""
     package = root / name

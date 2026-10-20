@@ -661,15 +661,28 @@ Defects found while working on other items, then findings from the brooks-lint h
     clip boundaries in the gradient check.
   - **Out of scope**: Shortening `train.main` and `BenchmarkRunner.run`; changing any update rule.
 
-- [ ] **Test Agents Through Their Public Behaviour**
+- [~] **Test Agents Through Their Public Behaviour**
   - **Description**: Tests reach into private attributes 274 times (124 in `tests/test_agents_extensive.py`), so a
     refactor with no behaviour change breaks many of them. (The 11 tests that called `_compute_returns` went with
-    that method on 2026-10-13; the count above predates that.)
+    that method on 2026-10-13; the count above predates that.) Recounted on 2026-10-20: about 560 accesses in 22
+    files, so the work is split into three PRs by agent family.
+  - **Progress (2026-10-20), PR 1 of 3, discrete policy-gradient agents**: `tests/agent_internals.py` is the one
+    place a test may touch an agent's private state; the AST check
+    `test_migrated_agent_tests_use_only_the_public_interface` (`tests/test_source_conventions.py`) holds the
+    migrated files to it. Migrated: `test_agents_extensive.py`, `test_reinforce_agent.py`,
+    `test_actor_critic_agent.py`, `test_ppo_agent.py`, `test_discrete_ppo.py`, `test_policy_gradient_maths.py`
+    and `test_discrete_policy_numerics.py`. Save/load tests compare checkpoints through
+    `tests.helpers.assert_same_checkpoint` and load into a differently seeded agent. The six "weights change
+    after update" tests (one more than counted above, in `test_ppo_agent.py`) are gone: the update-replay tests
+    in `test_policy_gradient_maths.py` and `test_discrete_ppo.py` already compare every weight against a
+    reference step, and a repeated-update test now requires the reported REINFORCE loss to fall. Remaining: the
+    continuous Gaussian agents (PR 2), DQN and DDPG (PR 3).
   - **Acceptance criteria**:
     - Agent tests assert through `select_action`, the metrics `update` returns, and save/load round trips.
     - Private access remains only where a test checks the maths directly (gradient checks, exact returns), through
       one helper per agent family.
-    - The five "weights change after update" tests are replaced by checks that could fail for a wrong gradient.
+    - The six "weights change after update" tests (five counted at first; `test_ppo_agent.py` had the sixth) are
+      replaced by checks that could fail for a wrong gradient.
   - **Known edge cases**: Tests that need a specific weight state to reach an edge case.
   - **Out of scope**: The integration tests in `tests/test_trainer.py` and the script tests.
 

@@ -9,6 +9,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import numpy as np
 
 from rl_core.agents import ReinforceAgent
+from tests.agent_internals import probabilities
+from tests.helpers import assert_same_checkpoint
 
 _REINFORCE_CONFIG = {"learning_rate": 1e-3, "gamma": 0.99, "hidden_dim": 64, "seed": 0}
 
@@ -69,35 +71,25 @@ def test_reinforce_agent_update_empty_batch():
     assert metrics == {"policy_loss": 0.0}
 
 
-def test_reinforce_agent_weights_change_after_update():
-    """Policy weights must change after a non-trivial update."""
-    agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
-    w1_before = agent._W1.copy()
-    batch = {
-        "observations": np.random.randn(20, 4),
-        "actions": np.random.randint(0, 2, size=20),
-        "rewards": np.ones(20),
-    }
-    agent.update(batch)
-    assert not np.allclose(agent._W1, w1_before), "W1 should change after update"
-
-
 def test_reinforce_agent_save_load(tmp_path):
-    """Saved weights are restored faithfully on load."""
+    """A loaded agent holds the saved weights (extension-less path)."""
     agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
-
+    agent.update(
+        {
+            "observations": np.random.default_rng(1).standard_normal((8, 4)),
+            "actions": np.array([0, 1] * 4),
+            "rewards": np.arange(8.0),
+        }
+    )  # trained, so no weight (the zero-initialised biases included) is at its initial value
     save_path = str(tmp_path / "reinforce_test")
     agent.save(save_path)
 
-    agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
-    agent2._W1 = np.zeros_like(agent2._W1)
-
+    agent2 = ReinforceAgent(
+        observation_dim=4, action_dim=2, config={**_REINFORCE_CONFIG, "seed": 9}
+    )
     agent2.load(save_path)
 
-    np.testing.assert_array_equal(agent._W1, agent2._W1)
-    np.testing.assert_array_equal(agent._W2, agent2._W2)
-    np.testing.assert_array_equal(agent._b1, agent2._b1)
-    np.testing.assert_array_equal(agent._b2, agent2._b2)
+    assert_same_checkpoint(agent, agent2, tmp_path)
 
 
 def test_reinforce_agent_save_load_pt_extension(tmp_path):
@@ -110,14 +102,12 @@ def test_reinforce_agent_save_load_pt_extension(tmp_path):
     assert os.path.exists(save_path)
     assert not os.path.exists(f"{save_path}.npz")
 
-    agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
-    agent2._W1 = np.zeros_like(agent2._W1)
+    agent2 = ReinforceAgent(
+        observation_dim=4, action_dim=2, config={**_REINFORCE_CONFIG, "seed": 9}
+    )
     agent2.load(save_path)
 
-    np.testing.assert_array_equal(agent._W1, agent2._W1)
-    np.testing.assert_array_equal(agent._W2, agent2._W2)
-    np.testing.assert_array_equal(agent._b1, agent2._b1)
-    np.testing.assert_array_equal(agent._b2, agent2._b2)
+    assert_same_checkpoint(agent, agent2, tmp_path)
 
 
 def test_reinforce_agent_save_load_npz_extension(tmp_path):
@@ -129,38 +119,32 @@ def test_reinforce_agent_save_load_npz_extension(tmp_path):
 
     assert os.path.exists(save_path)
 
-    agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
-    agent2._W1 = np.zeros_like(agent2._W1)
+    agent2 = ReinforceAgent(
+        observation_dim=4, action_dim=2, config={**_REINFORCE_CONFIG, "seed": 9}
+    )
     agent2.load(save_path)
 
-    np.testing.assert_array_equal(agent._W1, agent2._W1)
-    np.testing.assert_array_equal(agent._W2, agent2._W2)
-    np.testing.assert_array_equal(agent._b1, agent2._b1)
-    np.testing.assert_array_equal(agent._b2, agent2._b2)
+    assert_same_checkpoint(agent, agent2, tmp_path)
 
 
 def test_reinforce_agent_load_pt_legacy_npz_fallback(tmp_path):
     """Loading a .pt path supports legacy '<name>.pt.npz' checkpoints."""
     agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
+    agent.save(str(tmp_path / "reinforce_legacy.pt.npz"))
 
-    legacy_path = tmp_path / "reinforce_legacy.pt.npz"
-    np.savez(legacy_path, W1=agent._W1, b1=agent._b1, W2=agent._W2, b2=agent._b2)
-
-    agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
-    agent2._W1 = np.zeros_like(agent2._W1)
+    agent2 = ReinforceAgent(
+        observation_dim=4, action_dim=2, config={**_REINFORCE_CONFIG, "seed": 9}
+    )
     agent2.load(str(tmp_path / "reinforce_legacy.pt"))
 
-    np.testing.assert_array_equal(agent._W1, agent2._W1)
-    np.testing.assert_array_equal(agent._W2, agent2._W2)
-    np.testing.assert_array_equal(agent._b1, agent2._b1)
-    np.testing.assert_array_equal(agent._b2, agent2._b2)
+    assert_same_checkpoint(agent, agent2, tmp_path)
 
 
 def test_reinforce_agent_action_probabilities_sum_to_one():
     """Policy outputs a valid probability distribution."""
     agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
     obs = np.array([0.5, -0.3, 0.1, 0.8])
-    probs, _ = agent._policy(obs)
+    probs = probabilities(agent, obs)
     assert probs.shape == (2,)
     np.testing.assert_allclose(probs.sum(), 1.0, atol=1e-6)
     assert np.all(probs >= 0)

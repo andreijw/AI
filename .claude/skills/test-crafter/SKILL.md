@@ -80,6 +80,7 @@ only worse. Compare the analytic gradient with a central finite difference on a 
 one that disagrees.
 
 ```python
+from tests.agent_internals import gradient_check_parameters, loss_and_grads
 from tests.helpers import assert_gradients_match
 
 
@@ -87,11 +88,12 @@ def test_reinforce_gradients_match_finite_differences():
     agent = ReinforceAgent(observation_dim=4, action_dim=3, config={"hidden_dim": 6, "seed": 11})
     observations, actions = _batch()  # hand-built, no environment, no sampling
     return_weights = np.array([0.7, -1.2, 0.4, 1.5, -0.9, 0.3])  # held constant
-    _, grads = agent._loss_and_grads(observations, actions, return_weights)  # nothing applied
+    _, grads = loss_and_grads(agent, observations, actions, return_weights)  # nothing applied
+    parameters, _ = gradient_check_parameters(agent)  # the live arrays, perturbed in place
 
     assert_gradients_match(
-        lambda: agent._loss_and_grads(observations, actions, return_weights)[0],
-        {"W1": agent._W1, "b1": agent._b1, "W2": agent._W2, "b2": agent._b2},
+        lambda: loss_and_grads(agent, observations, actions, return_weights)[0],
+        parameters,
         grads,
     )
 ```
@@ -112,7 +114,8 @@ the fixtures and kink assertions to copy.
 - Whatever the algorithm holds constant when differentiating (returns, advantages, old log-probabilities,
   TD targets) must be an argument of the method, so the numerical gradient holds it constant too.
 - A parameter stored as a Python float (`_b_v`) cannot be perturbed in place: box it in a one-element
-  array and have the loss closure copy it back onto the agent.
+  array and have the loss closure copy it back onto the agent (`gradient_check_parameters` in
+  `tests/agent_internals.py` returns the box and a `sync` function for the closure to call).
 - This needs the loss and its gradients to be computable without also applying the optimizer step. If the
   code under test does both in one method, split it; that is a design improvement, not a test hack.
 
@@ -159,7 +162,13 @@ an aliased target only shows on the update after a sync.
 - **Parametrize rather than copy.** Two tests that differ only in inputs become one
   `@pytest.mark.parametrize`.
 - **Patch at the seam, not the internals.** The script tests monkeypatch `sys.argv` and optional imports;
-  a test that reaches into private attributes to make an assertion breaks on the next refactor.
+  a test that reaches into private attributes to make an assertion breaks on the next refactor. Agent
+  tests assert through `select_action`, the metrics `update` returns and `save`/`load`
+  (`tests.helpers.assert_same_checkpoint`, loading into a differently seeded agent that has trained at least
+  once, so a load that skips a zero-initialised bias still fails). Maths tests that need weights, the forward
+  pass or a loss method go through `tests/agent_internals.py`, the one module allowed to name an agent's
+  private members; `test_migrated_agent_tests_use_only_the_public_interface` holds each migrated file to it,
+  and a newly migrated file is added to its list.
 - **Every assertion message says what should have happened**, in words a person reading CI output
   understands.
 

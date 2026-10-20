@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from rl_core.agents import ActorCriticAgent, PPOAgent, ReinforceAgent
+from tests.agent_internals import probabilities, set_weights, weights
 
 POLICY_AGENTS = [ReinforceAgent, ActorCriticAgent, PPOAgent]
 OBSERVATION = np.array([0.05, -0.1, 0.02, 0.08])
@@ -23,14 +24,12 @@ def _set_logits(agent, logits) -> None:
     logit vector: scaling the weights depends on the sign of whatever the seed produced, and a
     hidden layer that outputs zero would make the weights irrelevant.
     """
-    weight, bias = ("_W2", "_b2") if isinstance(agent, ReinforceAgent) else ("_W_pi", "_b_pi")
-    setattr(agent, weight, np.zeros_like(getattr(agent, weight)))
-    setattr(agent, bias, np.asarray(logits, dtype=np.float64))
+    weight, bias = ("W2", "b2") if isinstance(agent, ReinforceAgent) else ("W_pi", "b_pi")
+    set_weights(agent, **{weight: np.zeros_like(weights(agent)[weight]), bias: logits})
 
 
 def _probabilities(agent, observation=OBSERVATION) -> np.ndarray:
-    forward = agent._policy if isinstance(agent, ReinforceAgent) else agent._forward
-    return np.asarray(forward(observation)[0])
+    return np.asarray(probabilities(agent, observation))
 
 
 def _make(agent_cls, action_dim: int = 2, **config):
@@ -104,11 +103,7 @@ def _late_reward_batch() -> dict[str, np.ndarray]:
 def _weights_after_update(agent_cls, gamma: float) -> dict[str, np.ndarray]:
     agent = _make(agent_cls, gamma=gamma)
     agent.update(_late_reward_batch())
-    return {
-        name: np.array(value, dtype=np.float64)
-        for name, value in vars(agent).items()
-        if name.startswith(("_W", "_b")) and isinstance(value, (np.ndarray, float))
-    }
+    return weights(agent)
 
 
 def _largest_difference(first: dict[str, np.ndarray], second: dict[str, np.ndarray]) -> float:
