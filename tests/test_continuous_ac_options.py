@@ -203,7 +203,16 @@ def test_advantages_are_not_normalised_when_asked(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "bad", [{"n_steps": -1}, {"n_steps": 2.5}, {"gae_lambda": 1.5}, {"gae_lambda": -0.1}]
+    "bad",
+    [
+        {"n_steps": -1},
+        {"n_steps": 2.5},
+        {"n_steps": 4.0},
+        {"n_steps": True},
+        {"n_steps": "4"},
+        {"gae_lambda": 1.5},
+        {"gae_lambda": -0.1},
+    ],
 )
 def test_invalid_chunk_settings_are_rejected(bad):
     with pytest.raises(ValueError, match="n_steps|gae_lambda"):

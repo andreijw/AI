@@ -7,6 +7,7 @@ import numpy as np
 from rl_core.seeding import AGENT_WEIGHTS_STREAM, derive_rng
 
 from .base_agent import BaseAgent
+from .config_values import positive_int
 from .optim import Adam, optimizer_from_config
 from .returns import discounted_returns
 from .softmax import stable_softmax
@@ -51,10 +52,10 @@ class ReinforceAgent(BaseAgent):
 
         self.learning_rate: float = float(config.get("learning_rate", 1e-3))
         self.gamma: float = float(config.get("gamma", 0.99))
-        self.hidden_dim: int = int(config.get("hidden_dim", 128))
+        self.hidden_dim: int = positive_int(config, "hidden_dim", 128)
 
         # Validate hyperparameters early to avoid numerical issues later.
-        self._validate_dims(observation_dim, action_dim, self.hidden_dim)
+        self._validate_dims(observation_dim, action_dim)
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
         if not (0.0 < self.gamma <= 1.0):

@@ -17,7 +17,7 @@ def test_continuous_base_dimension_validation():
     with pytest.raises(ValueError, match="action_dim must be positive"):
         ContinuousActorCriticAgent(observation_dim=3, action_dim=0, config={})
 
-    with pytest.raises(ValueError, match="hidden_dim must be positive"):
+    with pytest.raises(ValueError, match="hidden_dim must be a positive integer"):
         ContinuousActorCriticAgent(observation_dim=3, action_dim=1, config={"hidden_dim": 0})
 
 

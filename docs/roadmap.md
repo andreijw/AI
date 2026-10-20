@@ -739,6 +739,37 @@ Defects found while working on other items, then findings from the brooks-lint h
         `docs/benchmarks/cartpole_results.md` and the README's results table show the new numbers.
   - **Out of scope**: Sharing one rollout buffer between the two PPO agents (until a third user appears).
 
+- [~] **Strict Integer Settings for Every Agent**
+  - **Description**: Found 2026-10-19 while making the PPO settings strict ("PPO Episode Ends and Validation").
+    These agent settings are still read with `int(...)`, so 2.5 silently trains as 2: `hidden_dim` in
+    `ReinforceAgent`, `ActorCriticBase` (Actor-Critic, discrete PPO) and `ContinuousActorCriticBase` (continuous
+    Actor-Critic, continuous PPO), and DDPG's `hidden_sizes` widths, `batch_size`, `buffer_capacity`,
+    `learning_starts` and `max_updates_per_call`. Continuous Actor-Critic's `n_steps` is already strict but writes
+    its own non-negative check.
+  - **Acceptance criteria**:
+    - Each of these settings rejects 2.5, 4.0, `True` and `"4"` at construction with an error naming the key,
+      through the shared readers in `rl_core.agents.config_values`; `learning_starts` and `n_steps` accept 0.
+    - Committed configs and seeded results are unchanged (bit-identical short runs before and after).
+    - No `hidden_dim` check is left that can no longer fire.
+  - **Known edge cases**: NumPy integer widths in `hidden_sizes` (accepted); float or string widths (rejected);
+    an unset `max_updates_per_call` (None).
+  - **Out of scope**: Float settings. The Trainer's budget keys (`num_episodes`, `total_steps`), which accept 4.0
+    and `"4"` on purpose: they are run budgets converted from the CLI and YAML, not agent hyperparameters.
+  - **Built (2026-10-19)**:
+    - `hidden_dim` (REINFORCE, `ActorCriticBase`, `ContinuousActorCriticBase`) and DDPG's `batch_size` and
+      `buffer_capacity` use `positive_int`. DDPG's `learning_starts` and continuous Actor-Critic's `n_steps` use
+      the new `non_negative_int`, and `max_updates_per_call` uses `optional_positive_int`.
+    - Each DDPG `hidden_sizes` width is checked by the new `check_positive_int`, as in
+      `hidden_sizes[1] must be a positive integer, got 2.5`.
+    - The readers share one private check. Both `_validate_dims` methods no longer take `hidden_dim`, whose check
+      could no longer fire.
+    - DDPG's integer errors now come before its other range checks. The old message
+      "hidden_dim must be positive" is now "hidden_dim must be a positive integer".
+    - Tests are in `tests/test_strict_integer_settings.py` and `tests/test_config_values.py`.
+    - Seeded short runs of `configs/cartpole_reinforce.yaml`, `cartpole_actor_critic.yaml`, `pendulum_ddpg.yaml`
+      (15,000 steps, past its warm-up) and `pendulum_actor_critic.yaml` give bit-identical checkpoints and logs
+      before and after.
+
 - [x] **DQN Config Validation**
   - **Delivered in**: #100. Confirmed by the maintainer on 2026-10-19.
   - **Description**: Listed under "CartPole Agents Learn Within Their Budgets" → DQN behaviours and never given

@@ -16,6 +16,7 @@ from rl_core.seeding import (
 
 from .base_agent import BaseAgent
 from .bounds import action_bounds
+from .config_values import non_negative_int, positive_int
 from .optim import Adam, anneal_fraction, anneal_steps_from_config
 from .returns import discounted_returns, gae
 
@@ -58,7 +59,7 @@ class ContinuousActorCriticBase(BaseAgent):
         super().__init__(observation_dim, action_dim, config)
 
         self.gamma: float = float(config.get("gamma", 0.99))
-        self.hidden_dim: int = int(config.get("hidden_dim", 128))
+        self.hidden_dim: int = positive_int(config, "hidden_dim", 128)
         self.learning_rate: float = float(config.get("learning_rate", 3e-4))
         self.value_coef: float = float(config.get("value_coef", 0.5))
         self.entropy_coef: float = float(config.get("entropy_coef", 0.001))
@@ -82,7 +83,7 @@ class ContinuousActorCriticBase(BaseAgent):
         self._mean_scale: np.ndarray = (high - low) / 2.0
         self._mean_bias: np.ndarray = (high + low) / 2.0
 
-        self._validate_dims(observation_dim, action_dim, self.hidden_dim)
+        self._validate_dims(observation_dim, action_dim)
 
         # Initialize network parameters using He initialization
         weights_rng = derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM)
@@ -127,13 +128,11 @@ class ContinuousActorCriticBase(BaseAgent):
         )
 
     @staticmethod
-    def _validate_dims(obs_dim: int, act_dim: int, hidden_dim: int) -> None:
+    def _validate_dims(obs_dim: int, act_dim: int) -> None:
         if obs_dim <= 0:
             raise ValueError(f"observation_dim must be positive, got {obs_dim}")
         if act_dim <= 0:
             raise ValueError(f"action_dim must be positive, got {act_dim}")
-        if hidden_dim <= 0:
-            raise ValueError(f"hidden_dim must be positive, got {hidden_dim}")
 
     def _mean(self, h: np.ndarray) -> tuple[np.ndarray, np.ndarray | float, np.ndarray | None]:
         """
@@ -314,14 +313,7 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         config: dict[str, Any],
     ) -> None:
         super().__init__(observation_dim, action_dim, config)
-        raw_n_steps = config.get("n_steps", 0)
-        if (
-            isinstance(raw_n_steps, bool)
-            or not isinstance(raw_n_steps, int | np.integer)
-            or raw_n_steps < 0
-        ):
-            raise ValueError(f"n_steps must be a non-negative integer, got {raw_n_steps!r}")
-        self.n_steps: int = int(raw_n_steps)
+        self.n_steps: int = non_negative_int(config, "n_steps", 0)
         self.gae_lambda: float = float(config.get("gae_lambda", 1.0))
         if not 0.0 <= self.gae_lambda <= 1.0:
             raise ValueError(f"gae_lambda must be in [0, 1], got {self.gae_lambda!r}")
