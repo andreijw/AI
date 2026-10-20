@@ -7,6 +7,12 @@ import pytest
 
 from rl_core.agents.continuous_actor_critic import ContinuousActorCriticAgent
 from rl_core.agents.continuous_ppo import ContinuousPPOAgent
+from tests.agent_internals import (
+    assert_same_weights,
+    replace_shuffle_generator,
+    set_weights,
+    weights,
+)
 
 
 def test_continuous_base_dimension_validation():
@@ -66,8 +72,7 @@ def _far_outside_agent(agent_cls, **config):
     """An agent whose policy mean sits around +40, far beyond the action bounds of ±2."""
     settings = {"action_low": -2.0, "action_high": 2.0, "seed": 3, **config}
     agent = agent_cls(observation_dim=3, action_dim=1, config=settings)
-    agent._b_mu = np.array([40.0])
-    agent._W_mu = np.zeros_like(agent._W_mu)
+    set_weights(agent, b_mu=np.array([40.0]), W_mu=np.zeros_like(weights(agent)["W_mu"]))
     return agent
 
 
@@ -75,7 +80,7 @@ def _far_outside_agent(agent_cls, **config):
 def test_training_actions_are_the_unclipped_sample(agent_cls):
     """The batch must hold the action the log-probability was sampled for, not its clipped value."""
     agent = _far_outside_agent(agent_cls)
-    std = float(np.exp(agent._log_std[0]))
+    std = float(np.exp(weights(agent)["log_std"][0]))
     state = np.array([0.5, -0.2, 1.0])
     samples = np.array([agent.select_action(state, training=True)[0] for _ in range(200)])
     assert np.all(np.abs(samples - 40.0) < 6 * std), (
@@ -204,8 +209,6 @@ def test_continuous_ppo_update():
 # Reproducibility of the PPO mini-batch shuffle
 # ---------------------------------------------------------------------------
 
-_PPO_PARAMS = ("_W1", "_b1", "_W_mu", "_b_mu", "_log_std", "_W_v", "_b_v")
-
 
 @pytest.fixture
 def preserve_global_numpy_random_state():
@@ -233,21 +236,9 @@ def _ppo_agent(seed: int) -> ContinuousPPOAgent:
     return ContinuousPPOAgent(observation_dim=3, action_dim=1, config=config)
 
 
-def _ppo_params(agent: ContinuousPPOAgent) -> dict[str, np.ndarray]:
-    return {name: np.array(getattr(agent, name), dtype=np.float64) for name in _PPO_PARAMS}
-
-
-def _assert_same_params(first: ContinuousPPOAgent, second: ContinuousPPOAgent) -> None:
-    a, b = _ppo_params(first), _ppo_params(second)
-    for name in _PPO_PARAMS:
-        np.testing.assert_array_equal(
-            a[name], b[name], err_msg=f"{name} differs between two agents with the same seed."
-        )
-
-
 def _params_differ(first: ContinuousPPOAgent, second: ContinuousPPOAgent) -> bool:
-    a, b = _ppo_params(first), _ppo_params(second)
-    return any(not np.array_equal(a[name], b[name]) for name in _PPO_PARAMS)
+    a, b = weights(first), weights(second)
+    return any(not np.array_equal(a[name], b[name]) for name in a)
 
 
 def test_continuous_ppo_update_is_deterministic_for_a_seed(preserve_global_numpy_random_state):
@@ -260,7 +251,7 @@ def test_continuous_ppo_update_is_deterministic_for_a_seed(preserve_global_numpy
     np.random.seed(1)
     second.update(trajectory)
 
-    _assert_same_params(first, second)
+    assert_same_weights(first, second, rtol=0.0)
 
 
 def test_continuous_ppo_update_leaves_global_random_state_untouched():
@@ -280,13 +271,13 @@ def test_continuous_ppo_shuffle_draws_from_the_agents_own_generator():
     """Replacing the agent's generator changes the mini-batch order, and so the weights."""
     trajectory = _shuffle_sensitive_trajectory()
     first, second = _ppo_agent(seed=7), _ppo_agent(seed=7)
-    second._shuffle_rng = np.random.default_rng(999)
+    replace_shuffle_generator(second, np.random.default_rng(999))
 
     first.update(trajectory)
     second.update(trajectory)
 
     assert _params_differ(first, second), (
-        "Weights are identical with a different generator: the shuffle is not using _shuffle_rng."
+        "Weights are identical with a different generator: the shuffle ignores the agent's own."
     )
 
 
@@ -326,7 +317,7 @@ def _actor_critic_weights_after_update(gamma: float) -> dict[str, np.ndarray]:
     )
     for _ in range(3):
         agent.update(batch)
-    return {name: np.array(getattr(agent, name), dtype=np.float64) for name in _PPO_PARAMS}
+    return weights(agent)
 
 
 def test_continuous_actor_critic_update_depends_on_the_discount_factor():
@@ -335,7 +326,7 @@ def test_continuous_actor_critic_update_depends_on_the_discount_factor():
     far_sighted = _actor_critic_weights_after_update(gamma=0.99)
 
     difference = max(
-        float(np.max(np.abs(short_sighted[name] - far_sighted[name]))) for name in _PPO_PARAMS
+        float(np.max(np.abs(short_sighted[name] - far_sighted[name]))) for name in short_sighted
     )
     assert difference > 1e-6, (
         f"Weights match for gamma 0.5 and 0.99 (largest difference {difference:.2e}): "
@@ -348,5 +339,6 @@ def test_continuous_actor_critic_update_is_identical_for_the_same_discount_facto
     first = _actor_critic_weights_after_update(gamma=0.9)
     second = _actor_critic_weights_after_update(gamma=0.9)
 
-    for name in _PPO_PARAMS:
+    assert first.keys() == second.keys()
+    for name in first:
         np.testing.assert_array_equal(first[name], second[name])

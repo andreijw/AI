@@ -677,6 +677,12 @@ Defects found while working on other items, then findings from the brooks-lint h
     in `test_policy_gradient_maths.py` and `test_discrete_ppo.py` already compare every weight against a
     reference step, and a repeated-update test now requires the reported REINFORCE loss to fall. Remaining: the
     continuous Gaussian agents (PR 2), DQN and DDPG (PR 3).
+  - **Progress (2026-10-20), PR 2 of 3, continuous Gaussian agents**: `test_continuous_agent.py`,
+    `test_continuous_ac_options.py`, `test_continuous_options.py`, `test_continuous_policy_gradient_maths.py` and
+    `test_continuous_ppo_rollouts.py` join the guard's list, through the same helpers (now covering the Gaussian
+    weights `W_mu`, `b_mu`, `log_std`). Annealing progress is checked through the `anneal_fraction` metric and
+    an empty episode through the next rollout's `rollout_steps`. `assert_same_weights(..., rtol=0.0)` now means
+    bit-identical. Remaining: DQN and DDPG (PR 3).
   - **Acceptance criteria**:
     - Agent tests assert through `select_action`, the metrics `update` returns, and save/load round trips.
     - Private access remains only where a test checks the maths directly (gradient checks, exact returns), through

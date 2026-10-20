@@ -20,6 +20,7 @@ from tests.agent_internals import (
     ppo_minibatch_loss_and_grads,
     ppo_rollout_episode,
     probabilities,
+    set_constant_critic,
     set_weights,
     shuffle_generator,
     spy_on_ppo_minibatches,
@@ -70,11 +71,6 @@ def _cut_episode(
     if next_observations:
         batch["next_observations"] = rng.standard_normal((length, OBS_DIM))
     return batch
-
-
-def _constant_critic(agent: PPOAgent, value: float) -> None:
-    """Make V(s) = value for every state."""
-    set_weights(agent, W_v=np.zeros_like(weights(agent)["W_v"]), b_v=value)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +280,7 @@ def test_the_bootstrap_reaches_the_value_loss():
     Without the bootstrap A1 would be 1 and A0 = 1.52.
     """
     agent = _agent(gamma=0.9, gae_lambda=0.8, ppo_epochs=1)
-    _constant_critic(agent, 2.0)
+    set_constant_critic(agent, 2.0)
     metrics = agent.update(_cut_episode([1.0, 3.0]))
     a1 = 2.8
     a0 = 0.8 + 0.9 * 0.8 * a1

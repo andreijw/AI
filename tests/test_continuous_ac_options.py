@@ -14,6 +14,18 @@ import pytest
 
 from rl_core.agents import ContinuousActorCriticAgent, ContinuousPPOAgent
 from rl_core.agents.returns import gae
+from tests.agent_internals import (
+    assert_same_weights,
+    chunk_targets,
+    gaussian_forward,
+    optimizer,
+    set_constant_critic,
+    set_weights,
+    spy_on_adam_step,
+    spy_on_chunk_targets,
+    spy_on_loss_and_grads,
+    weights,
+)
 
 GAMMA, LAMBDA = 0.9, 0.9
 BOUNDS = {"action_low": -2.0, "action_high": 3.0}  # scale 2.5, bias 0.5
@@ -43,11 +55,6 @@ def _episode(length: int = 20, terminated: bool = False, seed: int = 0) -> dict[
     }
 
 
-def _constant_critic(agent, value: float) -> None:
-    agent._W_v[...] = 0.0
-    agent._b_v = value
-
-
 # ---------------------------------------------------------------------------
 # bounded_mean
 # ---------------------------------------------------------------------------
@@ -56,25 +63,25 @@ def _constant_critic(agent, value: float) -> None:
 @pytest.mark.parametrize("agent_cls", [ContinuousActorCriticAgent, ContinuousPPOAgent])
 def test_a_bounded_mean_stays_inside_the_bounds_whatever_the_weights(agent_cls):
     agent = agent_cls(3, 1, config={"seed": 1, "bounded_mean": True, **BOUNDS})
-    agent._b_mu[...] = 50.0
-    mu, _, _, _ = agent._forward(np.zeros((4, 3)))
+    set_weights(agent, b_mu=np.full(1, 50.0))
+    mu, _, _, _ = gaussian_forward(agent, np.zeros((4, 3)))
     np.testing.assert_allclose(mu, 3.0)
-    agent._b_mu[...] = -50.0
-    np.testing.assert_allclose(agent._forward(np.zeros(3))[0], [-2.0])
+    set_weights(agent, b_mu=np.full(1, -50.0))
+    np.testing.assert_allclose(gaussian_forward(agent, np.zeros(3))[0], [-2.0])
 
 
 def test_a_bounded_mean_is_tanh_scaled_to_the_bounds():
     agent = _ac(bounded_mean=True)
-    agent._W_mu[...] = 0.0
-    agent._b_mu[...] = np.arctanh(0.4)
-    np.testing.assert_allclose(agent._forward(np.zeros(3))[0], [0.5 + 2.5 * 0.4])
+    set_weights(agent, W_mu=np.zeros_like(weights(agent)["W_mu"]))
+    set_weights(agent, b_mu=np.full(1, np.arctanh(0.4)))
+    np.testing.assert_allclose(gaussian_forward(agent, np.zeros(3))[0], [0.5 + 2.5 * 0.4])
 
 
 @pytest.mark.parametrize("agent_cls", [ContinuousActorCriticAgent, ContinuousPPOAgent])
 def test_without_bounded_mean_the_mean_is_the_linear_head_as_before(agent_cls):
     agent = agent_cls(3, 1, config={"seed": 1, **BOUNDS})
-    agent._b_mu[...] = 50.0
-    np.testing.assert_allclose(agent._forward(np.zeros(3))[0], [50.0], atol=1.0)
+    set_weights(agent, b_mu=np.full(1, 50.0))
+    np.testing.assert_allclose(gaussian_forward(agent, np.zeros(3))[0], [50.0], atol=1.0)
 
 
 @pytest.mark.parametrize("bad", [{"action_high": np.inf}, {"action_low": 3.0}])
@@ -106,7 +113,7 @@ def test_an_old_checkpoint_counts_as_unbounded(tmp_path):
 
 def test_update_reports_how_often_a_bounded_mean_saturates():
     agent = _ac(bounded_mean=True)
-    agent._b_mu[...] = 50.0
+    set_weights(agent, b_mu=np.full(1, 50.0))
     assert agent.update(_episode())["saturation"] == pytest.approx(1.0)
     assert "saturation" not in _ac().update(_episode())
 
@@ -118,10 +125,10 @@ def test_update_reports_how_often_a_bounded_mean_saturates():
 
 def test_chunk_targets_match_a_hand_computation():
     agent = _ac()
-    _constant_critic(agent, 2.0)
+    set_constant_critic(agent, 2.0)
     rewards = np.array([-1.0, -3.0])
-    advantages, returns = agent._chunk_targets(
-        np.zeros((2, 3)), rewards, np.zeros(3), terminal=False
+    advantages, returns = chunk_targets(
+        agent, np.zeros((2, 3)), rewards, np.zeros(3), terminal=False
     )
     # V = 2 everywhere; bootstrap V(s_next) = 2: d1 = -3 + 0.9 * 2 - 2 = -3.2, d0 = -1 + 0.9 * 2 - 2 = -1.2,
     # A1 = d1, A0 = d0 + 0.9 * 0.9 * d1
@@ -131,24 +138,23 @@ def test_chunk_targets_match_a_hand_computation():
 
 def test_a_terminal_chunk_does_not_bootstrap():
     agent = _ac()
-    _constant_critic(agent, 2.0)
-    advantages, _ = agent._chunk_targets(
-        np.zeros((1, 3)), np.array([-3.0]), np.zeros(3), terminal=True
+    set_constant_critic(agent, 2.0)
+    advantages, _ = chunk_targets(
+        agent, np.zeros((1, 3)), np.array([-3.0]), np.zeros(3), terminal=True
     )
     np.testing.assert_allclose(advantages, [-3.0 - 2.0])
 
 
 def _chunk_calls(agent, episode, monkeypatch):
     calls = []
-    original = agent._chunk_targets
 
-    def record(states, rewards, bootstrap_obs, terminal):
+    def record(original, states, rewards, bootstrap_obs, terminal):
         calls.append(
             (len(rewards), terminal, None if bootstrap_obs is None else bootstrap_obs.copy())
         )
         return original(states, rewards, bootstrap_obs, terminal)
 
-    monkeypatch.setattr(agent, "_chunk_targets", record)
+    spy_on_chunk_targets(monkeypatch, agent, record)
     agent.update(episode)
     return calls
 
@@ -158,7 +164,7 @@ def test_an_episode_is_trained_in_chunks_of_n_steps_with_a_short_last_one(monkey
     episode = _episode(length=20)
     calls = _chunk_calls(agent, episode, monkeypatch)
     assert [length for length, _, _ in calls] == [8, 8, 4]
-    assert agent._optimizer.t == 3, "one optimizer step per chunk"
+    assert optimizer(agent).t == 3, "one optimizer step per chunk"
     # each chunk bootstraps from the state after its last step
     np.testing.assert_array_equal(calls[0][2], episode["next_observations"][7])
     np.testing.assert_array_equal(calls[2][2], episode["next_observations"][19])
@@ -170,12 +176,13 @@ def test_only_a_true_termination_ends_the_last_chunks_bootstrap(monkeypatch, ter
     assert [terminal for _, terminal, _ in calls] == [False, False, expected]
 
 
-def test_chunk_rewards_are_scaled():
+def test_chunk_rewards_are_scaled(monkeypatch):
     agent = _ac(n_steps=4, reward_scale=0.05)
     seen = []
-    original = agent._chunk_targets
-    agent._chunk_targets = lambda s, r, b, terminal: (
-        seen.append(r.copy()) or original(s, r, b, terminal)
+    spy_on_chunk_targets(
+        monkeypatch,
+        agent,
+        lambda original, s, r, b, terminal: seen.append(r.copy()) or original(s, r, b, terminal),
     )
     episode = _episode(length=4)
     agent.update(episode)
@@ -184,15 +191,14 @@ def test_chunk_rewards_are_scaled():
 
 def test_advantages_are_not_normalised_when_asked(monkeypatch):
     agent = _ac(n_steps=4, normalize_advantages=False)
-    _constant_critic(agent, 2.0)
+    set_constant_critic(agent, 2.0)
     received = []
-    original = agent._loss_and_grads
 
-    def record(states, actions, returns, advantages=None):
+    def record(original, states, actions, returns, advantages=None):
         received.append(advantages.copy())
         return original(states, actions, returns, advantages)
 
-    monkeypatch.setattr(agent, "_loss_and_grads", record)
+    spy_on_loss_and_grads(monkeypatch, agent, record)
     episode = _episode(length=4)
     agent.update(episode)
     values = np.full(4, 2.0)
@@ -227,9 +233,8 @@ def test_invalid_chunk_settings_are_rejected(bad):
 def test_the_learning_rate_anneals_per_trained_transition(monkeypatch):
     agent = _ac(n_steps=8, anneal_steps=40, learning_rate=0.01)
     rates = []
-    original = agent._adam_step
-    monkeypatch.setattr(
-        agent, "_adam_step", lambda grads, lr: rates.append(lr) or original(grads, lr)
+    spy_on_adam_step(
+        monkeypatch, agent, lambda original, grads, lr: rates.append(lr) or original(grads, lr)
     )
     agent.update(_episode(length=20))
     # chunks start after 0, 8 and 16 trained transitions of 40
@@ -243,7 +248,9 @@ def test_annealing_progress_survives_a_checkpoint(tmp_path):
     agent.save(path)
     resumed = _ac(n_steps=8, anneal_steps=100)
     resumed.load(path)
-    assert resumed._steps_trained == 20
+    assert resumed.update(_episode(length=20))["anneal_fraction"] == pytest.approx(0.8), (
+        "The resumed agent must continue the schedule after the 20 transitions already trained."
+    )
 
 
 def test_a_resumed_agent_continues_exactly_like_one_that_never_stopped(tmp_path):
@@ -257,9 +264,7 @@ def test_a_resumed_agent_continues_exactly_like_one_that_never_stopped(tmp_path)
     resumed.load(path)
     for run in (agent, resumed):
         run.update(_episode(seed=2))
-    for name in ("_W1", "_b1", "_W_mu", "_b_mu", "_log_std", "_W_v"):
-        np.testing.assert_array_equal(getattr(resumed, name), getattr(agent, name))
-    assert resumed._b_v == agent._b_v
+    assert_same_weights(resumed, agent, rtol=0.0)
 
 
 def test_the_annealed_fraction_is_reported():
@@ -305,10 +310,9 @@ def test_terminated_wins_over_done_and_done_alone_ends_the_episode(
         trajectory = _as_list(episode, keep)
     agent = _ac(n_steps=8)
     calls = []
-    original = agent._chunk_targets
-    monkeypatch.setattr(
-        agent, "_chunk_targets",
-        lambda s, r, b, terminal: calls.append(terminal) or original(s, r, b, terminal),
+    spy_on_chunk_targets(
+        monkeypatch, agent,
+        lambda original, s, r, b, terminal: calls.append(terminal) or original(s, r, b, terminal),
     )  # fmt: skip
     agent.update(trajectory)
     assert calls == [False, False, expected_last]
@@ -350,8 +354,9 @@ def test_the_default_update_reproduces_the_previous_weights():
             {"seed": 3, "hidden_dim": 4, "learning_rate": 0.01, "batch_size": 3, "ppo_epochs": 2},
         )
         agent.update(episode)
-        np.testing.assert_allclose(agent._W_mu.ravel(), w_mu, rtol=1e-12, atol=0)
-        assert agent._b_v == pytest.approx(b_v, rel=1e-12, abs=0)
+        recorded = weights(agent)
+        np.testing.assert_allclose(recorded["W_mu"].ravel(), w_mu, rtol=1e-12, atol=0)
+        assert float(recorded["b_v"]) == pytest.approx(b_v, rel=1e-12, abs=0)
 
 
 def test_without_next_observations_chunks_bootstrap_from_the_next_state_and_the_last_is_terminal(
@@ -366,15 +371,14 @@ def test_without_next_observations_chunks_bootstrap_from_the_next_state_and_the_
 
 def test_a_monte_carlo_update_can_skip_advantage_normalisation(monkeypatch):
     agent = _ac(normalize_advantages=False)
-    _constant_critic(agent, 2.0)
+    set_constant_critic(agent, 2.0)
     received = []
-    original = agent._loss_and_grads
 
-    def record(states, actions, returns, advantages=None):
+    def record(original, states, actions, returns, advantages=None):
         received.append((returns.copy(), advantages.copy()))
         return original(states, actions, returns, advantages)
 
-    monkeypatch.setattr(agent, "_loss_and_grads", record)
+    spy_on_loss_and_grads(monkeypatch, agent, record)
     agent.update(_episode(length=5))
     returns, advantages = received[0]
     np.testing.assert_allclose(advantages, returns - 2.0)
@@ -384,7 +388,7 @@ def test_a_monte_carlo_update_can_skip_advantage_normalisation(monkeypatch):
 def test_an_empty_or_unrecognised_episode_trains_nothing(trajectory):
     agent = _ac(n_steps=8)
     assert agent.update(trajectory) == {}
-    assert agent._optimizer.t == 0
+    assert optimizer(agent).t == 0
 
 
 @pytest.mark.parametrize("bad", [0, 2.5])
