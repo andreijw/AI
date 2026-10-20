@@ -36,6 +36,7 @@ common in plans written by an eager author.
 | Where | Holds | May import |
 | :--- | :--- | :--- |
 | `src/rl_core/agents/` | Algorithms: networks, update rules, `ReplayBuffer` | NumPy and the standard library. No Gymnasium, no challenge package |
+| `src/rl_core/environments/` | `BaseEnvWrapper`: seeding, observation noise, episode statistics and `wrap_env` shared by every challenge wrapper | Gymnasium as a library; it never names a challenge or a challenge's physics attributes, and `rl_core/agents/` never imports it |
 | `src/rl_core/training/` | `Trainer`: the episode loop, evaluation, checkpoint cadence | Gymnasium as an interface only; it never names an environment or an algorithm |
 | `src/rl_core/utils/` | Config, logging, video, plots | The I/O libraries (PyYAML, Matplotlib, moviepy) stay here |
 | `src/rl_core/challenges/` | `BenchmarkChallenge`, the challenge registry and `discover_challenges` | `rl_core`; it finds challenge packages by scanning, never by name |

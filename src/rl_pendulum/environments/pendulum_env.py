@@ -3,20 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
 
-import gymnasium as gym
 import numpy as np
 
-from rl_core.seeding import WRAPPER_STREAM, derive_rng
+from rl_core.environments import BaseEnvWrapper, checked_range
 
 
-class PendulumEnv:
+class PendulumEnv(BaseEnvWrapper):
     """
     Wrapper around Gymnasium Pendulum environments with noise injection and domain randomization.
 
-    Provides a standardized interface for continuous control training pipelines,
-    including observation noise, action noise, and physics domain randomization.
+    Provides a standardized interface for continuous control training pipelines. Seeding,
+    observation noise and episode statistics come from
+    :class:`rl_core.environments.BaseEnvWrapper`; this class adds the Pendulum-specific parts.
 
     Feature Compatibility:
     - **Observation noise injection**: Gaussian noise added to observation [cos(th), sin(th), th_dot]
@@ -60,50 +59,18 @@ class PendulumEnv:
                 Supported keys: 'g' / 'gravity', 'm' / 'mass', 'l' / 'length'.
                 Values should be 2-element tuples/lists [min, max].
         """
-        self.env_name = env_name
-        self.max_episode_steps = max_episode_steps
-        self.seed = seed
-        self.render_mode = render_mode
+        super().__init__(env_name, render_mode, max_episode_steps, seed, obs_noise_std)
 
-        # Generator for noise and domain randomization, on its own stream so it never repeats
-        # the numbers the wrapped environment draws its start states from. Created first so an
-        # invalid seed is rejected before any environment is opened.
-        self._np_random = derive_rng(seed, WRAPPER_STREAM)
-        # The constructor seed is applied on the first reset only; see reset().
-        self._has_reset = False
-
-        # Noise validation
-        if not np.isfinite(obs_noise_std) or obs_noise_std < 0.0:
-            raise ValueError(
-                f"obs_noise_std must be a finite, non-negative number, got {obs_noise_std!r}"
-            )
         if not np.isfinite(action_noise_std) or action_noise_std < 0.0:
             raise ValueError(
                 f"action_noise_std must be a finite, non-negative number, got {action_noise_std!r}"
             )
-
-        self.obs_noise_std = float(obs_noise_std)
         self.action_noise_std = float(action_noise_std)
 
         # Domain randomization validation
         self.domain_randomization = self._validate_domain_randomization(domain_randomization)
 
-        # Create base environment
-        self.env = gym.make(
-            env_name,
-            render_mode=render_mode,
-            max_episode_steps=max_episode_steps,
-        )
-
-        if seed is not None:
-            self.env.action_space.seed(seed)
-
-        self.observation_space = self.env.observation_space
-        self.action_space = self.env.action_space
-        self.metadata = self.env.metadata
-
-        self._episode_steps = 0
-        self._episode_reward = 0.0
+        self._make_env()
 
     def _validate_domain_randomization(
         self,
@@ -137,28 +104,13 @@ class PendulumEnv:
                     f"[min, max], got: {value!r}"
                 )
 
-            min_val, max_val = val_tuple
-            if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
+            validated_range = checked_range(param, *val_tuple)
+            if val_tuple[0] <= 0:
                 raise ValueError(
-                    f"Domain randomization range for '{param}' must contain numeric values, "
-                    f"got: [{min_val!r}, {max_val!r}]"
+                    f"Physical parameter '{param}' must be strictly positive, "
+                    f"got min: {val_tuple[0]}"
                 )
-            if not (np.isfinite(min_val) and np.isfinite(max_val)):
-                raise ValueError(
-                    f"Domain randomization range for '{param}' must use finite values, "
-                    f"got: [{min_val!r}, {max_val!r}]"
-                )
-            if min_val > max_val:
-                raise ValueError(
-                    f"Domain randomization range for '{param}' has min > max: "
-                    f"[{min_val}, {max_val}]"
-                )
-            if min_val <= 0:
-                raise ValueError(
-                    f"Physical parameter '{param}' must be strictly positive, got min: {min_val}"
-                )
-
-            validated[canon_key] = (float(min_val), float(max_val))
+            validated[canon_key] = validated_range
 
         return validated
 
@@ -173,13 +125,6 @@ class PendulumEnv:
                 sample = float(self._np_random.uniform(min_val, max_val))
                 setattr(base_env, param, sample)
 
-    def _add_observation_noise(self, obs: np.ndarray) -> np.ndarray:
-        """Add Gaussian noise to observations."""
-        if self.obs_noise_std > 0:
-            noise = self._np_random.normal(0, self.obs_noise_std, obs.shape)
-            return (obs + noise).astype(obs.dtype)
-        return obs
-
     def _clip_to_action_space(self, action: np.ndarray) -> np.ndarray:
         """Clip an action to the torque limits of the action space, as float32."""
         low = getattr(self.action_space, "low", -2.0)
@@ -193,53 +138,9 @@ class PendulumEnv:
             return self._clip_to_action_space(action + noise)
         return action
 
-    def reset(
-        self,
-        seed: int | None = None,
-        options: dict[str, Any] | None = None,
-    ) -> tuple[np.ndarray, dict[str, Any]]:
+    def _prepare_action(self, action: float | Sequence[float] | np.ndarray) -> np.ndarray:
         """
-        Reset the environment to an initial state.
-
-        The constructor seed is applied on the first reset only. Later resets without a seed
-        continue the same random sequences, so a seeded environment gives a reproducible series
-        of different episodes. Passing a seed restarts that series from the given seed.
-
-        Args:
-            seed: Optional seed that restarts the start-state and noise sequences.
-            options: Optional reset options dictionary.
-
-        Returns:
-            Tuple of (observation, info dict).
-        """
-        self._episode_steps = 0
-        self._episode_reward = 0.0
-
-        if seed is None and not self._has_reset:
-            seed = self.seed
-
-        obs, info = self.env.reset(seed=seed, options=options)
-        self._has_reset = True
-
-        if seed is not None:
-            self._np_random = derive_rng(seed, WRAPPER_STREAM)
-        self._apply_domain_randomization()
-        obs = self._add_observation_noise(obs)
-
-        return obs, info
-
-    def step(
-        self,
-        action: float | Sequence[float] | np.ndarray,
-    ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
-        """
-        Execute one step in the environment.
-
-        Args:
-            action: Continuous torque action (scalar or 1D array).
-
-        Returns:
-            Tuple of (observation, reward, terminated, truncated, info).
+        The continuous torque action (scalar or 1D array) as a float32 array, after action noise.
         """
         action_arr = np.asarray(action, dtype=np.float32)
         if action_arr.ndim == 0:
@@ -247,42 +148,4 @@ class PendulumEnv:
         # Agents return unclipped samples while training: clip to the torque limit first, so that
         # action noise still perturbs an out-of-range action instead of being clipped away.
         action_arr = self._clip_to_action_space(action_arr)
-
-        noisy_action = self._apply_action_noise(action_arr)
-
-        obs, reward, terminated, truncated, info = self.env.step(noisy_action)
-
-        self._episode_steps += 1
-        self._episode_reward += float(reward)
-
-        obs = self._add_observation_noise(obs)
-
-        if terminated or truncated:
-            info["episode"] = {
-                "steps": self._episode_steps,
-                "reward": self._episode_reward,
-            }
-
-        return obs, float(reward), terminated, truncated, info
-
-    def wrap_env(self, wrapper: Any) -> None:
-        """Inject a Gymnasium wrapper around the inner environment."""
-        self.env = wrapper
-
-    def close(self) -> None:
-        """Close the environment and cleanup resources."""
-        self.env.close()
-
-    def render(self) -> Any:
-        """Render the environment."""
-        return self.env.render()
-
-    @property
-    def episode_steps(self) -> int:
-        """Get current episode step count."""
-        return self._episode_steps
-
-    @property
-    def episode_reward(self) -> float:
-        """Get current episode cumulative reward."""
-        return self._episode_reward
+        return self._apply_action_noise(action_arr)

@@ -673,7 +673,8 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: Tests that need a specific weight state to reach an edge case.
   - **Out of scope**: The integration tests in `tests/test_trainer.py` and the script tests.
 
-- [ ] **Shared Environment Wrapper Base**
+- [x] **Shared Environment Wrapper Base**
+  - **Delivered in**: branch `feature/shared-env-wrapper-base`. Confirmed by the maintainer on 2026-10-20.
   - **Description**: `rl_cartpole/environments/cartpole_env.py` and `rl_pendulum/environments/pendulum_env.py` repeat
     four near-identical blocks (the largest about 50 lines) for noise, statistics and wrapping, so a fix in one
     challenge misses the other. The seeding logic in `__init__` and `reset()` is a fifth, kept in step today only by
@@ -684,6 +685,19 @@ Defects found while working on other items, then findings from the brooks-lint h
     - `tests/test_environment.py`, `tests/test_pendulum.py` and `tests/test_env_seeding.py` pass unchanged.
   - **Known edge cases**: Discrete action flips against continuous action noise; per-challenge randomized parameters.
   - **Out of scope**: The `make_env` factories; new wrappers such as frame stacking.
+  - **Built (2026-10-20)**:
+    - `rl_core.environments.BaseEnvWrapper` owns what both wrappers shared: the noise generator on its own stream,
+      the first-reset seed rule, observation noise, `_make_env()` (which keeps `metadata` as the inner
+      environment's dict for vector environments), `reset()`, the step statistics, `wrap_env`, `close`,
+      `render` and the counters. `checked_range` holds the shared domain-randomization range checks.
+    - `CartPoleEnv` and `PendulumEnv` keep only their action noise (`_apply_action_noise`, used by
+      `_prepare_action`) and their domain-randomization keys, messages and sampling order.
+    - The duplicate-code audit at 8 lines reports no pair between the two files (5 before), and the three named
+      test files are unchanged. New tests are in `tests/test_env_wrapper_base.py`.
+    - Seeded rollouts of both wrappers with every noise source on are bit-identical before and after. They
+      record observations, rewards, infos, randomized physics, an action-space sample, a mid-run reseed and
+      scalar, list and out-of-range Pendulum actions. Seeded short runs of `configs/cartpole_ppo.yaml` and
+      `configs/pendulum_ddpg.yaml` give identical checkpoints and logs.
 
 - [ ] **Complete Optimizer State in Checkpoints**
   - **Description**: The continuous agents save the Adam step count `adam_t` but not the moment estimates, so a run

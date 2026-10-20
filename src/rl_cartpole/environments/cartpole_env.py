@@ -1,23 +1,21 @@
 """CartPole environment wrapper for reinforcement learning."""
 
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 import gymnasium as gym
-import numpy as np
 
-from rl_core.seeding import WRAPPER_STREAM, derive_rng
+from rl_core.environments import BaseEnvWrapper, checked_range
 
 
-class CartPoleEnv:
+class CartPoleEnv(BaseEnvWrapper):
     """
     Wrapper around Gymnasium environments with noise injection and domain randomization.
 
     **Primary Use Case**: This wrapper is designed for CartPole environments but can
     work with other Gymnasium environments for basic noise injection features.
 
-    Provides a standardized interface for the training pipeline and
-    adds logging, monitoring, and preprocessing capabilities.
+    Seeding, observation noise and episode statistics come from
+    :class:`rl_core.environments.BaseEnvWrapper`; this class adds the CartPole-specific parts.
 
     Feature Compatibility:
     - **Observation noise injection**: Works with any Gymnasium environment
@@ -65,29 +63,12 @@ class CartPoleEnv:
             ValueError: If domain_randomization is enabled with non-CartPole environment
             ValueError: If action_noise_prob > 0 with non-Discrete(2) action space
         """
-        self.env_name = env_name
-        self.max_episode_steps = max_episode_steps
-        self.seed = seed
-        self.render_mode = render_mode
+        super().__init__(env_name, render_mode, max_episode_steps, seed, obs_noise_std)
 
-        # Generator for noise and domain randomization, on its own stream so it never repeats
-        # the numbers the wrapped environment draws its start states from. Created first so an
-        # invalid seed is rejected before any environment is opened.
-        self._np_random = derive_rng(seed, WRAPPER_STREAM)
-        # The constructor seed is applied on the first reset only; see reset().
-        self._has_reset = False
-
-        # Noise parameters
-        if not np.isfinite(obs_noise_std) or obs_noise_std < 0.0:
-            raise ValueError(
-                f"obs_noise_std must be a finite, non-negative number, got {obs_noise_std!r}"
-            )
         if not (0.0 <= action_noise_prob <= 1.0):
             raise ValueError(
                 f"action_noise_prob must be in the interval [0, 1], got {action_noise_prob!r}"
             )
-
-        self.obs_noise_std = obs_noise_std
         self.action_noise_prob = action_noise_prob
 
         # Domain randomization parameters
@@ -103,12 +84,7 @@ class CartPoleEnv:
                 f"Otherwise, remove domain_randomization parameter."
             )
 
-        # Create the base environment
-        self.env = gym.make(
-            env_name,
-            render_mode=render_mode,
-            max_episode_steps=max_episode_steps,
-        )
+        self._make_env()
 
         # Validate action noise compatibility early (after env creation)
         if action_noise_prob > 0:
@@ -120,18 +96,6 @@ class CartPoleEnv:
                     f"Environment '{env_name}' has an incompatible action space. "
                     f"Either use an environment with Discrete(2) actions or set action_noise_prob=0."
                 )
-
-        if seed is not None:
-            self.env.action_space.seed(seed)
-
-        # Environment properties
-        self.observation_space = self.env.observation_space
-        self.action_space = self.env.action_space
-        self.metadata = self.env.metadata  # Required for VectorEnv compatibility
-
-        # Episode tracking
-        self._episode_steps = 0
-        self._episode_reward = 0.0
 
     def _validate_domain_randomization(
         self,
@@ -159,25 +123,7 @@ class CartPoleEnv:
                     f"Domain randomization range for '{param}' must be a 2-element list/tuple "
                     f"[min, max], got: {value!r}"
                 )
-
-            min_val, max_val = value
-            if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
-                raise ValueError(
-                    f"Domain randomization range for '{param}' must contain numeric values, "
-                    f"got: [{min_val!r}, {max_val!r}]"
-                )
-            if not (np.isfinite(min_val) and np.isfinite(max_val)):
-                raise ValueError(
-                    f"Domain randomization range for '{param}' must use finite values, "
-                    f"got: [{min_val!r}, {max_val!r}]"
-                )
-            if min_val > max_val:
-                raise ValueError(
-                    f"Domain randomization range for '{param}' has min > max: "
-                    f"[{min_val}, {max_val}]"
-                )
-
-            validated[param] = (float(min_val), float(max_val))
+            validated[param] = checked_range(param, *value)
 
         return validated
 
@@ -214,7 +160,7 @@ class CartPoleEnv:
                 f"Either use a CartPole environment or disable domain_randomization."
             )
 
-        # Randomize each requested physical parameter
+        # Randomize each requested physical parameter, always in this order
         for param in ("gravity", "masscart", "masspole", "length"):
             if param in self.domain_randomization:
                 min_val, max_val = self.domain_randomization[param]
@@ -223,22 +169,6 @@ class CartPoleEnv:
         # Update total mass (used in dynamics)
         base_env.total_mass = base_env.masspole + base_env.masscart  # type: ignore[attr-defined]
         base_env.polemass_length = base_env.masspole * base_env.length  # type: ignore[attr-defined]
-
-    def _add_observation_noise(self, obs: np.ndarray) -> np.ndarray:
-        """
-        Add Gaussian noise to observations.
-
-        Args:
-            obs: Original observation
-
-        Returns:
-            Noisy observation (preserving original dtype)
-        """
-        if self.obs_noise_std > 0:
-            noise = self._np_random.normal(0, self.obs_noise_std, obs.shape)
-            # Preserve the original dtype (e.g., float32)
-            return (obs + noise).astype(obs.dtype)
-        return obs
 
     def _apply_action_noise(self, action: int) -> int:
         """
@@ -261,108 +191,6 @@ class CartPoleEnv:
             return 1 - action
         return action
 
-    def reset(
-        self, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[np.ndarray, dict[str, Any]]:
-        """
-        Reset the environment to an initial state.
-
-        The constructor seed is applied on the first reset only. Later resets without a seed
-        continue the same random sequences, so a seeded environment gives a reproducible series
-        of different episodes. Passing a seed restarts that series from the given seed.
-
-        Args:
-            seed: Optional seed that restarts the start-state and noise sequences
-            options: Optional dictionary of reset options (for compatibility with Gym API)
-
-        Returns:
-            Tuple of (observation, info dict)
-        """
-        self._episode_steps = 0
-        self._episode_reward = 0.0
-
-        if seed is None and not self._has_reset:
-            seed = self.seed
-
-        obs, info = self.env.reset(seed=seed, options=options)
-        self._has_reset = True
-
-        if seed is not None:
-            self._np_random = derive_rng(seed, WRAPPER_STREAM)
-
-        # Apply domain randomization at the start of each episode
-        self._apply_domain_randomization()
-
-        # Apply observation noise
-        obs = self._add_observation_noise(obs)
-
-        return obs, info
-
-    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
-        """
-        Execute one step in the environment.
-
-        Args:
-            action: Action to take (0 or 1 for CartPole)
-
-        Returns:
-            Tuple of (observation, reward, terminated, truncated, info)
-        """
-        # Apply action noise
-        noisy_action = self._apply_action_noise(action)
-
-        obs, reward, terminated, truncated, info = self.env.step(noisy_action)
-
-        self._episode_steps += 1
-        self._episode_reward += float(reward)
-
-        # Apply observation noise
-        obs = self._add_observation_noise(obs)
-
-        # Add episode statistics to info
-        if terminated or truncated:
-            info["episode"] = {
-                "steps": self._episode_steps,
-                "reward": self._episode_reward,
-            }
-
-        return obs, float(reward), terminated, truncated, info
-
-    def wrap_env(self, wrapper: Any) -> None:
-        """Inject a Gymnasium wrapper around the inner environment.
-
-        This is the intended way to apply wrappers (e.g. RecordVideo) without
-        breaking the CartPoleEnv interface.  The wrapper must accept the current
-        ``self.env`` as its first constructor argument and has already been
-        fully constructed before being passed here. It must wrap the current
-        ``self.env``: the constructor seed is applied on the first reset only, so
-        a different environment installed after that reset would never be seeded.
-
-        Args:
-            wrapper: A fully-constructed Gymnasium wrapper that wraps ``self.env``.
-
-        Example::
-
-            from gymnasium.wrappers import RecordVideo
-            record_wrapper = RecordVideo(env.env, video_folder="./videos", ...)
-            env.wrap_env(record_wrapper)
-        """
-        self.env = wrapper
-
-    def close(self) -> None:
-        """Close the environment and cleanup resources."""
-        self.env.close()
-
-    def render(self):
-        """Render the environment."""
-        return self.env.render()
-
-    @property
-    def episode_steps(self) -> int:
-        """Get current episode step count."""
-        return self._episode_steps
-
-    @property
-    def episode_reward(self) -> float:
-        """Get current episode cumulative reward."""
-        return self._episode_reward
+    def _prepare_action(self, action: int) -> int:
+        """The agent's action after action noise."""
+        return self._apply_action_noise(action)

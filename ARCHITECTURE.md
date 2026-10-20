@@ -35,6 +35,9 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │                                                                             │
 │  challenges/                                                                │
 │  - BenchmarkChallenge, CHALLENGES registry, discover_challenges()           │
+│                                                                             │
+│  environments/                                                              │
+│  - BaseEnvWrapper (seeding, observation noise, episode statistics)          │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -99,6 +102,8 @@ flowchart TD
             ContinuousAgents["Continuous: Random, A2C, PPO"]
         end
 
+        EnvBase["environments: BaseEnvWrapper"]
+
         subgraph Utils ["Utility Infrastructure"]
             Config["config.py"]
             Logger["logger.py"]
@@ -116,6 +121,8 @@ flowchart TD
     Trainer --> Challenges
     Trainer --> Agents
     Trainer --> Utils
+    CartPole --> EnvBase
+    Pendulum --> EnvBase
 ```
 
 ---
@@ -320,7 +327,11 @@ plots/
 ### Adding a New Challenge
 
 1. Create a new package under `src/rl_<challenge>/`:
-   - `environments/<challenge>_env.py`: Gymnasium wrapper handling domain randomization and noise injection.
+   - `environments/<challenge>_env.py`: the challenge's wrapper, a subclass of
+     `rl_core.environments.BaseEnvWrapper`. The base already handles seeding (the constructor seed on the first
+     reset only), observation noise, episode statistics and `wrap_env`. The subclass validates its own settings,
+     calls `_make_env()`, and overrides `_prepare_action` (action noise) and `_apply_domain_randomization`
+     (per-episode physics); both default to doing nothing.
    - `environments/make_env.py`: Vectorized and single-environment factory functions.
    - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`.
      It implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and
