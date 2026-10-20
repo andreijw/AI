@@ -7,8 +7,9 @@ import numpy as np
 from rl_core.seeding import AGENT_REPLAY_STREAM, derive_rng
 
 from .actor_critic_base import ActorCriticBase
+from .config_values import optional_positive_int, positive_int
 from .optim import anneal_fraction, anneal_steps_from_config
-from .returns import gae
+from .returns import episode_end, gae
 
 
 class PPOAgent(ActorCriticBase):
@@ -23,9 +24,12 @@ class PPOAgent(ActorCriticBase):
     The critic's target is ``R = A + V_old``; advantages are normalised once per rollout.
 
     ``update`` is called once per episode. It returns ``{}`` while it only buffers. Every episode
-    it receives ends its GAE trace at its last step, whether or not that step is marked done. Steps
-    still buffered when training stops are never trained on. Checkpoints hold the weights, the
-    optimizer state and the annealing counter, but not the buffer; loading a checkpoint empties it.
+    it receives ends its GAE trace at its last step, so that no episode borrows from the next. An
+    episode cut rather than terminated (a time limit, or the Trainer's ``max_steps_per_episode``)
+    adds ``gamma * V(next state)`` to its last reward when the next state is known, as continuous
+    PPO and Stable-Baselines3 do; a terminated episode does not bootstrap. Steps still buffered
+    when training stops are never trained on. Checkpoints hold the weights, the optimizer state
+    and the annealing counter, but not the buffer; loading a checkpoint empties it.
     Rollouts are whole episodes, so the counter can step past ``anneal_steps`` mid-rollout; the
     fraction is then held at zero.
 
@@ -55,29 +59,18 @@ class PPOAgent(ActorCriticBase):
 
         self.learning_rate: float = float(config.get("learning_rate", 3e-4))
         self.clip_epsilon: float = float(config.get("clip_epsilon", 0.2))
-        self.ppo_epochs: int = int(config.get("ppo_epochs", 4))
+        self.ppo_epochs: int = positive_int(config, "ppo_epochs", 4)
         self.gae_lambda: float = float(config.get("gae_lambda", 1.0))
-        self.rollout_steps: int = int(config.get("rollout_steps", 1))
+        self.rollout_steps: int = positive_int(config, "rollout_steps", 1)
         self.anneal_steps: int | None = anneal_steps_from_config(config)
-        raw_minibatch = config.get("minibatch_size")
-        self.minibatch_size: int | None = None if raw_minibatch is None else int(raw_minibatch)
+        self.minibatch_size: int | None = optional_positive_int(config, "minibatch_size")
 
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
         if self.clip_epsilon <= 0.0:
             raise ValueError(f"clip_epsilon must be positive, got {self.clip_epsilon!r}")
-        if self.ppo_epochs <= 0:
-            raise ValueError(f"ppo_epochs must be a positive integer, got {self.ppo_epochs!r}")
         if not (0.0 <= self.gae_lambda <= 1.0):
             raise ValueError(f"gae_lambda must be in [0, 1], got {self.gae_lambda!r}")
-        if self.rollout_steps <= 0:
-            raise ValueError(
-                f"rollout_steps must be a positive integer, got {self.rollout_steps!r}"
-            )
-        if self.minibatch_size is not None and self.minibatch_size <= 0:
-            raise ValueError(
-                f"minibatch_size must be a positive integer, got {self.minibatch_size!r}"
-            )
 
         # One generator for action sampling and mini-batch shuffling (the same one
         # BaseAgent would create lazily for sampling).
@@ -93,8 +86,9 @@ class PPOAgent(ActorCriticBase):
 
         Args:
             batch: Dictionary with "observations", "actions" and "rewards", and optionally
-                "dones". The batch is taken to be whole episodes: its last step always ends an
-                episode.
+                "dones", "terminated" and "next_observations". The batch is taken to be whole
+                episodes: its last step always ends an episode. See :meth:`_rollout_episode` for
+                how a cut episode is bootstrapped.
 
         Returns:
             ``{}`` while buffering. After training: mean ``policy_loss``, ``value_loss`` and
@@ -103,23 +97,43 @@ class PPOAgent(ActorCriticBase):
             ``anneal_fraction`` (the share of the learning rate and clip range used; 1 without
             ``anneal_steps``).
         """
-        observations, actions, rewards, n_steps = self._parse_trajectory(batch)
-        if n_steps == 0:
+        episode = self._rollout_episode(batch)
+        if episode is None:
             return {}
 
-        dones = np.zeros(n_steps, dtype=bool)
-        if batch.get("dones") is not None:
-            dones |= np.asarray(batch["dones"], dtype=bool)
-        dones[-1] = True
-
-        self._rollout.append((observations, actions, rewards, dones))
-        self._rollout_length += n_steps
+        self._rollout.append(episode)
+        self._rollout_length += len(episode[2])
         if self._rollout_length < self.rollout_steps:
             return {}
 
         parts = [np.concatenate(columns) for columns in zip(*self._rollout, strict=True)]
         self._rollout, self._rollout_length = [], 0
         return self._train_on_rollout(*parts)
+
+    def _rollout_episode(
+        self, batch: dict[str, Any]
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+        """
+        One episode as ``(observations, actions, rewards, dones)`` ready to join a rollout.
+
+        The last step always ends the advantage estimate (see :func:`episode_end`). If the episode
+        was cut rather than terminated and its next state is known, ``gamma * V(next state)`` is
+        added to a copy of its last reward. The caller's arrays are not modified.
+
+        Returns:
+            The four arrays, or None for an empty episode.
+        """
+        observations, actions, rewards, n_steps = self._parse_trajectory(batch)
+        if n_steps == 0:
+            return None
+        dones, bootstrap_obs = episode_end(
+            n_steps, batch.get("dones"), batch.get("terminated"), batch.get("next_observations")
+        )
+        if bootstrap_obs is not None:
+            _, next_value, _ = self._forward(bootstrap_obs)
+            rewards = rewards.copy()
+            rewards[-1] += self.gamma * next_value
+        return observations, actions, rewards, dones
 
     def _train_on_rollout(
         self,

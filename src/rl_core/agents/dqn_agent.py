@@ -8,16 +8,9 @@ import numpy.typing as npt
 from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, derive_rng
 
 from .base_agent import BaseAgent
+from .config_values import positive_int
 from .optim import Adam, anneal_fraction, optimizer_from_config
 from .replay_buffer import ReplayBuffer
-
-
-def _positive_int(config: dict[str, Any], key: str, default: int) -> int:
-    """``config[key]`` (or ``default``) as an int, rejecting booleans, non-integers and values <= 0."""
-    value = config.get(key, default)
-    if isinstance(value, bool) or not isinstance(value, int | np.integer) or value <= 0:
-        raise ValueError(f"{key} must be a positive integer, got {value!r}")
-    return int(value)
 
 
 def _optional_real(config: dict[str, Any], key: str) -> float | None:
@@ -66,14 +59,14 @@ class DQNAgent(BaseAgent):
 
         self.learning_rate: float = float(config.get("learning_rate", 1e-3))
         self.gamma: float = float(config.get("gamma", 0.99))
-        self.hidden_dim: int = _positive_int(config, "hidden_dim", 128)
-        self.buffer_capacity: int = _positive_int(config, "buffer_capacity", 10000)
-        self.batch_size: int = _positive_int(config, "batch_size", 64)
-        self.min_buffer_size: int = _positive_int(config, "min_buffer_size", self.batch_size)
+        self.hidden_dim: int = positive_int(config, "hidden_dim", 128)
+        self.buffer_capacity: int = positive_int(config, "buffer_capacity", 10000)
+        self.batch_size: int = positive_int(config, "batch_size", 64)
+        self.min_buffer_size: int = positive_int(config, "min_buffer_size", self.batch_size)
         self.epsilon_start: float = float(config.get("epsilon_start", 1.0))
         self.epsilon_end: float = float(config.get("epsilon_end", 0.02))
         self.epsilon_decay: float = float(config.get("epsilon_decay", 0.995))
-        self.target_update_frequency: int = _positive_int(config, "target_update_frequency", 100)
+        self.target_update_frequency: int = positive_int(config, "target_update_frequency", 100)
         self.tau: float | None = _optional_real(config, "tau")
         if self.tau is not None and not 0.0 < self.tau <= 1.0:
             raise ValueError(
@@ -83,7 +76,7 @@ class DQNAgent(BaseAgent):
         self.grad_clip_value: float = float(config.get("grad_clip_value", 10.0))
         self.exploration_steps: int | None = self._read_exploration_steps(config)
         self.updates_per_step: float | None = _optional_real(config, "updates_per_step")
-        self.max_updates_per_call: int = _positive_int(config, "max_updates_per_call", 64)
+        self.max_updates_per_call: int = positive_int(config, "max_updates_per_call", 64)
 
         self._validate_dims(observation_dim, action_dim, self.hidden_dim)
         if self.learning_rate <= 0.0:
@@ -167,7 +160,7 @@ class DQNAgent(BaseAgent):
         """
         if config.get("exploration_steps") is None:
             return None
-        value = _positive_int(config, "exploration_steps", 0)
+        value = positive_int(config, "exploration_steps", 0)
         if config.get("epsilon_decay") is not None:
             raise ValueError(
                 "Set epsilon_decay (once per update call) or exploration_steps "

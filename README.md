@@ -38,6 +38,7 @@ AI/
 │   │   │   ├── base_agent.py
 │   │   │   ├── actor_critic_agent.py
 │   │   │   ├── actor_critic_base.py
+│   │   │   ├── config_values.py # Strict readers for integer agent settings
 │   │   │   ├── continuous_actor_critic.py
 │   │   │   ├── continuous_ppo.py
 │   │   │   ├── continuous_random_agent.py
@@ -200,14 +201,15 @@ python train.py --config configs/pendulum_ddpg.yaml
 A run solves the challenge when its average training reward over 100 episodes reaches the threshold: 475 for
 CartPole-v1, -200 for Pendulum-v1. It **holds** when the average over its last 100 episodes is still at or above the
 threshold. Each agent trains for a budget of environment steps set against its rl-baselines3-zoo reference (see the
-config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18, with evaluation on its own
-environment and named random streams ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
+config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18 (CartPole PPO on 2026-10-19,
+after time-limit cuts were bootstrapped), with evaluation on its own environment and named random streams
+([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md)). `train.py` uses seed 42, which was
 not measured, so a single `train.py` run may land on the unlucky side of these numbers:
 
 | Challenge | Agent | Config | Budget (steps) | Seeds solved | Steps to solve | Held |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
-| CartPole-v1 | PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 200,000 | 5 of 5 | 80k to 132k | 5 of 5 |
+| CartPole-v1 | PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 200,000 | 5 of 5 | 72k to 90k | 5 of 5 |
 | CartPole-v1 | Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 500,000 | 5 of 5 | 209k to 456k | 4 of 5 |
 | CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 500,000 | 4 of 5 | 255k to 376k | 3 of 5 |
 | CartPole-v1 | DQN | `cartpole_dqn.yaml` (Adam, per-step exploration) | 300,000 | 5 of 5 | 144k to 183k | 5 of 5 |

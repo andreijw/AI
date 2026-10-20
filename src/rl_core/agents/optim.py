@@ -12,6 +12,8 @@ from typing import Any
 
 import numpy as np
 
+from .config_values import optional_positive_int
+
 OPTIMIZERS = ("sgd", "adam")
 
 
@@ -163,13 +165,7 @@ def anneal_steps_from_config(config: Mapping[str, Any]) -> int | None:
     Raises:
         ValueError: If it is set and not a positive integer.
     """
-    raw = config.get("anneal_steps")
-    if raw is None:
-        return None
-    steps = int(raw)
-    if steps <= 0:
-        raise ValueError(f"anneal_steps must be a positive integer, got {steps!r}")
-    return steps
+    return optional_positive_int(config, "anneal_steps")
 
 
 def anneal_fraction(steps_trained: int, anneal_steps: int | None) -> float:

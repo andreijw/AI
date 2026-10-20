@@ -89,9 +89,9 @@ or truncated) and `terminated`. For Monte Carlo returns the difference is harmle
 bootstraps from the next state's value (DQN, DDPG, TD targets, GAE) a time-limit cut is not a terminal state,
 and treating it as one teaches the critic that the future is worth nothing at the limit. Pendulum never
 terminates: every episode ends by truncation at 200 steps. DQN and DDPG store `terminated` in their replay
-buffers; continuous PPO adds γ·V(next state) to the last reward of each cut episode in a rollout. Discrete PPO's
-rollouts still treat every episode end as terminal. A plan for a new bootstrapping agent must say how it handles
-this.
+buffers; both PPO agents add γ·V(next state) to the last reward of each cut episode in a rollout, through
+`rl_core.agents.returns.episode_end` (discrete PPO treated every episode end as terminal until 2026-10-19). A
+plan for a new bootstrapping agent must say how it handles this.
 
 **A checkpoint is a file format.** Weights are saved as NumPy `.npz` archives (the trainer names them
 `agent_episode_<n>.pt`; `BaseAgent._resolve_save_path` and `_resolve_load_path` own the extension rules).

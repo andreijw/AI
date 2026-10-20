@@ -696,7 +696,8 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Checkpoints written before the change still load.
   - **Out of scope**: A resume option for `train.py`.
 
-- [ ] **PPO Episode Ends and Validation**
+- [x] **PPO Episode Ends and Validation**
+  - **Delivered in**: #104. Confirmed by the maintainer on 2026-10-19.
   - **Description**: Found 2026-10-18 while giving continuous PPO multi-episode rollouts. Discrete `PPOAgent`'s
     rollouts end every episode's GAE trace without a bootstrap, so CartPole's 500-step time limit counts as a true
     end; continuous PPO adds γ·V(next state) to the last reward of a cut episode. Discrete PPO also reads
@@ -706,6 +707,36 @@ Defects found while working on other items, then findings from the brooks-lint h
       does not bootstrap.
     - `rollout_steps` is validated the same way in both PPO agents.
     - CartPole PPO is rerun on seeds 1 to 5 and still meets its published claim (5 of 5 solved).
+  - **Built (2026-10-19), part 1, episode ends**:
+    - `rl_core.agents.returns.episode_end` holds the rule both PPO agents now share. The last step ends the
+      advantage estimate. An episode cut rather than terminated, by a time limit or by the Trainer's
+      `max_steps_per_episode`, returns its next state, and the agent adds γ·V(next state) to a copy of its last
+      reward. A cut with no known next state stays terminal.
+    - Discrete `PPOAgent` gets a `_rollout_episode` like continuous PPO's.
+    - The strict integer check from DQN moved to `rl_core.agents.config_values.positive_int`; DQN and both PPOs'
+      `rollout_steps` use it, so 2.5, 4.0, `True` and `"4"` are rejected.
+    - Tests are in `tests/test_returns.py`, `tests/test_discrete_ppo.py` and `tests/test_config_values.py`.
+  - **Built (2026-10-19), part 2, strict integer settings** (added to the item by the maintainer):
+    - `ppo_epochs` and `minibatch_size` in discrete PPO, `ppo_epochs` and `batch_size` in continuous PPO, and
+      `anneal_steps` (read by both PPOs and continuous Actor-Critic) were read with `int(...)`, so 2.5 trained
+      as 2. They now go through `positive_int` or the new `optional_positive_int` (None allowed) in
+      `rl_core.agents.config_values`, which reject 2.5, 4.0, `True`, `"4"`, 0 and negatives with the key's name.
+    - Continuous PPO now also rejects `ppo_epochs: 0`, which it used to accept and then never trained.
+    - Seeded short runs of `configs/cartpole_ppo.yaml`, `configs/pendulum_ppo.yaml` and
+      `configs/pendulum_actor_critic.yaml` give bit-identical checkpoints and logs before and after part 2.
+    - Still read with `int(...)` and left for a later item: `hidden_dim` (REINFORCE, `ActorCriticBase` and
+      `ContinuousActorCriticBase`, so every actor-critic and PPO agent) and DDPG's `batch_size`,
+      `buffer_capacity`, `learning_starts` and `max_updates_per_call`. The Trainer's budget keys accept 4.0 and
+      `"4"` on purpose; that difference should be a conscious choice when the item is picked up.
+  - **Verified (2026-10-19)**:
+    - Continuous PPO and DQN are unchanged. Seeded short runs of `configs/pendulum_ppo.yaml` (20,000 steps) and
+      `configs/cartpole_dqn.yaml` (10,000 steps) give bit-identical checkpoints and logs before and after.
+    - Learning run: `configs/cartpole_ppo.yaml` through the benchmark on seeds 1 to 5, 100-episode window.
+      - `develop` reproduced the published row: 5 of 5 solved, 108,325 average steps to solve, 5 held, eval 500.
+      - With the bootstrap: 5 of 5 solved, 79,556 average steps to solve (71,927 to 90,136, every seed faster),
+        5 held with a final training average of 500 on every seed, eval 500.
+      - Republished on 2026-10-19 (all CartPole agents, seeds 1 to 5): only PPO's row changed;
+        `docs/benchmarks/cartpole_results.md` and the README's results table show the new numbers.
   - **Out of scope**: Sharing one rollout buffer between the two PPO agents (until a third user appears).
 
 - [x] **DQN Config Validation**

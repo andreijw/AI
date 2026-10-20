@@ -33,8 +33,9 @@ To optimize token usage and context window limits:
   * `src/rl_core/agents/`: Base agent interfaces (`BaseAgent`, `ActorCriticBase`, `ContinuousActorCriticBase`),
     discrete agents (`RandomAgent`, `ReinforceAgent`, `ActorCriticAgent`, `PPOAgent`, `DQNAgent`),
     continuous agents (`ContinuousRandomAgent`, `ContinuousActorCriticAgent`, `ContinuousPPOAgent`, `DDPGAgent`),
-    `ReplayBuffer`, and the shared `mlp.py` (multi-layer networks), `bounds.py` (action bounds) and `softmax.py`
-    (the discrete policies' numerically stable softmax).
+    `ReplayBuffer`, and the shared `mlp.py` (multi-layer networks), `bounds.py` (action bounds), `softmax.py`
+    (the discrete policies' numerically stable softmax) and `config_values.py` (strict readers for integer
+    settings).
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).
   * `src/rl_core/utils/`: Configuration parsing (`config.py`), structured logging (`logger.py`),
     video recording (`video.py`), and visualization helpers (`visualization.py`).

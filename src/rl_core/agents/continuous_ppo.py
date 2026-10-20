@@ -6,9 +6,10 @@ from typing import Any
 
 import numpy as np
 
+from .config_values import positive_int
 from .continuous_actor_critic import ContinuousActorCriticBase
 from .optim import anneal_fraction, anneal_steps_from_config
-from .returns import gae
+from .returns import episode_end, gae
 
 
 class ContinuousPPOAgent(ContinuousActorCriticBase):
@@ -55,22 +56,15 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         )
         if self.clip_ratio <= 0.0:
             raise ValueError(f"clip_epsilon must be positive, got {self.clip_ratio!r}")
-        self.ppo_epochs: int = int(config.get("ppo_epochs", 8))
-        self.batch_size: int = int(config.get("batch_size", 64))
+        self.ppo_epochs: int = positive_int(config, "ppo_epochs", 8)
+        self.batch_size: int = positive_int(config, "batch_size", 64)
         self.gae_lambda: float = float(config.get("gae_lambda", 0.95))
         self.learning_rate: float = float(config.get("learning_rate", 3e-4))
         # Decay the learning rate and clip range linearly to zero over this many trained
         # transitions (counted per update); unset keeps both constant.
         self.anneal_steps: int | None = anneal_steps_from_config(config)
         self._steps_trained = 0
-        raw_rollout = config.get("rollout_steps", 1)
-        if (
-            isinstance(raw_rollout, bool)
-            or not isinstance(raw_rollout, int | np.integer)
-            or raw_rollout <= 0
-        ):
-            raise ValueError(f"rollout_steps must be a positive integer, got {raw_rollout!r}")
-        self.rollout_steps: int = int(raw_rollout)
+        self.rollout_steps: int = positive_int(config, "rollout_steps", 1)
         self._rollout: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
         self._rollout_length = 0
 
@@ -119,42 +113,38 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         Returns:
             The four arrays, or None for an empty or unrecognised episode.
         """
-        last_next_obs: np.ndarray | None = None
         if isinstance(trajectory, dict):
             if len(trajectory.get("observations", [])) == 0:
                 return None
             states = np.asarray(trajectory["observations"], dtype=np.float64)
             actions = np.asarray(trajectory["actions"], dtype=np.float64)
             rewards = np.asarray(trajectory["rewards"], dtype=np.float64)
-            dones = np.array(
-                trajectory.get("dones", np.zeros(len(rewards), dtype=bool)), dtype=bool
+            dones, bootstrap_obs = episode_end(
+                len(rewards),
+                trajectory.get("dones"),
+                trajectory.get("terminated"),
+                trajectory.get("next_observations"),
             )
-            terminated = trajectory.get("terminated")
-            if terminated is not None and len(terminated) > 0 and len(dones) > 0:
-                # A final step cut by the time limit is done but not terminated: bootstrap it.
-                dones[-1] = bool(np.asarray(terminated, dtype=bool)[-1])
-            next_obs = trajectory.get("next_observations")
-            if next_obs is not None and len(next_obs) > 0:
-                last_next_obs = np.asarray(next_obs[-1], dtype=np.float64)
         elif isinstance(trajectory, list):
             if not trajectory:
                 return None
             states = np.array([t["state"] for t in trajectory], dtype=np.float64)
             actions = np.array([t["action"] for t in trajectory], dtype=np.float64)
             rewards = np.array([t["reward"] for t in trajectory], dtype=np.float64)
-            dones = np.array([t["done"] for t in trajectory], dtype=bool)
-            if "terminated" in trajectory[-1]:
-                dones[-1] = bool(trajectory[-1]["terminated"])
-            if "next_state" in trajectory[-1]:
-                last_next_obs = np.asarray(trajectory[-1]["next_state"], dtype=np.float64)
+            last = trajectory[-1]
+            dones, bootstrap_obs = episode_end(
+                len(rewards),
+                [t["done"] for t in trajectory],
+                [last["terminated"]] if "terminated" in last else None,
+                [last["next_state"]] if "next_state" in last else None,
+            )
         else:
             return None
 
         rewards = rewards * self.reward_scale
-        if not dones[-1] and last_next_obs is not None:
-            _, _, last_v, _ = self._forward(last_next_obs)
+        if bootstrap_obs is not None:
+            _, _, last_v, _ = self._forward(bootstrap_obs)
             rewards[-1] += self.gamma * float(last_v)
-        dones[-1] = True
         return states, actions, rewards, dones
 
     def _rollout_targets(

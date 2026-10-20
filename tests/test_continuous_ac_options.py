@@ -376,3 +376,9 @@ def test_an_empty_or_unrecognised_episode_trains_nothing(trajectory):
     agent = _ac(n_steps=8)
     assert agent.update(trajectory) == {}
     assert agent._optimizer.t == 0
+
+
+@pytest.mark.parametrize("bad", [0, 2.5])
+def test_anneal_steps_must_be_a_positive_integer(bad):
+    with pytest.raises(ValueError, match="anneal_steps must be a positive integer"):
+        _ac(anneal_steps=bad)
