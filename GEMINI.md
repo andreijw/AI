@@ -36,6 +36,8 @@ To optimize token usage and context window limits:
     `ReplayBuffer`, and the shared `mlp.py` (multi-layer networks), `bounds.py` (action bounds), `softmax.py`
     (the discrete policies' numerically stable softmax) and `config_values.py` (strict readers for integer
     settings).
+  * `src/rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
+    observation noise, episode statistics, `wrap_env`), and `checked_range` for domain randomization ranges.
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).
   * `src/rl_core/utils/`: Configuration parsing (`config.py`), structured logging (`logger.py`),
     video recording (`video.py`), and visualization helpers (`visualization.py`).

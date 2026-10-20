@@ -50,6 +50,7 @@ AI/
 │   │   │   ├── replay_buffer.py
 │   │   │   ├── returns.py       # Discounted returns shared by the episodic agents
 │   │   │   └── softmax.py       # Numerically stable softmax shared by the discrete policies
+│   │   ├── environments/        # BaseEnvWrapper: seeding, observation noise, episode statistics
 │   │   ├── training/            # Generic training pipeline (trainer.py)
 │   │   ├── utils/               # Config, logging, video recording & plotting utilities
 │   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges
@@ -523,7 +524,9 @@ see [.github/COPILOT_DEPLOYMENT.md](.github/COPILOT_DEPLOYMENT.md).
 
 ### Environment Wrapper
 
-The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment and provides:
+The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment, and `PendulumEnv` wraps Pendulum-v1. Both
+subclass `rl_core.environments.BaseEnvWrapper`, which owns seeding, observation noise and episode statistics.
+They provide:
 
 - Episode tracking and statistics
 - Standardized interface for training pipeline

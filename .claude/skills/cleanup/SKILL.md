@@ -49,6 +49,7 @@ A duplicate rarely shares a name with the original. For each candidate, search f
 | Gaussian log-probability or entropy | `np.log(2 * np.pi` | `ContinuousActorCriticBase._log_prob`, `_entropy` |
 | Takes an Adam step | `beta1`, `m_hat` | `ContinuousActorCriticBase._adam_step` |
 | Stores and samples transitions | a list of tuples, `random.sample` | `ReplayBuffer` |
+| Wraps a Gymnasium environment with seeding, noise or episode statistics | `gym.make(` in a class, `info["episode"]` | subclass `rl_core.environments.BaseEnvWrapper`; `checked_range` for randomization ranges |
 | Reads or merges a config | `yaml.safe_load`, `json.load` | `load_config`, `merge_configs`, `train.load_run_config` |
 | Builds an environment or agent from config | `gym.make(`, a class lookup by name | `train.select_run_challenge`, then the challenge's `make_env` / `make_agent`; a package's `make_env_from_config` |
 | Builds a per-challenge, per-agent output path | `os.path.join(` with the agent type | `train.agent_output_dir` |
