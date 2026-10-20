@@ -708,6 +708,18 @@ Defects found while working on other items, then findings from the brooks-lint h
     - The strict integer check from DQN moved to `rl_core.agents.config_values.positive_int`; DQN and both PPOs'
       `rollout_steps` use it, so 2.5, 4.0, `True` and `"4"` are rejected.
     - Tests are in `tests/test_returns.py`, `tests/test_discrete_ppo.py` and `tests/test_config_values.py`.
+  - **Built (2026-10-19), part 2, strict integer settings** (added to the item by the maintainer):
+    - `ppo_epochs` and `minibatch_size` in discrete PPO, `ppo_epochs` and `batch_size` in continuous PPO, and
+      `anneal_steps` (read by both PPOs and continuous Actor-Critic) were read with `int(...)`, so 2.5 trained
+      as 2. They now go through `positive_int` or the new `optional_positive_int` (None allowed) in
+      `rl_core.agents.config_values`, which reject 2.5, 4.0, `True`, `"4"`, 0 and negatives with the key's name.
+    - Continuous PPO now also rejects `ppo_epochs: 0`, which it used to accept and then never trained.
+    - Seeded short runs of `configs/cartpole_ppo.yaml`, `configs/pendulum_ppo.yaml` and
+      `configs/pendulum_actor_critic.yaml` give bit-identical checkpoints and logs before and after part 2.
+    - Still read with `int(...)` and left for a later item: `hidden_dim` (REINFORCE, `ActorCriticBase` and
+      `ContinuousActorCriticBase`, so every actor-critic and PPO agent) and DDPG's `batch_size`,
+      `buffer_capacity`, `learning_starts` and `max_updates_per_call`. The Trainer's budget keys accept 4.0 and
+      `"4"` on purpose; that difference should be a conscious choice when the item is picked up.
   - **Verified (2026-10-19)**:
     - Continuous PPO and DQN are unchanged. Seeded short runs of `configs/pendulum_ppo.yaml` (20,000 steps) and
       `configs/cartpole_dqn.yaml` (10,000 steps) give bit-identical checkpoints and logs before and after.

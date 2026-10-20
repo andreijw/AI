@@ -464,6 +464,9 @@ def test_a_one_step_rollout_has_zero_advantage_after_centring():
     [
         ("rollout_steps", 0, "rollout_steps must be a positive integer"),
         ("rollout_steps", 2.5, "rollout_steps must be a positive integer"),  # was truncated to 2
+        ("ppo_epochs", 2.5, "ppo_epochs must be a positive integer"),
+        ("minibatch_size", 2.5, "minibatch_size must be a positive integer"),
+        ("anneal_steps", 2.5, "anneal_steps must be a positive integer"),
         ("minibatch_size", 0, "minibatch_size must be a positive integer"),
         ("gae_lambda", -0.1, "gae_lambda must be in"),
         ("gae_lambda", 1.1, "gae_lambda must be in"),

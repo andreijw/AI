@@ -7,7 +7,7 @@ import numpy as np
 from rl_core.seeding import AGENT_REPLAY_STREAM, derive_rng
 
 from .actor_critic_base import ActorCriticBase
-from .config_values import positive_int
+from .config_values import optional_positive_int, positive_int
 from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import episode_end, gae
 
@@ -59,25 +59,18 @@ class PPOAgent(ActorCriticBase):
 
         self.learning_rate: float = float(config.get("learning_rate", 3e-4))
         self.clip_epsilon: float = float(config.get("clip_epsilon", 0.2))
-        self.ppo_epochs: int = int(config.get("ppo_epochs", 4))
+        self.ppo_epochs: int = positive_int(config, "ppo_epochs", 4)
         self.gae_lambda: float = float(config.get("gae_lambda", 1.0))
         self.rollout_steps: int = positive_int(config, "rollout_steps", 1)
         self.anneal_steps: int | None = anneal_steps_from_config(config)
-        raw_minibatch = config.get("minibatch_size")
-        self.minibatch_size: int | None = None if raw_minibatch is None else int(raw_minibatch)
+        self.minibatch_size: int | None = optional_positive_int(config, "minibatch_size")
 
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
         if self.clip_epsilon <= 0.0:
             raise ValueError(f"clip_epsilon must be positive, got {self.clip_epsilon!r}")
-        if self.ppo_epochs <= 0:
-            raise ValueError(f"ppo_epochs must be a positive integer, got {self.ppo_epochs!r}")
         if not (0.0 <= self.gae_lambda <= 1.0):
             raise ValueError(f"gae_lambda must be in [0, 1], got {self.gae_lambda!r}")
-        if self.minibatch_size is not None and self.minibatch_size <= 0:
-            raise ValueError(
-                f"minibatch_size must be a positive integer, got {self.minibatch_size!r}"
-            )
 
         # One generator for action sampling and mini-batch shuffling (the same one
         # BaseAgent would create lazily for sampling).

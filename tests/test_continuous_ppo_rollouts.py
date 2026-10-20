@@ -97,6 +97,20 @@ def test_rollout_steps_must_be_a_positive_integer(bad):
         _agent(rollout_steps=bad)
 
 
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("ppo_epochs", 2.5),  # was truncated to 2
+        ("ppo_epochs", 0),  # was accepted, and then the agent never trained
+        ("batch_size", 2.5),
+        ("anneal_steps", 2.5),
+    ],
+)
+def test_integer_settings_must_be_positive_integers(key, value):
+    with pytest.raises(ValueError, match=f"{key} must be a positive integer"):
+        _agent(**{key: value})
+
+
 def test_loading_a_checkpoint_empties_a_partly_filled_rollout(tmp_path):
     agent = _agent(rollout_steps=15)
     agent.update(_episode(1))

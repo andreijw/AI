@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from rl_core.agents.config_values import positive_int
+from rl_core.agents.config_values import optional_positive_int, positive_int
 
 
 @pytest.mark.parametrize("value", [1, 256, np.int64(8)])
@@ -17,7 +17,28 @@ def test_positive_int_falls_back_to_the_default():
     assert positive_int({}, "rollout_steps", 3) == 3
 
 
-@pytest.mark.parametrize("value", [0, -1, 2.5, 4.0, True, "4", None])
-def test_positive_int_rejects_everything_else_naming_the_key(value):
+def _required(config, key):
+    return positive_int(config, key, 1)
+
+
+@pytest.mark.parametrize("read", [_required, optional_positive_int])
+@pytest.mark.parametrize("value", [0, -1, 2.5, 4.0, True, "4"])
+def test_both_readers_reject_everything_else_naming_the_key(read, value):
     with pytest.raises(ValueError, match="rollout_steps must be a positive integer"):
-        positive_int({"rollout_steps": value}, "rollout_steps", 1)
+        read({"rollout_steps": value}, "rollout_steps")
+
+
+def test_positive_int_rejects_an_explicit_none():
+    with pytest.raises(ValueError, match="rollout_steps must be a positive integer"):
+        positive_int({"rollout_steps": None}, "rollout_steps", 1)
+
+
+@pytest.mark.parametrize("config", [{}, {"minibatch_size": None}])
+def test_optional_positive_int_is_none_when_unset(config):
+    assert optional_positive_int(config, "minibatch_size") is None
+
+
+def test_optional_positive_int_accepts_positive_integers():
+    result = optional_positive_int({"minibatch_size": np.int32(64)}, "minibatch_size")
+    assert result == 64
+    assert type(result) is int

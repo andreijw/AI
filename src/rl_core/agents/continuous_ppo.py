@@ -56,8 +56,8 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         )
         if self.clip_ratio <= 0.0:
             raise ValueError(f"clip_epsilon must be positive, got {self.clip_ratio!r}")
-        self.ppo_epochs: int = int(config.get("ppo_epochs", 8))
-        self.batch_size: int = int(config.get("batch_size", 64))
+        self.ppo_epochs: int = positive_int(config, "ppo_epochs", 8)
+        self.batch_size: int = positive_int(config, "batch_size", 64)
         self.gae_lambda: float = float(config.get("gae_lambda", 0.95))
         self.learning_rate: float = float(config.get("learning_rate", 3e-4))
         # Decay the learning rate and clip range linearly to zero over this many trained
