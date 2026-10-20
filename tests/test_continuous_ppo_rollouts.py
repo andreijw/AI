@@ -9,6 +9,14 @@ import numpy as np
 import pytest
 
 from rl_core.agents import ContinuousPPOAgent
+from tests.agent_internals import (
+    assert_weights_unchanged,
+    gaussian_forward,
+    ppo_rollout_episode,
+    rollout_targets,
+    set_constant_critic,
+    weights,
+)
 
 GAMMA, LAMBDA, SCALE = 0.9, 0.95, 0.1
 
@@ -45,35 +53,25 @@ def _as_list(episode: dict[str, np.ndarray]) -> list[dict[str, object]]:
     ]  # fmt: skip
 
 
-def _weights(agent: ContinuousPPOAgent) -> dict[str, np.ndarray]:
-    names = ("_W1", "_b1", "_W_mu", "_b_mu", "_log_std", "_W_v")
-    return {name: np.array(getattr(agent, name)) for name in names} | {"_b_v": np.array(agent._b_v)}
-
-
-def _constant_critic(agent: ContinuousPPOAgent, value: float) -> None:
-    agent._W_v[...] = 0.0
-    agent._b_v = value
-
-
 # ---------------------------------------------------------------------------
 # Buffering
 # ---------------------------------------------------------------------------
 
 
 def test_episodes_are_buffered_until_the_rollout_is_full():
-    agent = _agent(rollout_steps=15)
-    before = _weights(agent)
+    agent = _agent(rollout_steps=15, anneal_steps=42)
+    before = weights(agent)
     assert agent.update(_episode(1)) == {}  # 7 transitions
     assert agent.update(_episode(2)) == {}  # 14
-    for name, value in _weights(agent).items():
-        np.testing.assert_array_equal(
-            value, before[name], err_msg=f"{name} changed while buffering"
-        )
+    assert_weights_unchanged(agent, before, "while buffering")
     metrics = agent.update(_episode(3))  # 21 >= 15: train on all three
     assert metrics["rollout_steps"] == 21
     assert {"policy_loss", "value_loss", "entropy", "anneal_fraction"} <= set(metrics)
-    assert agent._steps_trained == 21
     assert agent.update(_episode(4)) == {}, "the buffer starts again after training"
+    assert agent.update(_episode(5)) == {}
+    assert agent.update(_episode(6))["anneal_fraction"] == pytest.approx(0.5), (
+        "All 21 transitions of the first rollout must count towards the schedule."
+    )
 
 
 def test_the_default_trains_on_every_episode():
@@ -87,8 +85,8 @@ def test_a_list_of_transitions_is_buffered_like_a_batch():
     for seed in (1, 2):
         as_dict.update(_episode(seed))
         as_list.update(_as_list(_episode(seed)))
-    for name, value in _weights(as_dict).items():
-        np.testing.assert_array_equal(_weights(as_list)[name], value)
+    for name, value in weights(as_dict).items():
+        np.testing.assert_array_equal(weights(as_list)[name], value)
 
 
 @pytest.mark.parametrize("bad", [0, -2, 2.5, "many"])
@@ -128,10 +126,10 @@ def test_loading_a_checkpoint_empties_a_partly_filled_rollout(tmp_path):
 
 def test_a_cut_episode_bootstraps_its_last_scaled_reward():
     agent = _agent()
-    _constant_critic(agent, 2.0)
+    set_constant_critic(agent, 2.0)
     episode = _episode(1, length=2)
     episode["rewards"] = np.array([-1.0, -3.0])
-    _, _, rewards, dones = agent._rollout_episode(episode)
+    _, _, rewards, dones = ppo_rollout_episode(agent, episode)
     # scaled: [-0.1, -0.3]; the cut adds gamma * V(s') = 0.9 * 2.0 to the last one
     np.testing.assert_allclose(rewards, [-0.1, -0.3 + 0.9 * 2.0])
     np.testing.assert_array_equal(dones, [False, True])
@@ -139,32 +137,32 @@ def test_a_cut_episode_bootstraps_its_last_scaled_reward():
 
 def test_a_terminated_episode_does_not_bootstrap():
     agent = _agent()
-    _constant_critic(agent, 2.0)
+    set_constant_critic(agent, 2.0)
     episode = _episode(1, length=2, terminated=True)
     episode["rewards"] = np.array([-1.0, -3.0])
-    _, _, rewards, dones = agent._rollout_episode(episode)
+    _, _, rewards, dones = ppo_rollout_episode(agent, episode)
     np.testing.assert_allclose(rewards, [-0.1, -0.3])
     np.testing.assert_array_equal(dones, [False, True])
 
 
 def test_without_next_observations_the_last_step_is_terminal():
     agent = _agent()
-    _constant_critic(agent, 2.0)
+    set_constant_critic(agent, 2.0)
     episode = _episode(1, length=2)
     episode["rewards"] = np.array([-1.0, -3.0])
     del episode["next_observations"]
-    _, _, rewards, _ = agent._rollout_episode(episode)
+    _, _, rewards, _ = ppo_rollout_episode(agent, episode)
     np.testing.assert_allclose(rewards, [-0.1, -0.3])
 
 
 def test_advantages_match_a_hand_computation_across_two_episodes():
     agent = _agent()
-    _constant_critic(agent, 2.0)
+    set_constant_critic(agent, 2.0)
     cut, ended = _episode(1, length=2), _episode(2, length=1, terminated=True)
     cut["rewards"], ended["rewards"] = np.array([-1.0, -3.0]), np.array([-5.0])
-    parts = [agent._rollout_episode(episode) for episode in (cut, ended)]
+    parts = [ppo_rollout_episode(agent, episode) for episode in (cut, ended)]
     states, _, rewards, dones = (np.concatenate(column) for column in zip(*parts, strict=True))
-    advantages, returns = agent._rollout_targets(states, rewards, dones)
+    advantages, returns = rollout_targets(agent, states, rewards, dones)
     # V = 2 everywhere. Cut episode: d1 = (-0.3 + 1.8) - 2 = -0.5 (no bootstrap past its end);
     # d0 = -0.1 + 0.9 * 2 - 2 = -0.3, A0 = d0 + 0.9 * 0.95 * d1. Terminated episode: d = -0.5 - 2.
     a1 = -0.5
@@ -175,12 +173,12 @@ def test_advantages_match_a_hand_computation_across_two_episodes():
 
 def test_one_episodes_advantages_ignore_the_next_episode():
     agent = _agent()
-    first = agent._rollout_episode(_episode(1))
+    first = ppo_rollout_episode(agent, _episode(1))
     targets = []
     for second_seed in (2, 3):
-        parts = [first, agent._rollout_episode(_episode(second_seed))]
+        parts = [first, ppo_rollout_episode(agent, _episode(second_seed))]
         states, _, rewards, dones = (np.concatenate(c) for c in zip(*parts, strict=True))
-        targets.append(agent._rollout_targets(states, rewards, dones)[0][:7])
+        targets.append(rollout_targets(agent, states, rewards, dones)[0][:7])
     np.testing.assert_array_equal(targets[0], targets[1])
 
 
@@ -188,16 +186,16 @@ def test_rollout_episode_leaves_the_callers_batch_unchanged():
     agent = _agent()
     episode = _episode(1)
     copies = {key: value.copy() for key, value in episode.items()}
-    agent._rollout_episode(episode)
+    ppo_rollout_episode(agent, episode)
     for key, value in copies.items():
         np.testing.assert_array_equal(episode[key], value)
 
 
 @pytest.mark.parametrize("trajectory", [[], {"observations": []}, "not a batch"])
 def test_an_empty_or_unrecognised_episode_buffers_nothing(trajectory):
-    agent = _agent(rollout_steps=1)
+    agent = _agent(rollout_steps=7)
     assert agent.update(trajectory) == {}
-    assert agent._rollout_length == 0
+    assert agent.update(_episode(1))["rollout_steps"] == 7, "Nothing may have been buffered."
 
 
 def test_the_default_matches_the_previous_bootstrap_bit_for_bit():
@@ -207,12 +205,12 @@ def test_the_default_matches_the_previous_bootstrap_bit_for_bit():
 
     agent = _agent()
     episode = _episode(1)
-    _, _, values, _ = agent._forward(episode["observations"])
-    _, _, next_value, _ = agent._forward(episode["next_observations"][-1])
+    _, _, values, _ = gaussian_forward(agent, episode["observations"])
+    _, _, next_value, _ = gaussian_forward(agent, episode["next_observations"][-1])
     previous = gae(
         episode["rewards"] * SCALE, np.asarray(values, dtype=np.float64),
         np.zeros(7, dtype=bool), GAMMA, LAMBDA, last_value=float(next_value),
     )  # fmt: skip
-    states, _, rewards, dones = agent._rollout_episode(episode)
-    advantages, _ = agent._rollout_targets(states, rewards, dones)
+    states, _, rewards, dones = ppo_rollout_episode(agent, episode)
+    advantages, _ = rollout_targets(agent, states, rewards, dones)
     np.testing.assert_array_equal(advantages, previous)

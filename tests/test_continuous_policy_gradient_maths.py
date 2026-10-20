@@ -12,7 +12,6 @@ Unlike the discrete agents, these average over the batch inside the loss and its
 the step is Adam with global gradient-norm clipping.
 """
 
-import copy
 import math
 
 import numpy as np
@@ -20,19 +19,26 @@ import pytest
 
 from rl_core.agents.continuous_actor_critic import ContinuousActorCriticAgent
 from rl_core.agents.continuous_ppo import ContinuousPPOAgent
+from tests.agent_internals import (
+    adam_step,
+    assert_same_weights,
+    boxed_gradients,
+    gaussian_forward,
+    gradient_check_parameters,
+    log_prob,
+    loss_and_grads,
+    optimizer,
+    ppo_minibatch_loss_and_grads,
+    set_weights,
+    share_generators,
+    shuffle_generator,
+    spy_on_ppo_minibatches,
+    weights,
+)
 from tests.helpers import ReferenceAdam, assert_gradients_match
 
 EPS = 1e-5  # perturbation used by tests.helpers.numerical_grad
 N_STEPS, OBS_DIM, HIDDEN_DIM, ACTION_DIM = 6, 3, 6, 2
-PARAMETER_ATTRIBUTES = {
-    "W1": "_W1",
-    "b1": "_b1",
-    "W_mu": "_W_mu",
-    "b_mu": "_b_mu",
-    "log_std": "_log_std",
-    "W_v": "_W_v",
-    "b_v": "_b_v",
-}
 LOG_2PI = math.log(2.0 * math.pi)
 
 # ---------------------------------------------------------------------------
@@ -58,42 +64,24 @@ def _agent(agent_cls, action_dim: int = ACTION_DIM, **config):
 
 
 def _assert_away_from_kinks(agent, states: np.ndarray) -> None:
-    pre_activation = states @ agent._W1 + agent._b1
+    current = weights(agent)
+    pre_activation = states @ current["W1"] + current["b1"]
     margin = 100 * EPS * max(1.0, float(np.abs(states).max()))
     assert np.abs(pre_activation).min() > margin, "A hidden unit sits on the ReLU kink."
     active = pre_activation > 0
     assert active.any() and not active.all(), "Need both active and inactive hidden units."
-    assert np.all((agent._log_std > -2.0) & (agent._log_std < 1.0)), "log_std outside safe range."
-
-
-def _parameters(agent) -> tuple[dict[str, np.ndarray], np.ndarray]:
-    """Live parameter arrays for the gradient check, with the float value bias boxed."""
-    boxed_value_bias = np.array([agent._b_v], dtype=np.float64)
-    parameters = {
-        name: getattr(agent, attribute)
-        for name, attribute in PARAMETER_ATTRIBUTES.items()
-        if name != "b_v"
-    }
-    parameters["b_v"] = boxed_value_bias
-    return parameters, boxed_value_bias
-
-
-def _boxed(grads: dict) -> dict[str, np.ndarray]:
-    return {
-        name: np.atleast_1d(np.asarray(value, dtype=np.float64)) for name, value in grads.items()
-    }
+    log_std = current["log_std"]
+    assert np.all((log_std > -2.0) & (log_std < 1.0)), "log_std outside safe range."
 
 
 def _state(agent) -> dict[str, np.ndarray]:
     """Every weight and every piece of optimiser state, copied."""
-    snapshot = {
-        name: np.array(getattr(agent, attribute), dtype=np.float64)
-        for name, attribute in PARAMETER_ATTRIBUTES.items()
-    }
-    for name in PARAMETER_ATTRIBUTES:
-        snapshot[f"adam_m:{name}"] = np.array(agent._optimizer.m[name], dtype=np.float64)
-        snapshot[f"adam_v:{name}"] = np.array(agent._optimizer.v[name], dtype=np.float64)
-    snapshot["adam_t"] = np.array(agent._optimizer.t)
+    snapshot = weights(agent)
+    adam = optimizer(agent)
+    for name in list(snapshot):
+        snapshot[f"adam_m:{name}"] = np.array(adam.m[name], dtype=np.float64)
+        snapshot[f"adam_v:{name}"] = np.array(adam.v[name], dtype=np.float64)
+    snapshot["adam_t"] = np.array(adam.t)
     return snapshot
 
 
@@ -114,8 +102,8 @@ FIXED_ADVANTAGES = np.array([0.8, -1.1, 0.5, 1.3, -0.6, 0.2])
 
 def _ppo_old_log_probs(agent, states: np.ndarray, actions: np.ndarray) -> np.ndarray:
     """Old log-probabilities that put the ratios on both sides of the clip range."""
-    mu, log_std, _, _ = agent._forward(states)
-    current = agent._log_prob(actions, mu, log_std)
+    mu, log_std, _, _ = gaussian_forward(agent, states)
+    current = log_prob(agent, actions, mu, log_std)
     # ratio = exp(current - old) = exp(-offset): 0.61, 1.65, 0.95, 1.05, 0.74, 1.35
     return current + np.array([0.5, -0.5, 0.05, -0.05, 0.3, -0.3])
 
@@ -132,39 +120,39 @@ BOUNDED = {"bounded_mean": True, "action_low": -2.0, "action_high": 3.0}
 @pytest.mark.parametrize("action_dim", [1, 2])
 def test_actor_critic_gradients_match_finite_differences(action_dim, bounded):
     agent = _agent(ContinuousActorCriticAgent, action_dim, **(BOUNDED if bounded else {}))
-    agent._b_v = 0.2
-    agent._b_mu[...] = 0.7  # away from 0, so tanh's (1 - u^2) factor is not about 1
+    # b_mu away from 0, so tanh's (1 - u^2) factor is not about 1
+    set_weights(agent, b_v=0.2, b_mu=np.full(action_dim, 0.7))
     states, actions = _batch(action_dim)
     _assert_away_from_kinks(agent, states)
-    parameters, boxed_value_bias = _parameters(agent)
+    parameters, sync = gradient_check_parameters(agent)
     inputs = (states, actions, FIXED_RETURNS, FIXED_ADVANTAGES)
 
     def loss() -> float:
-        agent._b_v = float(boxed_value_bias[0])
-        return agent._loss_and_grads(*inputs)[0]["total"]
+        sync()
+        return loss_and_grads(agent, *inputs)[0]["total"]
 
-    _, grads = agent._loss_and_grads(*inputs)
+    _, grads = loss_and_grads(agent, *inputs)
 
-    assert_gradients_match(loss, parameters, _boxed(grads))
+    assert_gradients_match(loss, parameters, boxed_gradients(grads))
 
 
 @pytest.mark.parametrize("bounded", [False, True])
 @pytest.mark.parametrize("action_dim", [1, 2])
 def test_ppo_gradients_match_finite_differences(action_dim, bounded):
     agent = _agent(ContinuousPPOAgent, action_dim, **(BOUNDED if bounded else {}))
-    agent._b_v = 0.2
-    agent._b_mu[...] = 0.7  # away from 0, so tanh's (1 - u^2) factor is not about 1
+    # b_mu away from 0, so tanh's (1 - u^2) factor is not about 1
+    set_weights(agent, b_v=0.2, b_mu=np.full(action_dim, 0.7))
     states, actions = _batch(action_dim)
     _assert_away_from_kinks(agent, states)
     old_log_probs = _ppo_old_log_probs(agent, states, actions)
-    parameters, boxed_value_bias = _parameters(agent)
+    parameters, sync = gradient_check_parameters(agent)
     inputs = (states, actions, FIXED_RETURNS, FIXED_ADVANTAGES, old_log_probs)
 
     def loss() -> float:
-        agent._b_v = float(boxed_value_bias[0])
-        return agent._minibatch_loss_and_grads(*inputs)[0]["total"]
+        sync()
+        return ppo_minibatch_loss_and_grads(agent, *inputs)[0]["total"]
 
-    components, grads = agent._minibatch_loss_and_grads(*inputs)
+    components, grads = ppo_minibatch_loss_and_grads(agent, *inputs)
 
     # ratios 0.61 and 0.74 with a positive advantage, 1.65 and 1.35 with a negative one, are the
     # unclipped side of the minimum; the batch has both kinds of step.
@@ -172,7 +160,7 @@ def test_ppo_gradients_match_finite_differences(action_dim, bounded):
     clipped = np.clip(ratios, 0.8, 1.2) * FIXED_ADVANTAGES < ratios * FIXED_ADVANTAGES
     assert clipped.any() and not clipped.all(), "The batch must exercise both branches of the clip."
     assert math.isfinite(components["total"])
-    assert_gradients_match(loss, parameters, _boxed(grads))
+    assert_gradients_match(loss, parameters, boxed_gradients(grads))
 
 
 # ---------------------------------------------------------------------------
@@ -207,10 +195,14 @@ def _hand_agent(agent_cls, **config):
         action_dim=1,
         config={"hidden_dim": 5, "seed": 1, "gamma": 0.5, "init_log_std": 0.0, **config},
     )
-    agent._W1 = np.zeros_like(agent._W1)
-    agent._b1 = np.zeros_like(agent._b1)
-    agent._b_mu = np.array([0.5])
-    agent._b_v = HAND_VALUE
+    trunk = weights(agent)
+    set_weights(
+        agent,
+        W1=np.zeros_like(trunk["W1"]),
+        b1=np.zeros_like(trunk["b1"]),
+        b_mu=np.array([0.5]),
+        b_v=HAND_VALUE,
+    )
     return agent
 
 
@@ -264,8 +256,8 @@ def test_ppo_minibatch_loss_matches_hand_computation():
     ratios = np.array([1.0, 2.0, 0.5])
     old_log_probs = HAND_LOG_PROBS - np.log(ratios)
 
-    components, _ = agent._minibatch_loss_and_grads(
-        states, HAND_ACTIONS, HAND_RETURNS, advantages, old_log_probs
+    components, _ = ppo_minibatch_loss_and_grads(
+        agent, states, HAND_ACTIONS, HAND_RETURNS, advantages, old_log_probs
     )
 
     # step 0: ratio 1.0, A  1.0 -> min(1.0, 1.0)    =  1.0
@@ -284,21 +276,20 @@ def test_entropy_sums_over_action_dimensions():
     agent = _agent(ContinuousActorCriticAgent, action_dim=2, init_log_std=0.0)
     states, actions = _batch(2)
 
-    components, _ = agent._loss_and_grads(states, actions, FIXED_RETURNS, FIXED_ADVANTAGES)
+    components, _ = loss_and_grads(agent, states, actions, FIXED_RETURNS, FIXED_ADVANTAGES)
 
     assert components["entropy"] == pytest.approx(2 * HAND_ENTROPY, rel=1e-12)
 
 
-def _record_minibatch_inputs(agent) -> list[tuple[np.ndarray, np.ndarray]]:
+def _record_minibatch_inputs(agent, monkeypatch) -> list[tuple[np.ndarray, np.ndarray]]:
     """Make the agent record the returns and advantages each mini-batch is given."""
     recorded: list[tuple[np.ndarray, np.ndarray]] = []
-    original = agent._minibatch_loss_and_grads
 
-    def recording(states, actions, returns, advantages, old_log_probs, **kwargs):
+    def recording(original, states, actions, returns, advantages, old_log_probs, **kwargs):
         recorded.append((np.array(returns), np.array(advantages)))
         return original(states, actions, returns, advantages, old_log_probs, **kwargs)
 
-    agent._minibatch_loss_and_grads = recording
+    spy_on_ppo_minibatches(monkeypatch, agent, recording)
     return recorded
 
 
@@ -323,9 +314,11 @@ def _record_minibatch_inputs(agent) -> list[tuple[np.ndarray, np.ndarray]]:
         ((False, True, False), [0.5, 2.0, -2.0]),
     ],
 )
-def test_ppo_update_feeds_hand_computed_gae_to_the_minibatch(dones, expected_advantages):
+def test_ppo_update_feeds_hand_computed_gae_to_the_minibatch(
+    dones, expected_advantages, monkeypatch
+):
     agent = _hand_agent(ContinuousPPOAgent, gae_lambda=0.5, ppo_epochs=1, batch_size=8)
-    recorded = _record_minibatch_inputs(agent)
+    recorded = _record_minibatch_inputs(agent, monkeypatch)
 
     agent.update(_hand_batch(dones))
 
@@ -351,8 +344,8 @@ def test_actor_critic_loss_and_grads_changes_no_state():
     states, actions = _batch()
     before = _state(agent)
 
-    first = agent._loss_and_grads(states, actions, FIXED_RETURNS)
-    second = agent._loss_and_grads(states, actions, FIXED_RETURNS)
+    first = loss_and_grads(agent, states, actions, FIXED_RETURNS)
+    second = loss_and_grads(agent, states, actions, FIXED_RETURNS)
 
     _assert_state_unchanged(agent, before)
     assert first[0] == second[0]
@@ -370,8 +363,8 @@ def test_ppo_minibatch_loss_and_grads_changes_no_state():
     )
     before = _state(agent)
 
-    first = agent._minibatch_loss_and_grads(*inputs)
-    second = agent._minibatch_loss_and_grads(*inputs)
+    first = ppo_minibatch_loss_and_grads(agent, *inputs)
+    second = ppo_minibatch_loss_and_grads(agent, *inputs)
 
     _assert_state_unchanged(agent, before)
     assert first[0] == second[0]
@@ -380,13 +373,13 @@ def test_ppo_minibatch_loss_and_grads_changes_no_state():
 def test_actor_critic_default_advantages_are_normalised_returns_minus_values():
     """Leaving advantages out is the same as passing normalised(G - V) for the current weights."""
     agent = _agent(ContinuousActorCriticAgent)
-    agent._b_v = 0.2
+    set_weights(agent, b_v=0.2)
     states, actions = _batch()
-    _, _, values, _ = agent._forward(states)
+    _, _, values, _ = gaussian_forward(agent, states)
 
-    default_components, default_grads = agent._loss_and_grads(states, actions, FIXED_RETURNS)
-    explicit_components, explicit_grads = agent._loss_and_grads(
-        states, actions, FIXED_RETURNS, _normalised(FIXED_RETURNS - values)
+    default_components, default_grads = loss_and_grads(agent, states, actions, FIXED_RETURNS)
+    explicit_components, explicit_grads = loss_and_grads(
+        agent, states, actions, FIXED_RETURNS, _normalised(FIXED_RETURNS - values)
     )
 
     assert default_components == explicit_components
@@ -399,7 +392,7 @@ def test_actor_critic_rejects_advantages_of_the_wrong_length():
     states, actions = _batch()
 
     with pytest.raises(ValueError, match="advantages"):
-        agent._loss_and_grads(states, actions, FIXED_RETURNS, np.ones(N_STEPS + 1))
+        loss_and_grads(agent, states, actions, FIXED_RETURNS, np.ones(N_STEPS + 1))
 
 
 # ---------------------------------------------------------------------------
@@ -411,21 +404,8 @@ class _ReferenceAdam(ReferenceAdam):
     """The shared reference Adam, applying its steps to a continuous agent's parameters."""
 
     def step(self, agent, grads: dict) -> None:  # type: ignore[override]
-        for name, step in super().step(grads).items():
-            attribute = PARAMETER_ATTRIBUTES[name]
-            current = getattr(agent, attribute)
-            setattr(agent, attribute, float(current - step) if name == "b_v" else current - step)
-
-
-def _assert_same_weights(agent, reference) -> None:
-    for name, attribute in PARAMETER_ATTRIBUTES.items():
-        np.testing.assert_allclose(
-            getattr(agent, attribute),
-            getattr(reference, attribute),
-            rtol=1e-12,
-            atol=1e-15,
-            err_msg=f"{name} differs.",
-        )
+        current = weights(agent)
+        set_weights(agent, **{name: current[name] - s for name, s in super().step(grads).items()})
 
 
 def test_adam_step_matches_an_independent_implementation():
@@ -436,17 +416,17 @@ def test_adam_step_matches_an_independent_implementation():
 
     for scale in (0.01, 50.0, 0.3):  # below the clip threshold, far above it, and above again
         grads = {
-            name: scale * rng.standard_normal(np.shape(getattr(agent, attribute)))
-            for name, attribute in PARAMETER_ATTRIBUTES.items()
+            name: scale * rng.standard_normal(np.shape(value))
+            for name, value in weights(agent).items()
         }
         grads["b_v"] = float(grads["b_v"])
-        agent._adam_step(dict(grads), 0.01)
+        adam_step(agent, dict(grads), 0.01)
         adam.step(reference, grads)
 
-    _assert_same_weights(agent, reference)
-    assert agent._optimizer.t == 3
+    assert_same_weights(agent, reference)
+    assert optimizer(agent).t == 3
     moved = _state(agent)
-    assert all(not np.array_equal(moved[name], untouched[name]) for name in PARAMETER_ATTRIBUTES)
+    assert all(not np.array_equal(moved[name], untouched[name]) for name in weights(agent))
 
 
 STEP_REWARDS = np.array([1.0, 0.0, 2.0, 1.0, 0.0, 3.0])
@@ -475,12 +455,12 @@ def test_actor_critic_update_takes_one_adam_step_on_its_gradients():
 
     metrics = agent.update(batch)
 
-    components, grads = reference._loss_and_grads(
-        batch["observations"], batch["actions"], STEP_RETURNS
+    components, grads = loss_and_grads(
+        reference, batch["observations"], batch["actions"], STEP_RETURNS
     )
     _ReferenceAdam(0.01, reference.max_grad_norm).step(reference, grads)
-    _assert_same_weights(agent, reference)
-    assert agent._optimizer.t == 1
+    assert_same_weights(agent, reference)
+    assert optimizer(agent).t == 1
     assert metrics["policy_loss"] == pytest.approx(components["policy"], rel=1e-12)
     assert metrics["value_loss"] == pytest.approx(components["value"], rel=1e-12)
     assert metrics["entropy"] == pytest.approx(components["entropy"], rel=1e-12)
@@ -489,21 +469,21 @@ def test_actor_critic_update_takes_one_adam_step_on_its_gradients():
 
 def _with_biases(agent):
     """Give every bias a non-zero value, so a forward pass that drops one is visible."""
-    agent._b1 = np.linspace(-0.3, 0.3, HIDDEN_DIM)
-    agent._b_mu = np.array([0.2, -0.1])
-    agent._b_v = 0.4
+    set_weights(agent, b1=np.linspace(-0.3, 0.3, HIDDEN_DIM), b_mu=np.array([0.2, -0.1]), b_v=0.4)
     return agent
 
 
 def _independent_forward(agent, states: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Policy means and values for a batch of states, written out from the weights."""
-    hidden = np.maximum(0.0, states @ agent._W1 + agent._b1)
-    return hidden @ agent._W_mu + agent._b_mu, hidden @ agent._W_v + agent._b_v
+    w = weights(agent)
+    hidden = np.maximum(0.0, states @ w["W1"] + w["b1"])
+    return hidden @ w["W_mu"] + w["b_mu"], hidden @ w["W_v"] + w["b_v"]
 
 
 def _independent_log_prob(agent, actions: np.ndarray, mu: np.ndarray) -> np.ndarray:
-    variance = np.exp(2.0 * agent._log_std) + 1e-8  # the agents add 1e-8 to the variance
-    per_dimension = -0.5 * ((actions - mu) ** 2 / variance + 2.0 * agent._log_std + LOG_2PI)
+    log_std = weights(agent)["log_std"]
+    variance = np.exp(2.0 * log_std) + 1e-8  # the agents add 1e-8 to the variance
+    per_dimension = -0.5 * ((actions - mu) ** 2 / variance + 2.0 * log_std + LOG_2PI)
     return np.sum(per_dimension, axis=-1)
 
 
@@ -513,15 +493,15 @@ def test_forward_matches_the_network_written_out_from_its_weights():
     states, actions = _batch()
     expected_mu, expected_values = _independent_forward(agent, states)
 
-    mu, log_std, values, _ = agent._forward(states)
-    single_mu, _, single_value, _ = agent._forward(states[0])
+    mu, log_std, values, _ = gaussian_forward(agent, states)
+    single_mu, _, single_value, _ = gaussian_forward(agent, states[0])
 
     np.testing.assert_allclose(mu, expected_mu, rtol=1e-12)
     np.testing.assert_allclose(values, expected_values, rtol=1e-12)
     np.testing.assert_allclose(single_mu, expected_mu[0], rtol=1e-12)
     assert single_value == pytest.approx(expected_values[0], rel=1e-12)
     np.testing.assert_allclose(
-        agent._log_prob(actions, mu, log_std),
+        log_prob(agent, actions, mu, log_std),
         _independent_log_prob(agent, actions, expected_mu),
         rtol=1e-12,
     )
@@ -577,12 +557,14 @@ def test_ppo_update_replays_as_minibatch_steps_on_fixed_inputs(last_done, batch_
 
     adam = _ReferenceAdam(0.05, reference.max_grad_norm)
     indices = np.arange(N_STEPS)
+    shuffle = shuffle_generator(reference)
     seen: list[dict[str, float]] = []
     for _ in range(2):
-        reference._shuffle_rng.shuffle(indices)
+        shuffle.shuffle(indices)
         for start in range(0, N_STEPS, batch_size):
             chosen = indices[start : start + batch_size]
-            components, grads = reference._minibatch_loss_and_grads(
+            components, grads = ppo_minibatch_loss_and_grads(
+                reference,
                 states[chosen],
                 actions[chosen],
                 returns[chosen],
@@ -594,8 +576,8 @@ def test_ppo_update_replays_as_minibatch_steps_on_fixed_inputs(last_done, batch_
 
     assert len(seen) == 4, "Two epochs of two mini-batches each."
     assert len(chosen) == N_STEPS % batch_size, "The last mini-batch is the remainder."
-    _assert_same_weights(agent, reference)
-    assert agent._optimizer.t == 4
+    assert_same_weights(agent, reference)
+    assert optimizer(agent).t == 4
     for metric, component in (
         ("policy_loss", "policy"),
         ("value_loss", "value"),
@@ -616,11 +598,10 @@ def test_checkpoint_resumes_with_the_same_adam_state(agent_cls, tmp_path):
 
     resumed = _agent(agent_cls, gamma=0.5, seed=99)  # different initial weights
     resumed.load(path)
-    assert resumed._optimizer.t == agent._optimizer.t > 0
+    assert optimizer(resumed).t == optimizer(agent).t > 0
     # Checkpoints do not hold the generators (action noise, PPO's shuffle); share them so only the
     # optimiser state is under test.
-    resumed._shuffle_rng = copy.deepcopy(agent._shuffle_rng)
-    resumed._explore_rng = copy.deepcopy(agent._explore_rng)
+    share_generators(agent, resumed)
 
     agent.update(batch)
     resumed.update(batch)

@@ -9,6 +9,15 @@ import pytest
 from rl_core.agents.continuous_actor_critic import ContinuousActorCriticAgent
 from rl_core.agents.continuous_ppo import ContinuousPPOAgent
 from rl_core.training.trainer import Trainer
+from tests.agent_internals import (
+    assert_same_weights,
+    gaussian_forward,
+    log_prob,
+    ppo_minibatch_loss_and_grads,
+    spy_on_adam_step,
+    spy_on_ppo_minibatches,
+    weights,
+)
 
 AGENTS = [ContinuousActorCriticAgent, ContinuousPPOAgent]
 
@@ -30,21 +39,6 @@ def _batch(n: int = 12, seed: int = 0, last_done: bool = True) -> dict[str, np.n
     }
 
 
-def _weights(agent) -> dict[str, np.ndarray]:
-    names = ("_W1", "_b1", "_W_mu", "_b_mu", "_log_std", "_W_v", "_b_v")
-    return {name: np.array(getattr(agent, name), dtype=np.float64, copy=True) for name in names}
-
-
-def _assert_same(a, b, exact: bool = True) -> None:
-    for name, value in _weights(b).items():
-        if exact:
-            np.testing.assert_array_equal(_weights(a)[name], value, err_msg=name)
-        else:
-            np.testing.assert_allclose(
-                _weights(a)[name], value, rtol=1e-10, atol=1e-12, err_msg=name
-            )
-
-
 # ---------------------------------------------------------------------------
 # Initial scale of the mean head
 # ---------------------------------------------------------------------------
@@ -53,9 +47,10 @@ def _assert_same(a, b, exact: bool = True) -> None:
 @pytest.mark.parametrize("agent_cls", AGENTS)
 def test_mean_head_starts_small_by_default_without_changing_other_weights(agent_cls):
     small, full = _agent(agent_cls), _agent(agent_cls, mean_init_scale=1.0)
-    np.testing.assert_allclose(small._W_mu, 0.01 * full._W_mu, rtol=1e-12)
-    for name in ("_W1", "_W_v", "_b_mu", "_log_std"):
-        np.testing.assert_array_equal(getattr(small, name), getattr(full, name), err_msg=name)
+    small_weights, full_weights = weights(small), weights(full)
+    np.testing.assert_allclose(small_weights["W_mu"], 0.01 * full_weights["W_mu"], rtol=1e-12)
+    for name in ("W1", "W_v", "b_mu", "log_std"):
+        np.testing.assert_array_equal(small_weights[name], full_weights[name], err_msg=name)
 
 
 def test_small_mean_head_keeps_initial_actions_inside_the_bounds_at_pendulum_scale():
@@ -63,7 +58,7 @@ def test_small_mean_head_keeps_initial_actions_inside_the_bounds_at_pendulum_sca
     states = np.array(
         [[np.cos(a), np.sin(a), w] for a in np.linspace(-3, 3, 7) for w in (-8, 0, 8)]
     )
-    mu, _, _, _ = agent._forward(states)
+    mu, _, _, _ = gaussian_forward(agent, states)
     assert np.abs(mu).max() < 0.5
 
 
@@ -85,7 +80,7 @@ def test_reward_scale_trains_as_if_the_rewards_were_scaled(agent_cls):
     batch = _batch()
     scaled.update(batch)
     reference.update({**batch, "rewards": batch["rewards"] * 0.1})
-    _assert_same(scaled, reference, exact=False)
+    assert_same_weights(scaled, reference, rtol=1e-10)
 
 
 def test_reward_scale_leaves_the_batch_unchanged():
@@ -107,7 +102,7 @@ def test_truncated_final_step_bootstraps_like_an_unfinished_episode():
     terminated = np.zeros(len(batch["rewards"]), bool)
     truncated.update({**batch, "terminated": terminated})
     unfinished.update({**batch, "dones": np.r_[batch["dones"][:-1], False]})
-    _assert_same(truncated, unfinished)
+    assert_same_weights(truncated, unfinished, rtol=0.0)
 
 
 def test_terminated_final_step_does_not_bootstrap():
@@ -115,7 +110,7 @@ def test_terminated_final_step_does_not_bootstrap():
     batch = _batch(last_done=True)
     with_key.update({**batch, "terminated": batch["dones"].copy()})
     without_key.update(batch)
-    _assert_same(with_key, without_key)
+    assert_same_weights(with_key, without_key, rtol=0.0)
 
 
 def test_trainer_batch_reports_terminated_apart_from_truncated():
@@ -153,14 +148,15 @@ def test_annealing_passes_scaled_learning_rate_and_clip(monkeypatch):
         batch_size=64,
     )
     seen_lr, seen_clip = [], []
-    adam_step, loss = agent._adam_step, agent._minibatch_loss_and_grads
-    monkeypatch.setattr(
-        agent, "_adam_step", lambda grads, lr: (seen_lr.append(lr), adam_step(grads, lr))[1]
-    )
-    monkeypatch.setattr(
+    spy_on_adam_step(
+        monkeypatch,
         agent,
-        "_minibatch_loss_and_grads",
-        lambda *a, **k: (seen_clip.append(k.get("clip_epsilon")), loss(*a, **k))[1],
+        lambda adam_step, grads, lr: (seen_lr.append(lr), adam_step(grads, lr))[1],
+    )
+    spy_on_ppo_minibatches(
+        monkeypatch,
+        agent,
+        lambda loss, *a, **k: (seen_clip.append(k.get("clip_epsilon")), loss(*a, **k))[1],
     )
     first = agent.update(_batch(12))
     second = agent.update(_batch(12, seed=1))
@@ -172,9 +168,9 @@ def test_annealing_passes_scaled_learning_rate_and_clip(monkeypatch):
 def test_annealing_stops_learning_once_spent():
     agent = _agent(ContinuousPPOAgent, anneal_steps=10)
     agent.update(_batch(12))
-    before = copy.deepcopy(_weights(agent))
+    before = copy.deepcopy(weights(agent))
     agent.update(_batch(12, seed=1))
-    for name, value in _weights(agent).items():
+    for name, value in weights(agent).items():
         np.testing.assert_array_equal(value, before[name], err_msg=name)
 
 
@@ -189,7 +185,9 @@ def test_annealing_progress_survives_a_checkpoint(tmp_path):
     agent.save(path)
     resumed = _agent(ContinuousPPOAgent, anneal_steps=100, seed=9)
     resumed.load(path)
-    assert resumed._steps_trained == 12
+    assert resumed.update(_batch(12, seed=1))["anneal_fraction"] == pytest.approx(0.88), (
+        "The resumed agent must continue the schedule after the 12 transitions already trained."
+    )
 
 
 def test_anneal_steps_must_be_positive():
@@ -222,8 +220,8 @@ def test_an_extreme_log_ratio_does_not_overflow():
     agent = _agent(ContinuousPPOAgent)
     b = _batch(8)
     with np.errstate(over="raise", invalid="raise"):
-        components, grads = agent._minibatch_loss_and_grads(
-            b["observations"], b["actions"], np.zeros(8), np.ones(8), np.full(8, -1e4)
+        components, grads = ppo_minibatch_loss_and_grads(
+            agent, b["observations"], b["actions"], np.zeros(8), np.ones(8), np.full(8, -1e4)
         )
     assert np.isfinite(components["total"])
     assert all(np.all(np.isfinite(g)) for g in grads.values())
@@ -233,11 +231,11 @@ def test_the_loss_uses_the_clip_range_it_is_given():
     """Ratios of 1.1 with advantage 1: clip 0.2 leaves them (loss -1.1), clip 0.05 caps them (-1.05)."""
     agent = _agent(ContinuousPPOAgent)
     b = _batch(6)
-    mu, log_std, _, _ = agent._forward(b["observations"])
-    old = agent._log_prob(b["actions"], mu, log_std) - np.log(1.1)
+    mu, log_std, _, _ = gaussian_forward(agent, b["observations"])
+    old = log_prob(agent, b["actions"], mu, log_std) - np.log(1.1)
     args = (b["observations"], b["actions"], np.zeros(6), np.ones(6), old)
-    wide = agent._minibatch_loss_and_grads(*args, clip_epsilon=0.2)[0]["policy"]
-    narrow = agent._minibatch_loss_and_grads(*args, clip_epsilon=0.05)[0]["policy"]
+    wide = ppo_minibatch_loss_and_grads(agent, *args, clip_epsilon=0.2)[0]["policy"]
+    narrow = ppo_minibatch_loss_and_grads(agent, *args, clip_epsilon=0.05)[0]["policy"]
     assert wide == pytest.approx(-1.1, rel=1e-9)
     assert narrow == pytest.approx(-1.05, rel=1e-9)
 
@@ -247,8 +245,8 @@ def test_a_clamped_log_ratio_gives_no_policy_gradient_even_with_negative_advanta
     agent = _agent(ContinuousPPOAgent, entropy_coef=0.0, value_coef=0.0)
     b = _batch(8)
     stale = np.full(8, -1e4)
-    _, grads = agent._minibatch_loss_and_grads(
-        b["observations"], b["actions"], np.zeros(8), -np.ones(8), stale
+    _, grads = ppo_minibatch_loss_and_grads(
+        agent, b["observations"], b["actions"], np.zeros(8), -np.ones(8), stale
     )
     for name in ("W_mu", "b_mu", "log_std"):
         np.testing.assert_array_equal(grads[name], 0.0, err_msg=name)
@@ -280,7 +278,7 @@ def test_terminated_is_read_from_a_list_of_transitions_too():
             )
         ]
     )
-    _assert_same(as_dict, as_list)
+    assert_same_weights(as_dict, as_list, rtol=0.0)
 
 
 def test_an_empty_terminated_array_is_ignored():
@@ -288,4 +286,4 @@ def test_an_empty_terminated_array_is_ignored():
     b = _batch()
     with_empty.update({**b, "terminated": np.array([], dtype=bool)})
     without.update(b)
-    _assert_same(with_empty, without)
+    assert_same_weights(with_empty, without, rtol=0.0)

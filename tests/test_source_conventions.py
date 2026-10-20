@@ -229,6 +229,11 @@ PUBLIC_BEHAVIOUR_TEST_FILES = [
         "test_discrete_ppo.py",
         "test_policy_gradient_maths.py",
         "test_discrete_policy_numerics.py",
+        "test_continuous_agent.py",
+        "test_continuous_ac_options.py",
+        "test_continuous_options.py",
+        "test_continuous_policy_gradient_maths.py",
+        "test_continuous_ppo_rollouts.py",
     )
 ]
 
