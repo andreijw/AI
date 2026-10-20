@@ -1,11 +1,15 @@
 """DQN rejects invalid settings at construction, and warm-up reports no loss (roadmap: "DQN Config Validation")."""
 
-import copy
-
 import numpy as np
 import pytest
 
 from rl_core.agents import DQNAgent
+from tests.agent_internals import (
+    DQN_ONLINE_WEIGHTS,
+    assert_weights_unchanged,
+    live_weights,
+    weights,
+)
 
 
 def _agent(**config) -> DQNAgent:
@@ -91,14 +95,11 @@ def test_tau_one_copies_the_online_network_after_every_gradient_step():
         tau=1.0, target_update_frequency=1000, batch_size=4, min_buffer_size=4, updates_per_step=0.5
     )
     agent.update(_batch())
-    for online, target in (
-        ("_W1", "_target_W1"),
-        ("_b1", "_target_b1"),
-        ("_W2", "_target_W2"),
-        ("_b2", "_target_b2"),
-    ):
-        np.testing.assert_array_equal(getattr(agent, target), getattr(agent, online))
-        assert not np.shares_memory(getattr(agent, target), getattr(agent, online))
+    arrays = live_weights(agent)
+    for name in DQN_ONLINE_WEIGHTS:
+        online, target = arrays[name], arrays[f"target_{name}"]
+        np.testing.assert_array_equal(target, online)
+        assert not np.shares_memory(target, online), f"target_{name} aliases {name}."
 
 
 # ---------------------------------------------------------------------------
@@ -108,10 +109,10 @@ def test_tau_one_copies_the_online_network_after_every_gradient_step():
 
 def test_warm_up_reports_epsilon_but_no_loss_or_q_value():
     agent = _agent(batch_size=8, min_buffer_size=50)
-    before = copy.deepcopy(agent._W1)
+    before = weights(agent)
     metrics = agent.update(_batch())
     assert metrics == {"epsilon": agent.epsilon}
-    np.testing.assert_array_equal(agent._W1, before)
+    assert_weights_unchanged(agent, before, "in warm-up")
 
 
 def test_the_training_log_averages_loss_only_over_real_updates(tmp_path):

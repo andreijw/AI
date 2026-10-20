@@ -661,7 +661,10 @@ Defects found while working on other items, then findings from the brooks-lint h
     clip boundaries in the gradient check.
   - **Out of scope**: Shortening `train.main` and `BenchmarkRunner.run`; changing any update rule.
 
-- [~] **Test Agents Through Their Public Behaviour**
+- [x] **Test Agents Through Their Public Behaviour**
+  - **Delivered in**: #109 (discrete policy-gradient agents), #110 (continuous agents) and branch
+    `feature/value-agent-tests-public-behaviour` (DQN and DDPG). Marked complete in that branch's hand-off commit,
+    as the maintainer chose on 2026-10-20.
   - **Description**: Tests reach into private attributes 274 times (124 in `tests/test_agents_extensive.py`), so a
     refactor with no behaviour change breaks many of them. (The 11 tests that called `_compute_returns` went with
     that method on 2026-10-13; the count above predates that.) Recounted on 2026-10-20: about 560 accesses in 22
@@ -683,6 +686,16 @@ Defects found while working on other items, then findings from the brooks-lint h
     weights `W_mu`, `b_mu`, `log_std`). Annealing progress is checked through the `anneal_fraction` metric and
     an empty episode through the next rollout's `rollout_steps`. `assert_same_weights(..., rtol=0.0)` now means
     bit-identical. Remaining: DQN and DDPG (PR 3).
+  - **Progress (2026-10-20), PR 3 of 3, DQN and DDPG**: `test_dqn_agent.py`, `test_dqn_maths.py`,
+    `test_dqn_options.py`, `test_dqn_validation.py`, `test_ddpg_agent.py` and `test_committed_configs.py`
+    migrated. The helpers name DQN's weights `W1` … `target_b2` and DDPG's `actor_W0` … `target_critic_b2`, as
+    the checkpoints do, and add `counters`/`set_counters` for the checkpointed counters (DQN's target-sync
+    counter and exploration step, DDPG's training actions and gradient steps), read where no metric reports them.
+    `live_weights` serves the two checks that a target network shares no memory with the online one. The guard
+    now covers every `tests/test_*.py` except a listed, explained set of non-agent files
+    (`PRIVATE_ACCESS_EXEMPT`: environment wrappers, the replay buffer, the registry, a plotting helper, and the
+    out-of-scope trainer and script tests), so a new agent test file is checked without being added anywhere.
+    "One helper per agent family" is one module, `tests/agent_internals.py`, with a section per family.
   - **Acceptance criteria**:
     - Agent tests assert through `select_action`, the metrics `update` returns, and save/load round trips.
     - Private access remains only where a test checks the maths directly (gradient checks, exact returns), through
