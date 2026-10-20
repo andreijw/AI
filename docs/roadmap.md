@@ -689,7 +689,8 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Checkpoints written before the change still load.
   - **Out of scope**: A resume option for `train.py`.
 
-- [~] **PPO Episode Ends and Validation**
+- [x] **PPO Episode Ends and Validation**
+  - **Delivered in**: #104. Confirmed by the maintainer on 2026-10-19.
   - **Description**: Found 2026-10-18 while giving continuous PPO multi-episode rollouts. Discrete `PPOAgent`'s
     rollouts end every episode's GAE trace without a bootstrap, so CartPole's 500-step time limit counts as a true
     end; continuous PPO adds γ·V(next state) to the last reward of a cut episode. Discrete PPO also reads
@@ -727,8 +728,8 @@ Defects found while working on other items, then findings from the brooks-lint h
       - `develop` reproduced the published row: 5 of 5 solved, 108,325 average steps to solve, 5 held, eval 500.
       - With the bootstrap: 5 of 5 solved, 79,556 average steps to solve (71,927 to 90,136, every seed faster),
         5 held with a final training average of 500 on every seed, eval 500.
-      - Not republished yet: `docs/benchmarks/cartpole_results.md` and the README's results table still show the
-        `develop` numbers (80k to 132k steps).
+      - Republished on 2026-10-19 (all CartPole agents, seeds 1 to 5): only PPO's row changed;
+        `docs/benchmarks/cartpole_results.md` and the README's results table show the new numbers.
   - **Out of scope**: Sharing one rollout buffer between the two PPO agents (until a third user appears).
 
 - [x] **DQN Config Validation**
