@@ -9,6 +9,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_core.agents.dqn_agent import DQNAgent
+from tests.agent_internals import bellman_targets, counters, q_values, weights
+from tests.helpers import assert_same_checkpoint
 
 
 def test_dqn_init_valid():
@@ -57,7 +59,7 @@ def test_dqn_select_action_greedy_in_eval():
     obs = np.array([0.1, -0.2, 0.3, -0.4])
 
     # In eval mode, action must be argmax Q even if epsilon is 1.0
-    q_vals, _ = agent._forward_q(obs, target=False)
+    q_vals = q_values(agent, obs)
     expected_action = int(np.argmax(q_vals))
 
     for _ in range(20):
@@ -149,21 +151,26 @@ def test_dqn_target_network_hard_sync():
         "dones": np.zeros(10, dtype=bool),
     }
 
+    def w1_and_target():
+        current = weights(agent)
+        return current["W1"], current["target_W1"]
+
     # Initial target and online weights are identical
-    np.testing.assert_allclose(agent._W1, agent._target_W1)
+    np.testing.assert_allclose(*w1_and_target())
 
     # Update 1: online changes, target remains untouched
     agent.update(batch)
-    assert not np.allclose(agent._W1, agent._target_W1)
-    saved_target_w1 = np.copy(agent._target_W1)
+    online, target = w1_and_target()
+    assert not np.allclose(online, target)
+    saved_target_w1 = target
 
     # Update 2: target still untouched
     agent.update(batch)
-    np.testing.assert_allclose(agent._target_W1, saved_target_w1)
+    np.testing.assert_allclose(w1_and_target()[1], saved_target_w1)
 
     # Update 3: hard update synchronizes target with online
     agent.update(batch)
-    np.testing.assert_allclose(agent._W1, agent._target_W1)
+    np.testing.assert_allclose(*w1_and_target())
 
 
 def test_dqn_target_network_soft_sync():
@@ -187,12 +194,13 @@ def test_dqn_target_network_soft_sync():
         "dones": np.zeros(10, dtype=bool),
     }
 
-    initial_target_w1 = np.copy(agent._target_W1)
+    initial_target_w1 = weights(agent)["target_W1"]
     agent.update(batch)
 
     # Target should move towards online but not be identical
-    assert not np.allclose(agent._target_W1, initial_target_w1)
-    assert not np.allclose(agent._target_W1, agent._W1)
+    after = weights(agent)
+    assert not np.allclose(after["target_W1"], initial_target_w1)
+    assert not np.allclose(after["target_W1"], after["W1"])
 
 
 def test_dqn_terminal_state_value_zeroed():
@@ -204,8 +212,8 @@ def test_dqn_terminal_state_value_zeroed():
     dones_terminal = np.array([True])
     dones_non_terminal = np.array([False])
 
-    target_terminal = agent._compute_bellman_targets(rewards, s_next, dones_terminal)
-    target_non_terminal = agent._compute_bellman_targets(rewards, s_next, dones_non_terminal)
+    target_terminal = bellman_targets(agent, rewards, s_next, dones_terminal)
+    target_non_terminal = bellman_targets(agent, rewards, s_next, dones_non_terminal)
 
     # Terminal target is exactly reward (5.0)
     assert target_terminal[0] == 5.0
@@ -223,14 +231,10 @@ def test_dqn_save_load_checkpoint(tmp_path):
     checkpoint_path = str(tmp_path / "dqn_checkpoint.pt")
     agent.save(checkpoint_path)
 
-    restored = DQNAgent(observation_dim=4, action_dim=2, config={})
+    restored = DQNAgent(observation_dim=4, action_dim=2, config={"seed": 9})
     restored.load(checkpoint_path)
 
-    np.testing.assert_allclose(agent._W1, restored._W1)
-    np.testing.assert_allclose(agent._b1, restored._b1)
-    np.testing.assert_allclose(agent._W2, restored._W2)
-    np.testing.assert_allclose(agent._b2, restored._b2)
-    np.testing.assert_allclose(agent._target_W1, restored._target_W1)
+    assert_same_checkpoint(agent, restored, tmp_path)
     assert agent.epsilon == restored.epsilon
 
 
@@ -256,7 +260,7 @@ def test_dqn_updates_per_step_multiple_updates():
     }
     agent.update(batch)
     # 8 transitions * 0.5 updates_per_step = 4 gradient updates
-    assert agent._update_counter == 4
+    assert counters(agent)["update_counter"] == 4
 
 
 def test_dqn_updates_per_step_validation():

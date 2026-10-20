@@ -217,25 +217,22 @@ def test_the_seeded_default_rng_scan_flags_what_it_claims():
 # Agent tests go through the public interface; private access lives in tests/agent_internals.py
 # ---------------------------------------------------------------------------
 
-# Test files moved onto the public interface (roadmap: "Test Agents Through Their Public Behaviour").
-# Each later family adds its files here.
-PUBLIC_BEHAVIOUR_TEST_FILES = [
-    REPO_ROOT / "tests" / name
-    for name in (
-        "test_agents_extensive.py",
-        "test_reinforce_agent.py",
-        "test_actor_critic_agent.py",
-        "test_ppo_agent.py",
-        "test_discrete_ppo.py",
-        "test_policy_gradient_maths.py",
-        "test_discrete_policy_numerics.py",
-        "test_continuous_agent.py",
-        "test_continuous_ac_options.py",
-        "test_continuous_options.py",
-        "test_continuous_policy_gradient_maths.py",
-        "test_continuous_ppo_rollouts.py",
-    )
-]
+# Every test file is held to the agents' public interface (roadmap: "Test Agents Through Their Public
+# Behaviour"), except these, which test something other than an agent and reach into it on purpose.
+PRIVATE_ACCESS_EXEMPT = {
+    "test_trainer.py": "Trainer integration tests (out of scope of the roadmap item)",
+    "test_train_video.py": "script tests (out of scope of the roadmap item)",
+    "test_environment.py": "environment wrapper internals (action noise, domain randomization)",
+    "test_pendulum.py": "environment wrapper internals (action noise)",
+    "test_replay_buffer.py": "the buffer's write index",
+    "test_challenge_registry.py": "the registry's default search directory",
+    "test_visualization.py": "a private plotting helper",
+}
+AGENT_TEST_FILES = sorted(
+    path
+    for path in (REPO_ROOT / "tests").glob("test_*.py")
+    if path.name not in PRIVATE_ACCESS_EXEMPT
+)
 
 _PRIVATE_NAME = re.compile(r"_[A-Za-z]\w*")
 
@@ -280,7 +277,7 @@ def test_migrated_agent_tests_use_only_the_public_interface():
     behaviour change touches one helper instead of every test."""
     offenders = [
         f"{path.relative_to(REPO_ROOT)}:{line} {what}"
-        for path in PUBLIC_BEHAVIOUR_TEST_FILES
+        for path in AGENT_TEST_FILES
         for line, what in private_accesses(path.read_text(encoding="utf-8"))
     ]
 
@@ -288,6 +285,13 @@ def test_migrated_agent_tests_use_only_the_public_interface():
         "Assert through select_action, update's metrics or save/load; for maths, go through "
         "tests/agent_internals.py:\n" + "\n".join(offenders)
     )
+
+
+def test_private_access_exemptions_name_existing_files():
+    """A renamed or deleted test file must leave the exemption list, or the list goes stale."""
+    existing = {path.name for path in (REPO_ROOT / "tests").glob("test_*.py")}
+    assert set(PRIVATE_ACCESS_EXEMPT) <= existing
+    assert {"test_agents_extensive.py", "test_ddpg_agent.py"} <= {p.name for p in AGENT_TEST_FILES}
 
 
 def test_private_access_scan_flags_each_spelling():

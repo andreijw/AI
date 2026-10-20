@@ -14,11 +14,19 @@ import numpy as np
 import pytest
 
 from rl_core.agents import DQNAgent
+from tests.agent_internals import (
+    DQN_ONLINE_WEIGHTS,
+    apply_gradients,
+    assert_same_weights,
+    bellman_targets,
+    counters,
+    loss_and_grads,
+    share_generators,
+    weights,
+)
 from tests.helpers import ReferenceAdam
 
 OBS_DIM, ACTION_DIM = 4, 2
-ONLINE = {"W1": "_W1", "b1": "_b1", "W2": "_W2", "b2": "_b2"}
-TARGET = ["_target_W1", "_target_b1", "_target_W2", "_target_b2"]
 
 
 def _agent(**config) -> DQNAgent:
@@ -151,12 +159,13 @@ def _expected_adam_weights(agent: DQNAgent, batch, adam: ReferenceAdam) -> dict[
         batch["next_observations"], batch["dones"],
     )  # fmt: skip
     sample = reference.replay_buffer.sample(reference.batch_size)
-    targets = reference._compute_bellman_targets(
-        sample["rewards"], sample["next_observations"], sample["dones"]
+    targets = bellman_targets(
+        reference, sample["rewards"], sample["next_observations"], sample["dones"]
     )
-    _, grads = reference._loss_and_grads(sample["observations"], sample["actions"], targets)
+    _, grads = loss_and_grads(reference, sample["observations"], sample["actions"], targets)
     steps = adam.step(grads)
-    return {name: getattr(reference, attr) - steps[name] for name, attr in ONLINE.items()}
+    current = weights(reference)
+    return {name: current[name] - steps[name] for name in DQN_ONLINE_WEIGHTS}
 
 
 @pytest.mark.parametrize("max_grad_norm", [None, 0.05])
@@ -171,19 +180,21 @@ def test_adam_takes_the_reference_adam_step(max_grad_norm):
     for _ in range(2):  # two steps, so the moments carry over
         expected = _expected_adam_weights(agent, batch, adam)
         agent.update(batch)
-        for name, attribute in ONLINE.items():
-            np.testing.assert_allclose(getattr(agent, attribute), expected[name], rtol=1e-10)
+        after = weights(agent)
+        for name in DQN_ONLINE_WEIGHTS:
+            np.testing.assert_allclose(after[name], expected[name], rtol=1e-10, err_msg=name)
 
 
 def test_sgd_clips_each_gradient_element_at_grad_clip_value():
     agent = _agent(learning_rate=0.1, grad_clip_value=0.5)
-    grads = {name: np.full(getattr(agent, attr).shape, 2.0) for name, attr in ONLINE.items()}
+    before = weights(agent)
+    grads = {name: np.full(before[name].shape, 2.0) for name in DQN_ONLINE_WEIGHTS}
     grads["b2"] = np.full(ACTION_DIM, 0.25)
-    before = {name: getattr(agent, attr).copy() for name, attr in ONLINE.items()}
-    agent._apply_gradients(grads)
-    for name, attribute in ONLINE.items():
+    apply_gradients(agent, grads)
+    after = weights(agent)
+    for name in DQN_ONLINE_WEIGHTS:
         step = 0.1 * np.clip(grads[name], -0.5, 0.5)
-        np.testing.assert_allclose(getattr(agent, attribute), before[name] - step, rtol=1e-12)
+        np.testing.assert_allclose(after[name], before[name] - step, rtol=1e-12, err_msg=name)
 
 
 def test_grad_clip_value_defaults_to_ten():
@@ -234,16 +245,15 @@ def test_a_loaded_agent_resumes_exactly(tmp_path):
     resumed.load(path)
     # Training continues from the same replay data and generator state in both.
     resumed.replay_buffer = copy.deepcopy(agent.replay_buffer)
-    resumed._explore_rng = copy.deepcopy(agent._explore_rng)
+    share_generators(agent, resumed)
 
     for run in (agent, resumed):
         _act(run, 6)
         run.update(_batch(seed=9, terminated=np.zeros(6, dtype=bool)))
 
-    for attribute in [*ONLINE.values(), *TARGET]:
-        np.testing.assert_array_equal(getattr(resumed, attribute), getattr(agent, attribute))
+    assert_same_weights(resumed, agent, rtol=0.0)
     assert resumed.epsilon == agent.epsilon
-    assert resumed._update_counter == agent._update_counter
+    assert counters(resumed) == counters(agent)
 
 
 def test_the_saved_exploration_step_is_restored_not_rebuilt(tmp_path):
@@ -255,7 +265,7 @@ def test_the_saved_exploration_step_is_restored_not_rebuilt(tmp_path):
     agent.save(path)
     restored = _agent(**{**LINEAR, "exploration_steps": 50})
     restored.load(path)
-    assert restored._exploration_step == 3
+    assert counters(restored)["exploration_step"] == 3
 
 
 def test_the_trainer_time_limit_cut_reaches_the_buffer_as_not_terminal(tmp_path):
@@ -282,8 +292,7 @@ def test_the_trainer_time_limit_cut_reaches_the_buffer_as_not_terminal(tmp_path)
 
 def _old_checkpoint(path, agent: DQNAgent, epsilon: float) -> None:
     """A checkpoint in the format written before this change: weights and epsilon only."""
-    arrays = {name: getattr(agent, attribute) for name, attribute in ONLINE.items()}
-    arrays.update({f"target_{name}": getattr(agent, f"_target_{name}") for name in ONLINE})
+    arrays = weights(agent)  # keyed by checkpoint name: W1 … b2 and target_W1 … target_b2
     with open(path, "wb") as f:
         np.savez(f, **arrays, epsilon=np.array(epsilon))
 
@@ -305,8 +314,8 @@ def test_an_old_checkpoint_loads_into_an_adam_agent_with_fresh_moments(tmp_path)
     _old_checkpoint(path, source, epsilon=0.3)
     agent = _agent(optimizer="adam")
     agent.load(path)
-    np.testing.assert_array_equal(agent._W1, source._W1)
-    assert agent._update_counter == 0
+    assert_same_weights(agent, source, rtol=0.0)
+    assert counters(agent)["update_counter"] == 0
 
 
 def test_an_adam_checkpoint_loads_into_an_sgd_agent(tmp_path):
@@ -315,4 +324,4 @@ def test_an_adam_checkpoint_loads_into_an_sgd_agent(tmp_path):
     source.save(path)
     agent = _agent()
     agent.load(path)
-    np.testing.assert_array_equal(agent._W1, source._W1)
+    assert_same_weights(agent, source, rtol=0.0)

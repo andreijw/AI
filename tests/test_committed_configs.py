@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_cartpole.benchmark import CartPoleChallenge  # noqa: E402
 from rl_core.agents.optim import Adam  # noqa: E402
+from tests.agent_internals import optimizer, weights
 
 # Step budgets (roadmap: Benchmark Budgets and Solve Rule in Environment Steps), from the
 # rl-baselines3-zoo references where one exists; CartPole PPO gets twice its reference.
@@ -47,7 +48,7 @@ def test_every_agent_trains_for_its_step_budget(challenge, agent_type):
 def test_cartpole_policy_gradient_agents_use_adam(agent_type):
     env, agent, _ = CartPoleChallenge().setup_run(agent_type, seed=1, episodes=None)
     env.close()
-    assert isinstance(agent._optimizer, Adam)
+    assert isinstance(optimizer(agent), Adam)
 
 
 def test_dqn_uses_the_measured_rl_zoo_like_settings():
@@ -55,8 +56,8 @@ def test_dqn_uses_the_measured_rl_zoo_like_settings():
     within 300k steps (roadmap: "DQN Reaches the rl-zoo Reference")."""
     env, agent, _ = CartPoleChallenge().setup_run("dqn", seed=1, episodes=None)
     env.close()
-    assert isinstance(agent._optimizer, Adam)
-    assert agent._optimizer.max_grad_norm == pytest.approx(10.0)
+    assert isinstance(optimizer(agent), Adam)
+    assert optimizer(agent).max_grad_norm == pytest.approx(10.0)
     assert agent.learning_rate == pytest.approx(0.001)
     assert agent.target_update_frequency == 128
     assert (agent.exploration_steps, agent.epsilon_end) == (8000, pytest.approx(0.04))
@@ -70,7 +71,7 @@ def test_ppo_uses_standard_rollouts_with_an_annealed_learning_rate():
     assert agent.anneal_steps == 200_000
     assert (agent.gae_lambda, agent.gamma, agent.entropy_coef) == (0.8, 0.98, 0.0)
     assert agent.learning_rate == pytest.approx(0.001)
-    assert agent._optimizer.max_grad_norm == pytest.approx(0.5)
+    assert optimizer(agent).max_grad_norm == pytest.approx(0.5)
     assert (agent.clip_epsilon, agent.value_coef) == (0.2, 0.5)
 
 
@@ -120,4 +121,4 @@ def test_pendulum_actor_critic_uses_the_measured_settings():
     assert (agent.value_coef, agent.entropy_coef, agent.reward_scale) == pytest.approx(
         (0.4, 0.01, 0.05)
     )
-    np.testing.assert_allclose(agent._log_std, [-2.0])
+    np.testing.assert_allclose(weights(agent)["log_std"], [-2.0])
