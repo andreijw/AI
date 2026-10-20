@@ -9,6 +9,7 @@ from rl_core.seeding import AGENT_WEIGHTS_STREAM, derive_rng
 
 from .base_agent import BaseAgent
 from .optim import Adam, optimizer_from_config
+from .softmax import stable_softmax
 
 
 class ActorCriticBase(BaseAgent):
@@ -97,10 +98,7 @@ class ActorCriticBase(BaseAgent):
         h = np.maximum(0.0, obs @ self._W1 + self._b1)  # ReLU hidden layer
 
         # Policy head
-        logits = h @ self._W_pi + self._b_pi
-        logits = logits - np.max(logits)  # numerically stable softmax
-        exp_logits = np.exp(logits)
-        probs = exp_logits / exp_logits.sum()
+        probs = stable_softmax(h @ self._W_pi + self._b_pi)
 
         # Value head (scalar)
         value = float(h @ self._W_v) + self._b_v
@@ -118,10 +116,7 @@ class ActorCriticBase(BaseAgent):
             Tuple of (probabilities (B, action_dim), values (B,), hidden activations (B, H)).
         """
         h = np.maximum(0.0, observations @ self._W1 + self._b1)
-        logits = h @ self._W_pi + self._b_pi
-        logits = logits - np.max(logits, axis=1, keepdims=True)  # stable softmax, per row
-        exp_logits = np.exp(logits)
-        probs = exp_logits / exp_logits.sum(axis=1, keepdims=True)
+        probs = stable_softmax(h @ self._W_pi + self._b_pi)  # per row
         values = h @ self._W_v + self._b_v
         return probs, values, h
 
