@@ -699,11 +699,20 @@ Defects found while working on other items, then findings from the brooks-lint h
       scalar, list and out-of-range Pendulum actions. Seeded short runs of `configs/cartpole_ppo.yaml` and
       `configs/pendulum_ddpg.yaml` give identical checkpoints and logs.
 
-- [ ] **Complete Optimizer State in Checkpoints**
+- [x] **Complete Optimizer State in Checkpoints**
+  - **Delivered in**: #74 (Adam moments for every policy-gradient agent), #88 (DQN) and #92 (DDPG); the roadmap
+    entry was closed on 2026-10-20. Confirmed by the maintainer on 2026-10-20.
   - **Description**: The continuous agents save the Adam step count `adam_t` but not the moment estimates, so a run
     resumed from a checkpoint takes mis-scaled first steps. DQN does not save its target-sync counter.
   - **Progress (2026-10-16)**: DQN now saves and restores its target-sync counter, its exploration step and its
     Adam state, with a resume test (`tests/test_dqn_options.py`); the continuous agents remain.
+  - **Checked (2026-10-20)**: The continuous agents already stored their Adam moments (`Adam.state`) since #74.
+    Each family has an exact-resume test: `test_adam_checkpoint_resumes_exactly`
+    (`tests/test_policy_gradient_maths.py`), `test_checkpoint_resumes_with_the_same_adam_state`
+    (`tests/test_continuous_policy_gradient_maths.py`), `test_a_loaded_agent_resumes_exactly`
+    (`tests/test_dqn_options.py`) and `test_a_loaded_agent_resumes_weights_optimizers_and_counters`
+    (`tests/test_ddpg_agent.py`). Checkpoints holding only `adam_t` still load (`tests/test_optim.py`). A probe
+    of all eight learning-agent setups resumed bit-identically after one more update.
   - **Acceptance criteria**:
     - Everything an agent needs to resume training round-trips through `save` and `load`.
     - A test trains, saves, loads into a fresh agent, and gets the same weights after one more seeded update.
