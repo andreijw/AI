@@ -8,6 +8,7 @@ import numpy as np
 from rl_core.seeding import AGENT_WEIGHTS_STREAM, derive_rng
 
 from .base_agent import BaseAgent
+from .config_values import positive_int
 from .optim import Adam, optimizer_from_config
 from .softmax import stable_softmax
 
@@ -39,11 +40,11 @@ class ActorCriticBase(BaseAgent):
         super().__init__(observation_dim, action_dim, config)
 
         self.gamma: float = float(config.get("gamma", 0.99))
-        self.hidden_dim: int = int(config.get("hidden_dim", 128))
+        self.hidden_dim: int = positive_int(config, "hidden_dim", 128)
         self.value_coef: float = float(config.get("value_coef", 0.5))
         self.entropy_coef: float = float(config.get("entropy_coef", 0.01))
 
-        self._validate_dims(observation_dim, action_dim, self.hidden_dim)
+        self._validate_dims(observation_dim, action_dim)
         if not (0.0 < self.gamma <= 1.0):
             raise ValueError(f"gamma must be in the interval (0, 1], got {self.gamma!r}")
         if self.value_coef < 0.0:

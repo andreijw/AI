@@ -124,24 +124,22 @@ class BaseAgent(ABC):
         raise FileNotFoundError(f"Checkpoint not found at '{path}' (or fallback '{npz_path}').")
 
     @staticmethod
-    def _validate_dims(observation_dim: int, action_dim: int, hidden_dim: int) -> None:
+    def _validate_dims(observation_dim: int, action_dim: int) -> None:
         """
-        Validate common network dimension hyperparameters.
+        Validate the observation and action dimensions. Hidden widths are checked where they are
+        read from the config (``rl_core.agents.config_values``).
 
         Args:
             observation_dim: Observation space dimensionality.
             action_dim:      Number of discrete actions.
-            hidden_dim:      Hidden layer width.
 
         Raises:
-            ValueError: If any dimension is non-positive.
+            ValueError: If either dimension is non-positive.
         """
         if observation_dim <= 0:
             raise ValueError(f"observation_dim must be a positive integer, got {observation_dim!r}")
         if action_dim <= 0:
             raise ValueError(f"action_dim must be a positive integer, got {action_dim!r}")
-        if hidden_dim <= 0:
-            raise ValueError(f"hidden_dim must be a positive integer, got {hidden_dim!r}")
 
     # ------------------------------------------------------------------
     # Abstract interface

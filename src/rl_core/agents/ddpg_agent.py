@@ -15,6 +15,12 @@ from rl_core.seeding import (
 
 from .base_agent import BaseAgent
 from .bounds import action_bounds
+from .config_values import (
+    check_positive_int,
+    non_negative_int,
+    optional_positive_int,
+    positive_int,
+)
 from .mlp import Params, init_mlp, mlp_backward, mlp_forward
 from .optim import Adam
 from .replay_buffer import ReplayBuffer
@@ -67,19 +73,22 @@ class DDPGAgent(BaseAgent):
         raw_sizes = config.get("hidden_sizes", [400, 300])
         if np.ndim(raw_sizes) != 1:
             raise ValueError(f"hidden_sizes must be a list of widths, got {raw_sizes!r}")
-        self.hidden_sizes: list[int] = [int(h) for h in raw_sizes]
-        if not self.hidden_sizes or min(self.hidden_sizes) <= 0:
-            raise ValueError(f"hidden_sizes must be positive widths, got {self.hidden_sizes!r}")
+        if len(raw_sizes) == 0:
+            raise ValueError(f"hidden_sizes must hold at least one width, got {raw_sizes!r}")
+        self.hidden_sizes: list[int] = [
+            check_positive_int(f"hidden_sizes[{i}]", width) for i, width in enumerate(raw_sizes)
+        ]
         self.learning_rate = float(config.get("learning_rate", 1e-3))
         self.gamma = float(config.get("gamma", 0.98))
         self.tau = float(config.get("tau", 0.005))
-        self.batch_size = int(config.get("batch_size", 256))
-        self.buffer_capacity = int(config.get("buffer_capacity", 200_000))
-        self.learning_starts = int(config.get("learning_starts", 10_000))
+        self.batch_size = positive_int(config, "batch_size", 256)
+        self.buffer_capacity = positive_int(config, "buffer_capacity", 200_000)
+        self.learning_starts = non_negative_int(config, "learning_starts", 10_000)
         self.noise_std = float(config.get("noise_std", 0.1))
         self.updates_per_step = float(config.get("updates_per_step", 1.0))
-        raw_cap = config.get("max_updates_per_call")
-        self.max_updates_per_call: int | None = None if raw_cap is None else int(raw_cap)
+        self.max_updates_per_call: int | None = optional_positive_int(
+            config, "max_updates_per_call"
+        )
         raw_clip = config.get("max_grad_norm")
         self.max_grad_norm: float | None = None if raw_clip is None else float(raw_clip)
         self._validate(str(config.get("optimizer", "adam")).lower())
@@ -118,15 +127,8 @@ class DDPGAgent(BaseAgent):
             ("learning_rate", self.learning_rate > 0.0),
             ("gamma", 0.0 < self.gamma <= 1.0),
             ("tau", 0.0 < self.tau <= 1.0),
-            ("batch_size", self.batch_size > 0),
-            ("buffer_capacity", self.buffer_capacity > 0),
-            ("learning_starts", self.learning_starts >= 0),
             ("noise_std", self.noise_std >= 0.0),
             ("updates_per_step", self.updates_per_step > 0.0),
-            (
-                "max_updates_per_call",
-                self.max_updates_per_call is None or self.max_updates_per_call > 0,
-            ),
             ("max_grad_norm", self.max_grad_norm is None or self.max_grad_norm > 0.0),
         ]
         for name, ok in checks:

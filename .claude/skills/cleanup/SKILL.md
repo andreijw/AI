@@ -41,6 +41,7 @@ A duplicate rarely shares a name with the original. For each candidate, search f
 | Picks a discrete action from probabilities | `rng.choice(`, `np.argmax(probs` | `BaseAgent._select_action_from_probs` |
 | Works out a checkpoint path or extension | `.npz`, `os.path.splitext` | `BaseAgent._resolve_save_path` / `_resolve_load_path` |
 | Rejects bad dimensions | `<= 0` near `raise ValueError` | `BaseAgent._validate_dims` |
+| Reads an integer setting from a config | `int(config.get(`, `isinstance(value, bool)` | `rl_core.agents.config_values` (`positive_int`, `optional_positive_int`, `non_negative_int`; `check_positive_int` for list entries) |
 | Computes discounted returns | `gamma *` in a reversed loop | `rl_core.agents.returns.discounted_returns` |
 | Turns logits into action probabilities | `np.exp(` after `np.max(` | `rl_core.agents.softmax.stable_softmax` |
 | Unpacks the trainer's batch | `batch["observations"]` | `ActorCriticBase._parse_trajectory` |

@@ -78,7 +78,7 @@ class DQNAgent(BaseAgent):
         self.updates_per_step: float | None = _optional_real(config, "updates_per_step")
         self.max_updates_per_call: int = positive_int(config, "max_updates_per_call", 64)
 
-        self._validate_dims(observation_dim, action_dim, self.hidden_dim)
+        self._validate_dims(observation_dim, action_dim)
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
         if not (0.0 < self.gamma <= 1.0):
