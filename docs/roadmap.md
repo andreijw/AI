@@ -206,16 +206,23 @@ Pendulum items; continuous Actor-Critic is last because even the reference needs
   - **Out of scope**: Sharing the softmax or the network code between REINFORCE and the actor-critic family (see
     "One Softmax for the Discrete Policies").
 
-- [ ] **One Softmax for the Discrete Policies**
-  - **Description**: The numerically stable softmax is written inline twice, in `ReinforceAgent._policy` and in
-    `ActorCriticBase._forward`. Both copies are now covered by the same stability tests, so they cannot silently
-    diverge, but a change to one still has to be made in the other.
+- [x] **One Softmax for the Discrete Policies**
+  - **Delivered in**: #103. Confirmed by the maintainer on 2026-10-19.
+  - **Description**: The numerically stable softmax is written inline three times: in `ReinforceAgent._policy`, in
+    `ActorCriticBase._forward`, and per row in `ActorCriticBase._forward_batch`, which PPO uses. The two 1-D copies
+    are covered by the same stability tests, so they cannot silently diverge, but a change to one still has to be
+    made in the others. (The third copy was found while planning on 2026-10-19.)
   - **Acceptance criteria**:
     - One module-level `stable_softmax(logits)` under `src/rl_core/agents/`, with its own hand-computed tests, used
-      by both forward passes.
+      by all three forward passes.
     - Seeded runs give bit-identical weights before and after the change.
     - `tests/test_discrete_policy_numerics.py` passes unchanged.
-  - **Known edge cases**: Batched logits (a 2-D input) if a later agent needs them; all logits equal.
+  - **Known edge cases**: 2-D logits, which PPO's batched forward pass already uses; all logits equal.
+  - **Built (2026-10-19)**: `rl_core.agents.softmax.stable_softmax` normalises over the last axis, shifting each
+    row by its own maximum, and replaces all three copies. Tests in `tests/test_softmax.py` (hand-computed values,
+    extreme logits, per-row normalisation, input not modified). Training REINFORCE, Actor-Critic and PPO on scratch
+    copies of their CartPole configs for 10,000 steps, with a checkpoint every 25 episodes, gives bit-identical
+    checkpoints (390 arrays) and metric logs before and after the change, so no published result moves.
   - **Out of scope**: Sharing the network or forward pass between REINFORCE and the actor-critic family.
 
 ### Code Health

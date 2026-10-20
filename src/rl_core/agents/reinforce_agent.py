@@ -9,6 +9,7 @@ from rl_core.seeding import AGENT_WEIGHTS_STREAM, derive_rng
 from .base_agent import BaseAgent
 from .optim import Adam, optimizer_from_config
 from .returns import discounted_returns
+from .softmax import stable_softmax
 
 
 class ReinforceAgent(BaseAgent):
@@ -88,11 +89,7 @@ class ReinforceAgent(BaseAgent):
             Tuple of (action_probabilities, hidden_activations).
         """
         h = np.maximum(0.0, obs @ self._W1 + self._b1)  # ReLU
-        logits = h @ self._W2 + self._b2
-        # Numerically stable softmax
-        logits = logits - np.max(logits)
-        exp_logits = np.exp(logits)
-        probs = exp_logits / exp_logits.sum()
+        probs = stable_softmax(h @ self._W2 + self._b2)
         return probs, h
 
     def _loss_and_grads(

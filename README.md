@@ -48,7 +48,8 @@ AI/
 │   │   │   ├── random_agent.py
 │   │   │   ├── reinforce_agent.py
 │   │   │   ├── replay_buffer.py
-│   │   │   └── returns.py       # Discounted returns shared by the episodic agents
+│   │   │   ├── returns.py       # Discounted returns shared by the episodic agents
+│   │   │   └── softmax.py       # Numerically stable softmax shared by the discrete policies
 │   │   ├── training/            # Generic training pipeline (trainer.py)
 │   │   ├── utils/               # Config, logging, video recording & plotting utilities
 │   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges

@@ -30,7 +30,8 @@ contributing, writing code, refactoring components, or submitting pull requests.
 - **Framework Independence**: Agent neural networks and policy representations must be implemented cleanly in pure
   NumPy without external deep learning frameworks (e.g., PyTorch, TensorFlow).
 - **Numerical Stability**:
-  - Implement numerically stable softmax: `exp(z - np.max(z))` to prevent overflow.
+  - Use the shared numerically stable softmax, `rl_core.agents.softmax.stable_softmax`, which computes
+    `exp(z - max(z))` per row to prevent overflow; do not write another copy.
   - Safeguard logarithms and divisions: use small epsilon offsets (e.g., `np.log(probs + 1e-8)`) to prevent `NaN` or
     negative infinity values.
   - Clip probability ratios and gradients where applicable (e.g., PPO surrogate clipping in `[1 - eps, 1 + eps]`).
