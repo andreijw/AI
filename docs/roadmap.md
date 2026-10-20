@@ -206,7 +206,8 @@ Pendulum items; continuous Actor-Critic is last because even the reference needs
   - **Out of scope**: Sharing the softmax or the network code between REINFORCE and the actor-critic family (see
     "One Softmax for the Discrete Policies").
 
-- [~] **One Softmax for the Discrete Policies**
+- [x] **One Softmax for the Discrete Policies**
+  - **Delivered in**: #103. Confirmed by the maintainer on 2026-10-19.
   - **Description**: The numerically stable softmax is written inline three times: in `ReinforceAgent._policy`, in
     `ActorCriticBase._forward`, and per row in `ActorCriticBase._forward_batch`, which PPO uses. The two 1-D copies
     are covered by the same stability tests, so they cannot silently diverge, but a change to one still has to be
