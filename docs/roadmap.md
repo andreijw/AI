@@ -739,7 +739,8 @@ Defects found while working on other items, then findings from the brooks-lint h
         `docs/benchmarks/cartpole_results.md` and the README's results table show the new numbers.
   - **Out of scope**: Sharing one rollout buffer between the two PPO agents (until a third user appears).
 
-- [~] **Strict Integer Settings for Every Agent**
+- [x] **Strict Integer Settings for Every Agent**
+  - **Delivered in**: #105. Confirmed by the maintainer on 2026-10-19.
   - **Description**: Found 2026-10-19 while making the PPO settings strict ("PPO Episode Ends and Validation").
     These agent settings are still read with `int(...)`, so 2.5 silently trains as 2: `hidden_dim` in
     `ReinforceAgent`, `ActorCriticBase` (Actor-Critic, discrete PPO) and `ContinuousActorCriticBase` (continuous
