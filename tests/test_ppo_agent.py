@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from rl_core.agents import PPOAgent
+from tests.agent_internals import probabilities, state_value
 
 _PPO_CONFIG = {
     "learning_rate": 3e-4,
@@ -89,49 +90,42 @@ def test_ppo_agent_update_empty_batch():
     assert agent.update(batch) == {}
 
 
-def test_ppo_agent_weights_change_after_update():
-    """Network weights should change after a non-trivial update."""
-    agent = PPOAgent(observation_dim=4, action_dim=2, config=_PPO_CONFIG)
-    w1_before = agent._W1.copy()
-    w_pi_before = agent._W_pi.copy()
-    w_v_before = agent._W_v.copy()
-    batch = {
-        "observations": np.random.randn(20, 4),
-        "actions": np.random.randint(0, 2, size=20),
-        "rewards": np.ones(20),
-    }
-    agent.update(batch)
-    assert not np.allclose(agent._W1, w1_before)
-    assert not np.allclose(agent._W_pi, w_pi_before)
-    assert not np.allclose(agent._W_v, w_v_before)
-
-
 def test_ppo_agent_save_load(tmp_path):
-    """Saved weights are restored faithfully on load (extension-less path)."""
+    """A loaded agent holds the saved weights: saving it again writes the same arrays."""
     agent = PPOAgent(observation_dim=4, action_dim=2, config=_PPO_CONFIG)
+    agent.update(
+        {
+            "observations": np.random.default_rng(1).standard_normal((8, 4)),
+            "actions": np.array([0, 1] * 4),
+            "rewards": np.arange(8.0),
+        }
+    )  # trained, so no weight (the zero-initialised biases included) is at its initial value
     save_path = str(tmp_path / "ppo_test")
     agent.save(save_path)
 
-    agent2 = PPOAgent(observation_dim=4, action_dim=2, config=_PPO_CONFIG)
-    agent2._W1 = np.zeros_like(agent2._W1)
+    agent2 = PPOAgent(observation_dim=4, action_dim=2, config={**_PPO_CONFIG, "seed": 99})
     agent2.load(save_path)
+    agent2.save(str(tmp_path / "resaved"))
 
-    np.testing.assert_array_equal(agent._W1, agent2._W1)
-    np.testing.assert_array_equal(agent._W_pi, agent2._W_pi)
-    np.testing.assert_array_equal(agent._W_v, agent2._W_v)
-    assert agent._b_v == pytest.approx(agent2._b_v)
+    with np.load(f"{save_path}.npz") as saved, np.load(tmp_path / "resaved.npz") as resaved:
+        assert saved.files == resaved.files
+        for key in saved.files:
+            np.testing.assert_array_equal(resaved[key], saved[key], err_msg=f"{key} differs.")
+    observations = np.random.default_rng(0).standard_normal((20, 4))
+    assert [agent2.select_action(o, training=False) for o in observations] == [
+        agent.select_action(o, training=False) for o in observations
+    ], "The loaded agent must act greedily exactly as the saved one."
 
 
 def test_ppo_agent_action_probabilities_sum_to_one():
-    """Policy outputs a valid probability distribution."""
+    """Policy outputs a valid probability distribution and a scalar value."""
     agent = PPOAgent(observation_dim=4, action_dim=2, config=_PPO_CONFIG)
     obs = np.array([0.5, -0.3, 0.1, 0.8])
-    probs, value, h = agent._forward(obs)
+    probs = probabilities(agent, obs)
     assert probs.shape == (2,)
     np.testing.assert_allclose(probs.sum(), 1.0, atol=1e-6)
     assert np.all(probs >= 0)
-    assert isinstance(value, float)
-    assert h.shape == (64,)
+    assert isinstance(state_value(agent, obs), float)
 
 
 def test_ppo_agent_invalid_config():

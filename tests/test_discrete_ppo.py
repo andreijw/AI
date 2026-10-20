@@ -6,13 +6,26 @@ mini-batch steps on a mean-reduced loss. These tests check the pieces one at a t
 pass, the mini-batch loss and its gradients, the buffering, and a full update replayed independently.
 """
 
-import copy
-
 import numpy as np
 import pytest
 
 from rl_core.agents import PPOAgent
 from rl_core.agents.returns import gae
+from tests.agent_internals import (
+    assert_same_weights,
+    assert_weights_unchanged,
+    forward_batch,
+    gradient_check_parameters,
+    hidden_activations,
+    ppo_minibatch_loss_and_grads,
+    ppo_rollout_episode,
+    probabilities,
+    set_weights,
+    shuffle_generator,
+    spy_on_ppo_minibatches,
+    state_value,
+    weights,
+)
 from tests.helpers import ReferenceAdam, assert_gradients_match
 
 OBS_DIM, HIDDEN_DIM, ACTION_DIM = 4, 6, 3
@@ -61,23 +74,7 @@ def _cut_episode(
 
 def _constant_critic(agent: PPOAgent, value: float) -> None:
     """Make V(s) = value for every state."""
-    agent._W_v[...] = 0.0
-    agent._b_v = value
-
-
-def _weights(agent) -> dict[str, np.ndarray]:
-    return {
-        name: np.array(value, dtype=np.float64, copy=True)
-        for name, value in agent._parameters().items()
-    }
-
-
-def _assert_same_weights(actual, expected, rtol: float = 1e-12) -> None:
-    a, e = _weights(actual), _weights(expected)
-    for name in e:
-        np.testing.assert_allclose(
-            a[name], e[name], rtol=rtol, atol=1e-15, err_msg=f"{name} differs."
-        )
+    set_weights(agent, W_v=np.zeros_like(weights(agent)["W_v"]), b_v=value)
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +89,7 @@ def test_batched_forward_matches_the_single_observation_forward_row_by_row():
     # every other row to 0/0, so the max must be taken per row.
     observations[0] *= 20000.0
 
-    probs, values, hidden = agent._forward_batch(observations)
+    probs, values, hidden = forward_batch(agent, observations)
 
     assert (
         probs.shape == (5, ACTION_DIM) and values.shape == (5,) and hidden.shape == (5, HIDDEN_DIM)
@@ -101,7 +98,9 @@ def test_batched_forward_matches_the_single_observation_forward_row_by_row():
     # logits near 1000 turn last-bit differences into ~1e-10 relative differences after exp. A
     # global max gives 0/0 instead, which no tolerance accepts.
     for row, obs in enumerate(observations):
-        single_probs, single_value, single_hidden = agent._forward(obs)
+        single_probs = probabilities(agent, obs)
+        single_value = state_value(agent, obs)
+        single_hidden = hidden_activations(agent, obs)
         assert np.all(np.isfinite(probs[row]))
         np.testing.assert_allclose(probs[row], single_probs, rtol=1e-9, atol=1e-300)
         assert values[row] == pytest.approx(single_value, rel=1e-10)
@@ -113,19 +112,6 @@ def test_batched_forward_matches_the_single_observation_forward_row_by_row():
 # ---------------------------------------------------------------------------
 
 
-def _parameters(agent) -> tuple[dict[str, np.ndarray], np.ndarray]:
-    boxed_value_bias = np.array([agent._b_v], dtype=np.float64)
-    params = {
-        "W1": agent._W1,
-        "b1": agent._b1,
-        "W_pi": agent._W_pi,
-        "b_pi": agent._b_pi,
-        "W_v": agent._W_v,
-        "b_v": boxed_value_bias,
-    }
-    return params, boxed_value_bias
-
-
 def test_minibatch_gradients_match_finite_differences():
     agent = _agent(seed=24)
     rng = np.random.default_rng(4)
@@ -133,27 +119,27 @@ def test_minibatch_gradients_match_finite_differences():
     actions = np.array([0, 1, 2, 0, 1, 2])
     returns = rng.uniform(-1.0, 2.0, size=6)
     advantages = np.array([1.0, -0.8, 0.6, -1.2, 0.9, -0.4])
-    probs, _, _ = agent._forward_batch(observations)
+    probs, _, _ = forward_batch(agent, observations)
     current = np.log(probs[np.arange(6), actions])
     # Ratios of 1.5, 0.6, 1.0, 0.7, 1.4, 1.1: some steps clip, some do not, none sits on a clip edge.
     old_log_probs = current - np.log([1.5, 0.6, 1.0, 0.7, 1.4, 1.1])
 
-    pre_activation = observations @ agent._W1 + agent._b1
+    pre_activation = observations @ weights(agent)["W1"] + weights(agent)["b1"]
     assert np.abs(pre_activation).min() > 100 * EPS * np.abs(observations).max()
     active = pre_activation > 0
     assert active.any() and not active.all()
 
-    components, grads, clipped = agent._minibatch_loss_and_grads(
-        observations, actions, returns, advantages, old_log_probs
+    components, grads, clipped = ppo_minibatch_loss_and_grads(
+        agent, observations, actions, returns, advantages, old_log_probs
     )
     assert 0 < clipped < 6, "Some steps must clip and some must not."
 
-    params, boxed = _parameters(agent)
+    params, sync = gradient_check_parameters(agent)
 
     def loss() -> float:
-        agent._b_v = float(boxed[0])
-        return agent._minibatch_loss_and_grads(
-            observations, actions, returns, advantages, old_log_probs
+        sync()
+        return ppo_minibatch_loss_and_grads(
+            agent, observations, actions, returns, advantages, old_log_probs
         )[0]["total"]
 
     grads = {**grads, "b_v": np.atleast_1d(grads["b_v"])}
@@ -171,16 +157,16 @@ def test_minibatch_loss_matches_hand_computation():
       value loss  = 0.5 * mean((0.5 - [1.75, 1.5, 3.0])^2) = 0.5 * (1.5625 + 1 + 6.25) / 3 = 1.46875
     """
     agent = PPOAgent(2, 2, {"hidden_dim": 3, "seed": 0, "value_coef": 0.5, "entropy_coef": 0.1})
-    agent._W1[:] = 0.0
-    agent._b1[:] = 0.0
-    agent._b_pi = np.log(np.array([0.8, 0.2]))
-    agent._b_v = 0.5
+    set_weights(
+        agent, W1=np.zeros((2, 3)), b1=np.zeros(3), b_pi=np.log(np.array([0.8, 0.2])), b_v=0.5
+    )
     actions = np.array([0, 1, 1])
     log_probs = np.log(np.array([0.8, 0.2, 0.2]))
     old_log_probs = log_probs - np.log([1.5, 1.0, 0.5])
     entropy = -(0.8 * np.log(0.8) + 0.2 * np.log(0.2))
 
-    components, _, clipped = agent._minibatch_loss_and_grads(
+    components, _, clipped = ppo_minibatch_loss_and_grads(
+        agent,
         np.ones((3, 2)),
         actions,
         np.array([1.75, 1.5, 3.0]),
@@ -197,13 +183,12 @@ def test_minibatch_loss_matches_hand_computation():
 
 def test_minibatch_loss_and_grads_changes_nothing():
     agent = _agent()
-    before = _weights(agent)
+    before = weights(agent)
     episode = _episode(5, seed=2)
-    agent._minibatch_loss_and_grads(
-        episode["observations"], episode["actions"], np.ones(5), np.ones(5), np.zeros(5)
+    ppo_minibatch_loss_and_grads(
+        agent, episode["observations"], episode["actions"], np.ones(5), np.ones(5), np.zeros(5)
     )
-    for name, value in _weights(agent).items():
-        np.testing.assert_array_equal(value, before[name])
+    assert_weights_unchanged(agent, before, "computing a loss")
 
 
 # ---------------------------------------------------------------------------
@@ -213,15 +198,14 @@ def test_minibatch_loss_and_grads_changes_nothing():
 
 def test_episodes_are_buffered_until_the_rollout_is_full():
     agent = _agent(rollout_steps=10)
-    before = _weights(agent)
+    before = weights(agent)
 
     assert agent.update(_episode(6, seed=1)) == {}
-    for name, value in _weights(agent).items():
-        np.testing.assert_array_equal(value, before[name], err_msg=f"{name} moved while buffering.")
+    assert_weights_unchanged(agent, before, "while buffering")
 
     metrics = agent.update(_episode(6, seed=2))
     assert metrics["rollout_steps"] == 12, "Trains on everything buffered, overshoot included."
-    assert any(not np.array_equal(v, before[n]) for n, v in _weights(agent).items())
+    assert any(not np.array_equal(v, before[n]) for n, v in weights(agent).items())
 
     assert agent.update(_episode(3, seed=3)) == {}, "The buffer starts again empty after training."
 
@@ -238,7 +222,7 @@ def test_each_buffered_episode_ends_its_gae_trace(last_done):
     unmarked.update(_episode(4, seed=1, done=last_done))
     marked.update(_episode(5, seed=2, done=True))
     unmarked.update(_episode(5, seed=2, done=last_done))
-    _assert_same_weights(unmarked, marked, rtol=0.0)
+    assert_same_weights(unmarked, marked, rtol=0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -256,11 +240,11 @@ def test_each_buffered_episode_ends_its_gae_trace(last_done):
 def test_a_cut_episode_bootstraps_its_last_reward(ending):
     agent = _agent(gamma=0.9)  # the seeded critic gives every state its own value
     episode = _cut_episode([1.0, 3.0], **ending)
-    next_value = agent._forward(episode["next_observations"][-1])[1]
-    last_value = agent._forward(episode["observations"][-1])[1]
+    next_value = state_value(agent, episode["next_observations"][-1])
+    last_value = state_value(agent, episode["observations"][-1])
     assert next_value != pytest.approx(last_value), "the test needs V(s') and V(s_T) to differ"
 
-    _, _, rewards, dones = agent._rollout_episode(episode)
+    _, _, rewards, dones = ppo_rollout_episode(agent, episode)
 
     # The cut adds gamma * V(next state), not the value of the last state, to the last reward.
     np.testing.assert_allclose(rewards, [1.0, 3.0 + 0.9 * next_value], rtol=0, atol=1e-15)
@@ -276,7 +260,7 @@ def test_a_cut_episode_bootstraps_its_last_reward(ending):
 )
 def test_an_episode_without_a_state_to_bootstrap_from_ends_as_terminal(ending):
     agent = _agent(gamma=0.9)
-    _, _, rewards, dones = agent._rollout_episode(_cut_episode([1.0, 3.0], **ending))
+    _, _, rewards, dones = ppo_rollout_episode(agent, _cut_episode([1.0, 3.0], **ending))
     np.testing.assert_array_equal(rewards, [1.0, 3.0])
     np.testing.assert_array_equal(dones, [False, True])
 
@@ -285,7 +269,7 @@ def test_rollout_episode_leaves_the_callers_batch_unchanged():
     agent = _agent(gamma=0.9)
     episode = _cut_episode([1.0, 3.0, 2.0])  # float64 rewards, as the Trainer builds them
     copies = {key: value.copy() for key, value in episode.items()}
-    agent._rollout_episode(episode)
+    ppo_rollout_episode(agent, episode)
     for key, value in copies.items():
         np.testing.assert_array_equal(episode[key], value, err_msg=f"{key} was modified")
 
@@ -309,15 +293,14 @@ def test_the_bootstrap_reaches_the_value_loss():
 
 def test_empty_batch_changes_nothing_and_returns_no_metrics():
     agent = _agent(rollout_steps=1)
-    before = _weights(agent)
+    before = weights(agent)
     empty = {
         "observations": np.zeros((0, OBS_DIM)),
         "actions": np.zeros(0, dtype=int),
         "rewards": np.zeros(0),
     }
     assert agent.update(empty) == {}
-    for name, value in _weights(agent).items():
-        np.testing.assert_array_equal(value, before[name])
+    assert_weights_unchanged(agent, before, "with nothing to train on")
 
 
 def test_loading_a_checkpoint_drops_the_partial_rollout(tmp_path):
@@ -346,7 +329,7 @@ def _replay(
         [np.arange(len(e["rewards"])) == len(e["rewards"]) - 1 for e in episodes]
     )
     n = len(rews)
-    probs, values, _ = reference._forward_batch(obs)
+    probs, values, _ = forward_batch(reference, obs)
     old_log_probs = np.log(probs[np.arange(n), acts])
     raw = gae(rews, values, dones, reference.gamma, reference.gae_lambda)
     returns = raw + values
@@ -357,18 +340,14 @@ def _replay(
         for start in range(0, n, mb):
             idx = order[start : start + mb]
             batch_sizes.append(len(idx))
-            components, grads, clipped = reference._minibatch_loss_and_grads(
-                obs[idx], acts[idx], returns[idx], advantages[idx], old_log_probs[idx]
+            components, grads, clipped = ppo_minibatch_loss_and_grads(
+                reference, obs[idx], acts[idx], returns[idx], advantages[idx], old_log_probs[idx]
             )
             clipped_total += clipped
             parts.append(components)
             steps = adam.step(grads) if adam is not None else {k: lr * g for k, g in grads.items()}
-            for name, step in steps.items():
-                attribute = f"_{name}"
-                current = getattr(reference, attribute)
-                setattr(
-                    reference, attribute, float(current - step) if name == "b_v" else current - step
-                )
+            current = weights(reference)
+            set_weights(reference, **{name: current[name] - step for name, step in steps.items()})
     means = {key: float(np.mean([c[key] for c in parts])) for key in ("policy", "value", "entropy")}
     return batch_sizes, clipped_total / (n * epochs), means
 
@@ -388,7 +367,7 @@ def test_update_replays_gae_and_shuffled_minibatches(optimizer):
     if optimizer == "adam":
         config["max_grad_norm"] = 0.5
     agent, reference = _agent(**config), _agent(**config)
-    rng = copy.deepcopy(agent._shuffle_rng)
+    rng = shuffle_generator(agent)
     adam = ReferenceAdam(0.05, 0.5) if optimizer == "adam" else None
     episodes = [_episode(4, seed=1), _episode(5, seed=2)]
 
@@ -397,7 +376,7 @@ def test_update_replays_gae_and_shuffled_minibatches(optimizer):
     sizes, clip_fraction, means = _replay(reference, episodes, rng, adam, lr=0.05, mb=4, epochs=2)
 
     assert sizes == [4, 4, 1, 4, 4, 1]
-    _assert_same_weights(agent, reference)
+    assert_same_weights(agent, reference)
     assert metrics["rollout_steps"] == 9
     assert metrics["clip_fraction"] == pytest.approx(clip_fraction, rel=1e-12)
     assert 0.0 < clip_fraction < 1.0, "The second epoch must clip some steps for this to be tested."
@@ -409,14 +388,14 @@ def test_update_replays_gae_and_shuffled_minibatches(optimizer):
 def test_minibatch_larger_than_the_rollout_takes_one_step_per_epoch():
     config = {"rollout_steps": 5, "minibatch_size": 64, "ppo_epochs": 3, "learning_rate": 0.05}
     agent, reference = _agent(**config), _agent(**config)
-    rng = copy.deepcopy(agent._shuffle_rng)
+    rng = shuffle_generator(agent)
     episode = _episode(5, seed=3)
 
     agent.update(episode)
     sizes, _, _ = _replay(reference, [episode], rng, None, lr=0.05, mb=64, epochs=3)
 
     assert sizes == [5, 5, 5]
-    _assert_same_weights(agent, reference)
+    assert_same_weights(agent, reference)
 
 
 def test_same_seed_gives_the_same_weights():
@@ -424,7 +403,7 @@ def test_same_seed_gives_the_same_weights():
     for agent in (a, b):
         agent.update(_episode(4, seed=1))
         agent.update(_episode(5, seed=2))
-    _assert_same_weights(a, b, rtol=0.0)
+    assert_same_weights(a, b, rtol=0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +418,7 @@ def test_defaults_train_on_every_episode_with_monte_carlo_advantages_on_the_whol
     """
     agent = _agent(learning_rate=0.05, ppo_epochs=2)
     reference = _agent(learning_rate=0.05, ppo_epochs=2)
-    rng = copy.deepcopy(agent._shuffle_rng)
+    rng = shuffle_generator(agent)
     assert (agent.rollout_steps, agent.minibatch_size, agent.gae_lambda) == (1, None, 1.0)
     episode = _episode(70, seed=1)  # longer than any fixed mini-batch default would be
 
@@ -447,16 +426,15 @@ def test_defaults_train_on_every_episode_with_monte_carlo_advantages_on_the_whol
     sizes, _, _ = _replay(reference, [episode], rng, None, lr=0.05, mb=70, epochs=2)
 
     assert sizes == [70, 70]
-    _assert_same_weights(agent, reference)
+    assert_same_weights(agent, reference)
 
 
 def test_a_one_step_rollout_has_zero_advantage_after_centring():
     """A single advantage cannot be scaled to unit spread; it is centred to zero instead."""
     agent = _agent(entropy_coef=0.0, value_coef=0.0, learning_rate=0.05)
-    before = _weights(agent)
+    before = weights(agent)
     agent.update(_episode(1, seed=3))
-    for name, value in _weights(agent).items():
-        np.testing.assert_array_equal(value, before[name], err_msg=f"{name} moved.")
+    assert_weights_unchanged(agent, before, "on a zero advantage")
 
 
 @pytest.mark.parametrize(
@@ -493,7 +471,7 @@ def test_annealing_scales_learning_rate_and_clip_by_the_remaining_fraction():
         "gae_lambda": 0.9,
     }
     agent, reference = _agent(**config), _agent(**config)
-    rng = copy.deepcopy(agent._shuffle_rng)
+    rng = shuffle_generator(agent)
     episodes = [_episode(5, seed=1), _episode(5, seed=2)]
 
     for episode in episodes:
@@ -502,29 +480,30 @@ def test_annealing_scales_learning_rate_and_clip_by_the_remaining_fraction():
         reference.clip_epsilon = 0.2 * fraction
         _replay(reference, [episode], rng, None, lr=0.05 * fraction, mb=5, epochs=2)
 
-    _assert_same_weights(agent, reference)
-    assert agent._steps_trained == 10
+    assert_same_weights(agent, reference)
+    assert agent.update(_episode(5, seed=3))["anneal_fraction"] == pytest.approx(0.5), (
+        "Both rollouts (10 transitions) must count towards the schedule."
+    )
 
 
 def test_annealing_stops_learning_once_the_schedule_is_spent():
     """Past the schedule the fraction stays at zero; it must not turn negative and ascend."""
     agent = _agent(rollout_steps=5, anneal_steps=4, learning_rate=0.05)
     agent.update(_episode(5, seed=1))
-    before = _weights(agent)
+    before = weights(agent)
     agent.update(_episode(5, seed=2))
-    for name, value in _weights(agent).items():
-        np.testing.assert_array_equal(value, before[name], err_msg=f"{name} moved at fraction 0.")
+    assert_weights_unchanged(agent, before, "at fraction 0")
 
 
 def test_without_anneal_steps_the_learning_rate_stays_constant():
     config = {"rollout_steps": 5, "ppo_epochs": 1, "learning_rate": 0.05}
     agent, reference = _agent(**config), _agent(**config)
-    rng = copy.deepcopy(agent._shuffle_rng)
+    rng = shuffle_generator(agent)
     episodes = [_episode(5, seed=1), _episode(5, seed=2)]
     for episode in episodes:
         agent.update(episode)
         _replay(reference, [episode], rng, None, lr=0.05, mb=5, epochs=1)
-    _assert_same_weights(agent, reference)
+    assert_same_weights(agent, reference)
 
 
 def test_checkpoint_keeps_the_annealing_progress(tmp_path):
@@ -534,7 +513,9 @@ def test_checkpoint_keeps_the_annealing_progress(tmp_path):
     agent.save(path)
     resumed = _agent(rollout_steps=5, anneal_steps=20, seed=99)
     resumed.load(path)
-    assert resumed._steps_trained == 5
+    assert resumed.update(_episode(5, seed=2))["anneal_fraction"] == pytest.approx(0.75), (
+        "The resumed agent must continue the schedule after the 5 transitions already trained."
+    )
 
 
 def test_anneal_steps_must_be_positive():
@@ -547,13 +528,12 @@ def test_each_minibatch_gets_the_annealed_clip_range(monkeypatch):
         rollout_steps=5, anneal_steps=20, clip_epsilon=0.2, minibatch_size=5, ppo_epochs=1
     )
     seen = []
-    original = agent._minibatch_loss_and_grads
 
-    def spy(*args, **kwargs):
+    def spy(original, *args, **kwargs):
         seen.append(kwargs.get("clip_epsilon"))
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(agent, "_minibatch_loss_and_grads", spy)
+    spy_on_ppo_minibatches(monkeypatch, agent, spy)
     agent.update(_episode(5, seed=1))
     agent.update(_episode(5, seed=2))
     assert seen == pytest.approx([0.2, 0.15])
@@ -570,9 +550,11 @@ def test_a_checkpoint_without_the_annealing_counter_restarts_the_schedule(tmp_pa
     np.savez(path, **arrays)
 
     resumed = _agent(rollout_steps=5, anneal_steps=20)
-    resumed._steps_trained = 7
+    resumed.update(_episode(5, seed=3))  # 5 transitions into its own schedule before the load
     resumed.load(str(path))
-    assert resumed._steps_trained == 0
+    assert resumed.update(_episode(5, seed=2))["anneal_fraction"] == 1.0, (
+        "A checkpoint without the counter must restart the schedule."
+    )
 
 
 def test_metrics_report_the_annealing_fraction():

@@ -1,6 +1,7 @@
 """Tests that scan the source tree for conventions no single unit test can enforce."""
 
 import ast
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -210,3 +211,123 @@ def test_the_seeded_default_rng_scan_flags_what_it_claims():
         "np.random.Generator(np.random.PCG64(5))\n"
     )
     assert seeded_default_rng_calls(source) == [2, 4, 5, 5]
+
+
+# ---------------------------------------------------------------------------
+# Agent tests go through the public interface; private access lives in tests/agent_internals.py
+# ---------------------------------------------------------------------------
+
+# Test files moved onto the public interface (roadmap: "Test Agents Through Their Public Behaviour").
+# Each later family adds its files here.
+PUBLIC_BEHAVIOUR_TEST_FILES = [
+    REPO_ROOT / "tests" / name
+    for name in (
+        "test_agents_extensive.py",
+        "test_reinforce_agent.py",
+        "test_actor_critic_agent.py",
+        "test_ppo_agent.py",
+        "test_discrete_ppo.py",
+        "test_policy_gradient_maths.py",
+        "test_discrete_policy_numerics.py",
+    )
+]
+
+_PRIVATE_NAME = re.compile(r"_[A-Za-z]\w*")
+
+
+def private_accesses(source: str) -> list[tuple[int, str]]:
+    """
+    Return (line, description) for each way source reaches an object's private member.
+
+    Flags ``obj._name`` on anything but ``self`` or ``cls``; ``obj.__dict__``; a string literal
+    that is a private name (as passed to ``getattr``, ``setattr`` or ``monkeypatch.setattr``, or
+    listed for a loop over them); ``getattr``, ``setattr``, ``hasattr`` or ``delattr`` with a
+    computed name; ``vars(...)``, ``dir(...)`` and ``inspect.getmembers(...)``, which list private
+    members wholesale; and importing a private name. Other dunder names are allowed.
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Attribute):
+            owner = node.value.id if isinstance(node.value, ast.Name) else ""
+            private = node.attr.startswith("_") and not node.attr.startswith("__")
+            if (private and owner not in {"self", "cls"}) or node.attr == "__dict__":
+                found.append((node.lineno, f"{_dotted_name(node) or '...'}"))
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if _PRIVATE_NAME.fullmatch(node.value) and not node.value.startswith("__"):
+                found.append((node.lineno, repr(node.value)))
+        elif isinstance(node, ast.Call):
+            name = _dotted_name(node.func)
+            if name in {"vars", "dir", "inspect.getmembers"}:
+                found.append((node.lineno, f"{name}(...)"))
+            elif name in {"getattr", "setattr", "hasattr", "delattr"} and len(node.args) > 1:
+                literal = isinstance(node.args[1], ast.Constant)
+                if not literal:
+                    found.append((node.lineno, f"{name} with a computed name"))
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.name.startswith("_") and not alias.name.startswith("__"):
+                    found.append((node.lineno, f"import {alias.name}"))
+    return found
+
+
+def test_migrated_agent_tests_use_only_the_public_interface():
+    """Private agent state is read only through tests/agent_internals.py, so a refactor with no
+    behaviour change touches one helper instead of every test."""
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}:{line} {what}"
+        for path in PUBLIC_BEHAVIOUR_TEST_FILES
+        for line, what in private_accesses(path.read_text(encoding="utf-8"))
+    ]
+
+    assert not offenders, (
+        "Assert through select_action, update's metrics or save/load; for maths, go through "
+        "tests/agent_internals.py:\n" + "\n".join(offenders)
+    )
+
+
+def test_private_access_scan_flags_each_spelling():
+    """The scanner recognises each way a test can reach a private member that it claims to catch."""
+    source = (
+        "agent._W1\n"
+        "run.agent._forward(x)\n"
+        "getattr(agent, '_b1')\n"
+        "monkeypatch.setattr(agent, '_loss_and_grads', spy)\n"
+        "names = ('_W_pi', '_W_v')\n"
+        "vars(agent)\n"
+        "agent.__dict__\n"
+        "getattr(agent, f'_{name}')\n"
+        "setattr(agent, name, value)\n"
+        "dir(agent)\n"
+        "inspect.getmembers(agent)\n"
+        "from rl_core.agents.returns import _helper\n"
+    )
+
+    assert sorted(private_accesses(source)) == [
+        (1, "agent._W1"),
+        (2, "run.agent._forward"),
+        (3, "'_b1'"),
+        (4, "'_loss_and_grads'"),
+        (5, "'_W_pi'"),
+        (5, "'_W_v'"),
+        (6, "vars(...)"),
+        (7, "agent.__dict__"),
+        (8, "getattr with a computed name"),
+        (9, "setattr with a computed name"),
+        (10, "dir(...)"),
+        (11, "inspect.getmembers(...)"),
+        (12, "import _helper"),
+    ]
+
+
+def test_private_access_scan_allows_self_dunders_and_plain_strings():
+    source = (
+        "self._W1 = 0\n"
+        "cls._registry\n"
+        "agent.__class__.__name__\n"
+        "'__init__'\n"
+        "match = 'weights_change'\n"
+        "agent.select_action(obs)\n"
+        "_local_helper(agent)\n"
+    )
+
+    assert private_accesses(source) == []

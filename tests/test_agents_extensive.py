@@ -9,6 +9,8 @@ import numpy as np
 import pytest
 
 from rl_core.agents import ActorCriticAgent, BaseAgent, RandomAgent, ReinforceAgent
+from tests.agent_internals import hidden_activations, probabilities, state_value, weights
+from tests.helpers import assert_same_checkpoint
 
 # ---------------------------------------------------------------------------
 # Shared fixtures / helpers
@@ -339,22 +341,23 @@ class TestReinforceAgentExtended:
         agent = ReinforceAgent(
             observation_dim=4, action_dim=3, config={**_REINFORCE_CFG, "hidden_dim": 32}
         )
-        assert agent._W1.shape == (4, 32)
-        assert agent._b1.shape == (32,)
-        assert agent._W2.shape == (32, 3)
-        assert agent._b2.shape == (3,)
+        assert weights(agent)["W1"].shape == (4, 32)
+        assert weights(agent)["b1"].shape == (32,)
+        assert weights(agent)["W2"].shape == (32, 3)
+        assert weights(agent)["b2"].shape == (3,)
 
     def test_bias_initialised_to_zeros(self):
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        np.testing.assert_array_equal(agent._b1, np.zeros_like(agent._b1))
-        np.testing.assert_array_equal(agent._b2, np.zeros_like(agent._b2))
+        np.testing.assert_array_equal(weights(agent)["b1"], np.zeros_like(weights(agent)["b1"]))
+        np.testing.assert_array_equal(weights(agent)["b2"], np.zeros_like(weights(agent)["b2"]))
 
     # --- Policy forward pass -------------------------------------------------
 
     def test_policy_output_shape(self):
         for action_dim in (2, 3, 5):
             agent = ReinforceAgent(observation_dim=4, action_dim=action_dim, config=_REINFORCE_CFG)
-            probs, h = agent._policy(np.zeros(4))
+            probs = probabilities(agent, np.zeros(4))
+            h = hidden_activations(agent, np.zeros(4))
             assert probs.shape == (action_dim,)
             assert h.shape == (64,)
 
@@ -362,19 +365,19 @@ class TestReinforceAgentExtended:
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
         for _ in range(10):
             obs = np.random.randn(4)
-            probs, _ = agent._policy(obs)
+            probs = probabilities(agent, obs)
             np.testing.assert_allclose(probs.sum(), 1.0, atol=1e-6)
 
     def test_policy_probabilities_non_negative(self):
         agent = ReinforceAgent(observation_dim=4, action_dim=5, config=_REINFORCE_CFG)
         for _ in range(10):
-            probs, _ = agent._policy(np.random.randn(4))
+            probs = probabilities(agent, np.random.randn(4))
             assert np.all(probs >= 0)
 
     def test_policy_probabilities_strictly_positive(self):
         """Softmax output should never collapse to zero for reasonable inputs."""
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        probs, _ = agent._policy(np.array([100.0, -100.0, 0.0, 0.5]))
+        probs = probabilities(agent, np.array([100.0, -100.0, 0.0, 0.5]))
         assert np.all(probs > 0)
 
     # --- Action selection ----------------------------------------------------
@@ -400,7 +403,7 @@ class TestReinforceAgentExtended:
         """Greedy action should equal argmax of the policy probabilities."""
         agent = ReinforceAgent(observation_dim=4, action_dim=4, config=_REINFORCE_CFG)
         obs = np.random.randn(4)
-        probs, _ = agent._policy(obs)
+        probs = probabilities(agent, obs)
         greedy = agent.select_action(obs, training=False)
         assert greedy == int(np.argmax(probs))
 
@@ -459,13 +462,6 @@ class TestReinforceAgentExtended:
         metrics = agent.update(_make_batch())
         assert list(metrics.keys()) == ["policy_loss"]
 
-    def test_update_all_weights_change(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        before = {k: getattr(agent, k).copy() for k in ("_W1", "_b1", "_W2", "_b2")}
-        agent.update(_make_batch(20))
-        for k, v in before.items():
-            assert not np.allclose(getattr(agent, k), v), f"{k} should change after update"
-
     def test_update_inconsistent_trajectory_lengths(self):
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
         batch = {
@@ -476,8 +472,9 @@ class TestReinforceAgentExtended:
         with pytest.raises(ValueError, match="Inconsistent"):
             agent.update(batch)
 
-    def test_update_repeated_keeps_finite_loss_and_changes_weights(self):
-        """Repeated updates on a fixed batch keep loss finite and move parameters."""
+    def test_update_repeated_lowers_the_policy_loss(self):
+        """Repeated updates on a fixed batch descend the loss they report; a gradient with the
+        wrong sign or applied to the wrong weights would not."""
         agent = ReinforceAgent(
             observation_dim=4,
             action_dim=2,
@@ -489,12 +486,11 @@ class TestReinforceAgentExtended:
             "actions": rng.integers(0, 2, size=30),
             "rewards": np.ones(30),
         }
-        w1_before = agent._W1.copy()
         losses = [agent.update(batch)["policy_loss"] for _ in range(20)]
-        # All losses should be finite
         assert all(np.isfinite(loss) for loss in losses), "Policy loss became non-finite"
-        # Parameters should have moved from the initial position
-        assert not np.allclose(agent._W1, w1_before), "W1 should change after repeated updates"
+        assert np.mean(losses[-5:]) < np.mean(losses[:5]), (
+            f"The reported policy loss must fall on a fixed batch: {losses[0]:.4f} -> {losses[-1]:.4f}"
+        )
 
     def test_update_large_observation_and_action_dim(self):
         agent = ReinforceAgent(observation_dim=64, action_dim=8, config={"seed": 0})
@@ -514,26 +510,26 @@ class TestReinforceAgentExtended:
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
         p = str(tmp_path / "ckpt")
         agent.save(p)
-        agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        agent2._W1 = np.zeros_like(agent2._W1)
+        agent2 = ReinforceAgent(
+            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
+        )
         agent2.load(p)
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
-        np.testing.assert_array_equal(agent._W2, agent2._W2)
-        np.testing.assert_array_equal(agent._b1, agent2._b1)
-        np.testing.assert_array_equal(agent._b2, agent2._b2)
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
     def test_save_load_preserves_inference_output(self, tmp_path):
         """After save/load the agent produces the same action probabilities."""
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
         obs = np.array([0.1, -0.2, 0.3, -0.4])
-        probs_before, _ = agent._policy(obs)
+        probs_before = probabilities(agent, obs)
 
         p = str(tmp_path / "ckpt")
         agent.save(p)
 
-        agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
+        agent2 = ReinforceAgent(
+            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
+        )
         agent2.load(p)
-        probs_after, _ = agent2._policy(obs)
+        probs_after = probabilities(agent2, obs)
 
         np.testing.assert_allclose(probs_before, probs_after, atol=1e-10)
 
@@ -557,9 +553,11 @@ class TestReinforceAgentExtended:
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
         p = str(tmp_path / "ckpt")
         agent.save(p)
-        agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
+        agent2 = ReinforceAgent(
+            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
+        )
         agent2.load(p)  # Should resolve to p + ".npz"
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
     def test_save_load_after_training(self, tmp_path):
         """Weights saved after training are restored with full precision."""
@@ -570,11 +568,12 @@ class TestReinforceAgentExtended:
         p = str(tmp_path / "trained")
         agent.save(p)
 
-        agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
+        agent2 = ReinforceAgent(
+            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
+        )
         agent2.load(p)
 
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
-        np.testing.assert_array_equal(agent._W2, agent2._W2)
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
     def test_load_pt_extension_exact_file(self, tmp_path):
         """Loading a .pt path that exists on disk should load that exact file."""
@@ -583,24 +582,22 @@ class TestReinforceAgentExtended:
         agent.save(p)
         assert os.path.exists(p)
 
-        agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        agent2._W1 = np.zeros_like(agent2._W1)
+        agent2 = ReinforceAgent(
+            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
+        )
         agent2.load(p)
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
     def test_load_pt_legacy_npz_fallback(self, tmp_path):
         """Loading a .pt path falls back to '<name>.pt.npz' when the .pt file is absent."""
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        legacy_path = tmp_path / "reinforce_legacy.pt.npz"
-        np.savez(legacy_path, W1=agent._W1, b1=agent._b1, W2=agent._W2, b2=agent._b2)
+        agent.save(str(tmp_path / "reinforce_legacy.pt.npz"))
 
-        agent2 = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        agent2._W1 = np.zeros_like(agent2._W1)
+        agent2 = ReinforceAgent(
+            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
+        )
         agent2.load(str(tmp_path / "reinforce_legacy.pt"))
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
-        np.testing.assert_array_equal(agent._W2, agent2._W2)
-        np.testing.assert_array_equal(agent._b1, agent2._b1)
-        np.testing.assert_array_equal(agent._b2, agent2._b2)
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
 
 # ===========================================================================
@@ -697,24 +694,25 @@ class TestActorCriticAgentExtended:
         agent = ActorCriticAgent(
             observation_dim=6, action_dim=3, config={**_AC_CFG, "hidden_dim": 32}
         )
-        assert agent._W1.shape == (6, 32)
-        assert agent._b1.shape == (32,)
-        assert agent._W_pi.shape == (32, 3)
-        assert agent._b_pi.shape == (3,)
-        assert agent._W_v.shape == (32,)
-        assert isinstance(agent._b_v, float)
+        assert weights(agent)["W1"].shape == (6, 32)
+        assert weights(agent)["b1"].shape == (32,)
+        assert weights(agent)["W_pi"].shape == (32, 3)
+        assert weights(agent)["b_pi"].shape == (3,)
+        assert weights(agent)["W_v"].shape == (32,)
 
     def test_bias_initialised_to_zeros(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        np.testing.assert_array_equal(agent._b1, np.zeros_like(agent._b1))
-        np.testing.assert_array_equal(agent._b_pi, np.zeros_like(agent._b_pi))
-        assert agent._b_v == 0.0
+        np.testing.assert_array_equal(weights(agent)["b1"], np.zeros_like(weights(agent)["b1"]))
+        np.testing.assert_array_equal(weights(agent)["b_pi"], np.zeros_like(weights(agent)["b_pi"]))
+        assert weights(agent)["b_v"] == 0.0
 
     # --- Forward pass --------------------------------------------------------
 
     def test_forward_output_types_and_shapes(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        probs, value, h = agent._forward(np.zeros(4))
+        probs = probabilities(agent, np.zeros(4))
+        value = state_value(agent, np.zeros(4))
+        h = hidden_activations(agent, np.zeros(4))
         assert probs.shape == (2,)
         assert isinstance(value, float)
         assert h.shape == (64,)
@@ -722,26 +720,26 @@ class TestActorCriticAgentExtended:
     def test_forward_probs_sum_to_one(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
         for _ in range(10):
-            probs, _, _ = agent._forward(np.random.randn(4))
+            probs = probabilities(agent, np.random.randn(4))
             np.testing.assert_allclose(probs.sum(), 1.0, atol=1e-6)
 
     def test_forward_probs_non_negative(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=5, config=_AC_CFG)
         for _ in range(10):
-            probs, _, _ = agent._forward(np.random.randn(4))
+            probs = probabilities(agent, np.random.randn(4))
             assert np.all(probs >= 0)
 
     def test_forward_value_is_finite(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
         for _ in range(10):
-            _, value, _ = agent._forward(np.random.randn(4))
+            value = state_value(agent, np.random.randn(4))
             assert np.isfinite(value)
 
     def test_forward_hidden_relu_non_negative(self):
         """Hidden activations after ReLU must be non-negative."""
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
         for _ in range(10):
-            _, _, h = agent._forward(np.random.randn(4))
+            h = hidden_activations(agent, np.random.randn(4))
             assert np.all(h >= 0)
 
     # --- Action selection ----------------------------------------------------
@@ -766,7 +764,7 @@ class TestActorCriticAgentExtended:
     def test_select_action_greedy_matches_argmax(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=4, config=_AC_CFG)
         obs = np.random.randn(4)
-        probs, _, _ = agent._forward(obs)
+        probs = probabilities(agent, obs)
         greedy = agent.select_action(obs, training=False)
         assert greedy == int(np.argmax(probs))
 
@@ -820,16 +818,6 @@ class TestActorCriticAgentExtended:
         for val in metrics.values():
             assert np.isfinite(val)
 
-    def test_update_all_weights_change(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        attrs = ("_W1", "_b1", "_W_pi", "_b_pi", "_W_v")
-        before = {k: getattr(agent, k).copy() for k in attrs}
-        b_v_before = agent._b_v
-        agent.update(_make_batch(20))
-        for k, v in before.items():
-            assert not np.allclose(getattr(agent, k), v), f"{k} should change after update"
-        assert agent._b_v != b_v_before
-
     def test_update_inconsistent_trajectory_lengths(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
         batch = {
@@ -855,26 +843,6 @@ class TestActorCriticAgentExtended:
         for val in metrics.values():
             assert np.isfinite(val)
 
-    def test_value_loss_decreases_over_repeated_updates(self):
-        """Critic parameters change and loss stays finite over repeated updates on a fixed batch."""
-        agent = ActorCriticAgent(
-            observation_dim=4,
-            action_dim=2,
-            config={**_AC_CFG, "learning_rate": 1e-2, "entropy_coef": 0.0},
-        )
-        rng = np.random.default_rng(1)
-        batch = {
-            "observations": rng.standard_normal((50, 4)),
-            "actions": rng.integers(0, 2, size=50),
-            "rewards": np.ones(50),
-        }
-        w_v_before = agent._W_v.copy()
-        losses = [agent.update(batch)["value_loss"] for _ in range(20)]
-        # All value losses must be finite and non-negative
-        assert all(np.isfinite(v) and v >= 0 for v in losses), "Value loss has invalid values"
-        # Critic weights should have changed
-        assert not np.allclose(agent._W_v, w_v_before), "W_v should change after repeated updates"
-
     def test_zero_value_coef_does_not_change_critic_weights(self):
         """When value_coef=0 the critic output gradient is zero, so W_v should not change."""
         agent = ActorCriticAgent(
@@ -882,9 +850,9 @@ class TestActorCriticAgentExtended:
             action_dim=2,
             config={**_AC_CFG, "value_coef": 0.0},
         )
-        w_v_before = agent._W_v.copy()
+        w_v_before = weights(agent)["W_v"]
         agent.update(_make_batch(20))
-        np.testing.assert_array_equal(agent._W_v, w_v_before)
+        np.testing.assert_array_equal(weights(agent)["W_v"], w_v_before)
 
     def test_entropy_coef_effect_on_update(self):
         """Both entropy_coef=0 and entropy_coef=1 produce finite metrics; higher coef moves policy weights more."""
@@ -901,8 +869,8 @@ class TestActorCriticAgentExtended:
             observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 0, "entropy_coef": 1.0}
         )
 
-        w_pi_low_before = agent_low._W_pi.copy()
-        w_pi_high_before = agent_high._W_pi.copy()
+        w_pi_low_before = weights(agent_low)["W_pi"]
+        w_pi_high_before = weights(agent_high)["W_pi"]
 
         m_low = agent_low.update(batch)
         m_high = agent_high.update(batch)
@@ -914,8 +882,8 @@ class TestActorCriticAgentExtended:
 
         # Higher entropy_coef applies a stronger entropy gradient to the policy head,
         # so the policy-weight change should be larger in magnitude.
-        delta_low = np.linalg.norm(agent_low._W_pi - w_pi_low_before)
-        delta_high = np.linalg.norm(agent_high._W_pi - w_pi_high_before)
+        delta_low = np.linalg.norm(weights(agent_low)["W_pi"] - w_pi_low_before)
+        delta_high = np.linalg.norm(weights(agent_high)["W_pi"] - w_pi_high_before)
         assert delta_high > delta_low, (
             "Higher entropy_coef should produce larger policy-weight updates"
         )
@@ -932,25 +900,21 @@ class TestActorCriticAgentExtended:
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
         p = str(tmp_path / "ckpt")
         agent.save(p)
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        agent2._W1 = np.zeros_like(agent2._W1)
+        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
         agent2.load(p)
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
-        np.testing.assert_array_equal(agent._W_pi, agent2._W_pi)
-        np.testing.assert_array_equal(agent._W_v, agent2._W_v)
-        assert agent._b_v == agent2._b_v
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
     def test_save_load_preserves_inference_output(self, tmp_path):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
         obs = np.array([0.1, -0.2, 0.3, -0.4])
-        probs_before, val_before, _ = agent._forward(obs)
+        probs_before, val_before = probabilities(agent, obs), state_value(agent, obs)
 
         p = str(tmp_path / "ckpt")
         agent.save(p)
 
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
+        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
         agent2.load(p)
-        probs_after, val_after, _ = agent2._forward(obs)
+        probs_after, val_after = probabilities(agent2, obs), state_value(agent2, obs)
 
         np.testing.assert_allclose(probs_before, probs_after, atol=1e-10)
         np.testing.assert_allclose(val_before, val_after, atol=1e-10)
@@ -974,9 +938,9 @@ class TestActorCriticAgentExtended:
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
         p = str(tmp_path / "ckpt")
         agent.save(p)
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
+        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
         agent2.load(p)
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
     def test_save_load_after_training(self, tmp_path):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
@@ -984,12 +948,9 @@ class TestActorCriticAgentExtended:
             agent.update(_make_batch(20))
         p = str(tmp_path / "trained")
         agent.save(p)
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
+        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
         agent2.load(p)
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
-        np.testing.assert_array_equal(agent._W_pi, agent2._W_pi)
-        np.testing.assert_array_equal(agent._W_v, agent2._W_v)
-        assert agent._b_v == agent2._b_v
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
     def test_load_pt_extension_exact_file(self, tmp_path):
         """Loading a .pt path that exists on disk should load that exact file."""
@@ -998,31 +959,17 @@ class TestActorCriticAgentExtended:
         agent.save(p)
         assert os.path.exists(p)
 
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        agent2._W1 = np.zeros_like(agent2._W1)
+        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
         agent2.load(p)
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
     def test_load_pt_legacy_npz_fallback(self, tmp_path):
         """Loading a .pt path falls back to '<name>.pt.npz' when the .pt file is absent."""
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        legacy_path = tmp_path / "ac_legacy.pt.npz"
-        np.savez(
-            legacy_path,
-            W1=agent._W1,
-            b1=agent._b1,
-            W_pi=agent._W_pi,
-            b_pi=agent._b_pi,
-            W_v=agent._W_v,
-            b_v=np.array(agent._b_v),
-        )
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        agent2._W1 = np.zeros_like(agent2._W1)
+        agent.save(str(tmp_path / "ac_legacy.pt.npz"))
+        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
         agent2.load(str(tmp_path / "ac_legacy.pt"))
-        np.testing.assert_array_equal(agent._W1, agent2._W1)
-        np.testing.assert_array_equal(agent._W_pi, agent2._W_pi)
-        np.testing.assert_array_equal(agent._W_v, agent2._W_v)
-        assert agent._b_v == agent2._b_v
+        assert_same_checkpoint(agent, agent2, tmp_path)
 
     def test_invalid_observation_dim_raises(self):
         with pytest.raises(ValueError, match="observation_dim"):

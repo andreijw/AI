@@ -669,6 +669,7 @@ the project checks only.
 | Tool | Purpose |
 | :--- | :--- |
 | `tests/helpers.py` → `numerical_grad`, `assert_gradients_match` | Finite-difference check of a hand-written backward pass, parameter by parameter |
+| `tests/agent_internals.py` | The one module agent tests may use to reach weights, forward passes and loss methods |
 | `.claude/skills/test-crafter/scripts/mutation_check.py` | Applies small breaks from a JSON list, reports which tests notice, restores the files |
 | `.claude/skills/doc-sync/scripts/check_md_width.py` | Checks the Markdown line-length rule on machines without Node |
 | `src/benchmark.py --output-dir … --report …` | Seeded experiment sweeps that leave `docs/benchmarks/` and saved runs alone |
