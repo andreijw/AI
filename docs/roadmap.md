@@ -689,7 +689,7 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Checkpoints written before the change still load.
   - **Out of scope**: A resume option for `train.py`.
 
-- [ ] **PPO Episode Ends and Validation**
+- [~] **PPO Episode Ends and Validation**
   - **Description**: Found 2026-10-18 while giving continuous PPO multi-episode rollouts. Discrete `PPOAgent`'s
     rollouts end every episode's GAE trace without a bootstrap, so CartPole's 500-step time limit counts as a true
     end; continuous PPO adds γ·V(next state) to the last reward of a cut episode. Discrete PPO also reads
@@ -699,6 +699,24 @@ Defects found while working on other items, then findings from the brooks-lint h
       does not bootstrap.
     - `rollout_steps` is validated the same way in both PPO agents.
     - CartPole PPO is rerun on seeds 1 to 5 and still meets its published claim (5 of 5 solved).
+  - **Built (2026-10-19), part 1, episode ends**:
+    - `rl_core.agents.returns.episode_end` holds the rule both PPO agents now share. The last step ends the
+      advantage estimate. An episode cut rather than terminated, by a time limit or by the Trainer's
+      `max_steps_per_episode`, returns its next state, and the agent adds γ·V(next state) to a copy of its last
+      reward. A cut with no known next state stays terminal.
+    - Discrete `PPOAgent` gets a `_rollout_episode` like continuous PPO's.
+    - The strict integer check from DQN moved to `rl_core.agents.config_values.positive_int`; DQN and both PPOs'
+      `rollout_steps` use it, so 2.5, 4.0, `True` and `"4"` are rejected.
+    - Tests are in `tests/test_returns.py`, `tests/test_discrete_ppo.py` and `tests/test_config_values.py`.
+  - **Verified (2026-10-19)**:
+    - Continuous PPO and DQN are unchanged. Seeded short runs of `configs/pendulum_ppo.yaml` (20,000 steps) and
+      `configs/cartpole_dqn.yaml` (10,000 steps) give bit-identical checkpoints and logs before and after.
+    - Learning run: `configs/cartpole_ppo.yaml` through the benchmark on seeds 1 to 5, 100-episode window.
+      - `develop` reproduced the published row: 5 of 5 solved, 108,325 average steps to solve, 5 held, eval 500.
+      - With the bootstrap: 5 of 5 solved, 79,556 average steps to solve (71,927 to 90,136, every seed faster),
+        5 held with a final training average of 500 on every seed, eval 500.
+      - Not republished yet: `docs/benchmarks/cartpole_results.md` and the README's results table still show the
+        `develop` numbers (80k to 132k steps).
   - **Out of scope**: Sharing one rollout buffer between the two PPO agents (until a third user appears).
 
 - [x] **DQN Config Validation**

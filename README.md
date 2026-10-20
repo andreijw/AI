@@ -38,6 +38,7 @@ AI/
 │   │   │   ├── base_agent.py
 │   │   │   ├── actor_critic_agent.py
 │   │   │   ├── actor_critic_base.py
+│   │   │   ├── config_values.py # Strict readers for integer agent settings
 │   │   │   ├── continuous_actor_critic.py
 │   │   │   ├── continuous_ppo.py
 │   │   │   ├── continuous_random_agent.py

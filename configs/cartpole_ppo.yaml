@@ -1,8 +1,9 @@
 # CartPole PPO Training Configuration
 # Standard PPO: rollouts of whole episodes, GAE, mini-batch epochs, and a learning rate and clip range
 # decayed linearly to zero. Values follow rl-baselines3-zoo's CartPole-v1 PPO settings; measured on
-# seeds 1 to 5 on 2026-10-16 (100-episode window): every seed's training average reached 475 within
-# 73k to 199k steps, 4 of 5 held it, and every final evaluation scored 500.
+# seeds 1 to 5 on 2026-10-19, with time-limit cuts bootstrapped (100-episode window): every seed's
+# training average reached 475 within 72k to 90k steps, all 5 held it, and every final evaluation
+# scored 500.
 
 # Environment settings
 environment:

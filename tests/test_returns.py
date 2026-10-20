@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from rl_core.agents.returns import discounted_returns, gae
+from rl_core.agents.returns import discounted_returns, episode_end, gae
 
 
 @pytest.mark.parametrize(
@@ -109,3 +109,64 @@ def test_gae_with_lambda_one_is_the_return_minus_the_value():
 
 def test_gae_of_an_empty_rollout_is_empty():
     assert gae(np.array([]), np.array([]), np.array([], dtype=bool), 0.9, 0.95).shape == (0,)
+
+
+# ---------------------------------------------------------------------------
+# episode_end
+# ---------------------------------------------------------------------------
+
+NEXT = np.arange(6, dtype=np.float32).reshape(3, 2)  # float32, as Pendulum returns
+
+
+@pytest.mark.parametrize(
+    "dones,terminated,bootstraps",
+    [
+        ([False, False, True], [False, False, False], True),  # time-limit cut
+        ([False, False, False], [False, False, False], True),  # cut by max_steps_per_episode
+        ([False, False, True], [False, False, True], False),  # true termination
+        ([False, False, False], None, True),  # no terminated flags: the dones decide
+        ([False, False, True], None, False),
+        (None, None, True),  # no flags at all: a cut
+    ],
+)
+def test_episode_end_bootstraps_only_a_cut(dones, terminated, bootstraps):
+    ends, bootstrap_obs = episode_end(3, dones, terminated, NEXT)
+
+    np.testing.assert_array_equal(ends, [False, False, True])
+    if bootstraps:
+        assert bootstrap_obs.dtype == np.float64
+        np.testing.assert_array_equal(bootstrap_obs, [4.0, 5.0])
+    else:
+        assert bootstrap_obs is None
+
+
+def test_episode_end_without_next_observations_treats_a_cut_as_terminal():
+    ends, bootstrap_obs = episode_end(3, [False, False, True], [False, False, False], None)
+    np.testing.assert_array_equal(ends, [False, False, True])
+    assert bootstrap_obs is None
+
+
+def test_episode_end_keeps_earlier_episode_ends():
+    ends, _ = episode_end(4, [False, True, False, False], None, None)
+    np.testing.assert_array_equal(ends, [False, True, False, True])
+
+
+def test_episode_end_does_not_modify_its_inputs():
+    dones = np.array([False, False, False])
+    terminated = np.array([False, False, False])
+    ends, _ = episode_end(3, dones, terminated, NEXT)
+    np.testing.assert_array_equal(dones, [False, False, False])
+    np.testing.assert_array_equal(terminated, [False, False, False])
+    assert ends is not dones
+
+
+def test_episode_end_of_an_empty_episode():
+    ends, bootstrap_obs = episode_end(0, [], [], np.empty((0, 2)))
+    assert ends.shape == (0,)
+    assert bootstrap_obs is None
+
+
+@pytest.mark.parametrize("dones", [[False, True], [False, False, False, True]])
+def test_episode_end_rejects_dones_of_the_wrong_length(dones):
+    with pytest.raises(ValueError, match="one flag per step"):
+        episode_end(3, dones, None, None)

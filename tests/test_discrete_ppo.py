@@ -37,6 +37,34 @@ def _episode(length: int, seed: int, done: bool | None = True) -> dict[str, np.n
     return batch
 
 
+def _cut_episode(
+    rewards, terminated: bool = False, done: bool = True, next_observations: bool = True
+) -> dict[str, np.ndarray]:
+    """An episode shaped as the Trainer builds it, with chosen rewards and a chosen ending.
+
+    ``done=True, terminated=False`` is a time-limit cut; ``done=False, terminated=False`` is a cut by
+    ``max_steps_per_episode``; ``terminated=True`` is a true end.
+    """
+    length = len(rewards)
+    rng = np.random.default_rng(length)
+    batch = {
+        "observations": rng.standard_normal((length, OBS_DIM)),
+        "actions": rng.integers(0, ACTION_DIM, size=length),
+        "rewards": np.array(rewards, dtype=np.float64),
+        "dones": np.array([False] * (length - 1) + [done]),
+        "terminated": np.array([False] * (length - 1) + [terminated]),
+    }
+    if next_observations:
+        batch["next_observations"] = rng.standard_normal((length, OBS_DIM))
+    return batch
+
+
+def _constant_critic(agent: PPOAgent, value: float) -> None:
+    """Make V(s) = value for every state."""
+    agent._W_v[...] = 0.0
+    agent._b_v = value
+
+
 def _weights(agent) -> dict[str, np.ndarray]:
     return {
         name: np.array(value, dtype=np.float64, copy=True)
@@ -200,7 +228,8 @@ def test_episodes_are_buffered_until_the_rollout_is_full():
 
 @pytest.mark.parametrize("last_done", [False, None])
 def test_each_buffered_episode_ends_its_gae_trace(last_done):
-    """An episode cut short (last done False) or sent without dones still ends where it ends.
+    """An episode cut short (last done False) or sent without dones, and without a next state to
+    bootstrap from, still ends where it ends.
 
     Otherwise GAE would bootstrap from the next episode's first state.
     """
@@ -210,6 +239,72 @@ def test_each_buffered_episode_ends_its_gae_trace(last_done):
     marked.update(_episode(5, seed=2, done=True))
     unmarked.update(_episode(5, seed=2, done=last_done))
     _assert_same_weights(unmarked, marked, rtol=0.0)
+
+
+# ---------------------------------------------------------------------------
+# Episode ends: a time-limit cut bootstraps, a true termination does not
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "ending",
+    [
+        {"done": True, "terminated": False},  # cut by the environment's time limit
+        {"done": False, "terminated": False},  # cut by the Trainer's max_steps_per_episode
+    ],
+)
+def test_a_cut_episode_bootstraps_its_last_reward(ending):
+    agent = _agent(gamma=0.9)  # the seeded critic gives every state its own value
+    episode = _cut_episode([1.0, 3.0], **ending)
+    next_value = agent._forward(episode["next_observations"][-1])[1]
+    last_value = agent._forward(episode["observations"][-1])[1]
+    assert next_value != pytest.approx(last_value), "the test needs V(s') and V(s_T) to differ"
+
+    _, _, rewards, dones = agent._rollout_episode(episode)
+
+    # The cut adds gamma * V(next state), not the value of the last state, to the last reward.
+    np.testing.assert_allclose(rewards, [1.0, 3.0 + 0.9 * next_value], rtol=0, atol=1e-15)
+    np.testing.assert_array_equal(dones, [False, True])
+
+
+@pytest.mark.parametrize(
+    "ending",
+    [
+        {"terminated": True},  # a true end
+        {"next_observations": False},  # a cut whose next state is unknown
+    ],
+)
+def test_an_episode_without_a_state_to_bootstrap_from_ends_as_terminal(ending):
+    agent = _agent(gamma=0.9)
+    _, _, rewards, dones = agent._rollout_episode(_cut_episode([1.0, 3.0], **ending))
+    np.testing.assert_array_equal(rewards, [1.0, 3.0])
+    np.testing.assert_array_equal(dones, [False, True])
+
+
+def test_rollout_episode_leaves_the_callers_batch_unchanged():
+    agent = _agent(gamma=0.9)
+    episode = _cut_episode([1.0, 3.0, 2.0])  # float64 rewards, as the Trainer builds them
+    copies = {key: value.copy() for key, value in episode.items()}
+    agent._rollout_episode(episode)
+    for key, value in copies.items():
+        np.testing.assert_array_equal(episode[key], value, err_msg=f"{key} was modified")
+
+
+def test_the_bootstrap_reaches_the_value_loss():
+    """One update on one cut episode, with V(s) = 2 everywhere, reports the hand-computed loss.
+
+    gamma 0.9, lambda 0.8, rewards [1, 3], cut, so the last reward becomes 3 + 0.9 * 2 = 4.8:
+      A1 = 4.8 - 2 = 2.8                         (the last step ends the trace)
+      A0 = (1 + 0.9 * 2 - 2) + 0.9 * 0.8 * A1 = 0.8 + 0.72 * 2.8 = 2.816
+    The returns are A + V, so the value loss before the only step is 0.5 * mean(A^2).
+    Without the bootstrap A1 would be 1 and A0 = 1.52.
+    """
+    agent = _agent(gamma=0.9, gae_lambda=0.8, ppo_epochs=1)
+    _constant_critic(agent, 2.0)
+    metrics = agent.update(_cut_episode([1.0, 3.0]))
+    a1 = 2.8
+    a0 = 0.8 + 0.9 * 0.8 * a1
+    assert metrics["value_loss"] == pytest.approx(0.5 * (a0**2 + a1**2) / 2, rel=1e-12)
 
 
 def test_empty_batch_changes_nothing_and_returns_no_metrics():
@@ -368,6 +463,7 @@ def test_a_one_step_rollout_has_zero_advantage_after_centring():
     "key,value,message",
     [
         ("rollout_steps", 0, "rollout_steps must be a positive integer"),
+        ("rollout_steps", 2.5, "rollout_steps must be a positive integer"),  # was truncated to 2
         ("minibatch_size", 0, "minibatch_size must be a positive integer"),
         ("gae_lambda", -0.1, "gae_lambda must be in"),
         ("gae_lambda", 1.1, "gae_lambda must be in"),
