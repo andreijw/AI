@@ -52,7 +52,7 @@ A duplicate rarely shares a name with the original. For each candidate, search f
 | Wraps a Gymnasium environment with seeding, noise or episode statistics | `gym.make(` in a class, `info["episode"]` | subclass `rl_core.environments.BaseEnvWrapper`; `checked_range` for randomization ranges |
 | Reads or merges a config | `yaml.safe_load`, `json.load` | `load_config`, `merge_configs`, `train.load_run_config` |
 | Builds an environment or agent from config | `gym.make(`, a class lookup by name | `train.select_run_challenge`, then the challenge's `make_env` / `make_agent`; a package's `make_env_from_config` |
-| Builds a per-challenge, per-agent output path | `os.path.join(` with the agent type | `train.agent_output_dir` |
+| Builds a per-challenge, per-agent output path | `os.path.join(` with the agent type | `train.agent_output_dir`; all four of a run's folders: `train.output_dirs` |
 | Smooths a reward curve, finds the solve episode | `np.convolve`, a rolling mean | `visualization._rolling_average`, `benchmark.find_solved_episode` |
 | Reports progress | `print(` under `src/` | `Logger` / `setup_logger` |
 | Runs a script inside a test | `sys.argv`, a config written inline | `tests/helpers.run_main`, `minimal_config` |

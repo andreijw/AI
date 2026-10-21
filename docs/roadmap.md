@@ -732,6 +732,18 @@ Defects found while working on other items, then findings from the brooks-lint h
     - Real CartPole (random, DQN, PPO) and Pendulum (random, PPO) benchmarks give the same metrics JSON, report
       and plot bytes before and after, with durations masked.
     - Remaining: `train.py` `main` (PR 2), the Gaussian agents' gradients (PR 3).
+  - **Progress (2026-10-20), PR 2 of 3, `train.py` `main`**:
+    - `main` is 48 lines, down from 167, and no function in `train.py` exceeds 50. It now calls
+      `parse_args(argv)` (the parser and its five checks, testable without `sys.argv`), `output_dirs` (pure: the
+      checkpoint, log, video and plot folders), `resolve_render_mode`, `attach_video_recorder` and
+      `train_and_plot`.
+    - `tests/test_train_main.py` adds what no test covered: Ctrl-C (both environments closed, no plot), `--plot`,
+      and a failed run still closing both environments. These pass on the old `main` too. It also pins which CLI
+      error is reported first.
+    - `--help` and every CLI error message are unchanged. Seeded 6-episode runs of `configs/cartpole_dqn.yaml` and
+      `configs/pendulum_ppo.yaml` with `--plot` give checkpoints equal key by key and the same metrics rows
+      (timestamps masked), before and after. `record.py` still writes its video.
+    - Remaining: the Gaussian agents' gradients (PR 3).
   - **Out of scope**: `DQNAgent.__init__` (linear validation); the single `Trainer(...)` call shared by
     `train.py`, `record.py` and the benchmark, which differ on purpose; `plot_benchmark_comparison` and
     `Trainer._log_metrics`; `benchmark.py` `main` and `run_benchmark`'s parameter list (the CLI and public API).
