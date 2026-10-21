@@ -242,10 +242,10 @@ def attach_video_recorder(env, trainer, video_every, video_dir, logger):
     headless machines where no display is available. It follows the trainer's episode counter, so
     it must be created after the trainer, and wraps only the training environment, never the
     evaluation one. env.wrap_env() injects it through the wrapper's interface rather than by
-    direct attribute assignment.
+    direct attribute assignment. RecordVideo creates video_dir itself and warns that it overwrites
+    videos when the folder already exists, so the folder is not created here.
     """
     video_every = video_every if video_every is not None else trainer.eval_frequency
-    os.makedirs(video_dir, exist_ok=True)
     env.wrap_env(
         TrainingVideoRecorder(env.env, video_folder=video_dir, progress=trainer, every=video_every)
     )

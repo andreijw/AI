@@ -68,17 +68,40 @@ class DQNAgent(BaseAgent):
         self.epsilon_decay: float = float(config.get("epsilon_decay", 0.995))
         self.target_update_frequency: int = positive_int(config, "target_update_frequency", 100)
         self.tau: float | None = _optional_real(config, "tau")
+        self.grad_clip_value: float = float(config.get("grad_clip_value", 10.0))
+        self.exploration_steps: int | None = self._read_exploration_steps(config)
+        self.updates_per_step: float | None = _optional_real(config, "updates_per_step")
+        self.max_updates_per_call: int = positive_int(config, "max_updates_per_call", 64)
+        self._validate_dims(observation_dim, action_dim)
+        self._validate_rates()
+        self._validate_buffer_and_optimizer(config)
+
+        self.epsilon: float = self.epsilon_start
+        self._update_counter: int = 0
+        self._exploration_step: int = 0
+        self._explore_rng: np.random.Generator = derive_rng(
+            config.get("seed"), AGENT_EXPLORATION_STREAM
+        )
+        self._init_q_networks(derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM))
+        self.replay_buffer: ReplayBuffer = ReplayBuffer(
+            capacity=self.buffer_capacity,
+            observation_dim=self.observation_dim,
+            seed=config.get("seed"),
+        )
+        self._optimizer: Adam | None = optimizer_from_config(config, self._parameters())
+
+    def _validate_rates(self) -> None:
+        """
+        Check the rates and coefficients read in ``__init__``, each error naming its key.
+
+        Raises:
+            ValueError: For the first one out of range.
+        """
         if self.tau is not None and not 0.0 < self.tau <= 1.0:
             raise ValueError(
                 f"tau must be in (0, 1] (1 copies the target every gradient step; for periodic hard "
                 f"syncs leave tau unset and use target_update_frequency), got {self.tau!r}"
             )
-        self.grad_clip_value: float = float(config.get("grad_clip_value", 10.0))
-        self.exploration_steps: int | None = self._read_exploration_steps(config)
-        self.updates_per_step: float | None = _optional_real(config, "updates_per_step")
-        self.max_updates_per_call: int = positive_int(config, "max_updates_per_call", 64)
-
-        self._validate_dims(observation_dim, action_dim)
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
         if not (0.0 < self.gamma <= 1.0):
@@ -89,6 +112,22 @@ class DQNAgent(BaseAgent):
             raise ValueError(f"epsilon_end must be in [0, 1], got {self.epsilon_end!r}")
         if not (0.0 < self.epsilon_decay <= 1.0):
             raise ValueError(f"epsilon_decay must be in (0, 1], got {self.epsilon_decay!r}")
+        if self.grad_clip_value <= 0.0:
+            raise ValueError(f"grad_clip_value must be positive, got {self.grad_clip_value!r}")
+        if self.updates_per_step is not None and self.updates_per_step <= 0:
+            raise ValueError(
+                f"updates_per_step must be positive (leave it unset for one update per call), "
+                f"got {self.updates_per_step!r}"
+            )
+
+    def _validate_buffer_and_optimizer(self, config: dict[str, Any]) -> None:
+        """
+        Check that the replay buffer can warm up and fill a batch, and that a clip setting suits
+        the optimizer.
+
+        Raises:
+            ValueError: For the first inconsistent pair of settings.
+        """
         if self.min_buffer_size < self.batch_size:
             raise ValueError(
                 f"min_buffer_size ({self.min_buffer_size}) must be at least batch_size "
@@ -99,56 +138,30 @@ class DQNAgent(BaseAgent):
                 f"buffer_capacity ({self.buffer_capacity}) must be at least min_buffer_size "
                 f"({self.min_buffer_size}), or the buffer never warms up and the agent never trains"
             )
-        if self.updates_per_step is not None and self.updates_per_step <= 0:
-            raise ValueError(
-                f"updates_per_step must be positive (leave it unset for one update per call), "
-                f"got {self.updates_per_step!r}"
-            )
-
-        if self.grad_clip_value <= 0.0:
-            raise ValueError(f"grad_clip_value must be positive, got {self.grad_clip_value!r}")
-
-        self.epsilon: float = self.epsilon_start
-        self._update_counter: int = 0
-        self._exploration_step: int = 0
-        weights_rng = derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM)
-        self._explore_rng: np.random.Generator = derive_rng(
-            config.get("seed"), AGENT_EXPLORATION_STREAM
-        )
-
-        # He weight initialization
-        scale1 = np.sqrt(2.0 / observation_dim)
-        scale2 = np.sqrt(2.0 / self.hidden_dim)
-
-        # Online Q-network parameters
-        self._W1: npt.NDArray[np.float64] = (
-            weights_rng.standard_normal((observation_dim, self.hidden_dim)) * scale1
-        )
-        self._b1: npt.NDArray[np.float64] = np.zeros(self.hidden_dim)
-        self._W2: npt.NDArray[np.float64] = (
-            weights_rng.standard_normal((self.hidden_dim, action_dim)) * scale2
-        )
-        self._b2: npt.NDArray[np.float64] = np.zeros(action_dim)
-
-        # Target Q-network parameters (identical copy)
-        self._target_W1: npt.NDArray[np.float64] = np.copy(self._W1)
-        self._target_b1: npt.NDArray[np.float64] = np.copy(self._b1)
-        self._target_W2: npt.NDArray[np.float64] = np.copy(self._W2)
-        self._target_b2: npt.NDArray[np.float64] = np.copy(self._b2)
-
-        # Replay buffer
-        self.replay_buffer: ReplayBuffer = ReplayBuffer(
-            capacity=self.buffer_capacity,
-            observation_dim=self.observation_dim,
-            seed=config.get("seed"),
-        )
-
         if str(config.get("optimizer", "sgd")).lower() != "sgd" and "grad_clip_value" in config:
             raise ValueError(
                 "grad_clip_value is the element-wise clip of plain SGD; "
                 "with Adam, clip the global norm with max_grad_norm"
             )
-        self._optimizer: Adam | None = optimizer_from_config(config, self._parameters())
+
+    def _init_q_networks(self, weights_rng: np.random.Generator) -> None:
+        """He-initialised online Q-network (W1 drawn before W2) and an identical target copy."""
+        self._W1: npt.NDArray[np.float64] = weights_rng.standard_normal(
+            (self.observation_dim, self.hidden_dim)
+        ) * np.sqrt(2.0 / self.observation_dim)
+        self._b1: npt.NDArray[np.float64] = np.zeros(self.hidden_dim)
+        self._W2: npt.NDArray[np.float64] = weights_rng.standard_normal(
+            (self.hidden_dim, self.action_dim)
+        ) * np.sqrt(2.0 / self.hidden_dim)
+        self._b2: npt.NDArray[np.float64] = np.zeros(self.action_dim)
+        self._sync_target()
+
+    def _sync_target(self) -> None:
+        """Hard sync: the target network becomes a copy (sharing no memory) of the online one."""
+        self._target_W1: npt.NDArray[np.float64] = np.copy(self._W1)
+        self._target_b1: npt.NDArray[np.float64] = np.copy(self._b1)
+        self._target_W2: npt.NDArray[np.float64] = np.copy(self._W2)
+        self._target_b2: npt.NDArray[np.float64] = np.copy(self._b2)
 
     @staticmethod
     def _read_exploration_steps(config: dict[str, Any]) -> int | None:
@@ -262,20 +275,19 @@ class DQNAgent(BaseAgent):
                    and optionally 'next_observations', 'terminated' and 'dones'.
 
         Returns:
-            Dictionary with training metrics: 'loss', 'epsilon', 'mean_q'; during warm-up (the
-            buffer below ``min_buffer_size``) only 'epsilon', as no update happened.
+            Dictionary with training metrics: 'loss', 'epsilon', 'mean_q'; only 'epsilon' when no
+            update happened: during warm-up (the buffer below ``min_buffer_size``), or when the
+            batch stored no transition (empty, or without ``next_observations`` or either flag).
         """
-        self.replay_buffer.add_transitions(batch)
+        n_stored = self.replay_buffer.add_transitions(batch)
 
-        if not self.replay_buffer.can_sample(self.min_buffer_size):
-            # Warm-up: no update, so no loss or Q-value for the log to average in.
+        if n_stored == 0 or not self.replay_buffer.can_sample(self.min_buffer_size):
+            # No update, so no loss or Q-value for the log to average in, and no epsilon decay.
             return {"epsilon": self.epsilon}
 
-        n_transitions = len(batch.get("actions", [])) if isinstance(batch, dict) else 0
-        if self.updates_per_step is not None and self.updates_per_step > 0 and n_transitions > 0:
+        if self.updates_per_step is not None:
             num_updates = min(
-                self.max_updates_per_call,
-                max(1, int(n_transitions * self.updates_per_step)),
+                self.max_updates_per_call, max(1, int(n_stored * self.updates_per_step))
             )
         else:
             num_updates = 1
@@ -309,10 +321,7 @@ class DQNAgent(BaseAgent):
                 self._target_W2 = self.tau * self._W2 + (1.0 - self.tau) * self._target_W2
                 self._target_b2 = self.tau * self._b2 + (1.0 - self.tau) * self._target_b2
             elif self._update_counter % self.target_update_frequency == 0:
-                self._target_W1 = np.copy(self._W1)
-                self._target_b1 = np.copy(self._b1)
-                self._target_W2 = np.copy(self._W2)
-                self._target_b2 = np.copy(self._b2)
+                self._sync_target()
 
             total_loss += components["loss"]
             total_q += components["mean_q"]

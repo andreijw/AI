@@ -15,6 +15,17 @@ from 2026-10-16; earlier results use the 10-episode rule.
 
 ### Changed
 
+- **Code health loose ends** (`feature/code-health-loose-ends`): `DQNAgent.__init__` drops from 94 lines and
+  complexity 12 to 44 lines, through `_validate_rates`, `_validate_buffer_and_optimizer`, `_init_q_networks` and a
+  `_sync_target` shared with the hard target sync; seeded weights are bit-identical before and after.
+  `Trainer._log_metrics` drops from complexity 11 to below 10: the metric normaliser is the public
+  `rl_core.utils.logger.json_safe`, which `Logger.log` now applies too, so a metrics line written without the
+  trainer is also strict JSON; every logger dispatch branch is now tested. The Gaussian agents keep `log_std` inside
+  [-20, 2] by projecting the parameter after every Adam step and on `load`, instead of only clipping it in the
+  forward pass, where the entropy bonus could push the hidden raw value past the bound without limit;
+  `init_log_std` outside the bounds is rejected. No saved Pendulum checkpoint came near a bound (120 checkpoints,
+  -2.01 to 0.57), and 100 episodes of the committed Pendulum PPO and Actor-Critic configs (seed 42) give
+  bit-identical weights to `develop`.
 - **Tighter, faster, safer CI** (`feature/ci-pipeline-hardening`): every pull request runs one `ci.yml` with two
   jobs, `Checks` (Ruff, format, MyPy, Bandit, pylint duplicate-code, markdownlint, README workflow list) and
   `Unit Tests` (pytest, coverage, Codecov), down from about 7 jobs that each installed Python, plus CodeQL. Merges
@@ -51,6 +62,12 @@ from 2026-10-16; earlier results use the 10-episode rule.
 
 ### Fixed
 
+- **DQN trained on a batch it did not store** (`feature/code-health-loose-ends`): a batch without `terminated` or
+  `dones`, without `next_observations`, or empty, stores nothing and now runs no gradient step and no epsilon decay,
+  as in warm-up. The trainer always sends the flags, so committed runs are unaffected.
+- **"Overwriting existing videos" on every `--record-video` run** (`feature/code-health-loose-ends`): `train.py`
+  created the video folder before Gymnasium's `RecordVideo`, which warns whenever its folder exists. The tests that
+  triggered it now record into fresh folders, and pytest turns the warning into an error.
 - **Private-access guard allows inherited hooks** (#112): a zero-argument `super()._name` is allowed like
   `self._name`; `super(T, obj)._name` is still flagged. `develop` had been red since #111 met #107.
 

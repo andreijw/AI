@@ -2,9 +2,31 @@
 
 import json
 import logging
+import math
 import os
 from datetime import datetime
 from typing import Any
+
+import numpy as np
+
+
+def json_safe(value: Any) -> Any:
+    """
+    ``value`` as strict-JSON Python built-ins, recursively.
+
+    NumPy scalars become Python scalars, non-finite floats (NaN, inf) become None, and dicts,
+    lists and tuples keep their structure with converted contents (a tuple becomes a list).
+    Anything else, arrays included, is returned unchanged.
+    """
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    return value
 
 
 class Logger:
@@ -71,7 +93,7 @@ class Logger:
         try:
             with open(self.metrics_file, "a") as f:
                 log_entry = {**metrics, "step": step} if step is not None else metrics
-                f.write(json.dumps(log_entry) + "\n")
+                f.write(json.dumps(json_safe(log_entry), allow_nan=False) + "\n")
         except (OSError, TypeError, ValueError) as e:
             self.logger.warning("Failed to write metrics to %s: %s", self.metrics_file, e)
 

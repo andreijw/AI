@@ -20,6 +20,11 @@ from .config_values import non_negative_int, positive_int
 from .optim import Adam, anneal_fraction, anneal_steps_from_config
 from .returns import discounted_returns, gae
 
+# Bounds of the log standard deviation: σ from about 2e-9 to 7.4. The parameter is projected back
+# inside them after every step, so its gradient is exact wherever the forward pass uses it.
+LOG_STD_MIN = -20.0
+LOG_STD_MAX = 2.0
+
 
 class _BatchForward(NamedTuple):
     """One forward pass over a batch: what both Gaussian agents' backward passes need."""
@@ -54,7 +59,8 @@ class ContinuousActorCriticBase(BaseAgent):
         mean_init_scale (float): Scale of the mean head's initial weights relative to He scaling;
             small keeps the initial mean inside the bounds. Default: 0.01.
         reward_scale (float): Multiplier on rewards before returns are computed. Default: 1.0.
-        init_log_std (float): Initial log standard deviation. Default: -0.5.
+        init_log_std (float): Initial log standard deviation, in [-20, 2]; the parameter is kept
+            there throughout training. Default: -0.5.
         action_low, action_high: Action bounds. Default: -1.0, 1.0.
         bounded_mean (bool): Policy mean bias + scale * tanh(z), inside the action bounds; needs
             finite bounds with action_low < action_high. Default: False.
@@ -124,6 +130,10 @@ class ContinuousActorCriticBase(BaseAgent):
 
         # Trainable log standard deviation: initialized to -0.5 (std ~ 0.6)
         init_log_std = float(config.get("init_log_std", -0.5))
+        if not LOG_STD_MIN <= init_log_std <= LOG_STD_MAX:
+            raise ValueError(
+                f"init_log_std must be in [{LOG_STD_MIN}, {LOG_STD_MAX}], got {init_log_std!r}"
+            )
         self._log_std: np.ndarray = np.full(action_dim, init_log_std, dtype=np.float64)
 
         # Critic head: hidden -> value
@@ -174,7 +184,7 @@ class ContinuousActorCriticBase(BaseAgent):
         s = np.asarray(state, dtype=np.float64)
         h = np.maximum(0.0, s @ self._W1 + self._b1)  # ReLU
         mu, _, _ = self._mean(h)
-        log_std = np.clip(self._log_std, -20.0, 2.0)
+        log_std = self._bounded_log_std()
         v = (h @ self._W_v + self._b_v).item() if s.ndim == 1 else h @ self._W_v + self._b_v
         return mu, log_std, v, h
 
@@ -218,19 +228,28 @@ class ContinuousActorCriticBase(BaseAgent):
         return float(np.sum(log_std + 0.5 * log_2pi_e))
 
     def _adam_step(self, grads: dict[str, np.ndarray | float], lr: float) -> None:
-        """Apply one step of Adam optimization with gradient clipping, updating arrays in place."""
+        """
+        Apply one step of Adam optimization with gradient clipping, updating arrays in place, then
+        project ``log_std`` back inside [LOG_STD_MIN, LOG_STD_MAX].
+        """
         for name, step in self._optimizer.step(grads, lr).items():
             if name == "b_v":
                 self._b_v -= float(step)
             else:
                 param = getattr(self, f"_{name}")
                 param -= step
+        np.clip(self._log_std, LOG_STD_MIN, LOG_STD_MAX, out=self._log_std)
+
+    def _bounded_log_std(self) -> np.ndarray:
+        """``log_std`` clipped to its bounds. Construction, every step and ``load`` keep the
+        parameter inside them; this guards a value set directly."""
+        return np.clip(self._log_std, LOG_STD_MIN, LOG_STD_MAX)
 
     def _batch_forward(self, states: np.ndarray) -> _BatchForward:
         """The forward pass over a batch of states, (n, observation_dim), for a backward pass."""
         h = np.maximum(0.0, states @ self._W1 + self._b1)  # ReLU
         mu, dmu_dz, _ = self._mean(h)
-        log_std = np.clip(self._log_std, -20.0, 2.0)
+        log_std = self._bounded_log_std()
         values = h @ self._W_v + self._b_v
         return _BatchForward(states, h, mu, dmu_dz, log_std, values)
 
@@ -328,6 +347,8 @@ class ContinuousActorCriticBase(BaseAgent):
             for name in self._PARAM_NAMES:
                 setattr(self, f"_{name}", data[name])
             self._b_v = float(data["b_v"])
+            # A checkpoint saved before log_std was projected may hold one past a bound.
+            np.clip(self._log_std, LOG_STD_MIN, LOG_STD_MAX, out=self._log_std)
             self._optimizer.load_state(data)
             self._load_extra_checkpoint_state(data)
 

@@ -76,7 +76,11 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --cov=src --cov-report=term-missing"
-filterwarnings = ["error::pytest.PytestUnraisableExceptionWarning"]
+filterwarnings = [
+    "error::pytest.PytestUnraisableExceptionWarning",
+    # RecordVideo warns, in colour, when its folder already exists: a test or train.py made it.
+    "error:.*Overwriting existing videos:UserWarning",
+]
 
 [tool.ruff]
 line-length = 100
