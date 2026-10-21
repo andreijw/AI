@@ -41,7 +41,7 @@ CONTRIBUTING.md, GEMINI.md and ARCHITECTURE.md.
 | Document | Owns | Update when |
 | :--- | :--- | :--- |
 | `docs/roadmap.md` | Open and in-progress items: description, acceptance criteria, status, follow-ups | Always. Record what was built and what was dropped while the item is open |
-| `CHANGELOG.md` | One condensed entry per completed item, newest first, under `Unreleased` until dated | When an item completes, in its hand-off commit; the item leaves the roadmap at the same time |
+| `CHANGELOG.md` | One condensed entry per completed item, newest first, under the date it was handed off | When an item completes, in its hand-off commit; the item leaves the roadmap at the same time |
 | `TESTING.md` | Manual checks a person runs, as rows with an ID (`ENV-`, `TR-`, `VID-`, `OUT-`, `BM-`, `CKPT-`, `LOG-`, `CI-`), a command and an expected result | A command, flag, output path or expected behaviour was added or changed |
 | `README.md` | Features, project structure, install, usage commands, configuration, architecture summary | A headline feature, a command, a prerequisite or the folder layout changed |
 | `ARCHITECTURE.md` | Package boundaries, the agent class diagram, the training sequence, the artifact tree, extension steps | A class, a base-class method in the diagram, a boundary or an output path changed |
@@ -65,13 +65,13 @@ Two things are generated, so run the generator and never edit by hand:
 Prefer pointing at the source over restating it. "See `configs/cartpole_dqn.yaml`" cannot go stale; a
 copied table of hyperparameters will.
 
-When an item completes, it leaves `docs/roadmap.md` and a condensed entry goes under `## Unreleased` in
-`CHANGELOG.md`: what changed, the PR or branch, and the measured numbers other documents quote. Before removing
-the item, move anything still live in it (follow-ups, deferred ideas) to the open item it belongs to, or to a
-new one. An item delivered over several PRs stays `[~]` with a progress note until the last one. When the pull requests behind `Unreleased` entries have merged, the next hand-off moves those entries under a
-`## <date>` heading, the day the last of them merged.
-Other documents cite completed work as `(CHANGELOG.md, <date>)`, never by roadmap item name, and never as
-`Unreleased`, which moves.
+When an item completes, it leaves `docs/roadmap.md` and a condensed entry goes into `CHANGELOG.md` under the
+hand-off date (`## <date>`, created if it is not already the newest section): what changed, the branch (the PR
+number is not known yet), and the measured numbers other documents quote. The pull request carries its own entry,
+so it merges complete and nothing has to be dated afterwards. Before removing the item, move anything still live
+in it (follow-ups, deferred ideas) to the open item it belongs to, or to a new one. An item delivered over several
+PRs stays `[~]` with a progress note until the last one.
+Other documents cite completed work as `(CHANGELOG.md, <date>)`, never by roadmap item name.
 
 When one document contradicts another, the repository is the source of truth: fix the document, and if it
 cannot be fixed in this change, add it to **Known Discrepancies** in `CLAUDE.md`.

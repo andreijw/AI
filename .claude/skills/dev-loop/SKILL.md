@@ -169,13 +169,13 @@ Stage the changed files by name with `git add`. Then report:
 - the exact commit command (conventional commit subject; no `Co-Authored-By` trailer, which
   `.claude/settings.json` turns off); you push after they commit
 
-Complete the roadmap item in the hand-off commit: remove it from `docs/roadmap.md` and add a condensed entry
-under `## Unreleased` in `CHANGELOG.md` (`Added`, `Changed` or `Fixed`): what changed, the PR or branch, and
-the numbers a reader would quote (config, seeds, result). Stage it with the rest and say so in the hand-off,
+Complete the roadmap item in the hand-off commit: remove it from `docs/roadmap.md` and add a condensed entry to
+`CHANGELOG.md` under today's date (`## <date>`, created if it is not already the newest section; `Added`,
+`Changed` or `Fixed`): what changed, the branch, and the numbers a reader would quote (config, seeds, result).
+The PR then merges complete, and nothing has to be dated after the merge. Stage it with the rest and say so in the hand-off,
 so the maintainer can unstage it if they do not agree. For work that spans several PRs, the item stays `[~]`
 with a progress note until the last one. Anything still live in the item (a follow-up, a deferred idea) moves to
-the open item it belongs to, or a new one, before the item is removed. When the pull requests behind `Unreleased` entries have merged, the next hand-off moves those entries under a
-`## <date>` heading, the day the last of them merged.
+the open item it belongs to, or a new one, before the item is removed.
 
 After they have committed: push the branch, then open the PR against `develop` with `gh pr create`, following
 `.github/pull_request_template.md`, with every ticked box true. Watch `gh pr checks` until it finishes, and

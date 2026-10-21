@@ -1,31 +1,26 @@
 # Changelog
 
 What changed in the framework, newest first, in the style of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-There are no version tags: work merges to `develop`, and each dated section is the day its pull requests merged
-(a month, before October 2026). Entries for work not yet merged sit under Unreleased until it is. Each entry is
-the condensed form of its roadmap item; the full discussion is in the pull requests and the git history. Open work
-is in [docs/roadmap.md](docs/roadmap.md).
+There are no version tags: work merges to `develop`. Each pull request adds its own entry under the day it was
+handed off for merge, so it merges complete; sections before 2026-10-21 use the day the pull requests merged (a
+month, before October 2026). Each entry is the condensed form of its roadmap item; the full discussion is in the
+pull requests and the git history. Open work is in [docs/roadmap.md](docs/roadmap.md).
 
 Results quote the committed config and seeds 1 to 5 unless they say otherwise. They use the 100-episode solve rule
 from 2026-10-16; earlier results use the 10-episode rule.
 "Solves" is the rolling training average reaching the threshold (475 on CartPole-v1, -200 on Pendulum-v1) and
 "holds" is the final 100-episode average still at or above it.
 
-## Unreleased
+## 2026-10-21
 
 ### Changed
 
-- **Benchmark plot curves are a pure, tested function**: `rl_core.utils.visualization.aligned_curves` smooths one
+- **Benchmark plot curves are a pure, tested function** (#117): `rl_core.utils.visualization.aligned_curves` smooths one
   agent's runs and aligns them by episode or on a shared environment-step grid; `plot_benchmark_comparison` only
   draws (complexity 14 to below 10). New tests work the alignment out by hand; every line, band and the PNG are
   byte-identical before and after. It rejects a window below 1, empty runs and non-positive episode lengths, which
   gave NaN curves or a silently wrong step grid. Clears the last Critical of the 2026-10-21 health dashboard
   (92/100).
-
-## 2026-10-21
-
-### Changed
-
 - **`train.py` `main` split** (#114): 167 lines down to 48, through `parse_args(argv)`, `output_dirs`,
   `resolve_render_mode`, `attach_video_recorder` and `train_and_plot`. `--help`, every CLI error and seeded outputs
   are unchanged; new tests cover Ctrl-C, `--plot` and closing both environments when training fails.
