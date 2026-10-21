@@ -21,8 +21,8 @@ yours to decide, do and report.
 1. **Pick the work.** They choose what to build, usually from options you propose.
 2. **Approve the plan.** They see the roadmap item and the plan together, after the plan has been reviewed
    and refined, not before.
-3. **Commit.** They commit and push once the work has passed every gate. Commits are SSH-signed by them, so
-   never run `git commit` or `git push`. They also merge; never run `gh pr merge`.
+3. **Commit.** They commit once the work has passed every gate. Commits are SSH-signed by them, so never run
+   `git commit`; you push once they say it is committed. They also merge; never run `gh pr merge`.
 
 Between touchpoints, do not stop to ask about implementation, test or refactoring choices. Make the call,
 and say what you chose in the hand-off. Stop early only for something that is really theirs:
@@ -167,7 +167,7 @@ Stage the changed files by name with `git add`. Then report:
 - what was verified and how, and what was not (see below)
 - which `TESTING.md` rows are worth running by hand, with the exact command and the number to look for
 - the exact commit command (conventional commit subject; no `Co-Authored-By` trailer, which
-  `.claude/settings.json` turns off) and the push command
+  `.claude/settings.json` turns off); you push after they commit
 
 Complete the roadmap item in the hand-off commit: remove it from `docs/roadmap.md` and add a condensed entry
 under `## Unreleased` in `CHANGELOG.md` (`Added`, `Changed` or `Fixed`): what changed, the PR or branch, and
@@ -177,7 +177,7 @@ with a progress note until the last one. Anything still live in the item (a foll
 the open item it belongs to, or a new one, before the item is removed. When the pull requests behind `Unreleased` entries have merged, the next hand-off moves those entries under a
 `## <date>` heading, the day the last of them merged.
 
-After they have committed and pushed: open the PR against `develop` with `gh pr create`, following
+After they have committed: push the branch, then open the PR against `develop` with `gh pr create`, following
 `.github/pull_request_template.md`, with every ticked box true. Watch `gh pr checks` until it finishes, and
 fix a red check without being asked.
 

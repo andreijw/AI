@@ -9,7 +9,8 @@
       "Bash(gh *)",
       "Bash(sort *)",
       "Edit(/.claude/skills/test-crafter/**)",
-      "Bash(git grep *)"
+      "Bash(git grep *)",
+      "Bash(git push *)"
     ],
     "deny": [
       "Bash(gh pr merge *)",
@@ -19,8 +20,6 @@
       "Bash(gh repo delete *)",
       "Bash(git commit)",
       "Bash(git commit *)",
-      "Bash(git push)",
-      "Bash(git push *)",
       "Bash(git reset --hard)",
       "Bash(git reset --hard *)",
       "Bash(git clean)",

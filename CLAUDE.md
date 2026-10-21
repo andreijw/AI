@@ -129,8 +129,9 @@ eternal-descent repo). Setup and troubleshooting:
 - Branch off `develop` as `feature/<kebab-case-name>` (or `fix/<kebab-case-name>`); PRs target `develop`.
 - Commit messages use conventional commits: `type(scope): summary` (e.g. `feat(agents): …`, `fix(env): …`, `chore: …`,
   `docs: …`).
-- **Commits are SSH-signed by the maintainer. Never run `git commit` or `git push`.** Stage the changed files with
-  `git add` and print the exact commit and push commands for the user to run.
+- **Commits are SSH-signed by the maintainer. Never run `git commit`.** Stage the changed files with `git add` and
+  print the exact commit command for the user to run. Once they say it is committed, push the branch yourself (SSH
+  is refused from this machine's shell, so push over HTTPS with `gh`'s credentials) and open or update the PR.
 - PR descriptions follow [.github/pull_request_template.md](.github/pull_request_template.md).
 
 ## Known Discrepancies
