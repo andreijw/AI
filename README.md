@@ -468,17 +468,21 @@ npx --yes markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules
 
 ## CI/CD
 
-This repository includes comprehensive GitHub Actions workflows for maintaining code quality and security:
+Every pull request runs two jobs in `ci.yml`, which are the required status checks, plus CodeQL:
 
-### Automated Quality Checks
+- **Checks**: Ruff lint and format, MyPy, Bandit, the pylint duplicate-code audit, markdownlint, and a check
+  that the workflow list below is current
+- **Unit Tests**: pytest with coverage (50% minimum) and the Codecov upload
+- **CodeQL**: security analysis, also on every push to `develop` and weekly
 
-- **Linting**: Automated code quality checks with Ruff (format & linting)
-- **Type Checking**: Static type checking with MyPy for type safety
-- **Testing**: Automated unit tests with pytest and coverage reporting (50% minimum)
-- **Security Scanning**:
-  - CodeQL for comprehensive security analysis
-  - Bandit for Python-specific security vulnerabilities
-- **Dependency Management**: Dependabot for automated dependency updates
+A pull request that changes only `docs/**` or Markdown files (outside `src/` and `tests/`) skips the Python
+steps but still reports both checks; markdownlint and the workflow-list check always run. A new push to a
+pull request cancels its older run. Weekly Maintenance re-runs `ci.yml` on `develop` every Monday.
+
+Every action is pinned to a commit SHA, every workflow has a read-only token (CodeQL's results upload is the
+one write), and no workflow reads a secret other than `CODECOV_TOKEN` or calls a paid LLM API.
+`tests/test_ci_policy.py` fails when a workflow breaks any of these rules. Dependabot opens one grouped pull
+request per week for pip and one for GitHub Actions.
 
 ### Local Development Tools
 
@@ -501,22 +505,15 @@ The pre-commit hooks will automatically run:
 ### Workflows
 
 Workflows are automatically synchronized from `.github/workflows` by
-`scripts/sync_workflow_docs.py` (executed by the nightly maintenance workflow).
+`scripts/sync_workflow_docs.py`; the `Checks` job fails when the list is stale.
 
 <!-- WORKFLOWS:START -->
 
+- **ci.yml** - CI
 - **codeql.yml** - CodeQL Advanced
-- **copilot-deploy.yml** - Copilot Deployment
-- **lint.yml** - Lint
-- **nightly-maintenance.yml** - Nightly Maintenance
-- **security.yml** - Security Check
-- **test.yml** - Tests
-- **type-check.yml** - Type Check
+- **weekly-maintenance.yml** - Weekly Maintenance
 
 <!-- WORKFLOWS:END -->
-
-For more information about the Copilot deployment workflow and GPG signing setup,
-see [.github/COPILOT_DEPLOYMENT.md](.github/COPILOT_DEPLOYMENT.md).
 
 ## Architecture
 

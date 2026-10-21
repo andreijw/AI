@@ -2,10 +2,12 @@
 reference Adam optimiser."""
 
 import importlib
+import importlib.util
 import math
 import sys
 import uuid
 from collections.abc import Callable, Mapping
+from pathlib import Path
 
 import numpy as np
 
@@ -16,6 +18,15 @@ def run_main(args, monkeypatch, module="train"):
     # Force re-import so module-level imports pick up anything the test patched.
     sys.modules.pop(module, None)
     importlib.import_module(module).main()
+
+
+def load_script(name):
+    """Import ``scripts/<name>.py`` by path; ``scripts/`` is not a package."""
+    path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"scripts_{name}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def minimal_config(tmp_path):

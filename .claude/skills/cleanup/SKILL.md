@@ -69,7 +69,7 @@ ls src/rl_core/agents src/rl_core/utils
 then `Grep` for `def ` in the two or three files whose names fit, underscore-prefixed methods on the base
 classes included: most of the reusable maths lives there. For tests, read `tests/helpers.py`.
 
-Then let the tool the nightly CI job uses look for long copies:
+Then let the tool CI's `Checks` job uses look for long copies:
 
 ```bash
 python -m pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes

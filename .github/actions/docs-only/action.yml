@@ -1,0 +1,25 @@
+name: Docs-only change
+description: >-
+  Outputs docs_only=true when a pull request changes only documentation (scripts/docs_only.py decides).
+  Needs a checkout with fetch-depth 2, so HEAD is the PR merge commit and HEAD^1 its base. Every other
+  event outputs false, and a failing diff fails the step, so in doubt everything runs.
+outputs:
+  docs_only:
+    description: '"true" or "false"'
+    value: ${{ steps.classify.outputs.docs_only }}
+runs:
+  using: composite
+  steps:
+    - id: classify
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+      run: |
+        set -euo pipefail
+        if [ "$EVENT_NAME" = "pull_request" ]; then
+          docs_only=$(git diff --name-only --no-renames HEAD^1 HEAD | python3 -I scripts/docs_only.py)
+        else
+          docs_only=false
+        fi
+        echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+        echo "Docs-only change: $docs_only"

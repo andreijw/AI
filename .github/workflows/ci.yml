@@ -1,0 +1,159 @@
+name: CI
+
+# The ruleset does not require branches to be up to date before merging, so a merge into develop is
+# not the tree its pull request tested; Weekly Maintenance re-runs this workflow on develop. `main`
+# does not exist today; the push trigger covers it if it is ever created as a release branch.
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  # Required status checks are these job names: "Checks" and "Unit Tests". Renaming one blocks merges
+  # until the BasicProtection ruleset is updated (tests/test_ci_policy.py REQUIRED_CHECKS).
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      # If detection fails the job fails; steps that still run (`!cancelled()`) see an empty output and
+      # treat the change as not docs-only.
+      - name: Detect docs-only change
+        id: docs
+        uses: ./.github/actions/docs-only
+
+      # Each check runs if the steps it needs succeeded, so one failure does not hide the others.
+      - name: Check README workflow list
+        if: ${{ !cancelled() }}
+        run: python3 -I scripts/sync_workflow_docs.py --check
+
+      - name: Run markdownlint
+        if: ${{ !cancelled() }}
+        run: npx --yes markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules
+
+      - name: Set up Python
+        if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project with dev dependencies
+        id: install
+        if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run Ruff linter
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: ruff check .
+
+      - name: Run Ruff formatter check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: ruff format --check .
+
+      - name: Run MyPy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: mypy src/
+
+      - name: Run Bandit security scanner
+        id: bandit
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          rc=0
+          bandit -r src/ -ll -f json -o bandit-report.json || rc=$?
+          cat bandit-report.json
+          exit "$rc"
+
+      - name: Upload Bandit report
+        if: ${{ !cancelled() && steps.bandit.outcome == 'failure' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Check for duplicate code
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: >-
+          pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20
+          --ignore-imports=yes --ignore-signatures=yes
+
+  tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Detect docs-only change
+        id: docs
+        uses: ./.github/actions/docs-only
+
+      - name: Set up Python
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project with dev dependencies
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # --cov=src and --cov-report=term-missing come from addopts in pyproject.toml.
+      - name: Run tests with coverage
+        id: pytest
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
+        run: pytest --cov-report=xml --cov-fail-under=50
+
+      # Pull requests only: called and scheduled runs receive no secrets. Fork and Dependabot PRs get no
+      # token either, which fail_ci_if_error: false tolerates.
+      - name: Upload coverage reports to Codecov
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.pytest.outcome != 'skipped' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: ./coverage.xml
+          disable_search: true
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage report artifact
+        if: ${{ !cancelled() && steps.pytest.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 3
+          if-no-files-found: ignore
