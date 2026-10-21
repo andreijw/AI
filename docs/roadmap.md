@@ -705,7 +705,9 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: Tests that need a specific weight state to reach an edge case.
   - **Out of scope**: The integration tests in `tests/test_trainer.py` and the script tests.
 
-- [~] **Tech-Debt Paydown from the 2026-10-20 Health Dashboard**
+- [x] **Tech-Debt Paydown from the 2026-10-20 Health Dashboard**
+  - **Delivered in**: #113 (benchmark runner), #114 (`train.py` `main`) and branch
+    `refactor/continuous-gaussian-grads` (Gaussian gradients). Confirmed by the maintainer on 2026-10-20.
   - **Description**: The brooks-health dashboard on `develop` at `f9482ce` scored 86/100, with Tech Debt at 69:
     - `BenchmarkRunner.run` (`src/benchmark.py`) was 210 lines with 9 parameters and complexity 15.
     - `train.py` `main` was 167 lines.
@@ -744,6 +746,20 @@ Defects found while working on other items, then findings from the brooks-lint h
       `configs/pendulum_ppo.yaml` with `--plot` give checkpoints equal key by key and the same metrics rows
       (timestamps masked), before and after. `record.py` still writes its video.
     - Remaining: the Gaussian agents' gradients (PR 3).
+  - **Progress (2026-10-20), PR 3 of 3, Gaussian gradients**:
+    - `ContinuousActorCriticBase` now owns the batch forward pass (`_batch_forward`, a `_BatchForward` of the
+      states, activations, mean, its derivative, log-std and values) and the policy-and-value backward pass
+      (`_policy_value_grads`). The policy term enters only as d(loss)/d(log π) per step: the actor-critic passes
+      `−A`, PPO `−mask·ratio·A`. Each agent keeps only its own loss.
+    - `_PARAM_NAMES` drives the Adam set-up, `_adam_step` (in place, `b_v` as a float), `save` and `load`, in place
+      of a seven-branch `elif` and three hand-written lists. Checkpoint keys and their order are unchanged.
+    - The duplicate-code audit at 8 lines reports no pair anywhere in `src/` (one before).
+    - `tests/test_gaussian_gradients_golden.py` compares 12 cases (both agents, bounded and unbounded means, one
+      and two action dimensions, PPO steps chosen to be active, clipped on either side and stale) against
+      `tests/data/gaussian_gradients.npz`, recorded from the old code: names, order and dtypes exactly, numbers to
+      a relative 1e-12 so other BLAS builds pass. On the recording machine (aarch64) all 240 arrays were
+      bit-identical. Seeded 12-episode runs of `configs/pendulum_ppo.yaml` and
+      `configs/pendulum_actor_critic.yaml` give identical checkpoints before and after.
   - **Out of scope**: `DQNAgent.__init__` (linear validation); the single `Trainer(...)` call shared by
     `train.py`, `record.py` and the benchmark, which differ on purpose; `plot_benchmark_comparison` and
     `Trainer._log_metrics`; `benchmark.py` `main` and `run_benchmark`'s parameter list (the CLI and public API).
