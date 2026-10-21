@@ -226,9 +226,13 @@ pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20 --ign
 
 ### Step 8 — Mark the feature complete
 
-- Once the user confirms the feature works as expected, update `docs/roadmap.md`:
-  - Move the item to its completed milestone section (or mark `[x]`).
-  - Remove the **In Progress** label.
+- Once the user confirms the feature works as expected, complete the roadmap item in the same commit:
+  - Remove it from `docs/roadmap.md`, first moving any live follow-up to the open item it belongs to.
+  - Add a condensed entry under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md) (`Added`, `Changed` or `Fixed`):
+    what changed, the PR or branch, and the measured results a reader would quote.
+  - An item delivered over several PRs stays `[~]` with a progress note until the last of them completes it.
+  - When the PRs behind `Unreleased` entries have merged, the next hand-off moves those entries under a
+    `## <date>` heading, the day the last of them merged.
 - If the feature introduced new manual test procedures, add them to [TESTING.md](TESTING.md).
 - If `.github/workflows/` changed, run `python scripts/sync_workflow_docs.py` to refresh the README workflow list.
 

@@ -1,5 +1,5 @@
 """Options of the continuous agents added for Pendulum: initial mean scale, reward scale, time-limit
-bootstrapping, annealing, the clip key and the log-ratio guard (roadmap: Pendulum PPO Learns)."""
+bootstrapping, annealing, the clip key and the log-ratio guard (CHANGELOG.md, 2026-10-15)."""
 
 import copy
 

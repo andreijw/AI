@@ -1,7 +1,7 @@
 # Pendulum Continuous PPO Training Configuration
 # Trains on rollouts of whole episodes (at least 2048 transitions: 11 episodes of 200 steps), each time-limit cut
 # bootstrapped. Measured 2026-10-18 under the 100-episode rule: 9 of seeds 1-10 solve within 200,000 steps and 8
-# hold; one episode per update solved 0 of 5 (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode Rule").
+# hold; one episode per update solved 0 of 5 (CHANGELOG.md, 2026-10-18).
 
 environment:
   name: "Pendulum-v1"

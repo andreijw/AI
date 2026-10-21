@@ -1,5 +1,5 @@
-"""Options that let the continuous Actor-Critic learn Pendulum-v1 (roadmap: "Continuous Actor-Critic Learns
-Pendulum-v1").
+"""Options that let the continuous Actor-Critic learn Pendulum-v1 (CHANGELOG.md,
+2026-10-18).
 
 * ``bounded_mean`` (both continuous agents): mu = bias + scale * tanh(z), so the policy mean stays inside the
   action bounds; without it the mean drifts past the bounds, where every executed torque is the same.
@@ -320,8 +320,8 @@ def test_terminated_wins_over_done_and_done_alone_ends_the_episode(
 
 def test_the_default_update_reproduces_the_previous_weights():
     """bounded_mean off and n_steps 0 train as before the options existed (bit for bit when they were added,
-    2026-10-18). The values were re-recorded when agents moved to named random streams (roadmap: "Separate
-    Random Streams for Agents and Buffers"), which legitimately changed every seeded weight. Other CPUs' BLAS
+    2026-10-18). The values were re-recorded when agents moved to named random streams (CHANGELOG.md,
+    2026-10-19), which legitimately changed every seeded weight. Other CPUs' BLAS
     can round the last bit differently (CI on x86 differs by 2e-16 relative), so the comparison allows 1e-12,
     far below what any change to the update would move them."""
     from rl_core.agents import ContinuousPPOAgent

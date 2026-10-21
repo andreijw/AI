@@ -3,7 +3,7 @@
 # annealed, value coefficient 0.4, log std -2), with a bounded policy mean, an entropy bonus and a fixed reward
 # scale. Measured 2026-10-18 (scratch harness, seeds 1-5, 1,000,000 steps): greedy evaluation -152 +/- 45 across
 # seed means, beating the random agent's -1224 on 5 of 5 seeds; the 100-episode training average stays at -286 to
-# -341 and does not reach -200 (roadmap: "Continuous Actor-Critic Learns Pendulum-v1").
+# -341 and does not reach -200 (CHANGELOG.md, 2026-10-18).
 
 environment:
   name: "Pendulum-v1"

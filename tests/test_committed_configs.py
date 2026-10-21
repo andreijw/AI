@@ -1,7 +1,7 @@
 """The committed CartPole configs carry the settings that were measured to solve CartPole-v1.
 
-Each value pinned here was chosen from a five-seed measurement recorded in docs/roadmap.md
-("CartPole Agents Learn Within Their Budgets"). Changing one should come with a new
+Each value pinned here was chosen from a five-seed measurement recorded in CHANGELOG.md
+(2026-10-15 onwards). Changing one should come with a new
 measurement, and this test makes that change visible in review.
 """
 
@@ -17,7 +17,7 @@ from rl_cartpole.benchmark import CartPoleChallenge  # noqa: E402
 from rl_core.agents.optim import Adam  # noqa: E402
 from tests.agent_internals import optimizer, weights
 
-# Step budgets (roadmap: Benchmark Budgets and Solve Rule in Environment Steps), from the
+# Step budgets (CHANGELOG.md, 2026-10-16), from the
 # rl-baselines3-zoo references where one exists; CartPole PPO gets twice its reference.
 STEP_BUDGETS = {
     ("cartpole", "reinforce"): 500_000,
@@ -53,7 +53,7 @@ def test_cartpole_policy_gradient_agents_use_adam(agent_type):
 
 def test_dqn_uses_the_measured_rl_zoo_like_settings():
     """Adam, a linear per-step exploration schedule and a slower target sync: 5 of 5 seeds solved
-    within 300k steps (roadmap: "DQN Reaches the rl-zoo Reference")."""
+    within 300k steps (CHANGELOG.md, 2026-10-18)."""
     env, agent, _ = CartPoleChallenge().setup_run("dqn", seed=1, episodes=None)
     env.close()
     assert isinstance(optimizer(agent), Adam)
@@ -64,7 +64,7 @@ def test_dqn_uses_the_measured_rl_zoo_like_settings():
 
 
 def test_ppo_uses_standard_rollouts_with_an_annealed_learning_rate():
-    """rl-zoo CartPole settings with linear annealing over the whole 200k-step budget (roadmap)."""
+    """rl-zoo CartPole settings with linear annealing over the whole 200k-step budget (CHANGELOG.md, 2026-10-15)."""
     env, agent, _ = CartPoleChallenge().setup_run("ppo", seed=1, episodes=None)
     env.close()
     assert (agent.rollout_steps, agent.minibatch_size, agent.ppo_epochs) == (256, 256, 20)
@@ -91,7 +91,7 @@ def test_pendulum_ppo_uses_the_measured_settings():
 
 def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
     """rl-zoo's DDPG for Pendulum-v1 with 64x64 networks: 5 of 5 seeds solved within 40,000 steps
-    (roadmap: "Continuous Off-Policy Learning & DDPG")."""
+    (CHANGELOG.md, 2026-10-18)."""
     from rl_pendulum.benchmark import PendulumChallenge
 
     env, agent, _ = PendulumChallenge().setup_run("ddpg", seed=1, episodes=None)
@@ -110,7 +110,7 @@ def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
 
 def test_pendulum_actor_critic_uses_the_measured_settings():
     """Bounded mean, 8-step chunked updates, entropy 0.01 and rewards x 0.05: evaluation -152 +/- 45 on
-    seeds 1-5, beating the random agent on 5 of 5 (roadmap: "Continuous Actor-Critic Learns Pendulum-v1")."""
+    seeds 1-5, beating the random agent on 5 of 5 (CHANGELOG.md, 2026-10-18)."""
     from rl_pendulum.benchmark import PendulumChallenge
 
     env, agent, _ = PendulumChallenge().setup_run("actor_critic", seed=1, episodes=None)

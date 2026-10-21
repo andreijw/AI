@@ -4,7 +4,7 @@
 <!-- Provide a clear and concise description of the changes introduced in this PR. Why was this change made, and what does it accomplish? -->
 
 ## Related Issues / Roadmap Items
-<!-- Link to any related issues, user requests, or items in docs/roadmap.md (e.g., docs/roadmap.md#item-id) -->
+<!-- Link to any related issues, user requests, or the item in docs/roadmap.md; once complete it moves to CHANGELOG.md -->
 
 ## Type of Change
 
@@ -36,7 +36,8 @@
 
 ## PR Checklist
 
-- [ ] The roadmap item in `docs/roadmap.md` has been updated and marked as completed.
+- [ ] The roadmap item is complete: removed from `docs/roadmap.md` and condensed into `CHANGELOG.md` (or, for one PR of
+  several, updated with its progress).
 - [ ] The change is free of code duplication.
 - [ ] All new and existing tests pass cleanly.
 - [ ] Manual test procedures are documented in `TESTING.md` (if new procedures were introduced).

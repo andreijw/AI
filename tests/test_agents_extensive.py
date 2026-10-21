@@ -180,8 +180,8 @@ class TestRandomAgentExtended:
         assert isinstance(action, int)
 
     def test_evaluation_draws_from_its_own_reproducible_generator(self):
-        """Since 2026-10-18 evaluation actions come from a separate stream (roadmap: "Separate
-        Evaluation Environment"): different from the training sequence, reproducible per seed."""
+        """Since 2026-10-18 evaluation actions come from a separate stream (CHANGELOG.md,
+        2026-10-18): different from the training sequence, reproducible per seed."""
         obs = np.zeros(4)
 
         def actions(training):

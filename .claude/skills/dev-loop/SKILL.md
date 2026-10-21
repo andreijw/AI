@@ -21,8 +21,8 @@ yours to decide, do and report.
 1. **Pick the work.** They choose what to build, usually from options you propose.
 2. **Approve the plan.** They see the roadmap item and the plan together, after the plan has been reviewed
    and refined, not before.
-3. **Commit.** They commit and push once the work has passed every gate. Commits are SSH-signed by them, so
-   never run `git commit` or `git push`. They also merge; never run `gh pr merge`.
+3. **Commit.** They commit once the work has passed every gate. Commits are SSH-signed by them, so never run
+   `git commit`; you push once they say it is committed. They also merge; never run `gh pr merge`.
 
 Between touchpoints, do not stop to ask about implementation, test or refactoring choices. Make the call,
 and say what you chose in the hand-off. Stop early only for something that is really theirs:
@@ -46,8 +46,8 @@ Every command below is written `python -m …`. `python` means the virtual envir
 
 ### 1. Propose (skip if they already named the work)
 
-Read `docs/roadmap.md` (the unchecked items under **Upcoming Milestones**) and any follow-up notes on
-recently completed items. Offer two or three options with a recommendation and the reason, including what
+Read `docs/roadmap.md` (it holds only open work) and the newest entries in `CHANGELOG.md` for what just
+landed. Offer two or three options with a recommendation and the reason, including what
 each one touches. Wait for the pick.
 
 ### 2. Roadmap item
@@ -166,13 +166,18 @@ Stage the changed files by name with `git add`. Then report:
 - the decisions you made on their behalf
 - what was verified and how, and what was not (see below)
 - which `TESTING.md` rows are worth running by hand, with the exact command and the number to look for
-- the exact commit command (conventional commit subject, plus the `Co-Authored-By` trailer) and the push
-  command
+- the exact commit command (conventional commit subject; no `Co-Authored-By` trailer, which
+  `.claude/settings.json` turns off); you push after they commit
 
-Mark the roadmap item `[x]` only when they confirm the work is right. If they confirm before committing,
-make that edit first so it lands in the same commit.
+Complete the roadmap item in the hand-off commit: remove it from `docs/roadmap.md` and add a condensed entry
+under `## Unreleased` in `CHANGELOG.md` (`Added`, `Changed` or `Fixed`): what changed, the PR or branch, and
+the numbers a reader would quote (config, seeds, result). Stage it with the rest and say so in the hand-off,
+so the maintainer can unstage it if they do not agree. For work that spans several PRs, the item stays `[~]`
+with a progress note until the last one. Anything still live in the item (a follow-up, a deferred idea) moves to
+the open item it belongs to, or a new one, before the item is removed. When the pull requests behind `Unreleased` entries have merged, the next hand-off moves those entries under a
+`## <date>` heading, the day the last of them merged.
 
-After they have committed and pushed: open the PR against `develop` with `gh pr create`, following
+After they have committed: push the branch, then open the PR against `develop` with `gh pr create`, following
 `.github/pull_request_template.md`, with every ticked box true. Watch `gh pr checks` until it finishes, and
 fix a red check without being asked.
 
