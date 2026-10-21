@@ -198,7 +198,7 @@ pytest
 - Only change a test if it was demonstrably wrong to begin with — document why in the PR.
 - **Scan for code duplication** introduced or exposed by this change — repeated patterns across agents, environment
   wrappers, or training loops. Extract it into a shared helper before marking the step done. Do not defer it.
-- Run the security and duplication audits that CI runs nightly:
+- Run the security and duplication audits that CI's `Checks` job runs on every pull request:
 
 ```bash
 bandit -r src/ -ll
@@ -245,8 +245,10 @@ pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20 --ign
 
 - Changes reach `develop` only through pull requests. Direct pushes, force pushes and deleting `develop` are blocked,
   and every commit must be signed.
-- These CI checks must pass before a pull request can merge: Unit Tests, Ruff Linting, MyPy Type Checking, Bandit
-  Security Scan and Markdown Linting. CodeQL scanning and a Copilot review also run on every pull request.
+- These CI checks must pass before a pull request can merge: `Checks` (Ruff, MyPy, Bandit, pylint duplicate-code,
+  markdownlint, workflow list) and `Unit Tests`, both in `.github/workflows/ci.yml`. CodeQL scanning and a Copilot
+  review also run on every pull request. A pull request that changes only documentation skips the Python steps
+  and still reports both checks.
 - The maintainer owns every file ([.github/CODEOWNERS](.github/CODEOWNERS)), so a pull request from anyone else
   needs the maintainer's approval to merge. A new push dismisses an earlier approval.
 - Contributions from forks are welcome: open the pull request against `develop` and the maintainer will review it.

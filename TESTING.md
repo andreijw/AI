@@ -79,4 +79,6 @@ This document outlines manual verification and testing procedures for the RL fra
 | CI-2 | **Mypy Static Typing** | `mypy src` | Returns "Success: no issues found". |
 | CI-3 | **Pytest Test Suite** | `pytest -v` | All unit tests pass with coverage summary. |
 | CI-4 | **Bandit Security** | `bandit -r src/ -ll` | No high or medium severity security issues detected. |
-| CI-5 | **Doc Sync Script** | `python scripts/sync_workflow_docs.py` | Confirms "README.md already up to date." |
+| CI-5 | **Doc Sync Script** | `python scripts/sync_workflow_docs.py --check` | Confirms "README.md already up to date." (exit 0); CI's `Checks` job runs the same. |
+| CI-6 | **CI Policy** | `pytest tests/test_ci_policy.py --no-cov` | All pass: every workflow is SHA-pinned, read-only, time-limited and cancels superseded PR runs. |
+| CI-7 | **Docs-only Pull Request** | Open a PR that edits only a `.md` file; open the `Checks` and `Unit Tests` runs | Both report success; "Docs-only change: true" in the log; Python steps show as skipped; markdownlint ran. |

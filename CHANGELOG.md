@@ -15,6 +15,17 @@ from 2026-10-16; earlier results use the 10-episode rule.
 
 ### Changed
 
+- **Tighter, faster, safer CI** (`feature/ci-pipeline-hardening`): every pull request runs one `ci.yml` with two
+  jobs, `Checks` (Ruff, format, MyPy, Bandit, pylint duplicate-code, markdownlint, README workflow list) and
+  `Unit Tests` (pytest, coverage, Codecov), down from about 7 jobs that each installed Python, plus CodeQL. Merges
+  no longer re-run the checks, a new push cancels a pull request's older run, and docs-only pull requests skip the
+  Python steps but still report both checks. Every action is pinned to a commit SHA; every token is read-only
+  except CodeQL's results upload; `copilot-deploy.yml`, which held `contents: write` and a GPG key on pull requests
+  while doing nothing, is gone. Nightly maintenance became a weekly re-run of `ci.yml` on `develop` with no write
+  access, and its docs-sync pull request is gone (the `Checks` job now fails on a stale list). Dependabot groups
+  updates into one pull request per ecosystem. `tests/test_ci_policy.py` fails when a workflow breaks any of these
+  rules. Measured before, October 1–21: 1,001 runs, 1,177 jobs, 1,108 of them under a minute. The required checks
+  become `Checks` and `Unit Tests` in the ruleset.
 - **Benchmark plot curves are a pure, tested function** (#117): `rl_core.utils.visualization.aligned_curves` smooths one
   agent's runs and aligns them by episode or on a shared environment-step grid; `plot_benchmark_comparison` only
   draws (complexity 14 to below 10). New tests work the alignment out by hand; every line, band and the PNG are

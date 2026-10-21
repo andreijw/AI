@@ -12,6 +12,10 @@ updates:
     labels:
       - "dependencies"
       - "python"
+    # One PR per week for all pip updates, so one CI run instead of one per package.
+    groups:
+      python-dependencies:
+        patterns: ["*"]
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -28,6 +32,10 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    # Actions are pinned to commit SHAs with a version comment; Dependabot bumps both, in one PR.
+    groups:
+      github-actions:
+        patterns: ["*"]
     commit-message:
       prefix: "chore"
       include: "scope"

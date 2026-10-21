@@ -69,7 +69,8 @@ To optimize token usage and context window limits:
 * **`ARCHITECTURE.md`** / **`TESTING.md`**: Component architecture reference and manual test procedures.
 * **`setup.ps1`**: Windows developer setup (installs Python 3.12, creates `.venv`, runs CI checks).
 * **`pyproject.toml`**: Packaging metadata, dependencies, and tool settings (Ruff, Mypy, Pytest, Bandit).
-* **`.github/workflows/`**: CI/CD automation workflows (linting, tests, type checking, security, nightly maintenance).
+* **`.github/workflows/`**: CI/CD: `ci.yml` (`Checks` and `Unit Tests` on every PR), `codeql.yml`,
+  `weekly-maintenance.yml`; rules enforced by `tests/test_ci_policy.py`.
 
 ---
 
