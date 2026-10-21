@@ -17,6 +17,7 @@ from benchmark import (
     find_solved_episode,
     main,
     run_benchmark,
+    summarise_runs,
 )
 from rl_cartpole.benchmark import CartPoleChallenge
 from rl_cartpole.environments.cartpole_env import CartPoleEnv
@@ -353,6 +354,53 @@ def test_classify_run_without_threshold_never_solves():
     }
 
 
+def _record(eval_mean, duration, episodes, solved_episode=None, solved_step=None, **flags):
+    return {
+        "eval_mean_reward": eval_mean,
+        "duration": duration,
+        "total_episodes": episodes,
+        "solved_episode": solved_episode,
+        "solved_step": solved_step,
+        "is_solved": solved_episode is not None,
+        "eval_reached_threshold": flags.get("eval_reached", False),
+        "held": flags.get("held", False),
+    }
+
+
+def test_summarise_runs_averages_solves_over_the_solved_runs_only():
+    """Rates count every run; the solve episode and step average only the runs that solved."""
+    runs = [
+        _record(30.0, 2.0, 10, solved_episode=4, solved_step=40, eval_reached=True, held=True),
+        _record(10.0, 4.0, 20, solved_episode=8, solved_step=100),
+        _record(20.0, 6.0, 30),
+        _record(0.0, 8.0, 40, eval_reached=True),
+    ]
+
+    stats = summarise_runs({"dqn": runs}, {"dqn": (5000, "steps")})["dqn"]
+
+    assert stats == {
+        "budget": 5000,
+        "budget_unit": "steps",
+        "episodes": 25.0,
+        "avg_solved_step": 70.0,
+        "held_rate": 0.25,
+        "mean_eval_reward": 15.0,
+        "std_eval_reward": pytest.approx(11.1803398875),
+        "mean_duration": 5.0,
+        "solve_rate": 0.5,
+        "avg_solved_episode": 6.0,
+        "eval_threshold_rate": 0.5,
+        "runs": 4,
+    }
+
+
+def test_summarise_runs_reports_no_solve_average_when_nothing_solved():
+    stats = summarise_runs({"ppo": [_record(1.0, 1.0, 3)]}, {"ppo": (3, "episodes")})["ppo"]
+    assert stats["avg_solved_episode"] is None
+    assert stats["avg_solved_step"] is None
+    assert stats["solve_rate"] == 0.0
+
+
 # ---------------------------------------------------------------------------
 # Budget: each agent's own config unless --episodes is given
 # ---------------------------------------------------------------------------
@@ -476,7 +524,7 @@ def test_runner_override_applies_to_every_agent(tmp_path):
     assert "4 episodes for every agent" in report.read_text(encoding="utf-8")
 
 
-class _ScriptedTrainer:
+class ScriptedTrainer:
     """Stands in for Trainer: training rewards and evaluation mean are fixed by the seed."""
 
     # seed -> (training reward per episode, evaluation mean); the challenge's threshold is 20
@@ -499,7 +547,7 @@ def test_runner_reports_evaluation_successes_separately(tmp_path, monkeypatch):
     """An evaluation-only success is recorded apart from the solves, and the report explains the rule."""
     import benchmark
 
-    monkeypatch.setattr(benchmark, "Trainer", _ScriptedTrainer)
+    monkeypatch.setattr(benchmark, "Trainer", ScriptedTrainer)
     report = tmp_path / "rule.md"
     res = BenchmarkRunner(PerAgentBudgetChallenge()).run(
         agents=["long"],
@@ -531,6 +579,89 @@ def test_runner_reports_evaluation_successes_separately(tmp_path, monkeypatch):
     assert "## How a Run Counts as Solved" in md
     assert "does not count as a solve" in md
     assert "(1 greedy episode)" in md
+
+
+class _ClosingChallenge(PerAgentBudgetChallenge):
+    """Records every environment it opens and whether it was closed; only the agents in
+    ``separate`` get an evaluation environment of their own."""
+
+    def __init__(self, separate=("long", "short")):
+        super().__init__()
+        self.separate = separate
+        self.opened: list[Any] = []
+
+    def make_env(self, env_config, render_mode):
+        env = super().make_env(env_config, render_mode)
+        env.was_closed = False
+        close = env.close
+
+        def recording_close():
+            env.was_closed = True
+            close()
+
+        env.close = recording_close
+        self.opened.append(env)
+        return env
+
+    def setup_eval_env(self, agent_type, seed):
+        if agent_type not in self.separate:
+            return None
+        return self.make_env({"seed": seed}, render_mode=None)
+
+
+def test_runner_claims_separate_evaluation_only_when_every_agent_had_it(tmp_path, monkeypatch):
+    """One agent evaluating on its training environment means the report cannot claim it."""
+    import benchmark
+
+    monkeypatch.setattr(benchmark, "Trainer", ScriptedTrainer)
+    report = tmp_path / "mixed.md"
+    BenchmarkRunner(_ClosingChallenge(separate=("long",))).run(
+        agents=["long", "short"],
+        seeds=[1],
+        output_dir=str(tmp_path / "mixed"),
+        report_path=str(report),
+        save_plot=False,
+    )
+    assert "Evaluation runs on a separate environment" not in report.read_text(encoding="utf-8")
+
+
+def test_runner_closes_every_environment_it_opens(tmp_path, monkeypatch):
+    import benchmark
+
+    monkeypatch.setattr(benchmark, "Trainer", ScriptedTrainer)
+    challenge = _ClosingChallenge()
+    BenchmarkRunner(challenge).run(
+        agents=["long", "short"], seeds=[1, 2], output_dir=str(tmp_path), save_plot=False
+    )
+    assert len(challenge.opened) == 8  # a training and an evaluation environment per run
+    assert all(env.was_closed for env in challenge.opened)
+
+
+def test_runner_closes_both_environments_when_training_fails(tmp_path, monkeypatch):
+    import benchmark
+
+    class FailingTrainer(ScriptedTrainer):
+        def train(self) -> None:
+            raise RuntimeError("diverged")
+
+    monkeypatch.setattr(benchmark, "Trainer", FailingTrainer)
+    challenge = _ClosingChallenge()
+    with pytest.raises(RuntimeError, match="diverged"):
+        BenchmarkRunner(challenge).run(
+            agents=["long"], seeds=[1], output_dir=str(tmp_path), save_plot=False
+        )
+    assert len(challenge.opened) == 2
+    assert all(env.was_closed for env in challenge.opened)
+
+
+@pytest.mark.parametrize(
+    "bad", [{"agents": []}, {"seeds": []}, {"episodes": 0}, {"episodes": 2, "steps": 50}]
+)
+def test_runner_rejects_bad_arguments_before_writing_anything(tmp_path, bad):
+    out_dir = tmp_path / "never"
+    with pytest.raises(ValueError):
+        BenchmarkRunner(PerAgentBudgetChallenge()).run(output_dir=str(out_dir), **bad)
+    assert not out_dir.exists()
 
 
 def test_report_without_threshold_says_nothing_can_solve(tmp_path):

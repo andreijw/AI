@@ -1,0 +1,18 @@
+======================================================================
+Starting Benchmark Suite for Challenge: GenericWorld-v0
+Agents: ['short', 'long']
+Seeds:  [3, 2, 1]
+Budget per run: 4 episodes for every agent (`--episodes`)
+Solve Threshold:  20.0
+======================================================================
+
+[Benchmarking] Agent: SHORT (3 seeds)
+  -> Seed    3 | Eval Reward:    5.0 | Time:  1.50s | Did not solve
+  -> Seed    2 | Eval Reward:   30.0 | Time:  2.00s | Solved @ ep 2
+  -> Seed    1 | Eval Reward:   30.0 | Time:  2.50s | Did not solve
+
+[Benchmarking] Agent: LONG (3 seeds)
+  -> Seed    3 | Eval Reward:    5.0 | Time:  3.00s | Did not solve
+  -> Seed    2 | Eval Reward:   30.0 | Time:  3.50s | Solved @ ep 2
+  -> Seed    1 | Eval Reward:   30.0 | Time:  4.00s | Did not solve
+Benchmark markdown report saved to: <tmp>/report.md

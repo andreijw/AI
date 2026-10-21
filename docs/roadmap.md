@@ -705,6 +705,37 @@ Defects found while working on other items, then findings from the brooks-lint h
   - **Known edge cases**: Tests that need a specific weight state to reach an edge case.
   - **Out of scope**: The integration tests in `tests/test_trainer.py` and the script tests.
 
+- [~] **Tech-Debt Paydown from the 2026-10-20 Health Dashboard**
+  - **Description**: The brooks-health dashboard on `develop` at `f9482ce` scored 86/100, with Tech Debt at 69:
+    - `BenchmarkRunner.run` (`src/benchmark.py`) was 210 lines with 9 parameters and complexity 15.
+    - `train.py` `main` was 167 lines.
+    - The two Gaussian agents repeat the trunk backward pass.
+    - `ContinuousActorCriticBase._adam_step` switches on the parameter names that `save` and `load` list again.
+  - **Acceptance criteria**:
+    - `run` and `main` are each under 50 lines, and no new function exceeds 50 lines.
+    - `_generate_markdown_report` takes 5 parameters or fewer.
+    - The duplicate-code audit at 8 lines reports no pair between `continuous_actor_critic.py` and
+      `continuous_ppo.py`.
+    - Behaviour is unchanged, locked in by tests written before each change.
+  - **Known edge cases**: Signed zeros in the gradients; `b_v` stored as a Python float; tests that monkeypatch
+    `benchmark.Trainer`; timestamps in the logs.
+  - **Progress (2026-10-20), PR 1 of 3, benchmark runner**:
+    - `run` is 31 lines and below complexity 10. It builds a frozen `BenchmarkSettings`, runs each agent through
+      `_run_agent` and `_run_one_seed`, aggregates with the new public `summarise_runs`, and writes through
+      `_save_plot`, `_write_metrics_json` and `_generate_markdown_report`, which now takes 5 parameters
+      instead of 10.
+    - `tests/test_benchmark_characterization.py` locks in the console output, metrics JSON and report exactly
+      (scripted trainer, fixed clock, recorded before the split, in `tests/data/benchmark_characterization/`).
+    - New tests cover `summarise_runs` and three gaps that mutation testing found: the separate-evaluation claim
+      with mixed agents, closing both environments (also when training fails), and rejecting bad arguments
+      before anything is written.
+    - Real CartPole (random, DQN, PPO) and Pendulum (random, PPO) benchmarks give the same metrics JSON, report
+      and plot bytes before and after, with durations masked.
+    - Remaining: `train.py` `main` (PR 2), the Gaussian agents' gradients (PR 3).
+  - **Out of scope**: `DQNAgent.__init__` (linear validation); the single `Trainer(...)` call shared by
+    `train.py`, `record.py` and the benchmark, which differ on purpose; `plot_benchmark_comparison` and
+    `Trainer._log_metrics`; `benchmark.py` `main` and `run_benchmark`'s parameter list (the CLI and public API).
+
 - [x] **Shared Environment Wrapper Base**
   - **Delivered in**: branch `feature/shared-env-wrapper-base`. Confirmed by the maintainer on 2026-10-20.
   - **Description**: `rl_cartpole/environments/cartpole_env.py` and `rl_pendulum/environments/pendulum_env.py` repeat

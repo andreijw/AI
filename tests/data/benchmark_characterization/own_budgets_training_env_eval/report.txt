@@ -1,0 +1,27 @@
+# GenericWorld-v0 Multi-Agent Benchmark Results
+
+Comparative benchmark evaluation across reinforcement learning algorithms.
+
+## Benchmark Configuration
+
+- **Challenge / Environment**: `GenericWorld-v0` (Solved criteria: average reward >= 20)
+- **Budget per Run**: each agent's own config (`training.total_steps` or `num_episodes`), shown per agent
+- **Seeds Evaluated**: `[1, 2]`
+- **Algorithms**: `['long', 'short']`
+
+## How a Run Counts as Solved
+
+A run is solved when its average training reward over 1 consecutive
+episodes reaches 20. **Avg Solve Episode** is the last episode of
+the first such window, and **Avg Steps to Solve** the training steps up to it,
+averaged over the solved runs. **Held** is the share of runs with at least
+1 episodes whose last 1 average at least 20.
+**Eval ≥ Threshold** is the share of runs whose final evaluation
+(1 greedy episode) averaged at least 20; it does not count as a solve.
+
+## Performance Summary
+
+| Algorithm | Budget | Episodes | Mean Eval Reward | Reward Std | Solve Rate | Avg Solve Episode | Avg Steps to Solve | Held | Eval ≥ Threshold | Mean Time (s) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **long** | 3 episodes | 3 | 30.0 | ±0.0 | 50% | 1.0 | 1 | 50% | 100% | 1.75s |
+| **short** | 2 episodes | 2 | 30.0 | ±0.0 | 50% | 1.0 | 1 | 50% | 100% | 2.75s |
