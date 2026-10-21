@@ -137,6 +137,82 @@ def plot_training_metrics(
     return saved_path
 
 
+_PALETTE = [
+    "#1f77b4",  # blue
+    "#ff7f0e",  # orange
+    "#2ca02c",  # green
+    "#d62728",  # red
+    "#9467bd",  # purple
+    "#8c564b",  # brown
+    "#e377c2",  # pink
+    "#7f7f7f",  # gray
+]
+
+
+class EpisodeLengthsMismatchError(ValueError):
+    """``episode_lengths`` does not give one step count per episode of each run."""
+
+
+def aligned_curves(
+    runs: list[list[float]],
+    window: int,
+    episode_lengths: list[list[int]] | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Smooth one agent's runs and align them on a shared axis: the x values, mean and spread drawn.
+
+    Each run is smoothed with a trailing rolling average of ``window`` episodes. By episode, every
+    run is cut to the shortest one and x is 1, 2, ... By environment steps (``episode_lengths``
+    given, one list of episode step counts per run), each run is interpolated between its
+    cumulative episode ends onto 200 points from the latest first episode end to the earliest last
+    one, the stretch where every run has data, so runs of different episode counts are compared at
+    equal training effort.
+
+    Returns:
+        ``(x, mean, std)`` arrays of equal length: the population standard deviation across runs,
+        0 for a single run.
+
+    Raises:
+        ValueError: If ``window`` is below 1, there is no run or an empty one, or an episode length is
+            not positive (the step grid needs strictly increasing episode ends).
+        EpisodeLengthsMismatchError: If ``episode_lengths`` does not give one step count per episode
+            of each run.
+    """
+    if window < 1 or not runs or not all(len(run) for run in runs):
+        raise ValueError(
+            f"aligned_curves needs window >= 1 and non-empty runs; got window {window}."
+        )
+    smoothed = [_rolling_average(run, window) for run in runs]
+    if episode_lengths is not None:
+        if [len(lengths) for lengths in episode_lengths] != [len(r) for r in smoothed]:
+            raise EpisodeLengthsMismatchError("episode_lengths do not match the runs.")
+        if any(min(lengths) <= 0 for lengths in episode_lengths):
+            raise ValueError("episode_lengths must all be positive.")
+        ends = [np.cumsum(lengths) for lengths in episode_lengths]
+        start = max(float(e[0]) for e in ends)
+        stop = min(float(e[-1]) for e in ends)
+        x = np.linspace(start, stop, 200)
+        aligned = np.array([np.interp(x, e, r) for e, r in zip(ends, smoothed, strict=True)])
+    else:
+        shortest = min(len(r) for r in smoothed)
+        aligned = np.array([r[:shortest] for r in smoothed], dtype=np.float64)
+        x = np.arange(1, shortest + 1, dtype=np.float64)
+    return x, np.mean(aligned, axis=0), np.std(aligned, axis=0)
+
+
+def _check_benchmark_curves(agent_curves: dict[str, list[list[float]]], window: int) -> None:
+    if not agent_curves:
+        raise ValueError("agent_curves must not be empty.")
+    if window < 1:
+        raise ValueError(f"window must be >= 1; got {window}.")
+    for name, runs in agent_curves.items():
+        if not runs:
+            raise ValueError(f"Runs for agent '{name}' must not be empty.")
+        for i, run in enumerate(runs):
+            if not run:
+                raise ValueError(f"Run {i} for agent '{name}' must not be empty.")
+
+
 def plot_benchmark_comparison(
     agent_curves: dict[str, list[list[float]]],
     window: int = 10,
@@ -173,52 +249,18 @@ def plot_benchmark_comparison(
         ValueError: If agent_curves is empty or contains empty run data.
         ValueError: If window is less than 1.
     """
-    if not agent_curves:
-        raise ValueError("agent_curves must not be empty.")
-    if window < 1:
-        raise ValueError(f"window must be >= 1; got {window}.")
-
-    for name, runs in agent_curves.items():
-        if not runs:
-            raise ValueError(f"Runs for agent '{name}' must not be empty.")
-        for i, run in enumerate(runs):
-            if not run:
-                raise ValueError(f"Run {i} for agent '{name}' must not be empty.")
+    _check_benchmark_curves(agent_curves, window)
 
     fig, ax = plt.subplots(figsize=(11, 6))
     fig.suptitle(title, fontsize=14)
 
-    palette = [
-        "#1f77b4",  # blue
-        "#ff7f0e",  # orange
-        "#2ca02c",  # green
-        "#d62728",  # red
-        "#9467bd",  # purple
-        "#8c564b",  # brown
-        "#e377c2",  # pink
-        "#7f7f7f",  # gray
-    ]
-
     for idx, (name, runs) in enumerate(agent_curves.items()):
-        color = palette[idx % len(palette)]
-        smoothed_runs = [_rolling_average(run, window) for run in runs]
-        if episode_lengths is not None:
-            steps_runs = [np.cumsum(lengths) for lengths in episode_lengths[name]]
-            if [len(s) for s in steps_runs] != [len(r) for r in smoothed_runs]:
-                raise ValueError(f"episode_lengths for agent '{name}' do not match its runs.")
-            end = min(float(s[-1]) for s in steps_runs)
-            start = max(float(s[0]) for s in steps_runs)  # where every run has data
-            episodes = np.linspace(start, end, 200)
-            aligned = np.array(
-                [np.interp(episodes, s, r) for s, r in zip(steps_runs, smoothed_runs, strict=True)]
-            )
-        else:
-            min_len = min(len(r) for r in smoothed_runs)
-            aligned = np.array([r[:min_len] for r in smoothed_runs], dtype=np.float64)
-            episodes = np.arange(1, min_len + 1, dtype=np.float64)
-
-        mean_curve = np.mean(aligned, axis=0)
-        std_curve = np.std(aligned, axis=0)
+        color = _PALETTE[idx % len(_PALETTE)]
+        lengths = None if episode_lengths is None else episode_lengths[name]
+        try:
+            episodes, mean_curve, std_curve = aligned_curves(runs, window, lengths)
+        except EpisodeLengthsMismatchError as err:
+            raise ValueError(f"episode_lengths for agent '{name}' do not match its runs.") from err
 
         final_mean = float(mean_curve[-1])
         final_std = float(std_curve[-1]) if len(runs) > 1 else 0.0

@@ -15,6 +15,17 @@ from 2026-10-16; earlier results use the 10-episode rule.
 
 ### Changed
 
+- **Benchmark plot curves are a pure, tested function**: `rl_core.utils.visualization.aligned_curves` smooths one
+  agent's runs and aligns them by episode or on a shared environment-step grid; `plot_benchmark_comparison` only
+  draws (complexity 14 to below 10). New tests work the alignment out by hand; every line, band and the PNG are
+  byte-identical before and after. It rejects a window below 1, empty runs and non-positive episode lengths, which
+  gave NaN curves or a silently wrong step grid. Clears the last Critical of the 2026-10-21 health dashboard
+  (92/100).
+
+## 2026-10-21
+
+### Changed
+
 - **`train.py` `main` split** (#114): 167 lines down to 48, through `parse_args(argv)`, `output_dirs`,
   `resolve_render_mode`, `attach_video_recorder` and `train_and_plot`. `--help`, every CLI error and seeded outputs
   are unchanged; new tests cover Ctrl-C, `--plot` and closing both environments when training fails.
@@ -23,13 +34,10 @@ from 2026-10-16; earlier results use the 10-episode rule.
   Adam, `save` and `load`. Gradients are bit-identical on the recording machine, locked in by
   `tests/test_gaussian_gradients_golden.py`. The duplicate-code audit at 8 lines now reports no pair in `src/`.
   Completes the tech-debt paydown from the 2026-10-20 health dashboard (86/100, Tech Debt 69).
-- **Roadmap and changelog**: completed roadmap items now live here in condensed form and the roadmap holds only open
-  work; finishing an item moves it here in its hand-off commit. Loose ends from completed items became open items.
-
-## 2026-10-21
-
-### Changed
-
+- **Roadmap and changelog** (#116): completed roadmap items now live here in condensed form and the roadmap holds
+  only open work; finishing an item moves it here in its hand-off commit, and loose ends from completed items became
+  open items. The same PR turned off the `Co-Authored-By` commit trailer and lets Claude push once the maintainer
+  has committed.
 - **Benchmark runner split** (#113): `BenchmarkRunner.run` drops from 210 lines and complexity 15 to 31 lines, via a
   frozen `BenchmarkSettings`, per-seed runs, the public `summarise_runs` and separate writers; the report generator
   takes 5 parameters instead of 10. Console output, metrics JSON, report and plot are unchanged, locked in by
