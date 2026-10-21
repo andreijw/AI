@@ -34,6 +34,9 @@
       "Bash(rm --recursive *)"
     ]
   },
+  "attribution": {
+    "commit": ""
+  },
   "enabledPlugins": {
     "brooks-lint@brooks-lint-marketplace": true
   },

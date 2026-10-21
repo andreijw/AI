@@ -166,8 +166,8 @@ Stage the changed files by name with `git add`. Then report:
 - the decisions you made on their behalf
 - what was verified and how, and what was not (see below)
 - which `TESTING.md` rows are worth running by hand, with the exact command and the number to look for
-- the exact commit command (conventional commit subject, plus the `Co-Authored-By` trailer) and the push
-  command
+- the exact commit command (conventional commit subject; no `Co-Authored-By` trailer, which
+  `.claude/settings.json` turns off) and the push command
 
 Complete the roadmap item in the hand-off commit: remove it from `docs/roadmap.md` and add a condensed entry
 under `## Unreleased` in `CHANGELOG.md` (`Added`, `Changed` or `Fixed`): what changed, the PR or branch, and
