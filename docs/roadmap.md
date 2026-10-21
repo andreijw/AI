@@ -871,6 +871,21 @@ Defects found while working on other items, then findings from the brooks-lint h
     tests fail (`test_video.py`, `test_train_video.py`, `test_record.py`).
   - **Out of scope**: Other third-party deprecation warnings.
 
+- [x] **Private-Access Guard Allows Inherited Hooks**
+  - **Delivered in**: branch `fix/guard-allows-super-calls`. Confirmed by the maintainer on 2026-10-20.
+  - **Description**: #107 added `tests/test_env_wrapper_base.py`, whose test subclass calls
+    `super()._add_observation_noise(obs)`; #111 then widened the private-access guard
+    (`test_migrated_agent_tests_use_only_the_public_interface`) to every test file. The guard counted the `super()`
+    call as reaching into a private member, so `develop` failed its Tests check from the merge of #111.
+  - **Acceptance criteria**:
+    - A zero-argument `super()._name` is allowed, like `self._name`: it reaches nothing `self` does not.
+    - `super(T, obj)._name`, which can reach any object, is still flagged.
+    - The full suite passes on `develop` again.
+  - **Built (2026-10-20)**: `private_accesses` in `tests/test_source_conventions.py` treats a zero-argument
+    `super()` as an owner like `self` and `cls`. Both spellings have a case in the guard's own tests, and a mutant
+    that allows every `super(...)` call fails them.
+  - **Out of scope**: A test subclass of an agent can still read its privates through `self`, as before.
+
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
     - The continuous Actor-Critic's greedy policy matches rl-zoo's A2C, but its 100-episode training average stays
