@@ -130,15 +130,8 @@ def close_env(env, logger):
         logger.info("Environment closed")
 
 
-def main():
-    """Main training function."""
-    parser = argparse.ArgumentParser(description="Train an RL agent on a registered challenge")
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="configs/cartpole_default.yaml",
-        help="Path to configuration file",
-    )
+def add_output_arguments(parser):
+    """Add how a run is shown and what it saves: --render, the video flags and the plot flags."""
     parser.add_argument(
         "--render",
         action="store_true",
@@ -176,7 +169,10 @@ def main():
         type=str,
         help="Directory to save the training metrics plot (default: ./plots/<agent_type>)",
     )
-    add_challenge_arguments(parser)
+
+
+def add_budget_arguments(parser):
+    """Add --num-episodes and --total-steps, which override the config's budget; one at most."""
     budget = parser.add_mutually_exclusive_group()
     budget.add_argument(
         "--num-episodes",
@@ -188,7 +184,21 @@ def main():
         type=int,
         help="Train for this many environment steps (must be > 0); sets training.total_steps.",
     )
-    args = parser.parse_args()
+
+
+def parse_args(argv=None):
+    """Parse and check train.py's command line (sys.argv when argv is None)."""
+    parser = argparse.ArgumentParser(description="Train an RL agent on a registered challenge")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/cartpole_default.yaml",
+        help="Path to configuration file",
+    )
+    add_output_arguments(parser)
+    add_challenge_arguments(parser)
+    add_budget_arguments(parser)
+    args = parser.parse_args(argv)
 
     if args.render and args.record_video:
         parser.error("--render and --record-video are mutually exclusive. Use one or the other.")
@@ -200,37 +210,83 @@ def main():
         parser.error("--video-every requires --record-video.")
     if args.video_every is not None and args.video_every <= 0:
         parser.error("--video-every must be a positive integer.")
+    return args
 
+
+def output_dirs(config, agent_type, challenge, args):
+    """The run's (checkpoint, log, video, plot) folders, each nested under challenge and agent."""
+    training = config["training"]
+    return (
+        agent_output_dir(training.get("checkpoint_dir", "./checkpoints"), agent_type, challenge),
+        agent_output_dir(training.get("log_dir", "./logs"), agent_type, challenge),
+        args.video_dir or agent_output_dir("./videos", agent_type, challenge),
+        args.plot_dir or agent_output_dir("./plots", agent_type, challenge),
+    )
+
+
+def resolve_render_mode(args, config):
+    """--record-video renders rgb_array (no display); --render renders human; else the config's."""
+    if args.record_video:
+        return "rgb_array"
+    if args.render:
+        return "human"
+    return config["environment"].get("render_mode")
+
+
+def attach_video_recorder(env, trainer, video_every, video_dir, logger):
+    """
+    Record every Nth training episode of env to video_dir (N: --video-every, else the trainer's
+    evaluation frequency).
+
+    TrainingVideoRecorder captures rgb_array frames and saves them as mp4 files, so it works on
+    headless machines where no display is available. It follows the trainer's episode counter, so
+    it must be created after the trainer, and wraps only the training environment, never the
+    evaluation one. env.wrap_env() injects it through the wrapper's interface rather than by
+    direct attribute assignment.
+    """
+    video_every = video_every if video_every is not None else trainer.eval_frequency
+    os.makedirs(video_dir, exist_ok=True)
+    env.wrap_env(
+        TrainingVideoRecorder(env.env, video_folder=video_dir, progress=trainer, every=video_every)
+    )
+    logger.info(f"Recording videos every {video_every} episodes to '{video_dir}'")
+
+
+def train_and_plot(trainer, plot, plot_dir, challenge, agent_type, logger):
+    """Train; if plot, save the training metrics. Ctrl-C ends training early without a plot."""
+    try:
+        stats = trainer.train()
+        logger.info(f"Training complete. Final stats: {stats}")
+
+        if plot:
+            plot_path = plot_training_metrics(
+                episode_rewards=trainer.episode_rewards,
+                episode_lengths=trainer.episode_lengths,
+                save_dir=plot_dir,
+                title=f"{challenge.capitalize()} {agent_type.capitalize()} Agent – Training Metrics",
+            )
+            logger.info(f"Training metrics plot saved to '{plot_path}'")
+    except KeyboardInterrupt:
+        logger.info("Training interrupted by user")
+
+
+def main():
+    """Main training function."""
+    args = parse_args()
     config, agent_type = load_run_config(
         args.config, args.agent_type, args.num_episodes, args.total_steps
     )
     run_challenge = select_run_challenge(config, agent_type, args.challenge)
     challenge = run_challenge.key
 
-    config["training"]["checkpoint_dir"] = agent_output_dir(
-        config["training"].get("checkpoint_dir", "./checkpoints"), agent_type, challenge=challenge
-    )
-    video_dir = args.video_dir or agent_output_dir("./videos", agent_type, challenge=challenge)
-    plot_dir = args.plot_dir or agent_output_dir("./plots", agent_type, challenge=challenge)
-    config["training"]["log_dir"] = agent_output_dir(
-        config["training"].get("log_dir", "./logs"), agent_type, challenge=challenge
-    )
+    checkpoint_dir, log_dir, video_dir, plot_dir = output_dirs(config, agent_type, challenge, args)
+    config["training"]["checkpoint_dir"] = checkpoint_dir
+    config["training"]["log_dir"] = log_dir
 
-    # Setup logger
-    logger = setup_logger(
-        name=f"rl_{challenge}",
-        log_dir=config["training"]["log_dir"],
-    )
+    logger = setup_logger(name=f"rl_{challenge}", log_dir=log_dir)
     logger.info(f"Starting {challenge.capitalize()} RL training")
     logger.info(f"Configuration: {config}")
-
-    # --record-video uses rgb_array (no display needed); --render uses human (requires display).
-    if args.record_video:
-        render_mode = "rgb_array"
-    elif args.render:
-        render_mode = "human"
-    else:
-        render_mode = config["environment"].get("render_mode")
+    render_mode = resolve_render_mode(args, config)
 
     with headless_rendering(enabled=args.record_video):
         env = None
@@ -257,44 +313,9 @@ def main():
                 eval_seed=eval_seed,
             )
             logger.info("Trainer created")
-
-            # Wrap with TrainingVideoRecorder when --record-video is set. It captures
-            # rgb_array frames and saves them as mp4 files, so it works on headless
-            # machines where no display is available. It follows the trainer's episode
-            # counter, so it must be created after the trainer, and wraps only the training
-            # environment, never the evaluation one. The wrapper's wrap_env()
-            # injects the wrapper through the proper interface rather than bypassing it
-            # via direct attribute assignment.
             if args.record_video:
-                video_every = (
-                    args.video_every if args.video_every is not None else trainer.eval_frequency
-                )
-                os.makedirs(video_dir, exist_ok=True)
-                env.wrap_env(
-                    TrainingVideoRecorder(
-                        env.env,
-                        video_folder=video_dir,
-                        progress=trainer,
-                        every=video_every,
-                    )
-                )
-                logger.info(f"Recording videos every {video_every} episodes to '{video_dir}'")
-
-            # Train
-            try:
-                stats = trainer.train()
-                logger.info(f"Training complete. Final stats: {stats}")
-
-                if args.plot:
-                    plot_path = plot_training_metrics(
-                        episode_rewards=trainer.episode_rewards,
-                        episode_lengths=trainer.episode_lengths,
-                        save_dir=plot_dir,
-                        title=f"{challenge.capitalize()} {agent_type.capitalize()} Agent – Training Metrics",
-                    )
-                    logger.info(f"Training metrics plot saved to '{plot_path}'")
-            except KeyboardInterrupt:
-                logger.info("Training interrupted by user")
+                attach_video_recorder(env, trainer, args.video_every, video_dir, logger)
+            train_and_plot(trainer, args.plot, plot_dir, challenge, agent_type, logger)
         finally:
             for opened in (env, eval_env):
                 if opened is not None:
