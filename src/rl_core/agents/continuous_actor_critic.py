@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, ClassVar, NamedTuple
 
 import numpy as np
 
@@ -19,6 +19,17 @@ from .bounds import action_bounds
 from .config_values import non_negative_int, positive_int
 from .optim import Adam, anneal_fraction, anneal_steps_from_config
 from .returns import discounted_returns, gae
+
+
+class _BatchForward(NamedTuple):
+    """One forward pass over a batch: what both Gaussian agents' backward passes need."""
+
+    states: np.ndarray  # (n, observation_dim) the batch the pass was made on
+    h: np.ndarray  # (n, hidden_dim) post-ReLU activations
+    mu: np.ndarray  # (n, action_dim) policy means
+    dmu_dz: np.ndarray | float  # d(mu)/d(z) of the mean head; 1.0 when unbounded
+    log_std: np.ndarray  # (action_dim,) clipped log standard deviation
+    values: np.ndarray  # (n,) state values
 
 
 class ContinuousActorCriticBase(BaseAgent):
@@ -49,6 +60,12 @@ class ContinuousActorCriticBase(BaseAgent):
             finite bounds with action_low < action_high. Default: False.
         seed (int): Seed of the weights, action-noise and shuffle streams. Default: None.
     """
+
+    # The trainable parameters, stored as ``_<name>``: the order of the optimiser state, the
+    # gradients and the checkpoint. ``b_v`` is a Python float, the rest are arrays. _adam_step
+    # updates arrays in place and special-cases b_v by name: a new scalar parameter needs the
+    # same, or ``param -= step`` would rebind a local name and silently lose its update.
+    _PARAM_NAMES: ClassVar[tuple[str, ...]] = ("W1", "b1", "W_mu", "b_mu", "log_std", "W_v", "b_v")
 
     def __init__(
         self,
@@ -114,18 +131,11 @@ class ContinuousActorCriticBase(BaseAgent):
         self._b_v: float = 0.0
 
         # Adam with global gradient-norm clipping
-        self._optimizer = Adam(
-            {
-                "W1": self._W1,
-                "b1": self._b1,
-                "W_mu": self._W_mu,
-                "b_mu": self._b_mu,
-                "log_std": self._log_std,
-                "W_v": self._W_v,
-                "b_v": self._b_v,
-            },
-            max_grad_norm=self.max_grad_norm,
-        )
+        self._optimizer = Adam(self._params(), max_grad_norm=self.max_grad_norm)
+
+    def _params(self) -> dict[str, Any]:
+        """The trainable parameters by name, as the agent holds them (not copies)."""
+        return {name: getattr(self, f"_{name}") for name in self._PARAM_NAMES}
 
     @staticmethod
     def _validate_dims(obs_dim: int, act_dim: int) -> None:
@@ -208,22 +218,72 @@ class ContinuousActorCriticBase(BaseAgent):
         return float(np.sum(log_std + 0.5 * log_2pi_e))
 
     def _adam_step(self, grads: dict[str, np.ndarray | float], lr: float) -> None:
-        """Apply one step of Adam optimization with gradient clipping."""
-        for k, step in self._optimizer.step(grads, lr).items():
-            if k == "W1":
-                self._W1 -= step
-            elif k == "b1":
-                self._b1 -= step
-            elif k == "W_mu":
-                self._W_mu -= step
-            elif k == "b_mu":
-                self._b_mu -= step
-            elif k == "log_std":
-                self._log_std -= step
-            elif k == "W_v":
-                self._W_v -= step
-            elif k == "b_v":
+        """Apply one step of Adam optimization with gradient clipping, updating arrays in place."""
+        for name, step in self._optimizer.step(grads, lr).items():
+            if name == "b_v":
                 self._b_v -= float(step)
+            else:
+                param = getattr(self, f"_{name}")
+                param -= step
+
+    def _batch_forward(self, states: np.ndarray) -> _BatchForward:
+        """The forward pass over a batch of states, (n, observation_dim), for a backward pass."""
+        h = np.maximum(0.0, states @ self._W1 + self._b1)  # ReLU
+        mu, dmu_dz, _ = self._mean(h)
+        log_std = np.clip(self._log_std, -20.0, 2.0)
+        values = h @ self._W_v + self._b_v
+        return _BatchForward(states, h, mu, dmu_dz, log_std, values)
+
+    def _policy_value_grads(
+        self,
+        actions: np.ndarray,
+        returns: np.ndarray,
+        fwd: _BatchForward,
+        d_log_p: np.ndarray,
+    ) -> tuple[dict[str, Any], np.ndarray]:
+        """
+        Gradients of ``policy + value_coef·½·mean((V − R)²) − entropy_coef·H`` over a batch.
+
+        The policy term enters only through ``d_log_p``, the derivative of the policy loss with
+        respect to each step's log-probability before the batch mean, which is taken here. The
+        actor-critic passes ``−A``; PPO passes ``−mask·ratio·A``. Returns are held constant.
+
+        Returns:
+            The gradients keyed as :attr:`_PARAM_NAMES`, and ``V − R`` per step.
+        """
+        n = len(returns)
+        variance = np.exp(2.0 * fwd.log_std)
+        residual = actions - fwd.mu  # (n, action_dim)
+
+        # d(log_prob)/d(mu) = residual / variance; d(log_prob)/d(log_std) = residual²/variance − 1
+        d_mu = (residual / (variance + 1e-8)) * d_log_p[:, np.newaxis]
+        d_z = d_mu * fwd.dmu_dz  # through tanh when the mean is bounded
+        d_log_std = (((residual**2) / (variance + 1e-8)) - 1.0) * d_log_p[:, np.newaxis]
+
+        grad_w_mu = (fwd.h.T @ d_z) / n
+        grad_b_mu = np.mean(d_z, axis=0)
+        grad_log_std = np.mean(d_log_std, axis=0) - self.entropy_coef
+
+        # Critic loss: 0.5 * (V - R)^2
+        v_diff = fwd.values - returns  # (n,)
+        grad_w_v = (fwd.h.T @ v_diff) * self.value_coef / n
+        grad_b_v = float(np.mean(v_diff) * self.value_coef)
+
+        # Backpropagation into the shared hidden layer, through the ReLU
+        d_h_actor = d_z @ self._W_mu.T  # (n, hidden_dim)
+        d_h_critic = (v_diff[:, np.newaxis] * self.value_coef) @ self._W_v[np.newaxis, :]
+        d_h = (d_h_actor + d_h_critic) * (fwd.h > 0) / n
+
+        grads = {
+            "W1": fwd.states.T @ d_h,
+            "b1": np.sum(d_h, axis=0),
+            "W_mu": grad_w_mu,
+            "b_mu": grad_b_mu,
+            "log_std": grad_log_std,
+            "W_v": grad_w_v,
+            "b_v": grad_b_v,
+        }
+        return grads, v_diff
 
     def save(self, path: str) -> None:
         """
@@ -237,12 +297,7 @@ class ContinuousActorCriticBase(BaseAgent):
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
         with open(save_path, "wb") as f:
             arrays: dict[str, Any] = {
-                "W1": self._W1,
-                "b1": self._b1,
-                "W_mu": self._W_mu,
-                "b_mu": self._b_mu,
-                "log_std": self._log_std,
-                "W_v": self._W_v,
+                **self._params(),
                 "b_v": np.array(self._b_v),
                 "bounded_mean": np.array(self.bounded_mean),
                 **self._optimizer.state(),
@@ -270,12 +325,8 @@ class ContinuousActorCriticBase(BaseAgent):
                     f"Checkpoint was saved with bounded_mean={stored}, this agent has "
                     f"bounded_mean={self.bounded_mean}"
                 )
-            self._W1 = data["W1"]
-            self._b1 = data["b1"]
-            self._W_mu = data["W_mu"]
-            self._b_mu = data["b_mu"]
-            self._log_std = data["log_std"]
-            self._W_v = data["W_v"]
+            for name in self._PARAM_NAMES:
+                setattr(self, f"_{name}", data[name])
             self._b_v = float(data["b_v"])
             self._optimizer.load_state(data)
             self._load_extra_checkpoint_state(data)
@@ -502,60 +553,21 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
                 f"advantages has {len(advantages)} entries but the batch has {n_steps} steps"
             )
 
-        # Forward pass over batch
-        h = np.maximum(0.0, states @ self._W1 + self._b1)  # (n_steps, hidden_dim)
-        mu, dmu_dz, _ = self._mean(h)  # (n_steps, action_dim)
-        log_std = np.clip(self._log_std, -20.0, 2.0)
-        values = h @ self._W_v + self._b_v  # (n_steps,)
+        fwd = self._batch_forward(states)
 
         if advantages is None:
-            advantages = returns - values
+            advantages = returns - fwd.values
             # Normalize advantages for training stability
             if n_steps > 1:
                 adv_std = np.std(advantages)
                 advantages = (advantages - np.mean(advantages)) / (adv_std + 1e-8)
 
-        # Gaussian log probs
-        variance = np.exp(2.0 * log_std)
-        residual = actions - mu  # (n_steps, action_dim)
+        # The policy loss −mean(log π · A) has d/d(log π) = −A per step.
+        grads, v_diff = self._policy_value_grads(actions, returns, fwd, -advantages)
 
-        # Policy gradients
-        # d(log_prob)/d(mu) = residual / variance
-        d_mu = (residual / (variance + 1e-8)) * advantages[:, np.newaxis]
-        d_z = d_mu * dmu_dz  # through tanh when the mean is bounded
-        d_log_std = (((residual**2) / (variance + 1e-8)) - 1.0) * advantages[:, np.newaxis]
-
-        # Negative log-likelihood objective: L_pi = -sum(log_prob * A)
-        grad_w_mu = -(h.T @ d_z) / n_steps
-        grad_b_mu = -np.mean(d_z, axis=0)
-        grad_log_std = -np.mean(d_log_std, axis=0) - self.entropy_coef
-
-        # Critic loss: 0.5 * (V - G)^2
-        v_diff = values - returns  # (n_steps,)
-        grad_w_v = (h.T @ v_diff) * self.value_coef / n_steps
-        grad_b_v = float(np.mean(v_diff) * self.value_coef)
-
-        # Backpropagation into hidden layer
-        d_h_actor = -d_z @ self._W_mu.T  # (n_steps, hidden_dim)
-        d_h_critic = (v_diff[:, np.newaxis] * self.value_coef) @ self._W_v[np.newaxis, :]
-        d_h = (d_h_actor + d_h_critic) * (h > 0) / n_steps  # ReLU gradient
-
-        grad_w1 = states.T @ d_h
-        grad_b1 = np.sum(d_h, axis=0)
-
-        grads = {
-            "W1": grad_w1,
-            "b1": grad_b1,
-            "W_mu": grad_w_mu,
-            "b_mu": grad_b_mu,
-            "log_std": grad_log_std,
-            "W_v": grad_w_v,
-            "b_v": grad_b_v,
-        }
-
-        policy_loss = float(-np.mean(self._log_prob(actions, mu, log_std) * advantages))
+        policy_loss = float(-np.mean(self._log_prob(actions, fwd.mu, fwd.log_std) * advantages))
         value_loss = float(0.5 * np.mean(np.square(v_diff)))
-        entropy = self._entropy(log_std)
+        entropy = self._entropy(fwd.log_std)
 
         components = {
             "policy": policy_loss,

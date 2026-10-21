@@ -48,6 +48,8 @@ A duplicate rarely shares a name with the original. For each candidate, search f
 | Accumulates or applies actor-critic gradients | `dW`, `grads[` | `_zero_ac_gradients`, `_accumulate_ac_gradients`, `_apply_ac_gradients` |
 | Gaussian log-probability or entropy | `np.log(2 * np.pi` | `ContinuousActorCriticBase._log_prob`, `_entropy` |
 | Takes an Adam step | `beta1`, `m_hat` | `ContinuousActorCriticBase._adam_step` |
+| Backpropagates a Gaussian policy and value loss | `residual / (variance`, `(h > 0)` | `ContinuousActorCriticBase._batch_forward`, then `_policy_value_grads` with the loss's d/d(log π) |
+| Lists a Gaussian agent's parameters | `"W1": self._W1` | `ContinuousActorCriticBase._PARAM_NAMES`, `_params()` |
 | Stores and samples transitions | a list of tuples, `random.sample` | `ReplayBuffer` |
 | Wraps a Gymnasium environment with seeding, noise or episode statistics | `gym.make(` in a class, `info["episode"]` | subclass `rl_core.environments.BaseEnvWrapper`; `checked_range` for randomization ranges |
 | Reads or merges a config | `yaml.safe_load`, `json.load` | `load_config`, `merge_configs`, `train.load_run_config` |

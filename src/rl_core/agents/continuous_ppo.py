@@ -251,16 +251,10 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
             ``entropy`` terms and their weighted ``total``. Gradients are those of ``total``,
             keyed ``W1``, ``b1``, ``W_mu``, ``b_mu``, ``log_std``, ``W_v``, ``b_v``.
         """
-        b_size = len(b_returns)
-
-        # Forward pass
-        b_h = np.maximum(0.0, b_states @ self._W1 + self._b1)  # (b_size, hidden_dim)
-        b_mu, dmu_dz, _ = self._mean(b_h)  # (b_size, action_dim)
-        b_log_std = np.clip(self._log_std, -20.0, 2.0)
-        b_values = b_h @ self._W_v + self._b_v  # (b_size,)
+        fwd = self._batch_forward(b_states)
 
         # Log probs and ratio
-        new_log_probs = self._log_prob(b_actions, b_mu, b_log_std)
+        new_log_probs = self._log_prob(b_actions, fwd.mu, fwd.log_std)
         # A log-ratio beyond ±20 means the old log-probability is stale: clamp it so exp cannot
         # overflow, and give that step no policy gradient (with a negative advantage the
         # unclipped term would otherwise win and its gradient would be about e^20 times |A|).
@@ -282,42 +276,11 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         # dL_pi / d(log_prob) = -active_mask * ratio * advantages
         d_log_p = -active_mask * ratio * b_advantages
 
-        variance = np.exp(2.0 * b_log_std)
-        residual = b_actions - b_mu
-        d_mu = (residual / (variance + 1e-8)) * d_log_p[:, np.newaxis]
-        d_z = d_mu * dmu_dz  # through tanh when the mean is bounded
-        d_log_std = (((residual**2) / (variance + 1e-8)) - 1.0) * d_log_p[:, np.newaxis]
-
-        grad_w_mu = (b_h.T @ d_z) / b_size
-        grad_b_mu = np.mean(d_z, axis=0)
-        grad_log_std = np.mean(d_log_std, axis=0) - self.entropy_coef
-
-        # Critic loss: 0.5 * (V - R)^2
-        v_diff = b_values - b_returns
-        grad_w_v = (b_h.T @ v_diff) * self.value_coef / b_size
-        grad_b_v = float(np.mean(v_diff) * self.value_coef)
-
-        # Backprop to trunk
-        d_h_actor = d_z @ self._W_mu.T
-        d_h_critic = (v_diff[:, np.newaxis] * self.value_coef) @ self._W_v[np.newaxis, :]
-        d_h = (d_h_actor + d_h_critic) * (b_h > 0) / b_size
-
-        grad_w1 = b_states.T @ d_h
-        grad_b1 = np.sum(d_h, axis=0)
-
-        grads = {
-            "W1": grad_w1,
-            "b1": grad_b1,
-            "W_mu": grad_w_mu,
-            "b_mu": grad_b_mu,
-            "log_std": grad_log_std,
-            "W_v": grad_w_v,
-            "b_v": grad_b_v,
-        }
+        grads, v_diff = self._policy_value_grads(b_actions, b_returns, fwd, d_log_p)
 
         policy_loss = float(-np.mean(np.minimum(surr1, surr2)))
         value_loss = float(0.5 * np.mean(np.square(v_diff)))
-        entropy = self._entropy(b_log_std)
+        entropy = self._entropy(fwd.log_std)
         components = {
             "policy": policy_loss,
             "value": value_loss,
