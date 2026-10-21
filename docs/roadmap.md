@@ -15,9 +15,9 @@ No open items.
 
 ### Code Health
 
-The last health dashboard (brooks-health, 2026-10-20) scored 86/100. Its tech-debt findings were done in
-pull requests #113 to #115 (CHANGELOG.md). Left for a later dashboard: `plot_benchmark_comparison` and
-`Trainer._log_metrics` (complexity above 10), and `DQNAgent.__init__` (94 lines of linear validation).
+The last health dashboard (brooks-health, 2026-10-21) scored 92/100, and its one Critical, the curve alignment
+inside `plot_benchmark_comparison`, is fixed (CHANGELOG.md). Left for a later dashboard:
+`DQNAgent.__init__` (94 lines, complexity 12, mostly linear validation) and `Trainer._log_metrics` (complexity 11).
 
 - [ ] **Loose Ends from Completed Items**
   - **Description**: Small gaps recorded in completed items and never resolved, gathered when those items moved to

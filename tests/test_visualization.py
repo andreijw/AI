@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import numpy as np
 import pytest
 
+from rl_core.utils import visualization
 from rl_core.utils.visualization import (
     _rolling_average,
     plot_benchmark_comparison,
@@ -225,3 +226,90 @@ def test_plot_benchmark_unequal_run_lengths(tmp_path):
     result = plot_benchmark_comparison(curves, save_path=target, target_score=None)
     assert result is not None
     assert os.path.isfile(result)
+
+
+# ---------------------------------------------------------------------------
+# aligned_curves: the smoothing and alignment the comparison plot draws
+# ---------------------------------------------------------------------------
+
+
+def test_aligned_curves_by_episode_cut_every_run_to_the_shortest():
+    """Window 2 smooths [10, 20, 30] to [10, 15, 25] and [30, 10] to [30, 20]; both keep 2 episodes."""
+    x, mean, std = visualization.aligned_curves([[10.0, 20.0, 30.0], [30.0, 10.0]], window=2)
+    np.testing.assert_array_equal(x, [1.0, 2.0])
+    np.testing.assert_allclose(mean, [20.0, 17.5])
+    np.testing.assert_allclose(std, [10.0, 2.5])
+
+
+def test_aligned_curves_by_steps_share_a_grid_where_every_run_has_data():
+    """Steps run from the latest first episode end to the earliest last one, on 200 points, each run
+    interpolated between its episode ends."""
+    runs = [[0.0, 10.0], [4.0, 4.0, 4.0]]
+    lengths = [[10, 10], [5, 5, 30]]  # episode ends at 10, 20 and at 5, 10, 40
+    x, mean, std = visualization.aligned_curves(runs, window=1, episode_lengths=lengths)
+    assert len(x) == 200
+    assert (x[0], x[-1]) == (10.0, 20.0)
+    # At step 10 the first run is 0 and the second 4; at step 20, 10 and 4 + 0 (flat at 4).
+    np.testing.assert_allclose([mean[0], mean[-1]], [2.0, 7.0])
+    np.testing.assert_allclose([std[0], std[-1]], [2.0, 3.0])
+
+
+def test_aligned_curves_of_one_run_have_no_spread():
+    x, mean, std = visualization.aligned_curves([[1.0, 3.0]], window=1)
+    np.testing.assert_array_equal(mean, [1.0, 3.0])
+    np.testing.assert_array_equal(std, [0.0, 0.0])
+
+
+def test_aligned_curves_reject_episode_lengths_that_do_not_match_the_runs():
+    with pytest.raises(visualization.EpisodeLengthsMismatchError, match="do not match"):
+        visualization.aligned_curves([[1.0, 2.0]], window=1, episode_lengths=[[5]])
+
+
+@pytest.mark.parametrize(
+    ("runs", "window", "lengths"),
+    [([[1.0]], 0, None), ([], 2, None), ([[1.0], []], 2, None), ([[1.0, 2.0]], 1, [[5, 0]])],
+    ids=["window-0", "no-runs", "empty-run", "zero-length-episode"],
+)
+def test_aligned_curves_reject_inputs_that_would_give_nan_or_a_wrong_grid(runs, window, lengths):
+    """Without these checks a zero window gives NaN curves and a zero-length episode a step grid
+    that interpolation silently misreads."""
+    with pytest.raises(ValueError) as caught:
+        visualization.aligned_curves(runs, window=window, episode_lengths=lengths)
+    assert not isinstance(caught.value, visualization.EpisodeLengthsMismatchError)
+
+
+def test_the_comparison_plot_does_not_call_other_errors_a_length_mismatch():
+    with pytest.raises(ValueError, match="must all be positive"):
+        plot_benchmark_comparison({"PPO": [[1.0, 2.0]]}, episode_lengths={"PPO": [[5, 0]]})
+
+
+def test_the_comparison_plot_reports_which_agent_has_mismatched_lengths():
+    with pytest.raises(ValueError, match="episode_lengths for agent 'PPO' do not match its runs"):
+        plot_benchmark_comparison({"PPO": [[1.0, 2.0]]}, episode_lengths={"PPO": [[5]]})
+
+
+@pytest.mark.parametrize("by_steps", [False, True])
+def test_the_comparison_plot_draws_exactly_the_aligned_curves(by_steps, monkeypatch):
+    import matplotlib.pyplot as plt
+
+    figures = []
+    monkeypatch.setattr(plt, "close", lambda fig=None: figures.append(fig))
+    runs = [[10.0, 20.0, 30.0, 40.0], [5.0, 25.0, 15.0, 35.0, 45.0]]
+    lengths = [[10, 20, 30, 40], [5, 5, 50, 40, 10]] if by_steps else None
+    plot_benchmark_comparison(
+        {"PPO": runs},
+        window=2,
+        target_score=None,
+        episode_lengths={"PPO": lengths} if by_steps else None,
+    )
+    x, mean, std = visualization.aligned_curves(runs, window=2, episode_lengths=lengths)
+    ax = figures[0].axes[0]
+    (line,) = ax.lines
+    np.testing.assert_array_equal(line.get_xdata(), x)
+    np.testing.assert_array_equal(line.get_ydata(), mean)
+    assert line.get_label() == f"PPO ({mean[-1]:.1f} ± {std[-1]:.1f})"
+    # The band spans one standard deviation either side of the mean.
+    (band,) = ax.collections
+    edges = band.get_paths()[0].vertices[:, 1]
+    np.testing.assert_allclose([edges.min(), edges.max()], [(mean - std).min(), (mean + std).max()])
+    plt.close(figures[0])
