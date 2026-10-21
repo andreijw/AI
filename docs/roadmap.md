@@ -17,17 +17,8 @@ No open items.
 
 The last health dashboard (brooks-health, 2026-10-21) scored 92/100. Its one Critical, the curve alignment inside
 `plot_benchmark_comparison`, and the two complexity hotspots it left, `DQNAgent.__init__` and
-`Trainer._log_metrics`, are fixed (CHANGELOG.md, 2026-10-21).
-
-- [~] **Loose Ends from Completed Items**
-  - **Description**: Small gaps recorded in completed items and never resolved, gathered when those items moved to
-    CHANGELOG.md (2026-10-21). Each can become its own item when picked.
-    - Discrete PPO never trains on steps still buffered when training ends, and its checkpoints do not hold the
-      rollout buffer (continuous PPO likewise).
-  - **Progress**: the DQN, `log_std` and video-warning loose ends are done (`feature/code-health-loose-ends`,
-    CHANGELOG.md, 2026-10-21). Left for `feature/ppo-rollout-checkpoints`, decided by the maintainer on 2026-10-21:
-    both PPO agents save the buffered steps in their checkpoints, through one shared rollout class, and do not
-    train on a partly filled rollout when training ends.
+`Trainer._log_metrics`, are fixed (CHANGELOG.md, 2026-10-21). The loose ends gathered from completed items are
+closed too (CHANGELOG.md, 2026-10-21). What remains here are unscheduled ideas.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
@@ -41,8 +32,9 @@ The last health dashboard (brooks-health, 2026-10-21) scored 92/100. Its one Cri
     - Not tried, though the bars were met without them: Pendulum PPO with gSDE exploration, separate tanh actor and
       critic networks, or observation normalisation; CartPole DQN with more than `max_updates_per_call: 64` (about
       0.13 gradient steps per transition against rl-zoo's 0.5).
-    - Candidates once wanted: a resume option for `train.py` (checkpoints already hold everything needed), and
-      double, dueling or prioritised-replay DQN.
+    - Candidates once wanted: a resume option for `train.py` (checkpoints hold the weights, optimizer states,
+      counters and PPO's buffered steps, but not the random generators or DQN's and DDPG's replay buffers, so a
+      resume would not be bit-identical), and double, dueling or prioritised-replay DQN.
     - Found 2026-10-18 and not yet investigated: on the one-state overfit batch of
       `tests/test_policy_gradient_maths.py`, the discrete Actor-Critic (SGD, learning rate 0.05) reaches probability
       1.0 and can then collapse to the other action (seeds 6 and 7; 9 of 30 seeds under the old seeding) once the

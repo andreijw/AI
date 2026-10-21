@@ -10,6 +10,7 @@ from .config_values import positive_int
 from .continuous_actor_critic import ContinuousActorCriticBase
 from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import episode_end, gae
+from .rollout import EpisodeRollout, RolloutColumns
 
 
 class ContinuousPPOAgent(ContinuousActorCriticBase):
@@ -27,7 +28,8 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
     ``rollout_steps`` by up to one episode, and the transitions of a last unfilled rollout are not
     trained on. When an episode was cut by the time limit (done but not ``terminated``),
     ``gamma * V(next state)`` is added to its last scaled reward; a terminated episode does not
-    bootstrap. A partly filled rollout is not saved in checkpoints.
+    bootstrap. A partly filled rollout is saved in checkpoints and restored on load (see
+    :class:`EpisodeRollout`).
 
     Config keys, beyond those of :class:`ContinuousActorCriticBase` (all optional):
         clip_epsilon (float): PPO clip range; ``clip_ratio`` is accepted as an alias. Default: 0.2.
@@ -65,8 +67,7 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         self.anneal_steps: int | None = anneal_steps_from_config(config)
         self._steps_trained = 0
         self.rollout_steps: int = positive_int(config, "rollout_steps", 1)
-        self._rollout: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
-        self._rollout_length = 0
+        self._rollout = EpisodeRollout(self.rollout_steps)
 
     def update(self, trajectory: Any) -> dict[str, float]:
         """
@@ -87,19 +88,12 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         part = self._rollout_episode(trajectory)
         if part is None:
             return {}
-        self._rollout.append(part)
-        self._rollout_length += len(part[2])
-        if self._rollout_length < self.rollout_steps:
+        rollout = self._rollout.add(part)
+        if rollout is None:
             return {}
-        states, actions, rewards, dones = (
-            np.concatenate(column) for column in zip(*self._rollout, strict=True)
-        )
-        self._rollout, self._rollout_length = [], 0
-        return self._train_on_rollout(states, actions, rewards, dones)
+        return self._train_on_rollout(*rollout)
 
-    def _rollout_episode(
-        self, trajectory: Any
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+    def _rollout_episode(self, trajectory: Any) -> RolloutColumns | None:
         """
         One episode as ``(states, actions, rewards, dones)`` ready to join a rollout.
 
@@ -145,7 +139,7 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
         if bootstrap_obs is not None:
             _, _, last_v, _ = self._forward(bootstrap_obs)
             rewards[-1] += self.gamma * float(last_v)
-        return states, actions, rewards, dones
+        return RolloutColumns(states, actions, rewards, dones)
 
     def _rollout_targets(
         self, states: np.ndarray, rewards: np.ndarray, dones: np.ndarray
@@ -210,16 +204,15 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
             "rollout_steps": float(n_steps),
         }
 
-    def load(self, path: str) -> None:
-        """Load a checkpoint; a partly filled rollout is dropped, as it is not saved."""
-        super().load(path)
-        self._rollout, self._rollout_length = [], 0
-
     def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
-        return {"ppo_steps_trained": np.array(self._steps_trained)}
+        return {
+            "ppo_steps_trained": np.array(self._steps_trained),
+            **self._rollout.checkpoint_state(),
+        }
 
     def _load_extra_checkpoint_state(self, data: Any) -> None:
         self._steps_trained = int(data["ppo_steps_trained"]) if "ppo_steps_trained" in data else 0
+        self._rollout.restore(data, self.observation_dim, (self.action_dim,))
 
     def _minibatch_loss_and_grads(
         self,

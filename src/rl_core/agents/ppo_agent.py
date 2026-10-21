@@ -10,6 +10,7 @@ from .actor_critic_base import ActorCriticBase
 from .config_values import optional_positive_int, positive_int
 from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import episode_end, gae
+from .rollout import EpisodeRollout, RolloutColumns
 
 
 class PPOAgent(ActorCriticBase):
@@ -28,8 +29,8 @@ class PPOAgent(ActorCriticBase):
     episode cut rather than terminated (a time limit, or the Trainer's ``max_steps_per_episode``)
     adds ``gamma * V(next state)`` to its last reward when the next state is known, as continuous
     PPO and Stable-Baselines3 do; a terminated episode does not bootstrap. Steps still buffered
-    when training stops are never trained on. Checkpoints hold the weights, the optimizer state
-    and the annealing counter, but not the buffer; loading a checkpoint empties it.
+    when training stops are never trained on. Checkpoints hold the weights, the optimizer state,
+    the annealing counter and the buffered steps (see :class:`EpisodeRollout`).
     Rollouts are whole episodes, so the counter can step past ``anneal_steps`` mid-rollout; the
     fraction is then held at zero.
 
@@ -76,8 +77,7 @@ class PPOAgent(ActorCriticBase):
         # BaseAgent would create lazily for sampling).
         # Minibatch order on its own stream; action sampling uses the base class's exploration stream.
         self._shuffle_rng = derive_rng(config.get("seed"), AGENT_REPLAY_STREAM)
-        self._rollout: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
-        self._rollout_length = 0
+        self._rollout = EpisodeRollout(self.rollout_steps)
         self._steps_trained = 0
 
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
@@ -101,18 +101,12 @@ class PPOAgent(ActorCriticBase):
         if episode is None:
             return {}
 
-        self._rollout.append(episode)
-        self._rollout_length += len(episode[2])
-        if self._rollout_length < self.rollout_steps:
+        rollout = self._rollout.add(episode)
+        if rollout is None:
             return {}
+        return self._train_on_rollout(*rollout)
 
-        parts = [np.concatenate(columns) for columns in zip(*self._rollout, strict=True)]
-        self._rollout, self._rollout_length = [], 0
-        return self._train_on_rollout(*parts)
-
-    def _rollout_episode(
-        self, batch: dict[str, Any]
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+    def _rollout_episode(self, batch: dict[str, Any]) -> RolloutColumns | None:
         """
         One episode as ``(observations, actions, rewards, dones)`` ready to join a rollout.
 
@@ -133,7 +127,7 @@ class PPOAgent(ActorCriticBase):
             _, next_value, _ = self._forward(bootstrap_obs)
             rewards = rewards.copy()
             rewards[-1] += self.gamma * next_value
-        return observations, actions, rewards, dones
+        return RolloutColumns(observations, actions, rewards, dones)
 
     def _train_on_rollout(
         self,
@@ -268,12 +262,11 @@ class PPOAgent(ActorCriticBase):
         return components, grads, int(np.sum(use_clipped))
 
     def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
-        return {"ppo_steps_trained": np.array(self._steps_trained)}
+        return {
+            "ppo_steps_trained": np.array(self._steps_trained),
+            **self._rollout.checkpoint_state(),
+        }
 
     def _load_extra_checkpoint_state(self, data: Any) -> None:
         self._steps_trained = int(data["ppo_steps_trained"]) if "ppo_steps_trained" in data else 0
-
-    def load(self, path: str) -> None:
-        """Load weights and optimizer state, and drop any partly collected rollout."""
-        super().load(path)
-        self._rollout, self._rollout_length = [], 0
+        self._rollout.restore(data, self.observation_dim, ())

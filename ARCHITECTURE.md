@@ -63,9 +63,11 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    `rollout_steps` transitions, computes GAE over them (`rl_core/agents/returns.py`, shared with continuous PPO)
    and takes `ppo_epochs` passes of shuffled `minibatch_size` steps. Without those keys it trains on each episode
    alone, full batch, with return-minus-value advantages. The Trainer still calls `update` once per episode; PPO
-   returns no metrics on the episodes it only stores. Each episode ends its GAE trace, and an episode cut by the
-   time limit (or by `max_steps_per_episode`) adds γ·V(next state) to its last reward, so CartPole's 500-step limit
-   is not a terminal state. Continuous PPO buffers whole episodes the same way with its own `rollout_steps` and
+   returns no metrics on the episodes it only stores. Both PPO agents keep those episodes in one `EpisodeRollout`
+   (`rl_core/agents/rollout.py`), which saves them in checkpoints and restores them on load; a rollout still partly
+   filled when training ends is not trained on. Each episode ends its GAE trace, and an episode cut by the time limit
+   (or by `max_steps_per_episode`) adds γ·V(next state) to its last reward, so CartPole's 500-step limit is not a
+   terminal state. Continuous PPO buffers whole episodes the same way with its own `rollout_steps` and
    applies the same rule; both read it from `episode_end` in `rl_core/agents/returns.py`. DQN and DDPG
    store the trainer's `terminated` flag, so they bootstrap through time limits too. The continuous Actor-Critic
    replays each episode in `n_steps` chunks, each with GAE targets bootstrapped from the chunk's next state unless
