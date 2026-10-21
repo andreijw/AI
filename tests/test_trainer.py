@@ -684,3 +684,56 @@ def test_train_writes_update_metrics_to_jsonl_with_real_agent(env, tmp_path):
     assert last["update"]["loss"] > 0.0, "A zero loss means no real update was averaged."
     assert last["update"]["epsilon"] < 1.0, "Epsilon should have decayed from its start value."
     assert "non_finite" not in last
+
+
+# ---------------------------------------------------------------------------
+# _log_metrics: one normalised record, sent to whichever logger the trainer has
+# ---------------------------------------------------------------------------
+
+_RAW_METRICS = {"episode": np.int64(10), "loss": float("nan")}
+_SAFE_METRICS = {"episode": 10, "loss": None}
+
+
+def test_log_metrics_without_a_logger_uses_the_module_logger(env, agent, caplog):
+    trainer = Trainer(env=env, agent=agent, config={})
+    with caplog.at_level(logging.INFO, logger="rl_core.training.trainer"):
+        trainer._log_metrics(_RAW_METRICS)
+    assert f"METRICS: {_SAFE_METRICS}" in caplog.messages
+
+
+def test_log_metrics_with_a_standard_logger_uses_info(env, agent, caplog):
+    std_logger = logging.getLogger("test_log_metrics_standard")
+    trainer = Trainer(env=env, agent=agent, config={}, logger=std_logger)
+    with caplog.at_level(logging.INFO, logger="test_log_metrics_standard"):
+        trainer._log_metrics(_RAW_METRICS)
+    assert caplog.messages == [f"Metrics: {_SAFE_METRICS}"]
+
+
+def test_log_metrics_hands_a_custom_logger_the_normalised_dict(env, agent):
+    custom = MagicMock()
+    Trainer(env=env, agent=agent, config={}, logger=custom)._log_metrics(_RAW_METRICS)
+    custom.log.assert_called_once_with(_SAFE_METRICS)
+    custom.info.assert_not_called()
+
+
+def test_log_metrics_falls_back_to_info_when_log_takes_other_arguments(env, agent):
+    class LevelLogger:
+        def __init__(self):
+            self.lines = []
+
+        def log(self, level, msg):  # logging.Logger.log's shape: a dict alone is a TypeError
+            self.lines.append(("log", level, msg))
+
+        def info(self, msg):
+            self.lines.append(msg)
+
+    custom = LevelLogger()
+    Trainer(env=env, agent=agent, config={}, logger=custom)._log_metrics(_RAW_METRICS)
+    assert custom.lines == [f"Metrics: {_SAFE_METRICS}"]
+
+
+def test_log_metrics_with_neither_log_nor_info_uses_the_module_logger(env, agent, caplog):
+    trainer = Trainer(env=env, agent=agent, config={}, logger=object())
+    with caplog.at_level(logging.INFO, logger="rl_core.training.trainer"):
+        trainer._log_metrics(_RAW_METRICS)
+    assert f"METRICS: {_SAFE_METRICS}" in caplog.messages

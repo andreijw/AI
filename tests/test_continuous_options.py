@@ -10,10 +10,12 @@ from rl_core.agents.continuous_actor_critic import ContinuousActorCriticAgent
 from rl_core.agents.continuous_ppo import ContinuousPPOAgent
 from rl_core.training.trainer import Trainer
 from tests.agent_internals import (
+    adam_step,
     assert_same_weights,
     gaussian_forward,
     log_prob,
     ppo_minibatch_loss_and_grads,
+    set_weights,
     spy_on_adam_step,
     spy_on_ppo_minibatches,
     weights,
@@ -287,3 +289,71 @@ def test_an_empty_terminated_array_is_ignored():
     with_empty.update({**b, "terminated": np.array([], dtype=bool)})
     without.update(b)
     assert_same_weights(with_empty, without, rtol=0.0)
+
+
+# ---------------------------------------------------------------------------
+# log_std bounds: [-20, 2] in the forward pass, and the parameter itself projected after each step
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("agent_cls", AGENTS)
+@pytest.mark.parametrize(("raw", "bound"), [(5.0, 2.0), (-30.0, -20.0)])
+def test_a_log_std_past_a_bound_acts_exactly_like_the_bound(agent_cls, raw, bound):
+    """Sampling, the log-density and evaluation all see the clipped value, whatever the raw
+    parameter holds."""
+    past, at = _agent(agent_cls), _agent(agent_cls)
+    set_weights(past, log_std=np.array([raw]))
+    set_weights(at, log_std=np.array([bound]))
+    states = np.random.default_rng(1).standard_normal((4, 3))
+
+    mu_past, log_std_past, _, _ = gaussian_forward(past, states)
+    mu_at, log_std_at, _, _ = gaussian_forward(at, states)
+    np.testing.assert_array_equal(log_std_past, log_std_at)
+    actions = np.array([[0.3], [-1.0], [1.7], [0.0]])
+    np.testing.assert_array_equal(
+        log_prob(past, actions, mu_past, log_std_past), log_prob(at, actions, mu_at, log_std_at)
+    )
+    for state in states:
+        np.testing.assert_array_equal(past.select_action(state), at.select_action(state))
+
+
+@pytest.mark.parametrize("agent_cls", AGENTS)
+@pytest.mark.parametrize(("start", "push", "bound"), [(1.99, -1e6, 2.0), (-19.99, 1e6, -20.0)])
+def test_the_log_std_parameter_never_leaves_its_bounds(agent_cls, start, push, bound):
+    """A step that would carry log_std past a bound stops at it; it used to keep drifting under
+    the entropy bonus while the forward pass hid it, and had to drift back before σ could change."""
+    agent = _agent(agent_cls)
+    set_weights(agent, log_std=np.array([start]))
+    grads = {name: np.zeros_like(value) for name, value in weights(agent).items()}
+    grads["b_v"] = 0.0
+    grads["log_std"] = np.array([push])
+    for _ in range(5):
+        adam_step(agent, grads, lr=0.1)
+    assert weights(agent)["log_std"][0] == bound, f"log_std should stop at {bound}"
+
+
+@pytest.mark.parametrize("agent_cls", AGENTS)
+@pytest.mark.parametrize("init_log_std", [2.5, -20.5, float("nan")])
+def test_an_initial_log_std_outside_its_bounds_is_rejected(agent_cls, init_log_std):
+    with pytest.raises(ValueError, match="init_log_std"):
+        _agent(agent_cls, init_log_std=init_log_std)
+
+
+@pytest.mark.parametrize("agent_cls", AGENTS)
+def test_training_keeps_log_std_at_its_upper_bound_under_a_large_entropy_bonus(agent_cls):
+    """Through update() itself: the projection holds for each agent's own training path."""
+    agent = _agent(agent_cls, init_log_std=1.99, entropy_coef=100.0, learning_rate=0.1)
+    for seed in range(3):
+        agent.update(_batch(seed=seed))
+    assert weights(agent)["log_std"][0] == 2.0, "the entropy bonus pushes log_std up to the bound"
+
+
+@pytest.mark.parametrize("agent_cls", AGENTS)
+def test_loading_a_checkpoint_brings_log_std_back_inside_its_bounds(agent_cls, tmp_path):
+    """A checkpoint saved before the projection may hold a raw log_std past a bound."""
+    saved = _agent(agent_cls)
+    set_weights(saved, log_std=np.array([5.0]))
+    saved.save(str(tmp_path / "agent.npz"))
+    loaded = _agent(agent_cls, seed=9)
+    loaded.load(str(tmp_path / "agent.npz"))
+    assert weights(loaded)["log_std"][0] == 2.0, "the loaded parameter should sit on the bound"

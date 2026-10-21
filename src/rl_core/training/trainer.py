@@ -11,6 +11,7 @@ import gymnasium as gym
 import numpy as np
 
 from ..agents.base_agent import BaseAgent
+from ..utils.logger import json_safe
 
 _logger = logging.getLogger(__name__)
 
@@ -234,66 +235,39 @@ class Trainer:
         """
         Log training or evaluation metrics in a logger-agnostic way.
 
-        Non-finite numbers are written as None so every record is strict JSON.
-
-        Supports:
+        The metrics pass through :func:`json_safe` first (non-finite numbers become None), so
+        every record is strict JSON. Supports:
         - Custom loggers exposing `log(metrics: dict)`
         - Standard `logging.Logger`-like objects (using `.info(...)`)
         - Fallback to module logger when no compatible logger is provided
         """
-
-        def _normalize_value(value: Any) -> Any:
-            """
-            Recursively convert values to JSON-serializable Python built-ins.
-
-            - NumPy scalars (np.generic) -> corresponding Python scalars via .item()
-            - Non-finite floats (NaN, inf) -> None, which JSON can represent
-            - Containers (dict, list, tuple) -> same structure with normalized contents
-            """
-            if isinstance(value, np.generic):
-                # Includes np.floating, np.integer, etc.
-                value = value.item()
-            if isinstance(value, float) and not math.isfinite(value):
-                return None
-            if isinstance(value, dict):
-                return {k: _normalize_value(v) for k, v in value.items()}
-            if isinstance(value, (list, tuple)):
-                # Normalize list/tuple contents and return as a list to ensure
-                # JSON-native container types for downstream json.dumps usage.
-                return [_normalize_value(v) for v in value]
-            return value
-
-        normalized_metrics = _normalize_value(metrics)
-
-        # No logger configured: emit via module logger
-        if self.logger is None:
-            _logger.info("METRICS: %s", normalized_metrics)
-            return
-
-        # Special handling for standard logging.Logger instances
+        normalized_metrics = json_safe(metrics)
         if isinstance(self.logger, logging.Logger):
             # Use standard logging formatting; avoid calling logger.log with a dict
             self.logger.info("Metrics: %s", normalized_metrics)
-            return
+        elif self.logger is None or not self._log_to_custom_logger(normalized_metrics):
+            _logger.info("METRICS: %s", normalized_metrics)
 
-        # Prefer a custom `log(metrics: dict)` method if available
+    def _log_to_custom_logger(self, normalized_metrics: dict[str, Any]) -> bool:
+        """
+        Send metrics to a custom logger's `log(metrics: dict)`, else to its `.info(...)`.
+
+        Returns:
+            False if the logger has neither in a usable form.
+        """
         log_method = getattr(self.logger, "log", None)
         if callable(log_method):
             try:
-                # Custom logger expected to accept a single dict argument
                 log_method(normalized_metrics)
-                return
+                return True
             except TypeError:
                 # Likely a standard logging.Logger.log(level, msg, *args, **kwargs)
                 pass
-
-        # Fallback: use `.info(...)` if available
         info_method = getattr(self.logger, "info", None)
         if callable(info_method):
             info_method(f"Metrics: {normalized_metrics}")
-        else:
-            # Last resort: emit via module logger
-            _logger.info("METRICS: %s", normalized_metrics)
+            return True
+        return False
 
     def train(self) -> dict[str, Any]:
         """

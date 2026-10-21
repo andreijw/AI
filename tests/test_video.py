@@ -51,6 +51,7 @@ def _play_episode(env):
 
 
 def _make_recording_env(video_dir, progress, every):
+    """A recording env; video_dir should not exist yet, or RecordVideo warns it overwrites."""
     env = CartPoleEnv(render_mode="rgb_array", seed=42, max_episode_steps=5)
     env.wrap_env(
         TrainingVideoRecorder(env.env, video_folder=str(video_dir), progress=progress, every=every)
@@ -88,7 +89,7 @@ def _mp4_names(directory):
 def test_recorder_records_every_nth_training_episode_and_skips_evaluation(tmp_path):
     """Only every Nth training episode is recorded, named by its training episode number."""
     progress = SimpleNamespace(current_episode=0, evaluating=False)
-    env = _make_recording_env(tmp_path, progress, every=2)
+    env = _make_recording_env(tmp_path / "videos", progress, every=2)
 
     _play_episode(env)  # before training starts (current_episode == 0)
     for episode in range(1, 5):
@@ -101,7 +102,7 @@ def test_recorder_records_every_nth_training_episode_and_skips_evaluation(tmp_pa
             progress.evaluating = False
     env.close()
 
-    assert _mp4_names(tmp_path) == [
+    assert _mp4_names(tmp_path / "videos") == [
         "cartpole-training-episode-2.mp4",
         "cartpole-training-episode-4.mp4",
     ]
@@ -110,7 +111,7 @@ def test_recorder_records_every_nth_training_episode_and_skips_evaluation(tmp_pa
 def test_recorder_every_episode_ignores_evaluation_episodes(tmp_path):
     """every=1 records each training episode exactly once and no evaluation episode."""
     progress = SimpleNamespace(current_episode=0, evaluating=False)
-    env = _make_recording_env(tmp_path, progress, every=1)
+    env = _make_recording_env(tmp_path / "videos", progress, every=1)
 
     for episode in range(1, 4):
         progress.current_episode = episode
@@ -120,7 +121,9 @@ def test_recorder_every_episode_ignores_evaluation_episodes(tmp_path):
         progress.evaluating = False
     env.close()
 
-    assert _mp4_names(tmp_path) == [f"cartpole-training-episode-{n}.mp4" for n in (1, 2, 3)]
+    assert _mp4_names(tmp_path / "videos") == [
+        f"cartpole-training-episode-{n}.mp4" for n in (1, 2, 3)
+    ]
 
 
 def test_recorder_accepts_progress_that_cannot_be_copied(tmp_path):
@@ -128,11 +131,11 @@ def test_recorder_accepts_progress_that_cannot_be_copied(tmp_path):
     import threading
 
     progress = SimpleNamespace(current_episode=1, evaluating=False, lock=threading.RLock())
-    env = _make_recording_env(tmp_path, progress, every=1)
+    env = _make_recording_env(tmp_path / "videos", progress, every=1)
     _play_episode(env)
     env.close()
 
-    assert _mp4_names(tmp_path) == ["cartpole-training-episode-1.mp4"]
+    assert _mp4_names(tmp_path / "videos") == ["cartpole-training-episode-1.mp4"]
 
 
 @pytest.mark.parametrize(

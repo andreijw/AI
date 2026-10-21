@@ -155,3 +155,33 @@ def test_the_training_log_averages_loss_only_over_real_updates(tmp_path):
     assert 0 < len(real_losses) < len(second_window), "the second window should mix both kinds"
     second = [row for row in rows if "episode" in row][1]
     assert second["update"]["loss"] == pytest.approx(np.mean(real_losses))
+
+
+# ---------------------------------------------------------------------------
+# A batch the replay buffer does not store trains nothing
+# ---------------------------------------------------------------------------
+
+
+def _without(batch: dict[str, np.ndarray], *keys: str) -> dict[str, np.ndarray]:
+    return {k: v for k, v in batch.items() if k not in keys}
+
+
+@pytest.mark.parametrize(
+    "unstored",
+    [
+        pytest.param(lambda b: _without(b, "dones"), id="no-terminal-flags"),
+        pytest.param(lambda b: _without(b, "next_observations"), id="no-next-observations"),
+        pytest.param(lambda b: {k: v[:0] for k, v in b.items()}, id="empty"),
+    ],
+)
+def test_a_batch_that_stores_no_transition_runs_no_gradient_step(unstored):
+    """After warm-up, a batch the buffer cannot store used to run a gradient step on old samples."""
+    agent = _agent(batch_size=4, min_buffer_size=4, updates_per_step=1.0, epsilon_decay=0.9)
+    agent.update(_batch())  # warms the buffer
+    before, epsilon = weights(agent), agent.epsilon
+
+    metrics = agent.update(unstored(_batch()))
+
+    assert metrics == {"epsilon": epsilon}, "nothing was trained, so no loss or Q-value to report"
+    assert agent.epsilon == epsilon, "epsilon decays once per update that trained, not per call"
+    assert_weights_unchanged(agent, before, "after a batch that stored no transition")

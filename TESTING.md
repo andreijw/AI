@@ -43,7 +43,7 @@ This document outlines manual verification and testing procedures for the RL fra
 
 | Check # | Target Feature | Command to Execute | Expected Behavior |
 | --- | --- | --- | --- |
-| VID-1 | **Training clips** | `python train.py --config configs/cartpole_ppo.yaml --record-video --video-every 250` | Exactly `videos/cartpole/ppo/cartpole-training-episode-{250,500,750,1000}.mp4`; balances longer. |
+| VID-1 | **Training clips** | `python train.py --config configs/cartpole_ppo.yaml --record-video --video-every 250` | Exactly `videos/cartpole/ppo/cartpole-training-episode-{250,500,750,1000}.mp4`; balances longer. Into a folder that did not exist, no Gymnasium "Overwriting existing videos" warning. |
 | VID-2 | **Trained-agent video** | `python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_1000.pt` | One `videos/cartpole/ppo/cartpole-playback-full.mp4` with 5 episodes. |
 | VID-3 | **Usage errors** | `python train.py --video-every 5` and `python record.py` | Exit with "--video-every requires --record-video" and "the following arguments are required: --checkpoint". |
 | VID-4 | **Pendulum recording** | After `TR-6`: `python record.py --config configs/pendulum_ppo.yaml --checkpoint checkpoints/pendulum/ppo/agent_episode_1000.pt` | Generates `videos/pendulum/ppo/pendulum-playback-full.mp4` of 5 greedy episodes. Measured 2026-10-18 with seed 42, before evaluation moved to its own environment (not remeasured) (final training average -170): -208 ± 66 over the 5 episodes, so some fall just short of -200. |

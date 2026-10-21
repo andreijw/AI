@@ -40,7 +40,7 @@ def test_wrap_env_with_record_video(tmp_path):
     env = CartPoleEnv(render_mode="rgb_array", seed=42)
     wrapper = RecordVideo(
         env.env,
-        video_folder=str(tmp_path),
+        video_folder=str(tmp_path / "videos"),
         episode_trigger=lambda ep: False,  # never record, just test wrapping
         disable_logger=True,
     )

@@ -8,9 +8,10 @@ import sys
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+import numpy as np
 import pytest
 
-from rl_core.utils.logger import Logger, setup_logger
+from rl_core.utils.logger import Logger, json_safe, setup_logger
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -121,6 +122,20 @@ def test_logger_log_writes_to_metrics_file(logger, log_dir):
     entry = json.loads(line)
     assert entry["reward"] == 42.0
     assert entry["length"] == 10
+
+
+def test_logger_log_writes_a_non_finite_metric_as_null(logger, log_dir):
+    """Every metrics line is strict JSON, also when Logger.log is called without the trainer."""
+    logger.log({"loss": float("nan"), "q": np.float64(np.inf), "reward": 1.0})
+
+    (jsonl,) = [f for f in os.listdir(log_dir) if f.endswith(".jsonl")]
+    with open(os.path.join(log_dir, jsonl)) as f:
+        line = f.readline()
+    assert json.loads(line, parse_constant=lambda c: pytest.fail(f"{c} is not JSON")) == {
+        "loss": None,
+        "q": None,
+        "reward": 1.0,
+    }
 
 
 def test_logger_log_with_step_includes_step(logger, log_dir):
@@ -290,3 +305,30 @@ def test_logger_log_handles_unserializable_metrics(logger, log_dir, caplog):
 
     # A warning should have been emitted describing the failure
     assert any("Failed to write metrics" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# json_safe: metrics as strict-JSON Python built-ins
+# ---------------------------------------------------------------------------
+
+
+def test_json_safe_converts_numpy_scalars_to_python_ones():
+    converted = json_safe({"f": np.float32(0.5), "i": np.int64(3), "b": np.bool_(True)})
+    assert converted == {"f": 0.5, "i": 3, "b": True}
+    assert [type(v) for v in converted.values()] == [float, int, bool]
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -np.inf, np.float64("nan")])
+def test_json_safe_writes_a_non_finite_number_as_none(value):
+    assert json_safe(value) is None, "JSON has no NaN or infinity"
+
+
+def test_json_safe_recurses_into_containers_and_turns_tuples_into_lists():
+    metrics = {"evaluation": {"rewards": (np.float64(1.0), float("nan")), "tags": ["a", 2]}}
+    assert json_safe(metrics) == {"evaluation": {"rewards": [1.0, None], "tags": ["a", 2]}}
+    json.dumps(json_safe(metrics), allow_nan=False)
+
+
+def test_json_safe_leaves_other_values_alone():
+    assert json_safe("text") == "text"
+    assert json_safe(None) is None

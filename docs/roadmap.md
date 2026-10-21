@@ -15,19 +15,19 @@ No open items.
 
 ### Code Health
 
-The last health dashboard (brooks-health, 2026-10-21) scored 92/100, and its one Critical, the curve alignment
-inside `plot_benchmark_comparison`, is fixed (CHANGELOG.md). Left for a later dashboard:
-`DQNAgent.__init__` (94 lines, complexity 12, mostly linear validation) and `Trainer._log_metrics` (complexity 11).
+The last health dashboard (brooks-health, 2026-10-21) scored 92/100. Its one Critical, the curve alignment inside
+`plot_benchmark_comparison`, and the two complexity hotspots it left, `DQNAgent.__init__` and
+`Trainer._log_metrics`, are fixed (CHANGELOG.md, 2026-10-21).
 
-- [ ] **Loose Ends from Completed Items**
+- [~] **Loose Ends from Completed Items**
   - **Description**: Small gaps recorded in completed items and never resolved, gathered when those items moved to
     CHANGELOG.md (2026-10-21). Each can become its own item when picked.
-    - DQN stores no transition from a batch with neither `terminated` nor `dones`, but still runs gradient steps on
-      it.
     - Discrete PPO never trains on steps still buffered when training ends, and its checkpoints do not hold the
-      rollout buffer.
-    - The clip of `log_std` to [-20, 2] in the Gaussian agents has no test.
-    - Three Gymnasium "Overwriting existing videos" warnings from older video tests remain in the test output.
+      rollout buffer (continuous PPO likewise).
+  - **Progress**: the DQN, `log_std` and video-warning loose ends are done (`feature/code-health-loose-ends`,
+    CHANGELOG.md, 2026-10-21). Left for `feature/ppo-rollout-checkpoints`, decided by the maintainer on 2026-10-21:
+    both PPO agents save the buffered steps in their checkpoints, through one shared rollout class, and do not
+    train on a partly filled rollout when training ends.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
