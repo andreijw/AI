@@ -299,16 +299,6 @@ def test_empty_batch_changes_nothing_and_returns_no_metrics():
     assert_weights_unchanged(agent, before, "with nothing to train on")
 
 
-def test_loading_a_checkpoint_drops_the_partial_rollout(tmp_path):
-    """Buffered episodes came from the old weights; after a load they are stale."""
-    agent = _agent(rollout_steps=10)
-    path = str(tmp_path / "ppo.npz")
-    agent.save(path)
-    agent.update(_episode(6, seed=1))
-    agent.load(path)
-    assert agent.update(_episode(6, seed=2)) == {}, "Only the 6 steps after the load are buffered."
-
-
 # ---------------------------------------------------------------------------
 # A full update, replayed independently
 # ---------------------------------------------------------------------------

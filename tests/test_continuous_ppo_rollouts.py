@@ -109,16 +109,6 @@ def test_integer_settings_must_be_positive_integers(key, value):
         _agent(**{key: value})
 
 
-def test_loading_a_checkpoint_empties_a_partly_filled_rollout(tmp_path):
-    agent = _agent(rollout_steps=15)
-    agent.update(_episode(1))
-    path = str(tmp_path / "ppo.pt")
-    agent.save(path)
-    agent.update(_episode(2))  # 14 buffered
-    agent.load(path)
-    assert agent.update(_episode(3)) == {}, "7 transitions after loading: still buffering"
-
-
 # ---------------------------------------------------------------------------
 # Bootstrapping and episode boundaries
 # ---------------------------------------------------------------------------

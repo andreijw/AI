@@ -26,6 +26,13 @@ from 2026-10-16; earlier results use the 10-episode rule.
   `init_log_std` outside the bounds is rejected. No saved Pendulum checkpoint came near a bound (120 checkpoints,
   -2.01 to 0.57), and 100 episodes of the committed Pendulum PPO and Actor-Critic configs (seed 42) give
   bit-identical weights to `develop`.
+- **PPO checkpoints hold the partly filled rollout** (`feature/ppo-rollout-checkpoints`): both PPO agents keep
+  buffered episodes in one shared `rl_core.agents.rollout.EpisodeRollout`, replacing two copies of the
+  bookkeeping. Checkpoints save the buffered steps as `ppo_rollout_*` arrays (none while the buffer is empty), and
+  a load replaces the buffer with the checkpoint's; older checkpoints load with an empty buffer. Generator states
+  are not saved, so a resume is not bit-identical. By the maintainer's decision, a rollout still partly filled
+  when training ends is not trained on: the reported policy stays the one trained on full rollouts. 100 episodes
+  of the committed CartPole and Pendulum PPO configs (seed 42) give bit-identical weights before and after.
 - **Tighter, faster, safer CI** (`feature/ci-pipeline-hardening`): every pull request runs one `ci.yml` with two
   jobs, `Checks` (Ruff, format, MyPy, Bandit, pylint duplicate-code, markdownlint, README workflow list) and
   `Unit Tests` (pytest, coverage, Codecov), down from about 7 jobs that each installed Python, plus CodeQL. Merges
