@@ -237,23 +237,44 @@ AGENT_TEST_FILES = sorted(
 _PRIVATE_NAME = re.compile(r"_[A-Za-z]\w*")
 
 
+def _is_bare_super(node: ast.AST) -> bool:
+    """True for a zero-argument ``super()`` call; ``super(T, obj)`` can reach any object."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "super"
+        and not node.args
+        and not node.keywords
+    )
+
+
+def _describe_owner(node: ast.Attribute) -> str:
+    """'agent._W1' for a name chain, 'super(...)._forward' for an argumented super(), else '...'."""
+    if isinstance(node.value, ast.Call) and _dotted_name(node.value.func) == "super":
+        return f"super(...).{node.attr}"
+    return _dotted_name(node) or "..."
+
+
 def private_accesses(source: str) -> list[tuple[int, str]]:
     """
     Return (line, description) for each way source reaches an object's private member.
 
-    Flags ``obj._name`` on anything but ``self`` or ``cls``; ``obj.__dict__``; a string literal
-    that is a private name (as passed to ``getattr``, ``setattr`` or ``monkeypatch.setattr``, or
-    listed for a loop over them); ``getattr``, ``setattr``, ``hasattr`` or ``delattr`` with a
-    computed name; ``vars(...)``, ``dir(...)`` and ``inspect.getmembers(...)``, which list private
-    members wholesale; and importing a private name. Other dunder names are allowed.
+    Flags ``obj._name`` on anything but ``self``, ``cls`` or a zero-argument ``super()`` (a test
+    double calling its own inherited hook); ``obj.__dict__``; a string literal that is a private
+    name (as passed to ``getattr``, ``setattr`` or ``monkeypatch.setattr``, or listed for a loop
+    over them); ``getattr``, ``setattr``, ``hasattr`` or ``delattr`` with a computed name;
+    ``vars(...)``, ``dir(...)`` and ``inspect.getmembers(...)``, which list private members
+    wholesale; and importing a private name. Other dunder names are allowed.
     """
     found: list[tuple[int, str]] = []
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Attribute):
             owner = node.value.id if isinstance(node.value, ast.Name) else ""
+            if _is_bare_super(node.value):
+                owner = "super()"
             private = node.attr.startswith("_") and not node.attr.startswith("__")
-            if (private and owner not in {"self", "cls"}) or node.attr == "__dict__":
-                found.append((node.lineno, f"{_dotted_name(node) or '...'}"))
+            if (private and owner not in {"self", "cls", "super()"}) or node.attr == "__dict__":
+                found.append((node.lineno, _describe_owner(node)))
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             if _PRIVATE_NAME.fullmatch(node.value) and not node.value.startswith("__"):
                 found.append((node.lineno, repr(node.value)))
@@ -309,6 +330,7 @@ def test_private_access_scan_flags_each_spelling():
         "dir(agent)\n"
         "inspect.getmembers(agent)\n"
         "from rl_core.agents.returns import _helper\n"
+        "super(ReinforceAgent, agent)._forward(x)\n"
     )
 
     assert sorted(private_accesses(source)) == [
@@ -325,13 +347,17 @@ def test_private_access_scan_flags_each_spelling():
         (10, "dir(...)"),
         (11, "inspect.getmembers(...)"),
         (12, "import _helper"),
+        (13, "super(...)._forward"),
     ]
 
 
 def test_private_access_scan_allows_self_dunders_and_plain_strings():
+    """A test double's own members, reached through self, cls or a zero-argument super(), are its
+    own: super()._hook() reaches nothing self._hook() does not."""
     source = (
         "self._W1 = 0\n"
         "cls._registry\n"
+        "super()._add_observation_noise(obs)\n"
         "agent.__class__.__name__\n"
         "'__init__'\n"
         "match = 'weights_change'\n"
