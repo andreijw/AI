@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -294,11 +295,9 @@ class DDPGAgent(BaseAgent):
             "target_critic": self._target_critic,
         }
 
-    def save(self, path: str) -> None:
-        """
-        Save everything training needs to resume: the four networks, both Adam states and the
-        action and gradient-step counters. The replay buffer is not saved.
-        """
+    def _checkpoint_arrays(self) -> dict[str, Any]:
+        """Everything training needs to resume beyond the generators: the four networks, both
+        Adam states, the action and gradient-step counters and the replay buffer."""
         arrays: dict[str, Any] = {
             f"{net}_{name}": value
             for net, params in self._networks().items()
@@ -308,28 +307,30 @@ class DDPGAgent(BaseAgent):
         arrays.update(self._critic_optimizer.state(prefix="critic_adam_"))
         arrays["training_actions"] = np.array(self._training_actions)
         arrays["gradient_steps"] = np.array(self._gradient_steps)
-        with open(self._resolve_save_path(path), "wb") as f:
-            np.savez(f, **arrays)
+        arrays.update(self.replay_buffer.checkpoint_state())
+        return arrays
 
-    def load(self, path: str) -> None:
+    def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
         """
-        Load a checkpoint written by :meth:`save`.
+        Restore a checkpoint; one saved before the replay buffer was saved empties the buffer.
 
         Raises:
             ValueError: If a stored network has a different shape (other ``hidden_sizes``).
         """
-        with np.load(self._resolve_load_path(path)) as data:
-            for net, params in self._networks().items():
-                for name in params:
-                    stored = data[f"{net}_{name}"]
-                    if stored.shape != params[name].shape:
-                        raise ValueError(
-                            f"{net}_{name} has shape {stored.shape}, expected "
-                            f"{params[name].shape}: the checkpoint has other hidden_sizes, "
-                            "observation_dim or action_dim"
-                        )
-                    params[name] = np.array(stored, dtype=np.float64)
-            self._actor_optimizer.load_state(data, prefix="actor_adam_")
-            self._critic_optimizer.load_state(data, prefix="critic_adam_")
-            self._training_actions = int(data["training_actions"])
-            self._gradient_steps = int(data["gradient_steps"])
+        for net, params in self._networks().items():
+            for name in params:
+                stored = data[f"{net}_{name}"]
+                if stored.shape != params[name].shape:
+                    raise ValueError(
+                        f"{net}_{name} has shape {stored.shape}, expected "
+                        f"{params[name].shape}: the checkpoint has other hidden_sizes, "
+                        "observation_dim or action_dim"
+                    )
+        self.replay_buffer.restore(data)
+        for net, params in self._networks().items():
+            for name in params:
+                params[name] = np.array(data[f"{net}_{name}"], dtype=np.float64)
+        self._actor_optimizer.load_state(data, prefix="actor_adam_")
+        self._critic_optimizer.load_state(data, prefix="critic_adam_")
+        self._training_actions = int(data["training_actions"])
+        self._gradient_steps = int(data["gradient_steps"])

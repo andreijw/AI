@@ -1,11 +1,14 @@
 """Experience replay buffer for off-policy reinforcement learning."""
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 
-from rl_core.seeding import AGENT_REPLAY_STREAM, derive_rng
+from rl_core.seeding import AGENT_REPLAY_STREAM, derive_rng, generator_state, restore_generator
+
+_COLUMNS = ("observations", "actions", "rewards", "next_observations", "dones")
 
 
 class ReplayBuffer:
@@ -260,6 +263,65 @@ class ReplayBuffer:
     def can_sample(self, batch_size: int) -> bool:
         """Return True if the buffer contains at least batch_size transitions."""
         return self._size >= batch_size
+
+    KEY_PREFIX = "replay_"
+
+    def checkpoint_state(self) -> dict[str, np.ndarray]:
+        """
+        The buffer as checkpoint arrays under ``replay_`` keys: the filled part of each column
+        (sampling draws indices below the size, so the rest is never read), the capacity, the
+        next write index, the size and the sampling generator. The columns are views of the
+        buffer, valid until the next write.
+        """
+        state = {f"{self.KEY_PREFIX}{name}": getattr(self, name)[: self._size] for name in _COLUMNS}
+        state[f"{self.KEY_PREFIX}capacity"] = np.array(self.capacity)
+        state[f"{self.KEY_PREFIX}idx"] = np.array(self._idx)
+        state[f"{self.KEY_PREFIX}size"] = np.array(self._size)
+        state[f"{self.KEY_PREFIX}rng"] = generator_state(self._rng)
+        return state
+
+    def restore(self, data: Mapping[str, Any]) -> None:
+        """
+        Replace the contents with a checkpoint's; a checkpoint without ``replay_`` keys empties
+        the buffer.
+
+        Raises:
+            ValueError: Naming the key, if the saved capacity differs from this buffer's, the
+                write index or size is inconsistent, or a column's shape or dtype does not fit.
+                The buffer is then unchanged.
+        """
+        key = self.KEY_PREFIX
+        if f"{key}size" not in data:
+            self.clear()
+            return
+        names = ("capacity", "idx", "rng", *_COLUMNS)
+        missing = [f"{key}{name}" for name in names if f"{key}{name}" not in data]
+        if missing:
+            raise ValueError(
+                f"Checkpoint holds part of a replay buffer; missing {', '.join(missing)}"
+            )
+        capacity, idx, size = (int(data[f"{key}{n}"]) for n in ("capacity", "idx", "size"))
+        if capacity != self.capacity:
+            raise ValueError(
+                f"{key}capacity is {capacity}, this buffer holds {self.capacity}: a wrapped "
+                "buffer cannot move to another capacity"
+            )
+        if not 0 <= size <= capacity:
+            raise ValueError(f"{key}size {size} is outside [0, {capacity}]")
+        if not 0 <= idx < capacity or (size < capacity and idx != size):
+            raise ValueError(f"{key}idx {idx} does not fit size {size} and capacity {capacity}")
+        columns = {name: np.asarray(data[f"{key}{name}"]) for name in _COLUMNS}
+        for name, column in columns.items():
+            current = getattr(self, name)
+            if column.shape != (size, *current.shape[1:]) or column.dtype != current.dtype:
+                raise ValueError(
+                    f"{key}{name} has shape {column.shape} and dtype {column.dtype}, expected "
+                    f"{(size, *current.shape[1:])} and {current.dtype}"
+                )
+        restore_generator(self._rng, data[f"{key}rng"])
+        for name, column in columns.items():
+            getattr(self, name)[:size] = column
+        self._idx, self._size = idx, size
 
     def clear(self) -> None:
         """Reset the buffer to empty state."""

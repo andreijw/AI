@@ -21,7 +21,6 @@ from tests.agent_internals import (
     bellman_targets,
     counters,
     loss_and_grads,
-    share_generators,
     weights,
 )
 from tests.helpers import ReferenceAdam
@@ -242,10 +241,7 @@ def test_a_loaded_agent_resumes_exactly(tmp_path):
     path = str(tmp_path / "dqn.pt")
     agent.save(path)
     resumed = _agent(**RESUMABLE)
-    resumed.load(path)
-    # Training continues from the same replay data and generator state in both.
-    resumed.replay_buffer = copy.deepcopy(agent.replay_buffer)
-    share_generators(agent, resumed)
+    resumed.load(path)  # the checkpoint holds the replay buffer and every generator
 
     for run in (agent, resumed):
         _act(run, 6)

@@ -144,6 +144,8 @@ classDiagram
         +update(batch)* dict
         +save(path)
         +load(path)
+        #_checkpoint_arrays()* dict
+        #_load_checkpoint_arrays(data)*
     }
 
     class RandomAgent {
@@ -241,7 +243,9 @@ evaluation checkpoints, and video captures. `train.py` and the benchmark give th
 environment (built by the challenge's `make_env`, or `setup_eval_env` in the benchmark) and an evaluation seed from
 `rl_core.seeding.eval_seed_for`: evaluation episode i resets that environment with `eval_seed + i`, so every
 evaluation in a run plays the same start states and how often a run evaluates does not change its training episodes.
-The random agents draw their evaluation actions from a separate generator for the same reason. Without an evaluation
+The random agents draw their evaluation actions from a separate generator for the same reason. An agent checkpoint
+holds every generator the agent draws from and, for DQN and DDPG, the replay buffer, so a loaded agent continues
+exactly as the saved one would have. Without an evaluation
 environment (direct `Trainer` callers and tests) evaluation runs on the training environment. `record.py` passes its
 playback environment as the evaluation environment with the same seed, so a playback shows the training run's
 evaluation start states.

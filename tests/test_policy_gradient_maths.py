@@ -27,7 +27,6 @@ from tests.agent_internals import (
     optimizer,
     probabilities,
     set_weights,
-    share_generators,
     state_value,
     weights,
 )
@@ -393,7 +392,6 @@ def test_adam_checkpoint_resumes_exactly(agent_cls, tmp_path):
     resumed = _agent(agent_cls, **{**ADAM, "seed": 99})  # different initial weights
     resumed.load(path)
     assert optimizer(resumed).t == optimizer(agent).t
-    share_generators(agent, resumed)  # PPO shuffles mini-batches with one; checkpoints omit them
 
     agent.update(batch)
     resumed.update(batch)

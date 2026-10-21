@@ -24,9 +24,8 @@ class EpisodeRollout:
     Training waits for whole episodes, so a rollout can exceed ``rollout_steps`` by up to one
     episode. A partly filled rollout is saved in checkpoints (``ppo_rollout_<column>`` keys,
     none while the buffer is empty) and restored on load. The steps are saved as processed, so
-    a resume with a different ``reward_scale`` keeps the old scale for them. Generator states
-    are not saved, so a resumed run shuffles differently from an uninterrupted one. When
-    training ends, a partly filled rollout is not trained on.
+    a resume with a different ``reward_scale`` keeps the old scale for them. When training ends,
+    a partly filled rollout is not trained on.
     """
 
     KEY_PREFIX = "ppo_rollout_"

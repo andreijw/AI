@@ -533,7 +533,8 @@ The `BaseAgent` abstract class defines the interface for all RL agents:
 
 - `select_action()`: Choose actions based on observations
 - `update()`: Update policy based on collected experience
-- `save()` / `load()`: Checkpoint management
+- `_checkpoint_arrays()` / `_load_checkpoint_arrays(data)`: what a checkpoint holds; `BaseAgent.save()` and
+  `load()` write and read it, with every generator
 
 Implemented agents (in `src/rl_core/agents/`):
 

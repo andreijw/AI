@@ -72,7 +72,8 @@ test for a bad value. A key that changes meaning needs a note on what happens to
 have.
 
 **Share through a base class once there are two real users.** `ActorCriticBase` and
-`ContinuousActorCriticBase` own the network, the forward pass, save and load; a subclass supplies `update`.
+`ContinuousActorCriticBase` own the network, the forward pass and the checkpoint arrays (`BaseAgent.save` and
+`load` write and read them, with every generator); a subclass supplies `update`.
 That is the pattern for a family of agents. Stateless maths shared across families (returns, a softmax, an
 optimizer step) is a module-level function, not a mixin. Two occurrences are a note; the third is the
 signal to extract. An abstract base with one subclass and no second one on the roadmap is ceremony.

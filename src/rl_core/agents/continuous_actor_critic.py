@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+from collections.abc import Mapping
 from typing import Any, ClassVar, NamedTuple
 
 import numpy as np
@@ -304,53 +304,33 @@ class ContinuousActorCriticBase(BaseAgent):
         }
         return grads, v_diff
 
-    def save(self, path: str) -> None:
+    def _checkpoint_arrays(self) -> dict[str, Any]:
+        return {
+            **self._params(),
+            "b_v": np.array(self._b_v),
+            "bounded_mean": np.array(self.bounded_mean),
+            **self._optimizer.state(),
+        }
+
+    def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
         """
-        Save network weights to disk in NumPy ``.npz`` format.
-
-        Supported extensions are ``.pt`` and ``.npz``. If *path* has one of
-        these extensions, parameters are written exactly to that filename. If
-        *path* has no extension, ``.npz`` is appended.
-        """
-        save_path = self._resolve_save_path(path)
-        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
-        with open(save_path, "wb") as f:
-            arrays: dict[str, Any] = {
-                **self._params(),
-                "b_v": np.array(self._b_v),
-                "bounded_mean": np.array(self.bounded_mean),
-                **self._optimizer.state(),
-                **self._extra_checkpoint_state(),
-            }
-            np.savez_compressed(f, **arrays)
-
-    def load(self, path: str) -> None:
-        """
-        Load network weights from disk.
-
-        Supported extensions are ``.pt`` and ``.npz``. If *path* has no
-        extension, ``.npz`` is preferred.
-
         Raises:
             ValueError: If the checkpoint's ``bounded_mean`` differs from this agent's (a
                 checkpoint without the key was saved unbounded): the same weights would act
                 differently.
         """
-        resolved_path = self._resolve_load_path(path)
-        with np.load(resolved_path) as data:
-            stored = bool(data["bounded_mean"]) if "bounded_mean" in data else False
-            if stored != self.bounded_mean:
-                raise ValueError(
-                    f"Checkpoint was saved with bounded_mean={stored}, this agent has "
-                    f"bounded_mean={self.bounded_mean}"
-                )
-            for name in self._PARAM_NAMES:
-                setattr(self, f"_{name}", data[name])
-            self._b_v = float(data["b_v"])
-            # A checkpoint saved before log_std was projected may hold one past a bound.
-            np.clip(self._log_std, LOG_STD_MIN, LOG_STD_MAX, out=self._log_std)
-            self._optimizer.load_state(data)
-            self._load_extra_checkpoint_state(data)
+        stored = bool(data["bounded_mean"]) if "bounded_mean" in data else False
+        if stored != self.bounded_mean:
+            raise ValueError(
+                f"Checkpoint was saved with bounded_mean={stored}, this agent has "
+                f"bounded_mean={self.bounded_mean}"
+            )
+        for name in self._PARAM_NAMES:
+            setattr(self, f"_{name}", data[name])
+        self._b_v = float(data["b_v"])
+        # A checkpoint saved before log_std was projected may hold one past a bound.
+        np.clip(self._log_std, LOG_STD_MIN, LOG_STD_MAX, out=self._log_std)
+        self._optimizer.load_state(data)
 
 
 class ContinuousActorCriticAgent(ContinuousActorCriticBase):

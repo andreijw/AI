@@ -24,7 +24,6 @@ from tests.agent_internals import (
     exploration_generator,
     polyak_update,
     replay_generator,
-    share_generators,
     weights,
 )
 from tests.helpers import ReferenceAdam, assert_gradients_match
@@ -431,7 +430,8 @@ def test_two_agents_with_one_seed_act_and_learn_identically():
 
 
 def test_a_loaded_agent_resumes_weights_optimizers_and_counters(tmp_path):
-    """The replay buffer is not saved: the test hands the resumed agent the same one."""
+    """The checkpoint alone resumes training: networks, optimizers, counters, replay buffer and
+    generators."""
     agent = _agent(learning_starts=2)
     for _ in range(3):
         agent.select_action(OBS, training=True)
@@ -440,9 +440,7 @@ def test_a_loaded_agent_resumes_weights_optimizers_and_counters(tmp_path):
     agent.save(path)
 
     resumed = _agent(learning_starts=2)
-    resumed.load(path)
-    resumed.replay_buffer = copy.deepcopy(agent.replay_buffer)
-    share_generators(agent, resumed)
+    resumed.load(path)  # the checkpoint holds the replay buffer and every generator
     assert counters(resumed) == {"training_actions": 3, "gradient_steps": 6}
 
     for run in (agent, resumed):

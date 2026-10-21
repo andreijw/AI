@@ -60,10 +60,10 @@ class TestBaseAgent:
             def update(self, batch):
                 return {}
 
-            def save(self, path):
-                pass
+            def _checkpoint_arrays(self):
+                return {}
 
-            def load(self, path):
+            def _load_checkpoint_arrays(self, data):
                 pass
 
         with pytest.raises(TypeError):
@@ -74,16 +74,16 @@ class TestBaseAgent:
             def select_action(self, observation, training=True):
                 return 0
 
-            def save(self, path):
-                pass
+            def _checkpoint_arrays(self):
+                return {}
 
-            def load(self, path):
+            def _load_checkpoint_arrays(self, data):
                 pass
 
         with pytest.raises(TypeError):
             Incomplete(observation_dim=4, action_dim=2, config={})
 
-    def test_base_agent_subclass_missing_save(self):
+    def test_base_agent_subclass_missing_checkpoint_arrays(self):
         class Incomplete(BaseAgent):
             def select_action(self, observation, training=True):
                 return 0
@@ -91,13 +91,13 @@ class TestBaseAgent:
             def update(self, batch):
                 return {}
 
-            def load(self, path):
+            def _load_checkpoint_arrays(self, data):
                 pass
 
         with pytest.raises(TypeError):
             Incomplete(observation_dim=4, action_dim=2, config={})
 
-    def test_base_agent_subclass_missing_load(self):
+    def test_base_agent_subclass_missing_load_checkpoint_arrays(self):
         class Incomplete(BaseAgent):
             def select_action(self, observation, training=True):
                 return 0
@@ -105,8 +105,8 @@ class TestBaseAgent:
             def update(self, batch):
                 return {}
 
-            def save(self, path):
-                pass
+            def _checkpoint_arrays(self):
+                return {}
 
         with pytest.raises(TypeError):
             Incomplete(observation_dim=4, action_dim=2, config={})
@@ -121,10 +121,10 @@ class TestBaseAgent:
             def update(self, batch):
                 return {}
 
-            def save(self, path):
-                pass
+            def _checkpoint_arrays(self):
+                return {}
 
-            def load(self, path):
+            def _load_checkpoint_arrays(self, data):
                 pass
 
         cfg = {"lr": 0.1}

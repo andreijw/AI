@@ -392,10 +392,10 @@ class _ScriptedAgent(BaseAgent):
         self.update_calls += 1
         return metrics
 
-    def save(self, path):
-        pass
+    def _checkpoint_arrays(self):
+        return {}
 
-    def load(self, path):
+    def _load_checkpoint_arrays(self, data):
         pass
 
 

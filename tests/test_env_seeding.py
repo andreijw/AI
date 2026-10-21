@@ -232,10 +232,10 @@ class _ConstantActionAgent(BaseAgent):
     def update(self, batch):
         return {}
 
-    def save(self, path):
-        pass
+    def _checkpoint_arrays(self):
+        return {}
 
-    def load(self, path):
+    def _load_checkpoint_arrays(self, data):
         pass
 
 

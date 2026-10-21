@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
-import os
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -21,6 +20,12 @@ class ContinuousRandomAgent(BaseAgent):
     Samples actions uniformly at random from [action_low, action_high].
     Useful as an unbiased baseline and for smoke-testing environments.
     """
+
+    # Checkpoints from before 2026-10-21 stored the generators as "rng_state" and "eval_rng_state".
+    _LEGACY_GENERATOR_KEYS: ClassVar[dict[str, str]] = {
+        "_rng": "rng_state",
+        "_eval_rng": "eval_rng_state",
+    }
 
     def __init__(
         self,
@@ -79,38 +84,16 @@ class ContinuousRandomAgent(BaseAgent):
         """
         return {}
 
-    def save(self, path: str) -> None:
-        """Save random-agent metadata and RNG state to a NumPy ``.npz`` checkpoint."""
-        save_path = self._resolve_save_path(path)
-        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
-        state_json = json.dumps(self._rng.bit_generator.state)
-        with open(save_path, "wb") as f:
-            np.savez_compressed(
-                f,
-                observation_dim=np.int64(self.observation_dim),
-                action_dim=np.int64(self.action_dim),
-                action_low=self.action_low,
-                action_high=self.action_high,
-                rng_state=state_json,
-                eval_rng_state=json.dumps(self._eval_rng.bit_generator.state),
-            )
+    def _checkpoint_arrays(self) -> dict[str, Any]:
+        return {
+            "observation_dim": np.int64(self.observation_dim),
+            "action_dim": np.int64(self.action_dim),
+            "action_low": self.action_low,
+            "action_high": self.action_high,
+        }
 
-    def load(self, path: str) -> None:
-        """Load random-agent metadata and RNG state from a NumPy ``.npz`` checkpoint."""
-        resolved_path = self._resolve_load_path(path)
-        with np.load(resolved_path) as data:
-            self.observation_dim = int(data["observation_dim"])
-            self.action_dim = int(data["action_dim"])
-            self.action_low = np.asarray(data["action_low"], dtype=np.float32)
-            self.action_high = np.asarray(data["action_high"], dtype=np.float32)
-            if "rng_state" in data:
-                rng_state_raw = data["rng_state"]
-                rng_state_text = np.asarray(rng_state_raw).item()
-                if isinstance(rng_state_text, str):
-                    self._rng = np.random.default_rng()
-                    self._rng.bit_generator.state = json.loads(rng_state_text)
-            if "eval_rng_state" in data:  # checkpoints from before 2026-10-18 have none
-                self._eval_rng = np.random.default_rng()
-                self._eval_rng.bit_generator.state = json.loads(
-                    str(np.asarray(data["eval_rng_state"]).item())
-                )
+    def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
+        self.observation_dim = int(data["observation_dim"])
+        self.action_dim = int(data["action_dim"])
+        self.action_low = np.asarray(data["action_low"], dtype=np.float32)
+        self.action_high = np.asarray(data["action_high"], dtype=np.float32)
