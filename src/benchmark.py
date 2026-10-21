@@ -13,6 +13,7 @@ import logging
 import os
 import sys
 import time
+from dataclasses import dataclass
 from typing import Any
 
 # Ensure src is in Python path
@@ -118,6 +119,71 @@ def classify_run(
     }
 
 
+def summarise_runs(
+    results: dict[str, list[dict[str, Any]]], budgets: dict[str, tuple[int, str]]
+) -> dict[str, dict[str, Any]]:
+    """
+    Aggregate each agent's runs into the statistics the metrics file and report show.
+
+    Args:
+        results: Per agent, the run records :meth:`BenchmarkRunner.run` collects.
+        budgets: Per agent, the ``(value, unit)`` training budget of its runs.
+
+    Returns:
+        Per agent: budget, mean episodes, solve, held and evaluation rates, the mean and spread of
+        the evaluation reward, mean duration, and the average solve episode and step (None when
+        no run solved).
+    """
+    summary: dict[str, dict[str, Any]] = {}
+    for agent_type, runs in results.items():
+        eval_rewards = [r["eval_mean_reward"] for r in runs]
+        durations = [r["duration"] for r in runs]
+        solved_eps = [r["solved_episode"] for r in runs if r["is_solved"]]
+        solved_steps = [r["solved_step"] for r in runs if r["solved_step"] is not None]
+        eval_reached = [r for r in runs if r["eval_reached_threshold"]]
+        held = [r for r in runs if r["held"]]
+
+        summary[agent_type] = {
+            "budget": budgets[agent_type][0],
+            "budget_unit": budgets[agent_type][1],
+            "episodes": float(np.mean([r["total_episodes"] for r in runs])),
+            "avg_solved_step": float(np.mean(solved_steps)) if solved_steps else None,
+            "held_rate": float(len(held) / len(runs)),
+            "mean_eval_reward": float(np.mean(eval_rewards)),
+            "std_eval_reward": float(np.std(eval_rewards)),
+            "mean_duration": float(np.mean(durations)),
+            "solve_rate": float(len(solved_eps) / len(runs)),
+            "avg_solved_episode": float(np.mean(solved_eps)) if solved_eps else None,
+            "eval_threshold_rate": float(len(eval_reached) / len(runs)),
+            "runs": len(runs),
+        }
+    return summary
+
+
+@dataclass(frozen=True)
+class BenchmarkSettings:
+    """The validated settings of one benchmark: what runs, for how long, and how it is scored."""
+
+    agents: list[str]
+    seeds: list[int]
+    episodes: int | None
+    steps: int | None
+    window: int
+    eval_episodes: int
+    output_dir: str
+
+
+@dataclass(frozen=True)
+class SeedRun:
+    """One agent's run on one seed: its record, learning curve and training budget."""
+
+    result: dict[str, Any]
+    rewards: list[float]
+    lengths: list[int]
+    budget: tuple[int, str]
+    separate_eval: bool
+
+
 class BenchmarkRunner:
     """
     Reusable multi-agent benchmark orchestration engine.
@@ -164,6 +230,49 @@ class BenchmarkRunner:
         Returns:
             Dictionary containing raw runs, aggregated statistics, and output artifact paths.
         """
+        settings = self._settings(agents, episodes, seeds, output_dir, window, steps, eval_episodes)
+        os.makedirs(settings.output_dir, exist_ok=True)
+        self._print_banner(settings)
+
+        runs = {agent_type: self._run_agent(agent_type, settings) for agent_type in settings.agents}
+        results = {agent: [run.result for run in agent_runs] for agent, agent_runs in runs.items()}
+        # Each agent's budget as its last seed set it; every seed of an agent shares one config.
+        budgets = {agent: agent_runs[-1].budget for agent, agent_runs in runs.items()}
+        # Whether every run evaluated on a separate environment (challenges without configs do not).
+        separate_eval = all(run.separate_eval for agent_runs in runs.values() for run in agent_runs)
+        summary = summarise_runs(results, budgets)
+
+        plot_file = self._save_plot(runs, budgets, settings) if save_plot else None
+        metrics_json_path = self._write_metrics_json(settings, summary, results, budgets)
+        if report_path:
+            os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
+            report_md = self._generate_markdown_report(
+                summary, settings, plot_file, report_path, separate_eval
+            )
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write(report_md)
+            print(f"Benchmark markdown report saved to: {report_path}")
+
+        return {
+            "challenge": self.challenge.name,
+            "summary": summary,
+            "results": results,
+            "plot_path": plot_file,
+            "metrics_json": metrics_json_path,
+            "report_path": report_path,
+        }
+
+    def _settings(
+        self,
+        agents: list[str] | None,
+        episodes: int | None,
+        seeds: list[int] | None,
+        output_dir: str | None,
+        window: int,
+        steps: int | None,
+        eval_episodes: int,
+    ) -> BenchmarkSettings:
+        """Fill in the defaults and check the arguments of :meth:`run`, before anything is written."""
         agents = self.challenge.supported_agents if agents is None else agents
         seeds = [42, 123] if seeds is None else seeds
         output_dir = output_dir or f"plots/benchmarks/{self.challenge.key}"
@@ -184,144 +293,152 @@ class BenchmarkRunner:
         apply_budget_override({}, episodes, steps)  # rejects both at once
         if not seeds:
             raise ValueError("seeds list must not be empty.")
+        return BenchmarkSettings(agents, seeds, episodes, steps, window, eval_episodes, output_dir)
 
-        os.makedirs(output_dir, exist_ok=True)
-
-        results: dict[str, list[dict[str, Any]]] = {}
-        curve_data: dict[str, list[list[float]]] = {}
-        length_data: dict[str, list[list[int]]] = {}
-        budgets: dict[str, tuple[int, str]] = {}
-
+    def _print_banner(self, settings: BenchmarkSettings) -> None:
         print("=" * 70)
         print(f"Starting Benchmark Suite for Challenge: {self.challenge.name}")
-        print(f"Agents: {agents}")
-        print(f"Seeds:  {seeds}")
-        print(f"Budget per run: {_describe_budget(episodes, steps)}")
+        print(f"Agents: {settings.agents}")
+        print(f"Seeds:  {settings.seeds}")
+        print(f"Budget per run: {_describe_budget(settings.episodes, settings.steps)}")
         if self.challenge.solve_threshold is not None:
             print(f"Solve Threshold:  {self.challenge.solve_threshold}")
         print("=" * 70)
 
-        # Whether every run evaluated on a separate environment (challenges without configs do not).
-        separate_eval = True
-        for agent_type in agents:
-            results[agent_type] = []
-            curve_data[agent_type] = []
-            length_data[agent_type] = []
-
-            print(f"\n[Benchmarking] Agent: {agent_type.upper()} ({len(seeds)} seeds)")
-
-            for seed in seeds:
-                if steps is None:
-                    env, agent, train_cfg = self.challenge.setup_run(agent_type, seed, episodes)
-                else:
-                    env, agent, train_cfg = self.challenge.setup_run(
-                        agent_type, seed, episodes, steps=steps
-                    )
-                budgets[agent_type] = budget_of(train_cfg)
-                eval_env = self.challenge.setup_eval_env(agent_type, seed)
-                separate_eval = separate_eval and eval_env is not None
-                try:
-                    trainer = Trainer(
-                        agent=agent,
-                        env=env,
-                        config=train_cfg,
-                        logger=self.logger,
-                        eval_env=eval_env,
-                        eval_seed=None if eval_env is None else eval_seed_for(seed),
-                    )
-
-                    start_time = time.perf_counter()
-                    trainer.train()
-                    duration = time.perf_counter() - start_time
-
-                    eval_stats = trainer.evaluate(num_episodes=eval_episodes)
-                    eval_mean = float(eval_stats.get("mean_reward", 0.0))
-
-                    episode_rewards = [float(r) for r in trainer.episode_rewards]
-                    episode_lengths = [int(n) for n in trainer.episode_lengths]
-                    outcome = classify_run(
-                        episode_rewards,
-                        eval_mean,
-                        threshold=self.challenge.solve_threshold,
-                        window=window,
-                        episode_lengths=episode_lengths,
-                    )
-                    solved_ep = outcome["solved_episode"]
-                    is_solved = outcome["is_solved"]
-
-                    run_result = {
-                        "seed": seed,
-                        "duration": duration,
-                        "eval_mean_reward": eval_mean,
-                        "final_rolling_avg": float(_rolling_average(episode_rewards, window)[-1])
-                        if episode_rewards
-                        else 0.0,
-                        "solved_episode": solved_ep,
-                        "solved_step": outcome["solved_step"],
-                        "is_solved": is_solved,
-                        "held": outcome["held"],
-                        "eval_reached_threshold": outcome["eval_reached_threshold"],
-                        "total_episodes": len(episode_rewards),
-                        "total_steps": int(sum(episode_lengths)),
-                        "window": window,
-                    }
-                    results[agent_type].append(run_result)
-                    curve_data[agent_type].append(episode_rewards)
-                    length_data[agent_type].append(episode_lengths)
-
-                finally:
-                    env.close()
-                    if eval_env is not None:
-                        eval_env.close()
-
-                status = f"Solved @ ep {solved_ep}" if is_solved else "Did not solve"
-                print(
-                    f"  -> Seed {seed:4d} | Eval Reward: {eval_mean:6.1f} | "
-                    f"Time: {duration:5.2f}s | {status}"
-                )
-
-        summary: dict[str, dict[str, Any]] = {}
-        for agent_type, runs in results.items():
-            eval_rewards = [r["eval_mean_reward"] for r in runs]
-            durations = [r["duration"] for r in runs]
-            solved_eps = [r["solved_episode"] for r in runs if r["is_solved"]]
-            solved_steps = [r["solved_step"] for r in runs if r["solved_step"] is not None]
-            eval_reached = [r for r in runs if r["eval_reached_threshold"]]
-            held = [r for r in runs if r["held"]]
-
-            summary[agent_type] = {
-                "budget": budgets[agent_type][0],
-                "budget_unit": budgets[agent_type][1],
-                "episodes": float(np.mean([r["total_episodes"] for r in runs])),
-                "avg_solved_step": float(np.mean(solved_steps)) if solved_steps else None,
-                "held_rate": float(len(held) / len(runs)),
-                "mean_eval_reward": float(np.mean(eval_rewards)),
-                "std_eval_reward": float(np.std(eval_rewards)),
-                "mean_duration": float(np.mean(durations)),
-                "solve_rate": float(len(solved_eps) / len(runs)),
-                "avg_solved_episode": float(np.mean(solved_eps)) if solved_eps else None,
-                "eval_threshold_rate": float(len(eval_reached) / len(runs)),
-                "runs": len(runs),
-            }
-
-        plot_file = None
-        if save_plot:
-            plot_path = os.path.join(output_dir, "benchmark_comparison.png")
-            plot_file = plot_benchmark_comparison(
-                curve_data,
-                window=window,
-                save_path=plot_path,
-                target_score=self.challenge.solve_threshold,
-                title=f"{self.challenge.name} Multi-Agent Benchmark Comparison",
-                # Against steps only when every agent has a step budget: under episode budgets
-                # the shortest seed would cut every other seed's curve short.
-                episode_lengths=(
-                    length_data if all(u == "steps" for _, u in budgets.values()) else None
-                ),
+    def _run_agent(self, agent_type: str, settings: BenchmarkSettings) -> list[SeedRun]:
+        """Run one agent on every seed in turn, printing a line per seed."""
+        print(f"\n[Benchmarking] Agent: {agent_type.upper()} ({len(settings.seeds)} seeds)")
+        runs = []
+        for seed in settings.seeds:
+            run = self._run_one_seed(agent_type, seed, settings)
+            runs.append(run)
+            result = run.result
+            status = (
+                f"Solved @ ep {result['solved_episode']}"
+                if result["is_solved"]
+                else "Did not solve"
             )
-            print(f"\nBenchmark comparison plot saved to: {plot_file}")
+            print(
+                f"  -> Seed {seed:4d} | Eval Reward: {result['eval_mean_reward']:6.1f} | "
+                f"Time: {result['duration']:5.2f}s | {status}"
+            )
+        return runs
 
-        metrics_json_path = os.path.join(output_dir, "benchmark_metrics.json")
+    def _run_one_seed(self, agent_type: str, seed: int, settings: BenchmarkSettings) -> SeedRun:
+        """
+        Train and evaluate one agent on one seed, and classify the run.
+
+        The training run is set up before the evaluation environment, and both are closed even
+        if training fails.
+        """
+        if settings.steps is None:
+            env, agent, train_cfg = self.challenge.setup_run(agent_type, seed, settings.episodes)
+        else:
+            env, agent, train_cfg = self.challenge.setup_run(
+                agent_type, seed, settings.episodes, steps=settings.steps
+            )
+        budget = budget_of(train_cfg)
+        eval_env = self.challenge.setup_eval_env(agent_type, seed)
+        try:
+            trainer = Trainer(
+                agent=agent,
+                env=env,
+                config=train_cfg,
+                logger=self.logger,
+                eval_env=eval_env,
+                eval_seed=None if eval_env is None else eval_seed_for(seed),
+            )
+
+            start_time = time.perf_counter()
+            trainer.train()
+            duration = time.perf_counter() - start_time
+
+            eval_stats = trainer.evaluate(num_episodes=settings.eval_episodes)
+            eval_mean = float(eval_stats.get("mean_reward", 0.0))
+
+            episode_rewards = [float(r) for r in trainer.episode_rewards]
+            episode_lengths = [int(n) for n in trainer.episode_lengths]
+        finally:
+            env.close()
+            if eval_env is not None:
+                eval_env.close()
+
+        result = self._run_record(
+            seed, duration, eval_mean, episode_rewards, episode_lengths, settings.window
+        )
+        return SeedRun(result, episode_rewards, episode_lengths, budget, eval_env is not None)
+
+    def _run_record(
+        self,
+        seed: int,
+        duration: float,
+        eval_mean: float,
+        episode_rewards: list[float],
+        episode_lengths: list[int],
+        window: int,
+    ) -> dict[str, Any]:
+        """The record of one finished run, as the metrics file stores it."""
+        outcome = classify_run(
+            episode_rewards,
+            eval_mean,
+            threshold=self.challenge.solve_threshold,
+            window=window,
+            episode_lengths=episode_lengths,
+        )
+        return {
+            "seed": seed,
+            "duration": duration,
+            "eval_mean_reward": eval_mean,
+            "final_rolling_avg": float(_rolling_average(episode_rewards, window)[-1])
+            if episode_rewards
+            else 0.0,
+            "solved_episode": outcome["solved_episode"],
+            "solved_step": outcome["solved_step"],
+            "is_solved": outcome["is_solved"],
+            "held": outcome["held"],
+            "eval_reached_threshold": outcome["eval_reached_threshold"],
+            "total_episodes": len(episode_rewards),
+            "total_steps": int(sum(episode_lengths)),
+            "window": window,
+        }
+
+    def _save_plot(
+        self,
+        runs: dict[str, list[SeedRun]],
+        budgets: dict[str, tuple[int, str]],
+        settings: BenchmarkSettings,
+    ) -> str | None:
+        """Plot every agent's learning curves into the output folder; return the image path."""
+        curve_data = {
+            agent: [run.rewards for run in agent_runs] for agent, agent_runs in runs.items()
+        }
+        length_data = {
+            agent: [run.lengths for run in agent_runs] for agent, agent_runs in runs.items()
+        }
+        plot_file = plot_benchmark_comparison(
+            curve_data,
+            window=settings.window,
+            save_path=os.path.join(settings.output_dir, "benchmark_comparison.png"),
+            target_score=self.challenge.solve_threshold,
+            title=f"{self.challenge.name} Multi-Agent Benchmark Comparison",
+            # Against steps only when every agent has a step budget: under episode budgets
+            # the shortest seed would cut every other seed's curve short.
+            episode_lengths=(
+                length_data if all(u == "steps" for _, u in budgets.values()) else None
+            ),
+        )
+        print(f"\nBenchmark comparison plot saved to: {plot_file}")
+        return plot_file
+
+    def _write_metrics_json(
+        self,
+        settings: BenchmarkSettings,
+        summary: dict[str, dict[str, Any]],
+        results: dict[str, list[dict[str, Any]]],
+        budgets: dict[str, tuple[int, str]],
+    ) -> str:
+        """Write the summary, every run and the settings to benchmark_metrics.json; return its path."""
+        metrics_json_path = os.path.join(settings.output_dir, "benchmark_metrics.json")
         with open(metrics_json_path, "w", encoding="utf-8") as f:
             json.dump(
                 {
@@ -329,10 +446,10 @@ class BenchmarkRunner:
                     "summary": summary,
                     "detailed_runs": results,
                     "metadata": {
-                        "agents": agents,
-                        "seeds": seeds,
-                        "episodes": episodes,
-                        "steps": steps,
+                        "agents": settings.agents,
+                        "seeds": settings.seeds,
+                        "episodes": settings.episodes,
+                        "steps": settings.steps,
                         "budgets_per_agent": {
                             agent: {"value": value, "unit": unit}
                             for agent, (value, unit) in budgets.items()
@@ -340,55 +457,25 @@ class BenchmarkRunner:
                         "episodes_per_agent": {
                             agent: summary[agent]["episodes"] for agent in summary
                         },
-                        "window": window,
-                        "eval_episodes": eval_episodes,
+                        "window": settings.window,
+                        "eval_episodes": settings.eval_episodes,
                     },
                 },
                 f,
                 indent=2,
             )
-
-        if report_path:
-            os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
-            report_md = self._generate_markdown_report(
-                summary,
-                agents,
-                seeds,
-                episodes,
-                plot_file,
-                report_path,
-                window,
-                eval_episodes,
-                steps,
-                separate_eval=separate_eval,
-            )
-            with open(report_path, "w", encoding="utf-8") as f:
-                f.write(report_md)
-            print(f"Benchmark markdown report saved to: {report_path}")
-
-        return {
-            "challenge": self.challenge.name,
-            "summary": summary,
-            "results": results,
-            "plot_path": plot_file,
-            "metrics_json": metrics_json_path,
-            "report_path": report_path,
-        }
+        return metrics_json_path
 
     def _generate_markdown_report(
         self,
         summary: dict[str, dict[str, Any]],
-        agents: list[str],
-        seeds: list[int],
-        episodes: int | None,
+        settings: BenchmarkSettings,
         plot_file: str | None,
-        report_path: str | None = None,
-        window: int = 100,
-        eval_episodes: int = 10,
-        steps: int | None = None,
-        separate_eval: bool = False,
+        report_path: str | None,
+        separate_eval: bool,
     ) -> str:
         """Generate formatted Markdown report text for this challenge."""
+        agents, seeds, window = settings.agents, settings.seeds, settings.window
         threshold = self.challenge.solve_threshold
         thresh_str = f">= {threshold:.0f}" if threshold is not None else "N/A"
         lines = [
@@ -399,7 +486,7 @@ class BenchmarkRunner:
             "## Benchmark Configuration",
             "",
             f"- **Challenge / Environment**: `{self.challenge.name}` (Solved criteria: average reward {thresh_str})",
-            f"- **Budget per Run**: {_describe_budget(episodes, steps)}",
+            f"- **Budget per Run**: {_describe_budget(settings.episodes, settings.steps)}",
             f"- **Seeds Evaluated**: `{seeds}`",
             f"- **Algorithms**: `{agents}`",
             "",
@@ -409,6 +496,7 @@ class BenchmarkRunner:
         if threshold is None:
             lines.append("This challenge has no solve threshold, so no run counts as solved.")
         else:
+            eval_episodes = settings.eval_episodes
             eval_desc = f"{eval_episodes} greedy episode{'' if eval_episodes == 1 else 's'}"
             lines.extend(
                 [

@@ -1,0 +1,152 @@
+{
+  "challenge": "GenericWorld-v0",
+  "summary": {
+    "short": {
+      "budget": 4,
+      "budget_unit": "episodes",
+      "episodes": 4.0,
+      "avg_solved_step": 2.0,
+      "held_rate": 0.3333333333333333,
+      "mean_eval_reward": 21.666666666666668,
+      "std_eval_reward": 11.785113019775793,
+      "mean_duration": 2.0,
+      "solve_rate": 0.3333333333333333,
+      "avg_solved_episode": 2.0,
+      "eval_threshold_rate": 0.6666666666666666,
+      "runs": 3
+    },
+    "long": {
+      "budget": 4,
+      "budget_unit": "episodes",
+      "episodes": 4.0,
+      "avg_solved_step": 2.0,
+      "held_rate": 0.3333333333333333,
+      "mean_eval_reward": 21.666666666666668,
+      "std_eval_reward": 11.785113019775793,
+      "mean_duration": 3.5,
+      "solve_rate": 0.3333333333333333,
+      "avg_solved_episode": 2.0,
+      "eval_threshold_rate": 0.6666666666666666,
+      "runs": 3
+    }
+  },
+  "detailed_runs": {
+    "short": [
+      {
+        "seed": 3,
+        "duration": 1.5,
+        "eval_mean_reward": 5.0,
+        "final_rolling_avg": 5.0,
+        "solved_episode": null,
+        "solved_step": null,
+        "is_solved": false,
+        "held": false,
+        "eval_reached_threshold": false,
+        "total_episodes": 4,
+        "total_steps": 4,
+        "window": 2
+      },
+      {
+        "seed": 2,
+        "duration": 2.0,
+        "eval_mean_reward": 30.0,
+        "final_rolling_avg": 25.0,
+        "solved_episode": 2,
+        "solved_step": 2,
+        "is_solved": true,
+        "held": true,
+        "eval_reached_threshold": true,
+        "total_episodes": 4,
+        "total_steps": 4,
+        "window": 2
+      },
+      {
+        "seed": 1,
+        "duration": 2.5,
+        "eval_mean_reward": 30.0,
+        "final_rolling_avg": 5.0,
+        "solved_episode": null,
+        "solved_step": null,
+        "is_solved": false,
+        "held": false,
+        "eval_reached_threshold": true,
+        "total_episodes": 4,
+        "total_steps": 4,
+        "window": 2
+      }
+    ],
+    "long": [
+      {
+        "seed": 3,
+        "duration": 3.0,
+        "eval_mean_reward": 5.0,
+        "final_rolling_avg": 5.0,
+        "solved_episode": null,
+        "solved_step": null,
+        "is_solved": false,
+        "held": false,
+        "eval_reached_threshold": false,
+        "total_episodes": 4,
+        "total_steps": 4,
+        "window": 2
+      },
+      {
+        "seed": 2,
+        "duration": 3.5,
+        "eval_mean_reward": 30.0,
+        "final_rolling_avg": 25.0,
+        "solved_episode": 2,
+        "solved_step": 2,
+        "is_solved": true,
+        "held": true,
+        "eval_reached_threshold": true,
+        "total_episodes": 4,
+        "total_steps": 4,
+        "window": 2
+      },
+      {
+        "seed": 1,
+        "duration": 4.0,
+        "eval_mean_reward": 30.0,
+        "final_rolling_avg": 5.0,
+        "solved_episode": null,
+        "solved_step": null,
+        "is_solved": false,
+        "held": false,
+        "eval_reached_threshold": true,
+        "total_episodes": 4,
+        "total_steps": 4,
+        "window": 2
+      }
+    ]
+  },
+  "metadata": {
+    "agents": [
+      "short",
+      "long"
+    ],
+    "seeds": [
+      3,
+      2,
+      1
+    ],
+    "episodes": 4,
+    "steps": null,
+    "budgets_per_agent": {
+      "short": {
+        "value": 4,
+        "unit": "episodes"
+      },
+      "long": {
+        "value": 4,
+        "unit": "episodes"
+      }
+    },
+    "episodes_per_agent": {
+      "short": 4.0,
+      "long": 4.0
+    },
+    "window": 2,
+    "eval_episodes": 10
+  }
+}
