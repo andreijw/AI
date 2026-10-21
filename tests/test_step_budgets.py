@@ -1,5 +1,5 @@
-"""Training budgets in environment steps, and the step-based solve measures (roadmap: Benchmark Budgets and
-Solve Rule in Environment Steps)."""
+"""Training budgets in environment steps, and the step-based solve measures (CHANGELOG.md,
+2026-10-16)."""
 
 import warnings
 

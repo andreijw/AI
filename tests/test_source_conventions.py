@@ -193,7 +193,7 @@ def seeded_default_rng_calls(source: str) -> list[int]:
 
 def test_agents_seed_generators_through_named_streams():
     """An agent's generators come from rl_core.seeding.derive_rng(seed, <stream>): default_rng(seed) would repeat
-    the environment's start-state numbers (roadmap: "Separate Random Streams for Agents and Buffers")."""
+    the environment's start-state numbers (CHANGELOG.md, 2026-10-19)."""
     agent_files = sorted((REPO_ROOT / "src" / "rl_core" / "agents").glob("*.py"))
     offenders = [
         f"{path.relative_to(REPO_ROOT)}:{line}"
@@ -217,11 +217,11 @@ def test_the_seeded_default_rng_scan_flags_what_it_claims():
 # Agent tests go through the public interface; private access lives in tests/agent_internals.py
 # ---------------------------------------------------------------------------
 
-# Every test file is held to the agents' public interface (roadmap: "Test Agents Through Their Public
-# Behaviour"), except these, which test something other than an agent and reach into it on purpose.
+# Every test file is held to the agents' public interface (CHANGELOG.md,
+# 2026-10-20), except these, which test something other than an agent and reach into it on purpose.
 PRIVATE_ACCESS_EXEMPT = {
-    "test_trainer.py": "Trainer integration tests (out of scope of the roadmap item)",
-    "test_train_video.py": "script tests (out of scope of the roadmap item)",
+    "test_trainer.py": "Trainer integration tests (out of scope of the public-interface work)",
+    "test_train_video.py": "script tests (out of scope of the public-interface work)",
     "test_environment.py": "environment wrapper internals (action noise, domain randomization)",
     "test_pendulum.py": "environment wrapper internals (action noise)",
     "test_replay_buffer.py": "the buffer's write index",

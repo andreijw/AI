@@ -1,4 +1,4 @@
-"""Evaluation on its own environment with a fixed set of start states (roadmap: "Separate Evaluation Environment").
+"""Evaluation on its own environment with a fixed set of start states (CHANGELOG.md, 2026-10-18).
 
 Before this change evaluation ran on the training environment, so each evaluation consumed start states (and,
 for the random agents, generator draws) that training would otherwise have used: how often a run evaluated

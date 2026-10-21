@@ -1,5 +1,5 @@
-"""Every agent's random generators come from named streams of its seed (roadmap: "Separate Random Streams for Agents
-and Buffers").
+"""Every agent's random generators come from named streams of its seed (CHANGELOG.md,
+2026-10-19).
 
 Committed configs give an agent the environment's seed, and Gymnasium's ``reset(seed=s)`` draws start states from a
 generator equal to ``np.random.default_rng(s)``. An agent that seeded its own generators the same way drew the very

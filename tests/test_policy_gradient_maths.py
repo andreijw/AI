@@ -467,8 +467,8 @@ def test_repeated_updates_on_one_batch_fit_it(agent_cls):
         best = max(best, float(probabilities(agent, state)[0]))
 
     if agent_cls is ActorCriticAgent:
-        # The discrete Actor-Critic fits this batch and can then collapse to the other action (roadmap: "Separate
-        # Random Streams for Agents and Buffers" -> Finding), so it is held to fitting it at some point.
+        # The discrete Actor-Critic fits this batch and can then collapse to the other action (roadmap:
+        # "Ideas", not yet investigated), so it is held to fitting it at some point.
         assert best > 0.9, "the agent must come to prefer the rewarded action"
     else:
         assert probabilities(agent, state)[0] > 0.9, (

@@ -40,7 +40,8 @@ CONTRIBUTING.md, GEMINI.md and ARCHITECTURE.md.
 
 | Document | Owns | Update when |
 | :--- | :--- | :--- |
-| `docs/roadmap.md` | Each item's description, acceptance criteria, status, follow-ups | Always. Record what was built and what was dropped. Mark `[x]` only after the maintainer confirms |
+| `docs/roadmap.md` | Open and in-progress items: description, acceptance criteria, status, follow-ups | Always. Record what was built and what was dropped while the item is open |
+| `CHANGELOG.md` | One condensed entry per completed item, newest first, under `Unreleased` until dated | When an item completes, in its hand-off commit; the item leaves the roadmap at the same time |
 | `TESTING.md` | Manual checks a person runs, as rows with an ID (`ENV-`, `TR-`, `VID-`, `OUT-`, `BM-`, `CKPT-`, `LOG-`, `CI-`), a command and an expected result | A command, flag, output path or expected behaviour was added or changed |
 | `README.md` | Features, project structure, install, usage commands, configuration, architecture summary | A headline feature, a command, a prerequisite or the folder layout changed |
 | `ARCHITECTURE.md` | Package boundaries, the agent class diagram, the training sequence, the artifact tree, extension steps | A class, a base-class method in the diagram, a boundary or an output path changed |
@@ -64,10 +65,13 @@ Two things are generated, so run the generator and never edit by hand:
 Prefer pointing at the source over restating it. "See `configs/cartpole_dqn.yaml`" cannot go stale; a
 copied table of hyperparameters will.
 
-When an item is confirmed complete, the roadmap keeps one line for it under **Completed Releases &
-Milestones** and the full description comes out of the upcoming section: an item should not appear both
-folded and in full. Before removing the full text, move anything still live in it (follow-ups, deferred
-ideas) to the open item it belongs to, or to a new one.
+When an item completes, it leaves `docs/roadmap.md` and a condensed entry goes under `## Unreleased` in
+`CHANGELOG.md`: what changed, the PR or branch, and the measured numbers other documents quote. Before removing
+the item, move anything still live in it (follow-ups, deferred ideas) to the open item it belongs to, or to a
+new one. An item delivered over several PRs stays `[~]` with a progress note until the last one. When the pull requests behind `Unreleased` entries have merged, the next hand-off moves those entries under a
+`## <date>` heading, the day the last of them merged.
+Other documents cite completed work as `(CHANGELOG.md, <date>)`, never by roadmap item name, and never as
+`Unreleased`, which moves.
 
 When one document contradicts another, the repository is the source of truth: fix the document, and if it
 cannot be fixed in this change, add it to **Known Discrepancies** in `CLAUDE.md`.
@@ -78,7 +82,7 @@ After editing, `Grep` each file for a phrase you just wrote, and check again imm
 editor with the file open can write an old buffer back over the change.
 
 Then confirm the old facts are gone: the searches from step 2 should now return nothing but intended
-history (completed roadmap items keep their original wording).
+history (changelog entries keep their original wording).
 
 CI lints every Markdown file with `markdownlint-cli` 0.39.0 and `.markdownlint.json`: prose lines are at
 most 120 characters; tables and code blocks are exempt. Run the real linter where Node is installed. Where

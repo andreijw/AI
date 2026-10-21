@@ -1,4 +1,4 @@
-"""DQN rejects invalid settings at construction, and warm-up reports no loss (roadmap: "DQN Config Validation")."""
+"""DQN rejects invalid settings at construction, and warm-up reports no loss (CHANGELOG.md, 2026-10-19)."""
 
 import numpy as np
 import pytest

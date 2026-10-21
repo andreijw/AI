@@ -3,7 +3,7 @@
 # except the network: 64x64 instead of rl-zoo's 400x300, which takes about 16x longer in NumPy here.
 # Measured 2026-10-16, seeds 1-5, 100-episode rule: 5 of 5 solve at 31,000 to 31,600 steps and hold; greedy
 # evaluation -150 (+/- 27 across seed means) against rl-zoo's -152 (+/- 94 across episodes)
-# (roadmap: "Continuous Off-Policy Learning & DDPG").
+# (CHANGELOG.md, 2026-10-18).
 
 environment:
   name: "Pendulum-v1"

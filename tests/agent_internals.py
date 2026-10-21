@@ -5,7 +5,7 @@ Tests that check the maths directly (gradient checks, losses worked out by hand,
 against an independent reference) also need the weights, the forward pass and the loss-and-gradient
 methods. They reach them only through the functions here, so a refactor that renames an attribute
 changes this file and no test. ``tests/test_source_conventions.py`` holds the migrated test files to
-that (roadmap: "Test Agents Through Their Public Behaviour").
+that (CHANGELOG.md, 2026-10-20).
 
 Weights are keyed by the names the agent's checkpoint uses (``W1``, ``b1``, ``W2`` … for REINFORCE;
 ``W1``, ``b1``, ``W_pi``, ``b_pi``, ``W_v``, ``b_v`` for the discrete actor-critic agents; ``W1``, ``b1``,

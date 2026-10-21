@@ -31,7 +31,7 @@ agent:
 
 # Training settings
 training:
-  total_steps: 300000  # Environment steps: rl-zoo's 50k cannot hold a 100-episode average of 475 (roadmap)
+  total_steps: 300000  # Environment steps: rl-zoo's 50k cannot hold a 100-episode average of 475 (CHANGELOG.md, 2026-10-18)
   max_steps_per_episode: 500
   eval_frequency: 50             # Evaluate every N episodes
   save_frequency: 100            # Save checkpoint every N episodes

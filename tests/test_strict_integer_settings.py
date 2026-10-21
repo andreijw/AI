@@ -1,6 +1,6 @@
 """Every agent rejects a non-integer for its integer settings at construction, naming the key.
 
-Roadmap: "Strict Integer Settings for Every Agent". Before, ``int(...)`` turned 2.5 into 2, 4.0 into 4,
+CHANGELOG.md, 2026-10-20. Before, ``int(...)`` turned 2.5 into 2, 4.0 into 4,
 ``True`` into 1 and ``"4"`` into 4 without a word. DQN and the PPO-specific settings are covered in
 ``tests/test_dqn_validation.py``, ``tests/test_discrete_ppo.py`` and ``tests/test_continuous_ppo_rollouts.py``.
 """

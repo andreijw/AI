@@ -219,15 +219,13 @@ not measured, so a single `train.py` run may land on the unlucky side of these n
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates) | 1,000,000 | 0 of 5 | — | 0 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
-47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (roadmap: "DQN Reaches the rl-zoo
-Reference"). Pendulum DDPG uses rl-zoo's settings with 64×64 networks instead of 400×300, which take about 16 times
-longer in NumPy; its greedy evaluation averages -158 (± 25 across the 5 seeds' means) against rl-zoo's -152
-(± 94 across episodes of one run) (roadmap: "Continuous Off-Policy
-Learning & DDPG"). Pendulum PPO trains on rollouts of whole episodes for 200,000 steps, twice rl-zoo's 100,000;
-updating on one episode at a time it solved no seed (roadmap: "Pendulum PPO Holds -200 Under the 100-Episode
-Rule").
+47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
+Pendulum DDPG uses rl-zoo's settings with 64×64 networks instead of 400×300, which take about 16 times longer in
+NumPy; its greedy evaluation averages -158 (± 25 across the 5 seeds' means) against rl-zoo's -152 (± 94 across
+episodes of one run) (CHANGELOG.md, 2026-10-19). Pendulum PPO trains on rollouts of whole episodes for 200,000
+steps, twice rl-zoo's 100,000; updating on one episode at a time it solved no seed (CHANGELOG.md, 2026-10-18).
 Continuous Actor-Critic does not solve: its training average ends at -286 to -307, though its greedy evaluation
-of -172 ± 27 beats the random agent on every seed (roadmap: "Continuous Actor-Critic Learns Pendulum-v1").
+of -172 ± 27 beats the random agent on every seed (CHANGELOG.md, 2026-10-19).
 
 ### Run any agent from one base config (quick overrides)
 
