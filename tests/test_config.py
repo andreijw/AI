@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from rl_core.utils.config import load_config, merge_configs, save_config
+from rl_core.utils.config import load_config, merge_configs, read_env_settings, save_config
 
 
 def test_load_yaml_config():
@@ -231,3 +231,35 @@ def test_save_config_no_subdir():
         assert os.path.exists(save_path)
         loaded = load_config(save_path)
         assert loaded == config
+
+
+ENV_DEFAULTS = {"name": "Toy-v0", "max_episode_steps": 50, "obs_noise_std": 0.0}
+
+
+def test_read_env_settings_fills_defaults_and_treats_null_as_unset():
+    config = {"name": None, "max_episode_steps": 9}
+    settings = read_env_settings(config, ENV_DEFAULTS, "Toy-v0")
+    assert settings == {"name": "Toy-v0", "max_episode_steps": 9, "obs_noise_std": 0.0}
+    assert config == {"name": None, "max_episode_steps": 9}, "the config must not be changed"
+
+
+def test_read_env_settings_leaves_render_mode_and_seed_to_the_caller():
+    settings = read_env_settings({"render_mode": "rgb_array", "seed": 3}, ENV_DEFAULTS, "Toy-v0")
+    assert "render_mode" not in settings and "seed" not in settings, (
+        "render_mode and seed are allowed but passed through by the caller, null meaning null"
+    )
+
+
+@pytest.mark.parametrize("key", ["action_noise_prob", "obs_nosie_std", "domain_randomization"])
+def test_read_env_settings_rejects_a_setting_the_owner_does_not_support(key):
+    with pytest.raises(ValueError, match=f"Toy-v0 does not support .*{key}") as error:
+        read_env_settings({key: 0.1}, ENV_DEFAULTS, "Toy-v0")
+    assert "max_episode_steps, name, obs_noise_std" in str(error.value), "list what is supported"
+
+
+@pytest.mark.parametrize("value", [None, 0, 0.0, False, {}, []])
+def test_read_env_settings_accepts_an_unsupported_setting_left_off(value):
+    """A config copied from another challenge with its noise off still loads."""
+    assert (
+        read_env_settings({"action_noise_prob": value}, ENV_DEFAULTS, "Toy-v0")["name"] == "Toy-v0"
+    )

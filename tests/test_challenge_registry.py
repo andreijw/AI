@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from rl_cartpole.environments import CartPoleEnv
+from rl_core.agents import DQNAgent, RandomAgent
 from rl_core.challenges import (
     BenchmarkChallenge,
     discover_challenges,
@@ -198,3 +200,67 @@ def test_cli_help_names_a_challenge_package_that_failed_to_import(
     with pytest.warns(UserWarning), pytest.raises(SystemExit):
         benchmark.main()
     assert f"{broken} (RuntimeError: boom)" in capsys.readouterr().out
+
+
+class _TableOnly(BenchmarkChallenge):
+    """A challenge that declares only its agent table."""
+
+    name, key, solve_threshold, default_episodes = "CartPole-v1", "table_only", None, 1
+    AGENT_CLASSES = {"random": RandomAgent, "dqn": DQNAgent}
+
+    def make_env(self, env_config, render_mode):
+        return CartPoleEnv(seed=0, max_episode_steps=5)
+
+
+def test_a_challenge_with_only_an_agent_table_lists_and_builds_its_agents():
+    challenge = _TableOnly()
+    env = challenge.make_env({}, None)
+    try:
+        agent = challenge.make_agent("dqn", {"seed": 0}, env)
+    finally:
+        env.close()
+    assert challenge.supported_agents == ["dqn", "random"], "the table's keys, sorted"
+    assert type(agent) is DQNAgent
+    assert (agent.observation_dim, agent.action_dim) == (4, 2), "sized from the environment"
+
+
+def test_the_agent_config_hook_reaches_the_agent():
+    class WithHook(_TableOnly):
+        def agent_config(self, agent_config, env):
+            return {**agent_config, "hidden_dim": 7}
+
+    env = WithHook().make_env({}, None)
+    try:
+        agent = WithHook().make_agent("dqn", {"seed": 0}, env)
+    finally:
+        env.close()
+    assert agent.hidden_dim == 7, "make_agent should build the agent from agent_config's result"
+
+
+class _NoTable(BenchmarkChallenge):
+    """A challenge that declares no agent table: the base's empty one applies."""
+
+    name, key, solve_threshold, default_episodes = "CartPole-v1", "no_table", None, 1
+
+    def make_env(self, env_config, render_mode):
+        return CartPoleEnv(seed=0, max_episode_steps=5)
+
+
+@pytest.mark.parametrize("challenge_cls", [_TableOnly, _NoTable], ids=["not-in-table", "no-table"])
+def test_an_agent_outside_the_table_is_the_standard_error(challenge_cls):
+    challenge = challenge_cls()
+    env = challenge.make_env({}, None)
+    try:
+        with pytest.raises(ValueError, match=f"not supported by challenge '{challenge.key}'"):
+            challenge.make_agent("ppo", {}, env)
+    finally:
+        env.close()
+
+
+def test_a_challenge_without_an_agent_table_supports_no_agents():
+    assert _NoTable().supported_agents == []
+
+
+def test_the_base_agent_table_cannot_be_changed():
+    with pytest.raises(TypeError):
+        BenchmarkChallenge.AGENT_CLASSES["random"] = RandomAgent

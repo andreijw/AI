@@ -106,7 +106,9 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
         def train(self):
             return {"ok": True}
 
-    monkeypatch.setitem(rl_cartpole.benchmark.AGENT_CLASSES, "reinforce", _StubReinforce)
+    monkeypatch.setitem(
+        rl_cartpole.benchmark.CartPoleChallenge.AGENT_CLASSES, "reinforce", _StubReinforce
+    )
     monkeypatch.setattr(train, "Trainer", _StubTrainer)
 
     train.main()

@@ -18,18 +18,17 @@ from rl_core.challenges import BenchmarkChallenge, ChallengeEnv, register_challe
 from rl_pendulum.environments import make_env_from_config
 from rl_pendulum.environments.pendulum_env import PendulumEnv
 
-AGENT_CLASSES: dict[str, type[BaseAgent]] = {
-    "random": ContinuousRandomAgent,
-    "actor_critic": ContinuousActorCriticAgent,
-    "ppo": ContinuousPPOAgent,
-    "ddpg": DDPGAgent,
-}
-
 
 @register_challenge
 class PendulumChallenge(BenchmarkChallenge):
     """Pendulum-v1 continuous torque control benchmark challenge."""
 
+    AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {
+        "random": ContinuousRandomAgent,
+        "actor_critic": ContinuousActorCriticAgent,
+        "ppo": ContinuousPPOAgent,
+        "ddpg": DDPGAgent,
+    }
     CONFIG_MAP: ClassVar[dict[str, str]] = {
         "random": "pendulum_default.yaml",
         "actor_critic": "pendulum_actor_critic.yaml",
@@ -53,26 +52,15 @@ class PendulumChallenge(BenchmarkChallenge):
     def default_episodes(self) -> int:
         return 200
 
-    @property
-    def supported_agents(self) -> list[str]:
-        return sorted(AGENT_CLASSES)
-
     def make_env(self, env_config: Mapping[str, Any], render_mode: str | None) -> PendulumEnv:
         return make_env_from_config({**env_config, "render_mode": render_mode})
 
-    def make_agent(
-        self, agent_type: str, agent_config: Mapping[str, Any], env: ChallengeEnv
-    ) -> BaseAgent:
-        if agent_type not in AGENT_CLASSES:
-            raise self.unsupported_agent_error(agent_type)
+    def agent_config(self, agent_config: Mapping[str, Any], env: ChallengeEnv) -> dict[str, Any]:
+        """The agent's config with the environment's torque bounds, unless it sets its own."""
         action_space = env.action_space
         if not isinstance(action_space, gym.spaces.Box):
             raise TypeError(f"Pendulum needs a Box action space, got {action_space}")
         config = dict(agent_config)
         config.setdefault("action_low", action_space.low)
         config.setdefault("action_high", action_space.high)
-        return AGENT_CLASSES[agent_type](
-            observation_dim=gym.spaces.flatdim(env.observation_space),
-            action_dim=gym.spaces.flatdim(action_space),
-            config=config,
-        )
+        return config

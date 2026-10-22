@@ -8,9 +8,21 @@ from typing import Any
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
-from rl_core.utils.config import config_get
+from rl_core.utils.config import read_env_settings
 
 from .pendulum_env import PendulumEnv
+
+# Each environment setting a Pendulum config may set, by its config name, with its default.
+ENV_DEFAULTS: dict[str, Any] = {
+    "name": "Pendulum-v1",
+    "max_episode_steps": 200,
+    "obs_noise_std": 0.0,
+    "action_noise_std": 0.0,
+    "domain_randomization": None,
+}
+# What both factories accept: the vectorized one also reads async_envs, and one environment section may
+# serve both, so the single-environment factory accepts it and has no use for it.
+ACCEPTED_SETTINGS: dict[str, Any] = {**ENV_DEFAULTS, "async_envs": True}
 
 
 def make_env(
@@ -98,28 +110,33 @@ def make_vec_env(
 
 
 def make_env_from_config(config: dict[str, Any]) -> PendulumEnv:
-    """Create a Pendulum environment from a configuration dictionary."""
+    """Create a Pendulum environment from a configuration dictionary.
+
+    Raises:
+        ValueError: If the config sets a setting Pendulum does not support (see ACCEPTED_SETTINGS).
+    """
+    settings = read_env_settings(config, ACCEPTED_SETTINGS, "Pendulum-v1")
+    del settings["async_envs"]
     return make_env(
-        env_name=config_get(config, "name", "Pendulum-v1"),
+        env_name=settings.pop("name"),
         render_mode=config.get("render_mode"),
-        max_episode_steps=config_get(config, "max_episode_steps", 200),
         seed=config.get("seed"),
-        obs_noise_std=config_get(config, "obs_noise_std", 0.0),
-        action_noise_std=config_get(config, "action_noise_std", 0.0),
-        domain_randomization=config.get("domain_randomization"),
+        **settings,
     )
 
 
 def make_vec_env_from_config(config: dict[str, Any], num_envs: int = 4) -> gym.vector.VectorEnv:
-    """Create vectorized Pendulum environments from a configuration dictionary."""
+    """Create vectorized Pendulum environments from a configuration dictionary.
+
+    Raises:
+        ValueError: If the config sets a setting Pendulum does not support (see ACCEPTED_SETTINGS).
+    """
+    settings = read_env_settings(config, ACCEPTED_SETTINGS, "Pendulum-v1")
+    settings["async_envs"] = config.get("async_envs", True)  # null means synchronous, as before
     return make_vec_env(
         num_envs=num_envs,
-        env_name=config_get(config, "name", "Pendulum-v1"),
+        env_name=settings.pop("name"),
         render_mode=config.get("render_mode"),
-        max_episode_steps=config_get(config, "max_episode_steps", 200),
         seed=config.get("seed"),
-        obs_noise_std=config_get(config, "obs_noise_std", 0.0),
-        action_noise_std=config_get(config, "action_noise_std", 0.0),
-        domain_randomization=config.get("domain_randomization"),
-        async_envs=config.get("async_envs", True),
+        **settings,
     )
