@@ -6,7 +6,7 @@ import pytest
 
 from rl_core.agents.continuous_ppo import ContinuousPPOAgent
 from rl_core.agents.ppo_agent import PPOAgent
-from tests.agent_internals import assert_same_weights, share_generators
+from tests.agent_internals import assert_same_weights
 
 ROLLOUT_STEPS = 12
 
@@ -39,7 +39,7 @@ AGENTS = [PPOAgent, ContinuousPPOAgent]
 
 @pytest.mark.parametrize("agent_cls", AGENTS)
 def test_a_loaded_agent_resumes_a_partly_filled_rollout_exactly(agent_cls, tmp_path):
-    """Generators are not saved, so they are shared: the test covers what the checkpoint holds."""
+    """The resumed agent has other weights, optimizer state and generators before the load."""
     agent = _agent(agent_cls)
     assert agent.update(_episode(agent, 12, seed=1)), "the first rollout trains"
     # Cut, not terminated: its last buffered reward carries gamma * V(next state).
@@ -49,7 +49,6 @@ def test_a_loaded_agent_resumes_a_partly_filled_rollout_exactly(agent_cls, tmp_p
     resumed = _agent(agent_cls, seed=99)
     resumed.update(_episode(resumed, 12, seed=50))  # different weights and a trained optimizer
     resumed.load(path)
-    share_generators(agent, resumed)
 
     for run in (agent, resumed):
         metrics = run.update(_episode(run, 6, seed=3))

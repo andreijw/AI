@@ -345,18 +345,6 @@ def replace_shuffle_generator(
     agent._shuffle_rng = generator
 
 
-def share_generators(source: Any, target: Any) -> None:
-    """
-    Give ``target`` copies of every generator ``source`` holds, in their current state.
-
-    Checkpoints do not store generators, so an exact-resume test shares them to put only what
-    the checkpoint holds under test.
-    """
-    for name, value in vars(source).items():
-        if isinstance(value, np.random.Generator):
-            setattr(target, name, copy.deepcopy(value))
-
-
 # ---------------------------------------------------------------------------
 # Value-based and off-policy agents: DQNAgent, DDPGAgent
 # ---------------------------------------------------------------------------

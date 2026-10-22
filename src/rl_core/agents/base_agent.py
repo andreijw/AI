@@ -1,12 +1,17 @@
 """Base agent interface for reinforcement learning."""
 
+import json
 import os
 from abc import ABC, abstractmethod
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, ClassVar, final
 
 import numpy as np
 
-from rl_core.seeding import AGENT_EXPLORATION_STREAM, derive_rng
+from rl_core.seeding import generator_state, restore_generator
+
+# Checkpoint key of a generator attribute: "rng_" and its name without leading underscores.
+GENERATOR_KEY_PREFIX = "rng_"
 
 
 class BaseAgent(ABC):
@@ -15,7 +20,21 @@ class BaseAgent(ABC):
 
     Defines the interface that all agent implementations must follow.
     This allows for easy swapping of different RL algorithms.
+
+    A checkpoint (:meth:`save`) holds what :meth:`_checkpoint_arrays` and
+    :meth:`_extra_checkpoint_state` return, plus the state of every ``np.random.Generator``
+    attribute, so a loaded agent continues exactly as the saved one would have. A generator is
+    stored under ``rng_<attribute name without leading underscores>``: renaming the attribute
+    changes the checkpoint format. A generator held inside another object (a replay buffer) is
+    that object's to save.
     """
+
+    # Checkpoint keys an older format used for a generator attribute, read when the current key is
+    # absent: {attribute name: key}.
+    _LEGACY_GENERATOR_KEYS: ClassVar[dict[str, str]] = {}
+    # Exploration generator, created by each subclass that samples through
+    # :meth:`_select_action_from_probs` (AGENT_EXPLORATION_STREAM).
+    _explore_rng: np.random.Generator
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         """
@@ -36,9 +55,8 @@ class BaseAgent(ABC):
 
     def _select_action_from_probs(self, probs: np.ndarray, training: bool) -> int:
         """
-        Sample or greedily select an action from a probability distribution.
-
-        Lazily initialises a per-agent RNG on the first call.
+        Sample or greedily select an action from a probability distribution, sampling with the
+        subclass's ``_explore_rng``.
 
         Args:
             probs:    Action probability distribution.
@@ -47,9 +65,6 @@ class BaseAgent(ABC):
         Returns:
             Selected action index.
         """
-        if not hasattr(self, "_explore_rng"):
-            seed = self.config.get("seed") if isinstance(self.config, dict) else None
-            self._explore_rng = derive_rng(seed, AGENT_EXPLORATION_STREAM)
         if training:
             return int(self._explore_rng.choice(self.action_dim, p=probs))
         return int(np.argmax(probs))
@@ -61,6 +76,51 @@ class BaseAgent(ABC):
     def _load_extra_checkpoint_state(self, data: Any) -> None:
         """Restore what :meth:`_extra_checkpoint_state` saved; ``data`` maps names to arrays."""
         return None  # nothing extra by default
+
+    def _generators(self) -> dict[str, np.random.Generator]:
+        """
+        Every generator attribute, by checkpoint key, in sorted key order.
+
+        Raises:
+            ValueError: If two attributes map to one key (``_rng`` and ``rng``).
+        """
+        generators: dict[str, np.random.Generator] = {}
+        for name, value in vars(self).items():
+            if isinstance(value, np.random.Generator):
+                key = f"{GENERATOR_KEY_PREFIX}{name.lstrip('_')}"
+                if key in generators:
+                    raise ValueError(f"Two generator attributes would be saved as {key}")
+                generators[key] = value
+        return dict(sorted(generators.items()))
+
+    def _saved_generator_states(self, data: Mapping[str, Any]) -> dict[str, tuple[Any, str]]:
+        """
+        The checkpoint's state for each generator it holds, by checkpoint key (the current key, or
+        the legacy one): ``{key: (generator, key read)}``; one it does not hold is left out.
+
+        Raises:
+            ValueError: Naming the key, if a state is not a generator state of the same kind.
+        """
+        legacy = {
+            f"{GENERATOR_KEY_PREFIX}{name.lstrip('_')}": old
+            for name, old in self._LEGACY_GENERATOR_KEYS.items()
+        }
+        found: dict[str, tuple[Any, str]] = {}
+        for key, generator in self._generators().items():
+            source = key if key in data else legacy.get(key, key)
+            if source not in data:
+                continue
+            try:
+                kind = json.loads(str(np.asarray(data[source]).item()))["bit_generator"]
+            except (ValueError, KeyError, TypeError) as error:
+                raise ValueError(f"{source} is not a generator state: {error}") from error
+            if kind != type(generator.bit_generator).__name__:
+                raise ValueError(
+                    f"{source} holds a {kind} state, the agent's generator is "
+                    f"{type(generator.bit_generator).__name__}"
+                )
+            found[key] = (generator, source)
+        return found
 
     @staticmethod
     def _resolve_save_path(path: str) -> str:
@@ -171,19 +231,57 @@ class BaseAgent(ABC):
         """
 
     @abstractmethod
-    def save(self, path: str) -> None:
-        """
-        Save agent state to disk.
-
-        Args:
-            path: Path to save the agent
-        """
+    def _checkpoint_arrays(self) -> dict[str, Any]:
+        """The arrays :meth:`save` writes beyond generators and extras: weights, optimizer state,
+        counters, buffers."""
 
     @abstractmethod
-    def load(self, path: str) -> None:
+    def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
+        """Restore what :meth:`_checkpoint_arrays` saved, validating what must match."""
+
+    @final
+    def save(self, path: str) -> None:
         """
-        Load agent state from disk.
+        Save the agent to a compressed NumPy ``.npz`` checkpoint.
+
+        Supported extensions are ``.pt`` and ``.npz``; without one, ``.npz`` is appended. Missing
+        directories are created.
 
         Args:
-            path: Path to load the agent from
+            path: Destination file path.
         """
+        save_path = self._resolve_save_path(path)
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        parts = (
+            self._checkpoint_arrays(),
+            self._extra_checkpoint_state(),
+            {key: generator_state(g) for key, g in self._generators().items()},
+        )
+        arrays: dict[str, Any] = {}
+        for part in parts:
+            clashing = sorted(arrays.keys() & part.keys())
+            if clashing:
+                raise ValueError(f"Checkpoint keys saved twice: {', '.join(clashing)}")
+            arrays.update(part)
+        with open(save_path, "wb") as f:
+            np.savez_compressed(f, **arrays)
+
+    @final
+    def load(self, path: str) -> None:
+        """
+        Load a checkpoint written by :meth:`save`, or by an older version.
+
+        Without an extension and no such file, ``.npz`` is appended; a ``.pt`` path also finds a
+        legacy ``<name>.pt.npz``. Generator states are checked before anything is assigned; the
+        agent's own arrays are checked as its ``_load_checkpoint_arrays`` documents. A generator the
+        checkpoint does not hold keeps its current state.
+
+        Args:
+            path: Source file path.
+        """
+        with np.load(self._resolve_load_path(path)) as data:
+            generator_states = self._saved_generator_states(data)  # checked before any change
+            self._load_checkpoint_arrays(data)
+            self._load_extra_checkpoint_state(data)
+            for generator, source in generator_states.values():
+                restore_generator(generator, data[source])

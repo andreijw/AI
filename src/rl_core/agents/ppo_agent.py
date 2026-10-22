@@ -73,9 +73,7 @@ class PPOAgent(ActorCriticBase):
         if not (0.0 <= self.gae_lambda <= 1.0):
             raise ValueError(f"gae_lambda must be in [0, 1], got {self.gae_lambda!r}")
 
-        # One generator for action sampling and mini-batch shuffling (the same one
-        # BaseAgent would create lazily for sampling).
-        # Minibatch order on its own stream; action sampling uses the base class's exploration stream.
+        # Minibatch order on its own stream; action sampling uses ActorCriticBase's exploration one.
         self._shuffle_rng = derive_rng(config.get("seed"), AGENT_REPLAY_STREAM)
         self._rollout = EpisodeRollout(self.rollout_steps)
         self._steps_trained = 0

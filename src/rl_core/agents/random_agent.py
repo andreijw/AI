@@ -1,7 +1,7 @@
 """Random agent for baseline testing."""
 
-import json
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -17,6 +17,12 @@ class RandomAgent(BaseAgent):
     Useful as a baseline and for testing the training pipeline.
     Action selection is reproducible when a seed is provided via config.
     """
+
+    # Checkpoints from before 2026-10-21 stored the generators as "rng_state" and "eval_rng_state".
+    _LEGACY_GENERATOR_KEYS: ClassVar[dict[str, str]] = {
+        "_rng": "rng_state",
+        "_eval_rng": "eval_rng_state",
+    }
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         """
@@ -66,47 +72,19 @@ class RandomAgent(BaseAgent):
         """
         return {}
 
-    def save(self, path: str) -> None:
-        """Save random-agent metadata and RNG state to a NumPy ``.npz`` checkpoint."""
-        save_path = self._resolve_save_path(path)
-        state_json = json.dumps(self._rng.bit_generator.state)
-        with open(save_path, "wb") as checkpoint_file:
-            np.savez(
-                checkpoint_file,
-                observation_dim=np.int64(self.observation_dim),
-                action_dim=np.int64(self.action_dim),
-                rng_state=state_json,
-                eval_rng_state=json.dumps(self._eval_rng.bit_generator.state),
-            )
+    def _checkpoint_arrays(self) -> dict[str, Any]:
+        return {
+            "observation_dim": np.int64(self.observation_dim),
+            "action_dim": np.int64(self.action_dim),
+        }
 
-    def load(self, path: str) -> None:
-        """Load random-agent metadata and RNG state from a NumPy ``.npz`` checkpoint."""
-        load_path = self._resolve_load_path(path)
-        with np.load(load_path) as data:
-            saved_observation_dim = int(data["observation_dim"])
-            saved_action_dim = int(data["action_dim"])
-            if saved_observation_dim != self.observation_dim or saved_action_dim != self.action_dim:
-                raise ValueError(
-                    "Checkpoint dimensions do not match this agent instance: "
-                    f"checkpoint(observation_dim={saved_observation_dim}, "
-                    f"action_dim={saved_action_dim}) vs "
-                    f"agent(observation_dim={self.observation_dim}, action_dim={self.action_dim})."
-                )
-            rng_state_raw = data["rng_state"]
-            rng_state_text = np.asarray(rng_state_raw).item()
-            if not isinstance(rng_state_text, str):
-                raise ValueError(
-                    "RandomAgent checkpoint rng_state must be stored as a JSON string."
-                )
-            rng_state = json.loads(rng_state_text)
-            eval_state = (  # checkpoints from before 2026-10-18 have none
-                json.loads(str(np.asarray(data["eval_rng_state"]).item()))
-                if "eval_rng_state" in data
-                else None
+    def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
+        saved_observation_dim = int(data["observation_dim"])
+        saved_action_dim = int(data["action_dim"])
+        if saved_observation_dim != self.observation_dim or saved_action_dim != self.action_dim:
+            raise ValueError(
+                "Checkpoint dimensions do not match this agent instance: "
+                f"checkpoint(observation_dim={saved_observation_dim}, "
+                f"action_dim={saved_action_dim}) vs "
+                f"agent(observation_dim={self.observation_dim}, action_dim={self.action_dim})."
             )
-
-        self._rng = np.random.default_rng()
-        self._rng.bit_generator.state = rng_state
-        if eval_state is not None:
-            self._eval_rng = np.random.default_rng()
-            self._eval_rng.bit_generator.state = eval_state

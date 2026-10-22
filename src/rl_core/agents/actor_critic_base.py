@@ -1,11 +1,12 @@
 """Shared base class for actor-critic style agents."""
 
 from abc import abstractmethod
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
 
-from rl_core.seeding import AGENT_WEIGHTS_STREAM, derive_rng
+from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, derive_rng
 
 from .base_agent import BaseAgent
 from .config_values import positive_int
@@ -54,6 +55,8 @@ class ActorCriticBase(BaseAgent):
 
         # He-initialised weights for ReLU activations.
         rng = derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM)
+        # Action sampling (_select_action_from_probs) on its own stream.
+        self._explore_rng = derive_rng(config.get("seed"), AGENT_EXPLORATION_STREAM)
         scale1 = np.sqrt(2.0 / observation_dim)
         scale_head = np.sqrt(2.0 / self.hidden_dim)
 
@@ -254,45 +257,18 @@ class ActorCriticBase(BaseAgent):
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """Update agent parameters using collected trajectory data."""
 
-    def save(self, path: str) -> None:
-        """
-        Save network weights to disk in NumPy ``.npz`` format.
+    def _checkpoint_arrays(self) -> dict[str, Any]:
+        arrays: dict[str, Any] = {k: np.asarray(v) for k, v in self._parameters().items()}
+        if self._optimizer is not None:
+            arrays.update(self._optimizer.state())
+        return arrays
 
-        Supported extensions are ``.pt`` and ``.npz``. If *path* has one of
-        these extensions, parameters are written exactly to that filename. If
-        *path* has no extension, ``.npz`` is appended.
-
-        Args:
-            path: Destination file path.
-        """
-        save_path = self._resolve_save_path(path)
-        with open(save_path, "wb") as f:
-            arrays: dict[str, Any] = {k: np.asarray(v) for k, v in self._parameters().items()}
-            if self._optimizer is not None:
-                arrays.update(self._optimizer.state())
-            arrays.update(self._extra_checkpoint_state())
-            np.savez(f, **arrays)
-
-    def load(self, path: str) -> None:
-        """
-        Load network weights from disk.
-
-        Supported extensions are ``.pt`` and ``.npz``. If *path* has no
-        extension and does not exist, ``.npz`` is appended and that file is
-        loaded. Loading a ``.pt`` path also supports legacy
-        ``<name>.pt.npz`` checkpoints.
-
-        Args:
-            path: Source file path.
-        """
-        load_path = self._resolve_load_path(path)
-        with np.load(load_path) as data:
-            self._W1 = data["W1"]
-            self._b1 = data["b1"]
-            self._W_pi = data["W_pi"]
-            self._b_pi = data["b_pi"]
-            self._W_v = data["W_v"]
-            self._b_v = float(data["b_v"])
-            if self._optimizer is not None:
-                self._optimizer.load_state(data)
-            self._load_extra_checkpoint_state(data)
+    def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
+        self._W1 = data["W1"]
+        self._b1 = data["b1"]
+        self._W_pi = data["W_pi"]
+        self._b_pi = data["b_pi"]
+        self._W_v = data["W_v"]
+        self._b_v = float(data["b_v"])
+        if self._optimizer is not None:
+            self._optimizer.load_state(data)

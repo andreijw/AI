@@ -30,7 +30,6 @@ from tests.agent_internals import (
     optimizer,
     ppo_minibatch_loss_and_grads,
     set_weights,
-    share_generators,
     shuffle_generator,
     spy_on_ppo_minibatches,
     weights,
@@ -599,9 +598,6 @@ def test_checkpoint_resumes_with_the_same_adam_state(agent_cls, tmp_path):
     resumed = _agent(agent_cls, gamma=0.5, seed=99)  # different initial weights
     resumed.load(path)
     assert optimizer(resumed).t == optimizer(agent).t > 0
-    # Checkpoints do not hold the generators (action noise, PPO's shuffle); share them so only the
-    # optimiser state is under test.
-    share_generators(agent, resumed)
 
     agent.update(batch)
     resumed.update(batch)

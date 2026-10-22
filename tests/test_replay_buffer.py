@@ -234,3 +234,99 @@ def test_clear():
     buffer.clear()
     assert len(buffer) == 0
     assert not buffer.can_sample(1)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint state (CHANGELOG.md, 2026-10-21)
+# ---------------------------------------------------------------------------
+
+
+def _filled(
+    n: int, capacity: int = 8, action_dim: int | None = None, seed: int = 0
+) -> ReplayBuffer:
+    buffer = ReplayBuffer(capacity=capacity, observation_dim=3, seed=seed, action_dim=action_dim)
+    rng = np.random.default_rng(seed)
+    for _ in range(n):
+        action = rng.integers(0, 2) if action_dim is None else rng.standard_normal(action_dim)
+        buffer.add(rng.standard_normal(3), action, rng.standard_normal(), rng.standard_normal(3),
+                   bool(rng.random() < 0.2))  # fmt: skip
+    return buffer
+
+
+def _same_samples(a: ReplayBuffer, b: ReplayBuffer, batch_size: int = 3) -> None:
+    for _ in range(4):
+        sa, sb = a.sample(batch_size), b.sample(batch_size)
+        for key in sa:
+            np.testing.assert_array_equal(sb[key], sa[key], err_msg=key)
+
+
+@pytest.mark.parametrize("n", [5, 8, 13], ids=["partly-filled", "exactly-full", "wrapped"])
+@pytest.mark.parametrize("action_dim", [None, 2], ids=["discrete", "continuous"])
+def test_a_restored_buffer_samples_and_fills_exactly_like_the_saved_one(n, action_dim):
+    saved = _filled(n, action_dim=action_dim)
+    restored = _filled(2, action_dim=action_dim, seed=5)
+    restored.restore(saved.checkpoint_state())
+    assert len(restored) == len(saved)
+    _same_samples(saved, restored)
+    for buffer in (saved, restored):  # the next writes land in the same slots
+        extra = _filled(4, action_dim=action_dim, seed=9)
+        for i in range(4):
+            buffer.add(extra.observations[i], extra.actions[i], extra.rewards[i],
+                       extra.next_observations[i], extra.dones[i])  # fmt: skip
+    _same_samples(saved, restored)
+
+
+def test_only_the_filled_part_is_saved():
+    state = _filled(5, capacity=1000).checkpoint_state()
+    assert state["replay_observations"].shape == (5, 3)
+    assert int(state["replay_capacity"]) == 1000
+
+
+def test_a_checkpoint_without_a_buffer_empties_it():
+    buffer = _filled(5)
+    buffer.restore({"W1": np.zeros(3)})
+    assert len(buffer) == 0 and not buffer.can_sample(1)
+
+
+def _corrupt(key: str, value) -> dict[str, np.ndarray]:
+    state = _filled(13).checkpoint_state()
+    state[key] = np.asarray(value)
+    return state
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("replay_capacity", 16),  # a wrapped buffer in a larger one would overwrite valid data
+        ("replay_idx", 8),
+        ("replay_size", 9),
+        ("replay_observations", np.zeros((8, 4))),
+        ("replay_actions", np.zeros(8)),  # float actions in a discrete buffer
+        ("replay_rewards", np.zeros(7)),
+    ],
+)
+def test_an_inconsistent_buffer_state_is_rejected_and_changes_nothing(key, value):
+    buffer = _filled(5, seed=3)
+    before = {k: np.array(v, copy=True) for k, v in buffer.checkpoint_state().items()}
+    with pytest.raises(ValueError, match=key):
+        buffer.restore(_corrupt(key, value))
+    after = buffer.checkpoint_state()
+    for name in before:
+        np.testing.assert_array_equal(after[name], before[name], err_msg=name)
+
+
+def test_a_partly_filled_buffer_must_write_next_at_its_size():
+    state = _filled(5).checkpoint_state()
+    state["replay_idx"] = np.asarray(2)
+    with pytest.raises(ValueError, match="replay_idx"):
+        _filled(0).restore(state)
+
+
+@pytest.mark.parametrize(
+    "missing", ["replay_capacity", "replay_idx", "replay_rng", "replay_rewards"]
+)
+def test_a_buffer_state_missing_a_key_is_rejected_by_name(missing):
+    state = _filled(5).checkpoint_state()
+    del state[missing]
+    with pytest.raises(ValueError, match=missing):
+        _filled(2).restore(state)

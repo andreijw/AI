@@ -1,5 +1,7 @@
 """Seeded random generators for components that must not share a stream."""
 
+import json
+
 import numpy as np
 
 # Stream used by environment wrappers for observation noise, action noise and domain
@@ -65,3 +67,22 @@ def eval_seed_for(seed: int | None) -> int:
     without a seed gets an entropy-drawn value: fixed within that run, not reproducible across runs.
     """
     return int(derive_rng(seed, EVAL_STREAM).integers(2**31, 2**32))
+
+
+def generator_state(generator: np.random.Generator) -> np.ndarray:
+    """
+    The generator's state as a checkpoint array: a 0-d string array of its bit generator's state
+    in JSON, which ``np.load`` reads back without pickle.
+    """
+    return np.array(json.dumps(generator.bit_generator.state))
+
+
+def restore_generator(generator: np.random.Generator, state: np.ndarray) -> None:
+    """
+    Put ``generator`` in the state :func:`generator_state` saved, in place, so every reference to it
+    continues the saved sequence.
+
+    Raises:
+        ValueError: If the state belongs to another kind of bit generator.
+    """
+    generator.bit_generator.state = json.loads(str(np.asarray(state).item()))

@@ -1,5 +1,6 @@
 """Deep Q-Network (DQN) agent for CartPole."""
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -408,13 +409,10 @@ class DQNAgent(BaseAgent):
         self._W2 -= self.learning_rate * np.clip(grads["W2"], -limit, limit)
         self._b2 -= self.learning_rate * np.clip(grads["b2"], -limit, limit)
 
-    def save(self, path: str) -> None:
+    def _checkpoint_arrays(self) -> dict[str, Any]:
         """
-        Save everything training needs to resume: both networks, epsilon, the exploration and
-        target-sync counters, and the optimizer's state.
-
-        Args:
-            path: Destination checkpoint path (.pt or .npz).
+        Everything training needs to resume beyond the generators: both networks, epsilon, the
+        exploration and target-sync counters, the optimizer's state and the replay buffer.
         """
         arrays: dict[str, Any] = {
             "W1": self._W1,
@@ -428,44 +426,40 @@ class DQNAgent(BaseAgent):
             "epsilon": np.array(self.epsilon),
             "exploration_step": np.array(self._exploration_step),
             "update_counter": np.array(self._update_counter),
+            **self.replay_buffer.checkpoint_state(),
         }
         if self._optimizer is not None:
             arrays.update(self._optimizer.state())
-        save_path = self._resolve_save_path(path)
-        with open(save_path, "wb") as f:
-            np.savez(f, **arrays)
+        return arrays
 
-    def load(self, path: str) -> None:
+    def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
         """
-        Load a checkpoint written by :meth:`save`, or by an older version.
+        Restore a checkpoint, or an older one.
 
-        An older checkpoint has no counters or optimizer state: the target-sync counter is left
-        as it is, Adam starts from zero moments, and with ``exploration_steps`` the exploration
-        step is rebuilt from the saved epsilon so that exploration does not restart.
-
-        Args:
-            path: Source checkpoint path (.pt or .npz).
+        An older checkpoint has no counters, optimizer state or replay buffer: the target-sync
+        counter is left as it is, Adam starts from zero moments, the buffer is emptied, and with
+        ``exploration_steps`` the exploration step is rebuilt from the saved epsilon so that
+        exploration does not restart.
         """
-        load_path = self._resolve_load_path(path)
-        with np.load(load_path) as data:
-            self._W1 = data["W1"]
-            self._b1 = data["b1"]
-            self._W2 = data["W2"]
-            self._b2 = data["b2"]
-            self._target_W1 = data["target_W1"]
-            self._target_b1 = data["target_b1"]
-            self._target_W2 = data["target_W2"]
-            self._target_b2 = data["target_b2"]
-            if "epsilon" in data:
-                self.epsilon = float(data["epsilon"])
-            if "update_counter" in data:
-                self._update_counter = int(data["update_counter"])
-            if "exploration_step" in data:
-                self._exploration_step = int(data["exploration_step"])
-            else:
-                self._exploration_step = self._exploration_step_for(self.epsilon)
-            if self._optimizer is not None:
-                self._optimizer.load_state(data)
+        self.replay_buffer.restore(data)
+        self._W1 = data["W1"]
+        self._b1 = data["b1"]
+        self._W2 = data["W2"]
+        self._b2 = data["b2"]
+        self._target_W1 = data["target_W1"]
+        self._target_b1 = data["target_b1"]
+        self._target_W2 = data["target_W2"]
+        self._target_b2 = data["target_b2"]
+        if "epsilon" in data:
+            self.epsilon = float(data["epsilon"])
+        if "update_counter" in data:
+            self._update_counter = int(data["update_counter"])
+        if "exploration_step" in data:
+            self._exploration_step = int(data["exploration_step"])
+        else:
+            self._exploration_step = self._exploration_step_for(self.epsilon)
+        if self._optimizer is not None:
+            self._optimizer.load_state(data)
 
     def _exploration_step_for(self, epsilon: float) -> int:
         """The step of the linear schedule at which epsilon equals ``epsilon`` (0 without one)."""

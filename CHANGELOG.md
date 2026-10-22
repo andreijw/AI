@@ -26,6 +26,19 @@ from 2026-10-16; earlier results use the 10-episode rule.
   `init_log_std` outside the bounds is rejected. No saved Pendulum checkpoint came near a bound (120 checkpoints,
   -2.01 to 0.57), and 100 episodes of the committed Pendulum PPO and Actor-Critic configs (seed 42) give
   bit-identical weights to `develop`.
+- **Agent checkpoints hold every generator and the replay buffer** (`feature/checkpoint-generators`, the first of
+  two pull requests for resuming training): `BaseAgent.save` and `load` are now one shared template, writing a
+  compressed `.npz` of each agent's `_checkpoint_arrays`, its extras and the state of every generator attribute
+  (`rng_*`, through `rl_core.seeding.generator_state` and `restore_generator`). DQN and DDPG also save the filled part
+  of their replay buffer (`replay_*`, `ReplayBuffer.checkpoint_state` and `restore`, which refuses another capacity or
+  an inconsistent write index). A loaded agent now continues exactly as the saved one would have, for every agent;
+  the resume tests no longer hand the loaded agent the saved one's generators or buffer. Older checkpoints load as
+  before (the random agents' `rng_state` keys too), and seeded training is unchanged: 60 episodes of the committed
+  CartPole PPO, DQN, REINFORCE and Actor-Critic configs and Pendulum DDPG (seed 42) give bit-identical weights. A
+  stored transition costs about 37 bytes compressed, so at the committed configs a CartPole DQN checkpoint with its
+  full 20,000-transition buffer is about 0.8 MB (34 KB before) and a Pendulum DDPG one at the end of its
+  40,000-step run about 1.8 MB (302 KB before); `save` and `load` reject a key saved twice and check every generator
+  state before changing anything.
 - **PPO checkpoints hold the partly filled rollout** (`feature/ppo-rollout-checkpoints`): both PPO agents keep
   buffered episodes in one shared `rl_core.agents.rollout.EpisodeRollout`, replacing two copies of the
   bookkeeping. Checkpoints save the buffered steps as `ppo_rollout_*` arrays (none while the buffer is empty), and
