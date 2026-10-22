@@ -9,18 +9,18 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           src/benchmark.py & CLI                            │
 │                         (Multi-Agent Benchmarking)                          │
-└───────────────┬─────────────────────────────────────────────┬───────────────┘
-                │                                             │
-                ↓                                             ↓
-┌───────────────────────────────┐             ┌───────────────────────────────┐
-│        src/rl_cartpole/       │             │       src/rl_pendulum/        │
-│   (Discrete Control Challenge)│             │ (Continuous Control Challenge)│
-│  - CartPoleEnv                │             │  - PendulumEnv                │
-│  - Noise & Domain Rand        │             │  - Continuous Action Noise    │
-│  - CartPoleChallenge          │             │  - PendulumChallenge          │
-└───────────────┬───────────────┘             └───────────────┬───────────────┘
-                │                                             │
-                └──────────────────────┬──────────────────────┘
+└───────────┬──────────────────────────┬──────────────────────────┬───────────┘
+            │                          │                          │
+            ↓                          ↓                          ↓
+┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
+│  src/rl_cartpole/     │  │  src/rl_pendulum/     │  │  src/rl_acrobot/      │
+│ (Discrete Control)    │  │ (Continuous Control)  │  │ (Discrete Swing-Up)   │
+│ - CartPoleEnv         │  │ - PendulumEnv         │  │ - AcrobotEnv          │
+│ - Noise & Domain Rand │  │ - Action Noise & DR   │  │ - Observation Noise   │
+│ - CartPoleChallenge   │  │ - PendulumChallenge   │  │ - AcrobotChallenge    │
+└───────────┬───────────┘  └───────────┬───────────┘  └───────────┬───────────┘
+            │                          │                          │
+            └──────────────────────────┼──────────────────────────┘
                                        │
                                        ↓
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -47,7 +47,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 
 1. **Core Decoupling**: Algorithms and trainers in `rl_core` have zero coupling to specific Gymnasium environments.
 2. **Challenge Isolation**: Challenge-specific environments, physics domain randomizations, and configs reside in
-   independent packages (`rl_cartpole`, `rl_pendulum`).
+   independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`).
 3. **Discrete & Continuous Symmetry**: Shared base interfaces support discrete action selection and continuous
    bounded control (Gaussian policies).
 4. **Structured Artifact Scoping**: Generated logs, checkpoints, plots, and videos are partitioned deterministically
@@ -93,6 +93,7 @@ flowchart TD
     subgraph Challenges ["Challenge Layer"]
         CartPole["rl_cartpole: CartPoleEnv (Discrete)"]
         Pendulum["rl_pendulum: PendulumEnv (Continuous)"]
+        Acrobot["rl_acrobot: AcrobotEnv (Discrete)"]
     end
 
     subgraph Core ["rl_core Framework"]
@@ -125,6 +126,7 @@ flowchart TD
     Trainer --> Utils
     CartPole --> EnvBase
     Pendulum --> EnvBase
+    Acrobot --> EnvBase
 ```
 
 ---
@@ -260,7 +262,7 @@ sequenceDiagram
     autonumber
     actor User as User / CLI
     participant Trainer as Trainer
-    participant Env as Challenge Env (CartPole/Pendulum)
+    participant Env as Challenge Env (CartPole/Pendulum/Acrobot)
     participant Agent as Agent (Discrete / Continuous)
     participant Logger as Structured Logger
     participant Disk as Artifact Storage
@@ -345,7 +347,8 @@ plots/
      reset only), observation noise, episode statistics and `wrap_env`. The subclass validates its own settings,
      calls `_make_env()`, and overrides `_prepare_action` (action noise) and `_apply_domain_randomization`
      (per-episode physics); both default to doing nothing.
-   - `environments/make_env.py`: Vectorized and single-environment factory functions.
+   - `environments/make_env.py`: `make_env` and `make_env_from_config`; a vectorized factory only if something
+     uses it (`rl_acrobot` has none). A setting the wrapper does not support is rejected, not ignored.
    - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`.
      It implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and
      `make_agent(agent_type, agent_config, env)` (a lookup in its `AGENT_CLASSES`); the base class builds benchmark
@@ -357,7 +360,9 @@ plots/
      `src/benchmark.py --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the
      base class provides one), and its `key` must not already be registered.
 2. Add reference YAML configurations under `configs/<challenge>_<agent>.yaml`.
-3. Add corresponding test suites in `tests/test_<challenge>.py`.
+3. Add corresponding test suites in `tests/test_<challenge>.py`, and the challenge's rows to the per-challenge
+   tables in `tests/test_challenge_selection.py` (`EXPECTED_AGENTS`, `ENV_CLASSES`, the dimension tables) and
+   `tests/test_committed_configs.py` (`STEP_BUDGETS`).
 
 ### Adding a New Continuous Algorithm
 

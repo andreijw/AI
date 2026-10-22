@@ -14,8 +14,16 @@ def isolated_registry(monkeypatch, tmp_path):
     challenges, failures = dict(CHALLENGES), dict(registry.IMPORT_FAILURES)
     modules = set(sys.modules)
     yield tmp_path
+    # A real challenge first imported during the test stays in sys.modules, so it would never
+    # register again: keep it, and drop only what the test's fake packages registered (fake packages
+    # are named by tests.helpers.unique_name, prefix rl_fake).
+    real = {
+        key: cls
+        for key, cls in CHALLENGES.items()
+        if cls.__module__.startswith("rl_") and not cls.__module__.startswith("rl_fake")
+    }
     CHALLENGES.clear()
-    CHALLENGES.update(challenges)
+    CHALLENGES.update({**real, **challenges})
     registry.IMPORT_FAILURES.clear()
     registry.IMPORT_FAILURES.update(failures)
     for name in set(sys.modules) - modules:

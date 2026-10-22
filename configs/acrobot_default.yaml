@@ -1,0 +1,30 @@
+# Acrobot-v1 Random Baseline Configuration
+# Acrobot-v1: 6 observations, 3 torques, -1 reward per step until the tip swings above the line,
+# 500-step limit. Solved at a 100-episode training average of -100 (Gymnasium's reward_threshold).
+
+# Environment settings
+environment:
+  name: "Acrobot-v1"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 500
+  seed: 42
+
+# Agent settings
+agent:
+  type: "random"  # Options: "random", "dqn", "ppo"
+  config:
+    seed: 42  # Makes RandomAgent action selection reproducible
+
+# Training settings
+training:
+  total_steps: 50000  # Environment steps (random baseline: sets only its length)
+  max_steps_per_episode: 500
+  eval_frequency: 20  # Evaluate every N episodes
+  save_frequency: 50  # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true

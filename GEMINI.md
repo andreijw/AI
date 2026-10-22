@@ -49,6 +49,9 @@ To optimize token usage and context window limits:
   * `src/rl_pendulum/environments/`: Pendulum wrappers, observation/action noise, domain
     randomization, and vectorization.
   * `src/rl_pendulum/benchmark.py`: Pendulum benchmark challenge implementation.
+* **`src/rl_acrobot/`**: Acrobot-v1 discrete swing-up challenge.
+  * `src/rl_acrobot/environments/`: Acrobot wrapper (observation noise only) and its factories.
+  * `src/rl_acrobot/benchmark.py`: Acrobot benchmark challenge implementation.
 * **`src/rl_core/challenges/`**: The `BenchmarkChallenge` interface, the challenge registry and `discover_challenges`.
 * **`src/benchmark.py`**: The benchmark runner and its command line, for every discovered challenge.
 * **`tests/`** (located at [tests/](tests/)): Pytest unit and integration test suite

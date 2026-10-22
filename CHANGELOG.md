@@ -8,8 +8,31 @@ pull requests and the git history. Open work is in [docs/roadmap.md](docs/roadma
 
 Results quote the committed config and seeds 1 to 5 unless they say otherwise. They use the 100-episode solve rule
 from 2026-10-16; earlier results use the 10-episode rule.
-"Solves" is the rolling training average reaching the threshold (475 on CartPole-v1, -200 on Pendulum-v1) and
+"Solves" is the rolling training average reaching the threshold (475 on CartPole-v1, -200 on Pendulum-v1, -100 on
+Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
+
+## 2026-10-22
+
+### Added
+
+- **Acrobot-v1 challenge** (`feature/acrobot-challenge`), the first rung of the Phase 7 challenge ladder:
+  `src/rl_acrobot/` (`AcrobotEnv` on `BaseEnvWrapper` with observation noise only; a config that sets action noise
+  or domain randomization is rejected) with `AcrobotChallenge` (key `acrobot`, solve threshold -100, Gymnasium's
+  `reward_threshold`), found by `discover_challenges` with no edit to `rl_core` or the scripts. Configs
+  `acrobot_default.yaml`, `acrobot_dqn.yaml` and `acrobot_ppo.yaml` start from rl-baselines3-zoo's Acrobot-v1
+  settings (DQN with one hidden layer of 256 instead of two; PPO on one environment, without normalisation, for
+  500,000 steps instead of 1M). Measured on seeds 1 to 5 through the benchmark: PPO solves 5 of 5 (72k to 278k
+  steps) and holds 5 of 5 (final averages -83 to -99), evaluation -86 ± 9; DQN solves 5 of 5 (26k to 43k steps)
+  but holds 1 of 5 (final averages -95 to -103, the training average including epsilon 0.1), evaluation -91 ± 5;
+  random scores -500. About 3 minutes per seed for each. Not published under `docs/benchmarks/`.
+
+### Fixed
+
+- **Test registry fixture dropped real challenges** (`feature/acrobot-challenge`): `isolated_registry` restored
+  its snapshot of `CHALLENGES` after each test, dropping a real challenge first imported during the test; the
+  module stayed imported, so it never registered again, and `pytest tests/test_script_challenge_selection.py` run
+  alone failed 5 tests. It now keeps every real `rl_*` challenge and drops only the `rl_fake*` ones.
 
 ## 2026-10-21
 

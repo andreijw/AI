@@ -1,7 +1,7 @@
 ---
 name: dev-loop
 description: >
-  Runs a feature or bug fix on the RL framework (rl_core, rl_cartpole, rl_pendulum) from proposal to hand-off
+  Runs a feature or bug fix on the RL framework (rl_core, rl_cartpole, rl_pendulum, rl_acrobot) from proposal to hand-off
   as the project's dev team: propose the work, plan it, get the plan reviewed, write tests first, implement,
   pass every gate, sync the docs, and hand over for the maintainer's commit. Use this whenever the user asks
   to build, add, change, tune or fix anything in the agents, environments, trainer, benchmark or scripts,

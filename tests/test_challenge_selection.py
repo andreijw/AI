@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+import rl_acrobot.environments.acrobot_env as acrobot_env_module
 import rl_cartpole.environments.cartpole_env as cartpole_env_module
 import rl_pendulum.environments.pendulum_env as pendulum_env_module
 from rl_core.agents import (
@@ -21,6 +22,7 @@ from rl_core.challenges import CHALLENGES, discover_challenges, select_challenge
 discover_challenges()
 
 EXPECTED_AGENTS = {
+    "acrobot": {"random": RandomAgent, "dqn": DQNAgent, "ppo": PPOAgent},
     "cartpole": {
         "random": RandomAgent,
         "reinforce": ReinforceAgent,
@@ -37,6 +39,7 @@ EXPECTED_AGENTS = {
 }
 
 ENV_CLASSES = {
+    "acrobot": acrobot_env_module.AcrobotEnv,
     "cartpole": cartpole_env_module.CartPoleEnv,
     "pendulum": pendulum_env_module.PendulumEnv,
 }
@@ -47,7 +50,8 @@ ENV_CLASSES = {
 
 
 @pytest.mark.parametrize(
-    ("env_name", "key"), [("CartPole-v1", "cartpole"), ("Pendulum-v1", "pendulum")]
+    ("env_name", "key"),
+    [("Acrobot-v1", "acrobot"), ("CartPole-v1", "cartpole"), ("Pendulum-v1", "pendulum")],
 )
 def test_environment_name_selects_its_challenge(env_name, key):
     assert select_challenge(env_name, None) is CHALLENGES[key]
@@ -58,13 +62,16 @@ def test_challenge_key_alone_selects_that_challenge():
     assert select_challenge(None, "pendulum") is CHALLENGES["pendulum"]
 
 
-@pytest.mark.parametrize("env_name", ["Acrobot-v1", "cartpole-v1", "CartPole-v0", "MyPendulum-v1"])
+@pytest.mark.parametrize(
+    "env_name", ["MountainCar-v0", "cartpole-v1", "CartPole-v0", "MyPendulum-v1"]
+)
 def test_unknown_environment_name_is_an_error_naming_the_options(env_name):
     """Ids match exactly: no lower-casing and no substring match picks a challenge."""
     with pytest.raises(ValueError, match=f"Unknown environment '{env_name}'") as error:
         select_challenge(env_name, None)
     assert "CartPole-v1 (cartpole)" in str(error.value), "the message should list every option"
     assert "Pendulum-v1 (pendulum)" in str(error.value), "the message should list every option"
+    assert "Acrobot-v1 (acrobot)" in str(error.value), "the message should list every option"
 
 
 def test_challenge_key_that_disagrees_with_the_environment_is_an_error():
@@ -185,8 +192,8 @@ def test_make_agent_builds_the_agent_sized_for_the_environment(key, agent_type):
     finally:
         env.close()
     assert type(agent) is EXPECTED_AGENTS[key][agent_type]
-    assert agent.observation_dim == {"cartpole": 4, "pendulum": 3}[key]
-    assert agent.action_dim == {"cartpole": 2, "pendulum": 1}[key]
+    assert agent.observation_dim == {"acrobot": 6, "cartpole": 4, "pendulum": 3}[key]
+    assert agent.action_dim == {"acrobot": 3, "cartpole": 2, "pendulum": 1}[key]
 
 
 @pytest.mark.parametrize("agent_type", sorted(EXPECTED_AGENTS["pendulum"]))
