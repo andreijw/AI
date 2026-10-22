@@ -127,16 +127,17 @@ def test_pendulum_actor_critic_uses_the_measured_settings():
     np.testing.assert_allclose(weights(agent)["log_std"], [-2.0])
 
 
-def test_acrobot_dqn_starts_from_rl_zoo_settings():
+def test_acrobot_dqn_uses_rl_zoo_settings_with_a_lower_exploration_floor():
     """rl-zoo's DQN for Acrobot-v1 (one hidden layer of 256 instead of two): one gradient step per
-    transition, epsilon to 0.1 over the first 12% of the 100,000 steps."""
+    transition over 100,000 steps. Epsilon falls to 0.02 rather than rl-zoo's 0.1 over the first 12,000:
+    held -100 on 5 of 5 seeds against 1 of 5 (CHANGELOG.md, 2026-10-22)."""
     env, agent, _ = discover_challenges()["acrobot"]().setup_run("dqn", seed=1, episodes=None)
     env.close()
     assert isinstance(optimizer(agent), Adam)
     assert (agent.learning_rate, agent.gamma) == pytest.approx((6.3e-4, 0.99))
     assert (agent.hidden_dim, agent.batch_size, agent.buffer_capacity) == (256, 128, 50_000)
     assert agent.target_update_frequency == 250
-    assert (agent.exploration_steps, agent.epsilon_end) == (12_000, pytest.approx(0.1))
+    assert (agent.exploration_steps, agent.epsilon_end) == (12_000, pytest.approx(0.02))
     assert (agent.updates_per_step, agent.max_updates_per_call) == (1.0, 500)
 
 

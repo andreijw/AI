@@ -95,7 +95,7 @@ when picked.
   - **Before adding it**: Acrobot (CHANGELOG.md, 2026-10-22) made the third near-copy of a challenge's
     `make_env_from_config` and the second copy of the discrete `make_agent`; a fourth challenge is the moment to
     extract a shared config-reading factory into `rl_core` and a default `make_agent` over an `AGENT_CLASSES`
-    class variable. Acrobot DQN holds -100 on 1 of 5 seeds with `epsilon_end` 0.1; a lower floor is untried.
+    class variable.
 
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
   - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency

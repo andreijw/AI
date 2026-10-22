@@ -21,11 +21,13 @@ Acrobot-v1) and
   or domain randomization is rejected) with `AcrobotChallenge` (key `acrobot`, solve threshold -100, Gymnasium's
   `reward_threshold`), found by `discover_challenges` with no edit to `rl_core` or the scripts. Configs
   `acrobot_default.yaml`, `acrobot_dqn.yaml` and `acrobot_ppo.yaml` start from rl-baselines3-zoo's Acrobot-v1
-  settings (DQN with one hidden layer of 256 instead of two; PPO on one environment, without normalisation, for
-  500,000 steps instead of 1M). Measured on seeds 1 to 5 through the benchmark: PPO solves 5 of 5 (72k to 278k
-  steps) and holds 5 of 5 (final averages -83 to -99), evaluation -86 ± 9; DQN solves 5 of 5 (26k to 43k steps)
-  but holds 1 of 5 (final averages -95 to -103, the training average including epsilon 0.1), evaluation -91 ± 5;
-  random scores -500. About 3 minutes per seed for each. Not published under `docs/benchmarks/`.
+  settings (DQN with one hidden layer of 256 instead of two and an exploration floor of 0.02 instead of 0.1; PPO
+  on one environment, without normalisation, for 500,000 steps instead of 1M). Measured on seeds 1 to 5 through the
+  benchmark: PPO solves 5 of 5 (72k to 278k steps) and holds 5 of 5 (final averages -83 to -99), evaluation
+  -86 ± 9; DQN solves 5 of 5 (25k to 32k steps) and holds 5 of 5 (final averages -90 to -96), evaluation -85 ± 6;
+  random scores -500. With rl-zoo's floor of 0.1 DQN held on 1 of 5 (final averages -95 to -103, evaluation
+  -91 ± 5), and with 0.05 on 5 of 5 by under 1.2 points on three seeds. About 3 minutes per seed for each. Not
+  published under `docs/benchmarks/`.
 
 ### Fixed
 

@@ -2,7 +2,9 @@
 # Starts from rl-baselines3-zoo's Acrobot-v1 DQN settings (hyperparams/dqn.yml), with one hidden
 # layer of 256 where rl-zoo has two. The trainer updates once per episode, so updates_per_step 1.0
 # with a cap at the episode limit gives one gradient step per transition, as rl-zoo's train_freq 4
-# with gradient_steps -1.
+# with gradient_steps -1. Measured on seeds 1 to 5 (2026-10-22): epsilon floor 0.02 solves and holds -100 on
+# 5 of 5 (final averages -90 to -96, greedy evaluation -85 +/- 6); 0.1 held on 1 of 5 and 0.05 on 5 of 5 by
+# under 1.2 points on three seeds.
 
 # Environment settings
 environment:
@@ -24,7 +26,7 @@ agent:
     batch_size: 128                # Training mini-batch size (rl-zoo)
     min_buffer_size: 128           # rl-zoo starts learning at once; one batch is the least we can sample
     epsilon_start: 1.0             # Initial exploration probability
-    epsilon_end: 0.1               # Exploration probability once exploration_steps have passed (rl-zoo)
+    epsilon_end: 0.02              # Exploration floor after exploration_steps; rl-zoo's 0.1 held -100 on 1 of 5 seeds
     exploration_steps: 12000       # Training actions over which epsilon falls linearly (rl-zoo: 12% of 100k)
     target_update_frequency: 250   # Gradient steps between target network syncs (rl-zoo)
     updates_per_step: 1.0          # Gradient steps per transition

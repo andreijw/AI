@@ -226,7 +226,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | Pendulum-v1 | PPO | `pendulum_ppo.yaml` (2048-step rollouts, annealed) | 200,000 | 5 of 5 | 72k to 157k | 4 of 5 |
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates) | 1,000,000 | 0 of 5 | — | 0 of 5 |
 | Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
-| Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer) | 100,000 | 5 of 5 | 26k to 43k | 1 of 5 |
+| Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
@@ -237,9 +237,8 @@ steps, twice rl-zoo's 100,000; updating on one episode at a time it solved no se
 Continuous Actor-Critic does not solve: its training average ends at -286 to -307, though its greedy evaluation
 of -172 ± 27 beats the random agent on every seed (CHANGELOG.md, 2026-10-19).
 Acrobot was measured on 2026-10-22 (CHANGELOG.md, 2026-10-22); it has no published report under `docs/benchmarks/`
-yet. Acrobot DQN solves on every seed but its training average, which includes the 10% random actions it keeps
-exploring with, ends at -95 to -103, so it holds on 1 of 5; its greedy evaluation of -91 ± 5 is at or above -100
-on all 5.
+yet. Acrobot DQN keeps exploring with 2% random actions rather than rl-zoo's 10%: with 10% its training average ended
+at -95 to -103 and held on 1 of 5 seeds; with 2% it ends at -90 to -96, and its greedy evaluation is -85 ± 6.
 
 ### Run any agent from one base config (quick overrides)
 
