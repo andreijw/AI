@@ -275,8 +275,10 @@ python train.py --config configs/cartpole_ppo.yaml --resume checkpoints/cartpole
 ```
 
 Use the same config (and `--agent-type` or budget flags) as the original run; hyperparameter changes are not
-detected. A resumed run writes new timestamped log files, and checkpoints saved before 2026-10-21 hold no trainer
-state and cannot be resumed.
+detected. With `--record-video` the resumed run records the same clips, under the same episode numbers, as an
+uninterrupted run would; into the original video folder Gymnasium warns "Overwriting existing videos", but the
+earlier clips are kept, as the new ones have later numbers. A resumed run writes new timestamped log files, and
+checkpoints saved before 2026-10-21 hold no trainer state and cannot be resumed.
 
 For a full run with saved learning-curve plots (saved to `plots/ppo/`):
 

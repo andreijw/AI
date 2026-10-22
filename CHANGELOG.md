@@ -25,12 +25,13 @@ from 2026-10-16; earlier results use the 10-episode rule.
   file it was saved with, the agent class, the environment, the evaluation environment and that its histories agree
   with each other and with the step count. Budgets count the whole run (resuming episode 600 of 1,000 trains 400 more),
   and checkpoint and video numbering continue. Through `train.py` with seed 42, 200 episodes of
-  `configs/cartpole_ppo.yaml` and 100 resumed + 100 give identical checkpoint arrays and a byte-identical plot, as
-  do 100 episodes of `configs/pendulum_ddpg.yaml` against 50 + 50; `tests/test_resume.py` checks every agent on both
-  challenges. Uninterrupted training is unchanged: 100 episodes of the CartPole PPO and DQN configs give the same
-  agent checkpoints as before. Maintainer's decisions: an exact resume, budgets as totals. Not covered: mid-episode
-  stops, changed hyperparameters, `src/benchmark.py`, old log files (a resumed run writes new ones), and checkpoints
-  saved before this change (no trainer state).
+  `configs/cartpole_ppo.yaml` and 100 resumed + 100 give identical checkpoint arrays and a byte-identical plot, as do
+  100 episodes of `configs/pendulum_ddpg.yaml` against 50 + 50; with `--record-video`, 20 episodes of the CartPole
+  PPO config against 10 + 10 give byte-identical clips under the same episode numbers. `tests/test_resume.py` checks
+  every agent on both challenges. Uninterrupted training is unchanged: 100 episodes of the CartPole PPO and DQN
+  configs give the same agent checkpoints as before. Maintainer's decisions: an exact resume, budgets as totals. Not
+  covered: mid-episode stops, changed hyperparameters, `src/benchmark.py`, old log files (a resumed run writes new
+  ones), and checkpoints saved before this change (no trainer state).
 
 ### Changed
 

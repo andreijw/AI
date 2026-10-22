@@ -104,6 +104,11 @@ class TrainerState:
             arrays["first_non_finite_episode"] = np.array(self.first_non_finite_episode)
         if self.eval_seed is not None:
             arrays["eval_seed"] = np.array(self.eval_seed)
+        clashing = sorted(arrays.keys() & self.env_state.keys())
+        if clashing:
+            raise ValueError(
+                f"Environment state keys clash with the trainer's: {', '.join(clashing)}"
+            )
         return {**arrays, **self.env_state}
 
     @classmethod
@@ -125,8 +130,8 @@ class TrainerState:
             agent_sha256=_text(data, "agent_sha256"),
             agent_class=_text(data, "agent_class"),
             env_id=_text(data, "env_id"),
-            episode_rewards=[float(v) for v in _history(data, "episode_rewards")],
-            episode_lengths=[int(v) for v in _history(data, "episode_lengths")],
+            episode_rewards=[float(v) for v in _history(data, "episode_rewards", np.number)],
+            episode_lengths=[int(v) for v in _history(data, "episode_lengths", np.integer)],
             total_steps_trained=_integer(data, "total_steps_trained"),
             update_metric_window=_metric_window(data),
             non_finite_metrics_seen=_names(data),
@@ -142,6 +147,13 @@ class TrainerState:
             raise ValueError(
                 f"episode_rewards and episode_lengths hold {len(state.episode_rewards)} and "
                 f"{len(state.episode_lengths)} episodes; {name} was saved after {episodes}"
+            )
+        if state.eval_seed is not None and state.eval_seed < 0:
+            raise ValueError(f"eval_seed must be non-negative, got {state.eval_seed}")
+        first = state.first_non_finite_episode
+        if first is not None and not 1 <= first <= episodes:
+            raise ValueError(
+                f"first_non_finite_episode {first} is outside episodes 1 to {episodes}"
             )
         if state.total_steps_trained != sum(state.episode_lengths):
             raise ValueError(
@@ -195,10 +207,13 @@ def _optional_integer(data: Mapping[str, Any], key: str) -> int | None:
     return _integer(data, key) if key in data else None
 
 
-def _history(data: Mapping[str, Any], key: str) -> np.ndarray:
+def _history(data: Mapping[str, Any], key: str, kind: Any) -> np.ndarray:
+    """A 1-D array of ``kind`` (``np.integer``, or ``np.number`` for any real number), not bool."""
     value = np.asarray(data[key])
     if value.ndim != 1:
         raise ValueError(f"{key} must be one value per episode, got shape {value.shape}")
+    if value.dtype == np.bool_ or not np.issubdtype(value.dtype, kind) or value.dtype.kind == "c":
+        raise ValueError(f"{key} must hold {kind.__name__} values, got dtype {value.dtype}")
     return value
 
 

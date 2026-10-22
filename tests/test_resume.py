@@ -150,6 +150,54 @@ def test_the_saved_evaluation_seed_replaces_the_new_runs(tmp_path):
     assert resumed.eval_seed == 111
 
 
+def _recorded_run(agent_cls, config, directory, video_dir, num_episodes, resume_from=None):
+    """Train with every 2nd training episode recorded to ``video_dir``, as train.py attaches it."""
+    from rl_core.utils.video import TrainingVideoRecorder
+
+    def make_env():
+        return CartPoleEnv(render_mode="rgb_array", seed=3, max_episode_steps=EPISODE_STEPS)
+
+    trainer = _trainer(agent_cls, config, make_env, (4, 2), directory, num_episodes=num_episodes)
+    if resume_from is not None:
+        trainer.resume(str(resume_from))
+    trainer.env.wrap_env(
+        TrainingVideoRecorder(
+            trainer.env.env, video_folder=str(video_dir), progress=trainer, every=2
+        )
+    )
+    try:
+        trainer.train()
+    finally:
+        trainer.env.close()
+        trainer.eval_env.close()
+
+
+def test_a_resumed_run_records_the_same_clips_under_the_same_numbers(tmp_path):
+    pytest.importorskip("moviepy")
+    cls, config = _named("PPOAgent")
+    _recorded_run(cls, config, tmp_path / "full", tmp_path / "full_videos", 10)
+    # A second folder for the resumed half: RecordVideo warns about any existing folder.
+    _recorded_run(cls, config, tmp_path / "split", tmp_path / "videos_1", 5)
+    _recorded_run(cls, config, tmp_path / "split", tmp_path / "videos_2", 10,
+                  resume_from=tmp_path / "split" / "agent_episode_5.pt")  # fmt: skip
+
+    def clips(*folders):
+        return {
+            name: (folder / name).read_bytes() for folder in folders for name in os.listdir(folder)
+        }
+
+    full, split = (
+        clips(tmp_path / "full_videos"),
+        clips(tmp_path / "videos_1", tmp_path / "videos_2"),
+    )
+    assert (
+        sorted(split)
+        == sorted(full)
+        == sorted(f"cartpole-training-episode-{n}.mp4" for n in (2, 4, 6, 8, 10))
+    ), "the resumed run records episodes 6 to 10, numbered as in the uninterrupted run"
+    assert split == full, "and the clips show the same episodes, byte for byte"
+
+
 # ---------------------------------------------------------------------------
 # Checkpoints that cannot be resumed
 # ---------------------------------------------------------------------------
@@ -208,6 +256,18 @@ def test_a_plain_gymnasium_environment_trains_and_checkpoints_without_its_genera
         trainer = Trainer(env=plain, agent=cls(4, 2, dict(config)), config=training)
         with pytest.raises(ValueError, match="generator"):
             trainer.resume(str(tmp_path / "wrapped" / "agent_episode_5.pt"))
+    finally:
+        plain.close()
+
+    plain = gym.make("CartPole-v1")
+    try:
+        trainer = Trainer(
+            env=plain, agent=cls(4, 2, dict(config)), config={**training, "num_episodes": 10}
+        )
+        trainer.resume(str(tmp_path / "plain" / "agent_episode_5.pt"))
+        assert trainer.train()["total_episodes"] == 10, (
+            "a plain run resumes into a plain environment"
+        )
     finally:
         plain.close()
 
@@ -287,6 +347,33 @@ def _set(key, value):
             "env_start_rng",
             id="env-generator",
         ),  # fmt: skip
+        pytest.param(_set("agent_class", 3), "agent_class", id="class-not-text"),
+        pytest.param(_set("eval_seed", True), "eval_seed", id="seed-bool"),
+        pytest.param(_set("eval_seed", -1), "eval_seed", id="seed-negative"),
+        pytest.param(_set("total_steps_trained", 75.0), "total_steps_trained", id="steps-float"),
+        pytest.param(
+            lambda a: a.__setitem__("total_steps_trained", a["total_steps_trained"].reshape(1)),
+            "single value",
+            id="steps-array",
+        ),  # fmt: skip
+        pytest.param(
+            lambda a: a.__setitem__("episode_lengths", a["episode_lengths"] + 0.4),
+            "episode_lengths",
+            id="lengths-float",
+        ),  # fmt: skip
+        pytest.param(
+            lambda a: a.__setitem__("episode_rewards", a["episode_rewards"].astype(str)),
+            "episode_rewards",
+            id="rewards-text",
+        ),  # fmt: skip
+        pytest.param(
+            _set("first_non_finite_episode", 999),
+            "first_non_finite_episode",
+            id="first-non-finite-out-of-range",
+        ),  # fmt: skip
+        pytest.param(_set("env_has_reset", [True, False]), "env_has_reset", id="has-reset-array"),
+        pytest.param(_set("env_has_reset", "False"), "env_has_reset", id="has-reset-text"),
+        pytest.param(_set("env_typo", 1), "env_typo", id="unexpected-key"),
     ],
 )
 def test_a_malformed_trainer_file_is_rejected_before_anything_changes(change, match, tmp_path):
@@ -311,6 +398,28 @@ def test_a_run_evaluated_on_its_own_environment_needs_one_to_resume(tmp_path):
     trainer = Trainer(env=_cartpole(), agent=cls(4, 2, dict(config)), config=training)
     with pytest.raises(ValueError, match="evaluation"):
         trainer.resume(str(tmp_path / "agent_episode_5.pt"))
+
+
+def test_a_run_evaluated_on_its_training_environment_resumes_without_another(tmp_path):
+    cls, config = _named("RandomAgent")
+    training = {"num_episodes": 5, "max_steps_per_episode": EPISODE_STEPS, "eval_frequency": 5,
+                "save_frequency": 5, "checkpoint_dir": str(tmp_path)}  # fmt: skip
+    Trainer(env=_cartpole(), agent=cls(4, 2, dict(config)), config=training).train()
+    trainer = _trainer(cls, config, _cartpole, (4, 2), tmp_path, num_episodes=10)
+    with pytest.raises(ValueError, match="evaluation"):
+        trainer.resume(str(tmp_path / "agent_episode_5.pt"))
+
+
+def test_a_trainer_state_whose_environment_keys_clash_is_not_written():
+    from rl_core.training.checkpoints import TrainerState
+
+    state = TrainerState(
+        agent_checkpoint="agent_episode_0.pt", agent_sha256="", agent_class="A", env_id="E",
+        episode_rewards=[], episode_lengths=[], total_steps_trained=0, update_metric_window={},
+        non_finite_metrics_seen=[], env_state={"env_id": np.array("other")},
+    )  # fmt: skip
+    with pytest.raises(ValueError, match="env_id"):
+        state.to_arrays()
 
 
 def test_an_interrupted_agent_save_leaves_no_checkpoint(tmp_path, monkeypatch):

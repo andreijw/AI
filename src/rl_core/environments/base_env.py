@@ -124,6 +124,9 @@ class BaseEnvWrapper:
             raise ValueError(f"Environment state is missing {', '.join(missing)}")
         for key, generator in zip(_GENERATOR_KEYS, self._generators(), strict=True):
             check_generator_state(generator, state[key], key)
+        has_reset = np.asarray(state["env_has_reset"])
+        if has_reset.dtype != np.bool_ or has_reset.shape != ():
+            raise ValueError(f"env_has_reset must be one boolean, got {has_reset!r}")
 
     def set_rng_state(self, state: Mapping[str, Any]) -> None:
         """

@@ -567,4 +567,11 @@ class Trainer:
                 "evaluation environment"
             )
         if isinstance(self.env, ResumableEnv):
+            expected = set(self.env.rng_state())
+            unexpected, missing = set(state.env_state) - expected, expected - set(state.env_state)
+            if unexpected or missing:
+                raise ValueError(
+                    f"The checkpoint's environment state has keys {sorted(unexpected)} this "
+                    f"environment does not, and lacks {sorted(missing)}"
+                )
             self.env.check_rng_state(state.env_state)
