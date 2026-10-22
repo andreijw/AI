@@ -13,6 +13,26 @@ from 2026-10-16; earlier results use the 10-episode rule.
 
 ## 2026-10-21
 
+### Added
+
+- **Resume training from a checkpoint** (`feature/checkpoint-generators` and `feature/train-resume`):
+  `python train.py --config <the run's config> --resume <checkpoint_dir>/<challenge>/<agent>/agent_episode_<n>.pt`
+  continues a run so that it ends exactly as one that never stopped. Beside each agent checkpoint the trainer now
+  writes `trainer_episode_<n>.npz` (episode and step counts, reward and length histories, the update-metric window,
+  the evaluation seed and the training environment's generators, through `rl_core.environments.ResumableEnv`); both
+  files are written to a temporary name and moved into place. `Trainer.resume` reads the whole trainer file
+  (`rl_core.training.checkpoints.TrainerState`) and checks it before loading anything: the SHA-256 of the agent
+  file it was saved with, the agent class, the environment, the evaluation environment and that its histories agree
+  with each other and with the step count. Budgets count the whole run (resuming episode 600 of 1,000 trains 400 more),
+  and checkpoint and video numbering continue. Through `train.py` with seed 42, 200 episodes of
+  `configs/cartpole_ppo.yaml` and 100 resumed + 100 give identical checkpoint arrays and a byte-identical plot, as do
+  100 episodes of `configs/pendulum_ddpg.yaml` against 50 + 50; with `--record-video`, 20 episodes of the CartPole
+  PPO config against 10 + 10 give byte-identical clips under the same episode numbers. `tests/test_resume.py` checks
+  every agent on both challenges. Uninterrupted training is unchanged: 100 episodes of the CartPole PPO and DQN
+  configs give the same agent checkpoints as before. Maintainer's decisions: an exact resume, budgets as totals. Not
+  covered: mid-episode stops, changed hyperparameters, `src/benchmark.py`, old log files (a resumed run writes new
+  ones), and checkpoints saved before this change (no trainer state).
+
 ### Changed
 
 - **Code health loose ends** (`feature/code-health-loose-ends`): `DQNAgent.__init__` drops from 94 lines and
@@ -35,9 +55,9 @@ from 2026-10-16; earlier results use the 10-episode rule.
   the resume tests no longer hand the loaded agent the saved one's generators or buffer. Older checkpoints load as
   before (the random agents' `rng_state` keys too), and seeded training is unchanged: 60 episodes of the committed
   CartPole PPO, DQN, REINFORCE and Actor-Critic configs and Pendulum DDPG (seed 42) give bit-identical weights. A
-  stored transition costs about 37 bytes compressed, so at the committed configs a CartPole DQN checkpoint with its
-  full 20,000-transition buffer is about 0.8 MB (34 KB before) and a Pendulum DDPG one at the end of its
-  40,000-step run about 1.8 MB (302 KB before); `save` and `load` reject a key saved twice and check every generator
+  stored transition costs about 36 to 41 bytes compressed, so at the committed configs a CartPole DQN checkpoint with
+  its full 20,000-transition buffer is about 0.8 MB (34 KB before) and a Pendulum DDPG one at the end of its
+  40,000-step run about 2 MB (302 KB before); `save` and `load` reject a key saved twice and check every generator
   state before changing anything.
 - **PPO checkpoints hold the partly filled rollout** (`feature/ppo-rollout-checkpoints`): both PPO agents keep
   buffered episodes in one shared `rl_core.agents.rollout.EpisodeRollout`, replacing two copies of the

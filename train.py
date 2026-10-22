@@ -195,6 +195,16 @@ def parse_args(argv=None):
         default="configs/cartpole_default.yaml",
         help="Path to configuration file",
     )
+    parser.add_argument(
+        "--resume",
+        type=str,
+        metavar="CHECKPOINT",
+        help=(
+            "Continue the run that wrote this agent_episode_<n>.pt (its trainer_episode_<n>.npz "
+            "must be beside it), ending exactly as if it had never stopped. The budget counts the "
+            "episodes or steps already done."
+        ),
+    )
     add_output_arguments(parser)
     add_challenge_arguments(parser)
     add_budget_arguments(parser)
@@ -210,6 +220,8 @@ def parse_args(argv=None):
         parser.error("--video-every requires --record-video.")
     if args.video_every is not None and args.video_every <= 0:
         parser.error("--video-every must be a positive integer.")
+    if args.resume is not None and not os.path.isfile(args.resume):
+        parser.error(f"--resume: no checkpoint at {args.resume}")
     return args
 
 
@@ -313,6 +325,8 @@ def main():
                 eval_seed=eval_seed,
             )
             logger.info("Trainer created")
+            if args.resume is not None:
+                trainer.resume(args.resume)
             if args.record_video:
                 attach_video_recorder(env, trainer, args.video_every, video_dir, logger)
             train_and_plot(trainer, args.plot, plot_dir, challenge, agent_type, logger)

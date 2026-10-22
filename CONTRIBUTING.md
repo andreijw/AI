@@ -267,4 +267,5 @@ Training runs and the test suite write bulky outputs that must never be committe
   (`save_frequency`) balanced to avoid excessive disk writes. `BaseAgent.save` writes one compressed `.npz`: what the
   agent's `_checkpoint_arrays` and `_extra_checkpoint_state` return, the state of every generator attribute (`rng_*`
   keys), and for DQN and DDPG the filled part of the replay buffer (`replay_*`), so a loaded agent continues exactly as
-  the saved one would have. A generator held inside another object is that object's to save.
+  the saved one would have. A generator held inside another object is that object's to save. Beside each agent
+  checkpoint the trainer writes `trainer_episode_<n>.npz`, which `train.py --resume` needs.

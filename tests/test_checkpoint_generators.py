@@ -97,16 +97,24 @@ def test_an_old_checkpoint_leaves_generators_seeded_and_empties_a_replay_buffer(
     np.testing.assert_array_equal(np.array(actual), np.array(expected), "seeded generators")
 
 
+@pytest.mark.parametrize(
+    "bad_state",
+    [
+        pytest.param(generator_state(np.random.Generator(np.random.PCG64DXSM(1))), id="other-kind"),
+        pytest.param(np.array("not json"), id="not-json"),
+        pytest.param(np.array('{"state": 1}'), id="no-bit-generator"),
+    ],
+)
 @pytest.mark.parametrize(("agent_cls", "config", "obs_dim", "action_dim"), AGENTS)
 def test_a_generator_state_that_cannot_be_restored_leaves_the_agent_unchanged(
-    agent_cls, config, obs_dim, action_dim, tmp_path
+    agent_cls, config, obs_dim, action_dim, bad_state, tmp_path
 ):
     agent = agent_cls(obs_dim, action_dim, dict(config))
     agent.save(str(tmp_path / "agent.npz"))
     with np.load(tmp_path / "agent.npz") as data:
         bad = {k: data[k] for k in data.files}
     key = next(k for k in bad if k.startswith("rng_"))
-    bad[key] = generator_state(np.random.Generator(np.random.PCG64DXSM(1)))
+    bad[key] = bad_state
     np.savez(tmp_path / "bad.npz", **bad)
 
     target = agent_cls(obs_dim, action_dim, {**config, "seed": 7})

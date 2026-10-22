@@ -15,25 +15,7 @@ No open items.
 
 ### Training
 
-- [~] **Resume Training from a Checkpoint**
-  - **Description**: `train.py --resume checkpoints/<challenge>/<agent>/agent_episode_<n>.pt` continues a run from a
-    checkpoint so that it ends exactly as an uninterrupted run would. Decided by the maintainer on 2026-10-21: an
-    exact resume, in two pull requests, with budgets that count the whole run.
-  - **Acceptance criteria**:
-    - A run stopped after checkpoint n and resumed from it ends with bit-identical weights, reward and length
-      histories and checkpoints to one that never stopped, for every agent on both challenges.
-    - `--num-episodes`, `--total-steps` and the config's budget are totals for the run: resuming episode 600 of
-      1,000 trains 400 more. Checkpoint numbering continues instead of overwriting earlier files.
-    - Checkpoints from before the change still load for evaluation and `record.py`; resuming one fails with a
-      message that names the missing trainer state.
-  - **Known edge cases**: an unseeded run (its evaluation seed is drawn from entropy and must be saved); a
-    `save_frequency` that is not a multiple of the 10-episode log interval; a resume of a run that already met its
-    budget; video clip numbering; a mock or plain environment that cannot save its generators.
-  - **Out of scope**: resuming mid-episode; detecting changed hyperparameters; resuming `src/benchmark.py`;
-    vectorized environments; continuing the old log files (a resumed run writes new timestamped ones).
-  - **Progress**: agent checkpoints hold every generator and DQN's and DDPG's replay buffers
-    (`feature/checkpoint-generators`, CHANGELOG.md, 2026-10-21). Next: trainer state and `train.py --resume`
-    (`feature/train-resume`).
+No open items.
 
 ### Code Health
 

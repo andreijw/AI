@@ -303,6 +303,9 @@ def _corrupt(key: str, value) -> dict[str, np.ndarray]:
         ("replay_observations", np.zeros((8, 4))),
         ("replay_actions", np.zeros(8)),  # float actions in a discrete buffer
         ("replay_rewards", np.zeros(7)),
+        ("replay_size", np.array([5, 5])),
+        ("replay_rng", np.array("not json")),
+        ("replay_rng", np.array('{"bit_generator": "MT19937", "state": {}}')),
     ],
 )
 def test_an_inconsistent_buffer_state_is_rejected_and_changes_nothing(key, value):

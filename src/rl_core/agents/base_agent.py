@@ -1,6 +1,5 @@
 """Base agent interface for reinforcement learning."""
 
-import json
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
@@ -8,7 +7,7 @@ from typing import Any, ClassVar, final
 
 import numpy as np
 
-from rl_core.seeding import generator_state, restore_generator
+from rl_core.seeding import check_generator_state, generator_state, restore_generator
 
 # Checkpoint key of a generator attribute: "rng_" and its name without leading underscores.
 GENERATOR_KEY_PREFIX = "rng_"
@@ -73,6 +72,11 @@ class BaseAgent(ABC):
         """Arrays a subclass needs saved beyond the weights and optimizer state."""
         return {}
 
+    def _check_extra_checkpoint_state(self, data: Any) -> None:
+        """Raise ValueError if :meth:`_load_extra_checkpoint_state` would; called before anything
+        is loaded, so a malformed checkpoint changes nothing. Nothing to check by default."""
+        return None
+
     def _load_extra_checkpoint_state(self, data: Any) -> None:
         """Restore what :meth:`_extra_checkpoint_state` saved; ``data`` maps names to arrays."""
         return None  # nothing extra by default
@@ -110,15 +114,7 @@ class BaseAgent(ABC):
             source = key if key in data else legacy.get(key, key)
             if source not in data:
                 continue
-            try:
-                kind = json.loads(str(np.asarray(data[source]).item()))["bit_generator"]
-            except (ValueError, KeyError, TypeError) as error:
-                raise ValueError(f"{source} is not a generator state: {error}") from error
-            if kind != type(generator.bit_generator).__name__:
-                raise ValueError(
-                    f"{source} holds a {kind} state, the agent's generator is "
-                    f"{type(generator.bit_generator).__name__}"
-                )
+            check_generator_state(generator, data[source], source)
             found[key] = (generator, source)
         return found
 
@@ -281,6 +277,7 @@ class BaseAgent(ABC):
         """
         with np.load(self._resolve_load_path(path)) as data:
             generator_states = self._saved_generator_states(data)  # checked before any change
+            self._check_extra_checkpoint_state(data)
             self._load_checkpoint_arrays(data)
             self._load_extra_checkpoint_state(data)
             for generator, source in generator_states.values():
