@@ -262,6 +262,22 @@ and `logs/<challenge>/<agent_type>/` (for example `checkpoints/cartpole/ppo/agen
 `checkpoints/pendulum/ppo/agent_episode_200.pt`). Re-training the same agent replaces that agent's previous
 outputs; copy its folders first to keep a run. Logs in `logs/` are timestamped per run.
 
+### Resuming a run
+
+Every checkpoint is two files: `agent_episode_<n>.pt` (the agent, its optimizer state, generators and any replay
+buffer) and `trainer_episode_<n>.npz` beside it (the episode and step counts, reward history, evaluation seed and
+the training environment's generators, and a hash of the agent file, so a mismatched pair is refused). Resuming
+from one continues the run so that it ends exactly as it would have without the stop; the budget counts what was
+already trained, and checkpoint numbering continues:
+
+```bash
+python train.py --config configs/cartpole_ppo.yaml --resume checkpoints/cartpole/ppo/agent_episode_300.pt
+```
+
+Use the same config (and `--agent-type` or budget flags) as the original run; hyperparameter changes are not
+detected. A resumed run writes new timestamped log files, and checkpoints saved before 2026-10-21 hold no trainer
+state and cannot be resumed.
+
 For a full run with saved learning-curve plots (saved to `plots/ppo/`):
 
 ```bash

@@ -6,7 +6,13 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from rl_core.seeding import AGENT_REPLAY_STREAM, derive_rng, generator_state, restore_generator
+from rl_core.seeding import (
+    AGENT_REPLAY_STREAM,
+    check_generator_state,
+    derive_rng,
+    generator_state,
+    restore_generator,
+)
 
 _COLUMNS = ("observations", "actions", "rewards", "next_observations", "dones")
 
@@ -300,6 +306,27 @@ class ReplayBuffer:
             raise ValueError(
                 f"Checkpoint holds part of a replay buffer; missing {', '.join(missing)}"
             )
+        idx, size = self._checked_position(data)
+        columns = {name: np.asarray(data[f"{key}{name}"]) for name in _COLUMNS}
+        for name, column in columns.items():
+            current = getattr(self, name)
+            if column.shape != (size, *current.shape[1:]) or column.dtype != current.dtype:
+                raise ValueError(
+                    f"{key}{name} has shape {column.shape} and dtype {column.dtype}, expected "
+                    f"{(size, *current.shape[1:])} and {current.dtype}"
+                )
+        check_generator_state(self._rng, data[f"{key}rng"], f"{key}rng")
+        restore_generator(self._rng, data[f"{key}rng"])
+        for name, column in columns.items():
+            getattr(self, name)[:size] = column
+        self._idx, self._size = idx, size
+
+    def _checked_position(self, data: Mapping[str, Any]) -> tuple[int, int]:
+        """The saved write index and size, once they fit this buffer's capacity."""
+        key = self.KEY_PREFIX
+        for name in ("capacity", "idx", "size"):
+            if np.asarray(data[f"{key}{name}"]).shape != ():
+                raise ValueError(f"{key}{name} must be a single integer")
         capacity, idx, size = (int(data[f"{key}{n}"]) for n in ("capacity", "idx", "size"))
         if capacity != self.capacity:
             raise ValueError(
@@ -310,18 +337,7 @@ class ReplayBuffer:
             raise ValueError(f"{key}size {size} is outside [0, {capacity}]")
         if not 0 <= idx < capacity or (size < capacity and idx != size):
             raise ValueError(f"{key}idx {idx} does not fit size {size} and capacity {capacity}")
-        columns = {name: np.asarray(data[f"{key}{name}"]) for name in _COLUMNS}
-        for name, column in columns.items():
-            current = getattr(self, name)
-            if column.shape != (size, *current.shape[1:]) or column.dtype != current.dtype:
-                raise ValueError(
-                    f"{key}{name} has shape {column.shape} and dtype {column.dtype}, expected "
-                    f"{(size, *current.shape[1:])} and {current.dtype}"
-                )
-        restore_generator(self._rng, data[f"{key}rng"])
-        for name, column in columns.items():
-            getattr(self, name)[:size] = column
-        self._idx, self._size = idx, size
+        return idx, size
 
     def clear(self) -> None:
         """Reset the buffer to empty state."""

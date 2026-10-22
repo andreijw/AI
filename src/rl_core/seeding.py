@@ -86,3 +86,21 @@ def restore_generator(generator: np.random.Generator, state: np.ndarray) -> None
         ValueError: If the state belongs to another kind of bit generator.
     """
     generator.bit_generator.state = json.loads(str(np.asarray(state).item()))
+
+
+def check_generator_state(generator: np.random.Generator, state: np.ndarray, name: str) -> None:
+    """
+    Check that ``state`` (from :func:`generator_state`) can be restored into ``generator``, without
+    changing anything, so a caller can check every state before restoring any.
+
+    Raises:
+        ValueError: Naming ``name``, if ``state`` is not a generator state or is one of another kind
+            of bit generator.
+    """
+    try:
+        kind = json.loads(str(np.asarray(state).item()))["bit_generator"]
+    except (ValueError, KeyError, TypeError) as error:
+        raise ValueError(f"{name} is not a generator state: {error}") from error
+    expected = type(generator.bit_generator).__name__
+    if kind != expected:
+        raise ValueError(f"{name} holds a {kind} state, the generator is {expected}")

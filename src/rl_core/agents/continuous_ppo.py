@@ -210,9 +210,12 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
             **self._rollout.checkpoint_state(),
         }
 
+    def _check_extra_checkpoint_state(self, data: Any) -> None:
+        self._rollout.check(data, self.observation_dim, (self.action_dim,))
+
     def _load_extra_checkpoint_state(self, data: Any) -> None:
-        self._steps_trained = int(data["ppo_steps_trained"]) if "ppo_steps_trained" in data else 0
         self._rollout.restore(data, self.observation_dim, (self.action_dim,))
+        self._steps_trained = int(data["ppo_steps_trained"]) if "ppo_steps_trained" in data else 0
 
     def _minibatch_loss_and_grads(
         self,

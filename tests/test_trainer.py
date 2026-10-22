@@ -200,21 +200,15 @@ def test_evaluate_std_for_single_episode(trainer):
 # ---------------------------------------------------------------------------
 
 
-def test_save_checkpoint_creates_file(env, tmp_path):
-    """_save_checkpoint should create the checkpoint directory and call agent.save."""
+def test_save_checkpoint_creates_file(env, agent, tmp_path):
+    """_save_checkpoint creates the directory and writes the agent's and the trainer's files."""
     tmpdir = str(tmp_path / "ckpt")
-    config = {
-        "num_episodes": 1,
-        "checkpoint_dir": tmpdir,
-    }
-    mock_agent = MagicMock()
-    trainer = Trainer(env=env, agent=mock_agent, config=config)
+    trainer = Trainer(env=env, agent=agent, config={"num_episodes": 1, "checkpoint_dir": tmpdir})
 
     trainer._save_checkpoint(episode=1)
 
-    expected_path = os.path.join(tmpdir, "agent_episode_1.pt")
-    assert os.path.isdir(tmpdir)
-    mock_agent.save.assert_called_once_with(expected_path)
+    assert sorted(os.listdir(tmpdir)) == ["agent_episode_1.pt", "trainer_episode_1.npz"]
+    agent.load(os.path.join(tmpdir, "agent_episode_1.pt"))
 
 
 def test_save_checkpoint_creates_nested_directory(env, agent, tmp_path):

@@ -1,12 +1,34 @@
 """The behaviour every challenge's environment wrapper shares: seeding, observation noise and episode
 statistics around a Gymnasium environment."""
 
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, Protocol, runtime_checkable
 
 import gymnasium as gym
 import numpy as np
 
-from rl_core.seeding import WRAPPER_STREAM, derive_rng
+from rl_core.seeding import (
+    WRAPPER_STREAM,
+    check_generator_state,
+    derive_rng,
+    generator_state,
+    restore_generator,
+)
+
+# Checkpoint keys of an environment's generators: the wrapper's noise stream and Gymnasium's
+# start-state generator.
+_GENERATOR_KEYS = ("env_wrapper_rng", "env_start_rng")
+
+
+@runtime_checkable
+class ResumableEnv(Protocol):
+    """An environment whose random state at an episode boundary can be saved and restored."""
+
+    def rng_state(self) -> dict[str, np.ndarray]: ...
+
+    def check_rng_state(self, state: Mapping[str, Any]) -> None: ...
+
+    def set_rng_state(self, state: Mapping[str, Any]) -> None: ...
 
 
 class BaseEnvWrapper:
@@ -71,6 +93,50 @@ class BaseEnvWrapper:
 
         self._episode_steps = 0
         self._episode_reward = 0.0
+
+    def _generators(self) -> tuple[np.random.Generator, np.random.Generator]:
+        """The wrapper's noise generator and Gymnasium's start-state one, in ``_GENERATOR_KEYS``
+        order."""
+        start_rng: np.random.Generator = self.env.unwrapped.np_random
+        return self._np_random, start_rng
+
+    def rng_state(self) -> dict[str, np.ndarray]:
+        """
+        The environment's random state between episodes: both generators and whether the first
+        reset (which applies the constructor seed) has happened. Physics is not state here: domain
+        randomization draws it anew at every reset. Read through any wrapper ``wrap_env`` added.
+        """
+        state = {
+            k: generator_state(g) for k, g in zip(_GENERATOR_KEYS, self._generators(), strict=True)
+        }
+        state["env_has_reset"] = np.array(self._has_reset)
+        return state
+
+    def check_rng_state(self, state: Mapping[str, Any]) -> None:
+        """
+        Raise the ValueError :meth:`set_rng_state` would, changing nothing.
+
+        Raises:
+            ValueError: If a key is missing or holds another kind of generator state.
+        """
+        missing = [k for k in (*_GENERATOR_KEYS, "env_has_reset") if k not in state]
+        if missing:
+            raise ValueError(f"Environment state is missing {', '.join(missing)}")
+        for key, generator in zip(_GENERATOR_KEYS, self._generators(), strict=True):
+            check_generator_state(generator, state[key], key)
+
+    def set_rng_state(self, state: Mapping[str, Any]) -> None:
+        """
+        Continue from a state :meth:`rng_state` returned, in place.
+
+        Raises:
+            ValueError: If a key is missing or holds another kind of generator state; nothing is
+                changed then.
+        """
+        self.check_rng_state(state)
+        for key, generator in zip(_GENERATOR_KEYS, self._generators(), strict=True):
+            restore_generator(generator, state[key])
+        self._has_reset = bool(state["env_has_reset"])
 
     def _make_env(self) -> None:
         """Create the Gymnasium environment and take its spaces and metadata."""

@@ -7,6 +7,7 @@ import pytest
 from rl_core.agents.continuous_ppo import ContinuousPPOAgent
 from rl_core.agents.ppo_agent import PPOAgent
 from tests.agent_internals import assert_same_weights
+from tests.helpers import assert_same_checkpoint
 
 ROLLOUT_STEPS = 12
 
@@ -75,3 +76,26 @@ def test_a_load_replaces_the_buffered_steps_with_the_checkpoints(agent_cls, save
     assert agent.update(_episode(agent, missing - 1, seed=3)) == {}, "one step short: buffering"
     metrics = agent.update(_episode(agent, 1, seed=4))
     assert metrics.get("rollout_steps") == float(ROLLOUT_STEPS), "the checkpoint's steps train too"
+
+
+@pytest.mark.parametrize("agent_cls", AGENTS)
+def test_a_checkpoint_with_a_malformed_rollout_changes_nothing(agent_cls, tmp_path):
+    """The rollout is checked before any weight is replaced, so a failed load leaves the agent
+    as it was."""
+    saved = _agent(agent_cls)
+    saved.update(_episode(saved, 12, seed=1))
+    saved.update(_episode(saved, 5, seed=2))
+    saved.save(str(tmp_path / "saved.npz"))
+    with np.load(tmp_path / "saved.npz") as data:
+        bad = {k: data[k] for k in data.files}
+    bad["ppo_rollout_rewards"] = bad["ppo_rollout_rewards"][:-1]
+    np.savez(tmp_path / "bad.npz", **bad)
+
+    target = _agent(agent_cls, seed=99)
+    target.update(_episode(target, 12, seed=50))
+    target.save(str(tmp_path / "before.npz"))
+    with pytest.raises(ValueError, match="ppo_rollout_rewards"):
+        target.load(str(tmp_path / "bad.npz"))
+    untouched = _agent(agent_cls, seed=99)
+    untouched.load(str(tmp_path / "before.npz"))
+    assert_same_checkpoint(untouched, target, tmp_path)

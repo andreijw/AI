@@ -76,11 +76,26 @@ class EpisodeRollout:
             ValueError: If only some rollout keys are present, or a column's shape is not
                 ``(n, *step_shape)`` for one common ``n``. The buffer is then left unchanged.
         """
+        columns = self._checked_columns(data, observation_dim, action_shape)
+        n_steps = 0 if columns is None else len(columns.rewards)
+        self._episodes, self._length = (
+            ([columns], n_steps) if columns is not None and n_steps else ([], 0)
+        )
+
+    def check(
+        self, data: Mapping[str, Any], observation_dim: int, action_shape: tuple[int, ...]
+    ) -> None:
+        """Raise the ValueError :meth:`restore` would, changing nothing."""
+        self._checked_columns(data, observation_dim, action_shape)
+
+    def _checked_columns(
+        self, data: Mapping[str, Any], observation_dim: int, action_shape: tuple[int, ...]
+    ) -> RolloutColumns | None:
+        """The checkpoint's rollout columns once validated, or None if it holds no rollout."""
         keys = [f"{self.KEY_PREFIX}{name}" for name in RolloutColumns._fields]
         missing = [key for key in keys if key not in data]
         if len(missing) == len(keys):
-            self._episodes, self._length = [], 0
-            return
+            return None
         if missing:
             raise ValueError(f"Checkpoint holds part of a rollout; missing {', '.join(missing)}")
         columns = RolloutColumns(*(np.asarray(data[key]) for key in keys))
@@ -91,7 +106,7 @@ class EpisodeRollout:
                 raise ValueError(
                     f"{key} has shape {column.shape}, expected {(n_steps, *step_shape)}"
                 )
-        self._episodes, self._length = ([columns], n_steps) if n_steps else ([], 0)
+        return columns
 
     def _joined(self) -> RolloutColumns:
         return RolloutColumns(*(np.concatenate(c) for c in zip(*self._episodes, strict=True)))

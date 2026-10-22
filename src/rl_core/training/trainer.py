@@ -11,7 +11,15 @@ import gymnasium as gym
 import numpy as np
 
 from ..agents.base_agent import BaseAgent
+from ..environments import ResumableEnv
 from ..utils.logger import json_safe
+from .checkpoints import (
+    TrainerState,
+    checkpoint_paths,
+    file_sha256,
+    trainer_state_path,
+    write_atomically,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -283,8 +291,13 @@ class Trainer:
         )
         self._log_info(f"Starting training for {budget}...")
 
-        episode = 0
-        while self._budget_left(episode):
+        if self.episode_rewards and not self._budget_left(len(self.episode_rewards)):
+            self._log_info(
+                f"The budget is already met after {len(self.episode_rewards)} episodes; "
+                "nothing to train."
+            )
+        while self._budget_left(len(self.episode_rewards)):
+            episode = len(self.episode_rewards)  # done so far, restored by resume()
             self.current_episode = episode + 1
             episode_reward, episode_length = self._run_episode(training=True)
 
@@ -321,8 +334,6 @@ class Trainer:
             # Save checkpoint
             if (episode + 1) % self.save_frequency == 0:
                 self._save_checkpoint(episode + 1)
-
-            episode += 1
 
         self._log_info("Training complete!")
 
@@ -446,13 +457,114 @@ class Trainer:
 
     def _save_checkpoint(self, episode: int) -> None:
         """
-        Save a training checkpoint.
+        Save a training checkpoint: the agent to ``agent_episode_<n>.pt`` and, beside it, what
+        :meth:`resume` needs to continue the run to ``trainer_episode_<n>.npz`` (a
+        :class:`TrainerState`, which records the agent file's hash). Each file is written to a
+        temporary name and moved into place, the agent's first.
 
         Args:
-            episode: Current episode number
+            episode: Training episodes done
         """
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
-        checkpoint_path = os.path.join(self.checkpoint_dir, f"agent_episode_{episode}.pt")
-        self.agent.save(checkpoint_path)
-        self._log_info(f"Checkpoint saved to {checkpoint_path}")
+        agent_path, trainer_path = checkpoint_paths(self.checkpoint_dir, episode)
+        write_atomically(agent_path, self.agent.save)
+        arrays = self._trainer_state(agent_path).to_arrays()
+
+        def write_state(path: str) -> None:
+            with open(path, "wb") as f:
+                np.savez_compressed(f, **arrays)
+
+        write_atomically(trainer_path, write_state)
+        self._log_info(f"Checkpoint saved to {agent_path}")
+
+    def _env_id(self) -> str:
+        name = getattr(self.env, "env_name", None) or getattr(
+            getattr(self.env, "spec", None), "id", None
+        )
+        return str(name or type(self.env).__name__)
+
+    def _trainer_state(self, agent_path: str) -> TrainerState:
+        return TrainerState(
+            agent_checkpoint=os.path.basename(agent_path),
+            agent_sha256=file_sha256(agent_path),
+            agent_class=type(self.agent).__name__,
+            env_id=self._env_id(),
+            episode_rewards=list(self.episode_rewards),
+            episode_lengths=list(self.episode_lengths),
+            total_steps_trained=self.total_steps_trained,
+            update_metric_window=self._update_metric_window,
+            non_finite_metrics_seen=sorted(self._non_finite_metrics_seen),
+            first_non_finite_episode=self.first_non_finite_episode,
+            eval_seed=self.eval_seed,
+            env_state=self.env.rng_state() if isinstance(self.env, ResumableEnv) else {},
+        )
+
+    def resume(self, agent_checkpoint: str) -> None:
+        """
+        Continue a run from a checkpoint this trainer's ``_save_checkpoint`` wrote: load the agent,
+        then the trainer's histories, counters, metric window, evaluation seed and the training
+        environment's generators. :meth:`train` then trains up to the budget, which counts the
+        episodes and steps done before the stop, and numbering continues.
+
+        The whole trainer file is read and checked first: that it belongs to this agent file,
+        agent class and environment, and that its fields agree with each other. If the agent
+        checkpoint itself then fails to load, build a new trainer.
+
+        Raises:
+            FileNotFoundError: If the trainer file beside the checkpoint is missing (checkpoints
+                from before 2026-10-21 hold only the agent).
+            ValueError: If the checkpoint is not named ``agent_episode_<n>``, the trainer file is
+                malformed or belongs to another agent file, agent class or environment, or the run
+                had environment generators or an evaluation environment this trainer lacks (or
+                the other way round).
+        """
+        trainer_path = trainer_state_path(agent_checkpoint)
+        if not os.path.exists(trainer_path):
+            raise FileNotFoundError(
+                f"{os.path.basename(trainer_path)} is missing beside {agent_checkpoint}: only "
+                "checkpoints saved with their trainer state can be resumed"
+            )
+        with np.load(trainer_path) as data:
+            state = TrainerState.from_arrays(data, agent_checkpoint)
+        self._check_resumable(state)
+        self.agent.load(agent_checkpoint)
+        if isinstance(self.env, ResumableEnv):
+            self.env.set_rng_state(state.env_state)
+        self.episode_rewards = list(state.episode_rewards)
+        self.episode_lengths = list(state.episode_lengths)
+        self.total_steps_trained = state.total_steps_trained
+        self.current_episode = len(self.episode_rewards)
+        self._update_metric_window = {k: list(v) for k, v in state.update_metric_window.items()}
+        self._non_finite_metrics_seen = set(state.non_finite_metrics_seen)
+        self.first_non_finite_episode = state.first_non_finite_episode
+        if state.eval_seed is not None:
+            self.eval_seed = state.eval_seed
+        self._log_info(
+            f"Resumed from {agent_checkpoint} after {self.current_episode} episodes "
+            f"({self.total_steps_trained} steps)"
+        )
+
+    def _check_resumable(self, state: TrainerState) -> None:
+        """Raise ValueError unless the saved run can continue on this agent and environments."""
+        for what, saved, actual in (
+            ("agent", state.agent_class, type(self.agent).__name__),
+            ("environment", state.env_id, self._env_id()),
+        ):
+            if saved != actual:
+                raise ValueError(f"The checkpoint's {what} is {saved}; this trainer's is {actual}")
+        if bool(state.env_state) != isinstance(self.env, ResumableEnv):
+            raise ValueError(
+                "The checkpoint holds environment generators this environment cannot restore"
+                if state.env_state
+                else "The checkpoint holds no environment generators for this environment"
+            )
+        if (state.eval_seed is not None) != (self.eval_env is not None):
+            raise ValueError(
+                "The run evaluated on its own evaluation environment; give this trainer one"
+                if state.eval_seed is not None
+                else "The run evaluated on its training environment; this trainer has an "
+                "evaluation environment"
+            )
+        if isinstance(self.env, ResumableEnv):
+            self.env.check_rng_state(state.env_state)

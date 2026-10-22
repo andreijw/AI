@@ -245,7 +245,12 @@ environment (built by the challenge's `make_env`, or `setup_eval_env` in the ben
 evaluation in a run plays the same start states and how often a run evaluates does not change its training episodes.
 The random agents draw their evaluation actions from a separate generator for the same reason. An agent checkpoint
 holds every generator the agent draws from and, for DQN and DDPG, the replay buffer, so a loaded agent continues
-exactly as the saved one would have. Without an evaluation
+exactly as the saved one would have. Beside it the trainer writes `trainer_episode_<n>.npz` (episode and step
+counts, reward and length histories, the update-metric window, the evaluation seed and, for an environment that
+implements `rl_core.environments.ResumableEnv`, its generators) as a `TrainerState` that also records the agent
+file's SHA-256, both files through
+`rl_core.training.checkpoints.write_atomically`; `Trainer.resume` (`train.py --resume`) reads both, so a resumed
+run ends exactly as an uninterrupted one. Without an evaluation
 environment (direct `Trainer` callers and tests) evaluation runs on the training environment. `record.py` passes its
 playback environment as the evaluation environment with the same seed, so a playback shows the training run's
 evaluation start states.
@@ -279,7 +284,8 @@ sequenceDiagram
         end
         opt Periodic Checkpoint
             Trainer->>Agent: save(checkpoint_path)
-            Agent->>Disk: write .pt / .npz
+            Agent->>Disk: write agent_episode_<n>.pt
+            Trainer->>Disk: write trainer_episode_<n>.npz (counters, histories, env generators)
         end
     end
     Trainer-->>User: training_summary_dict
@@ -296,7 +302,8 @@ challenge and algorithm subdirectories:
 checkpoints/
 ├── cartpole/
 │   ├── ppo/
-│   │   └── agent_episode_500.pt
+│   │   ├── agent_episode_500.pt
+│   │   └── trainer_episode_500.npz
 │   └── dqn/
 └── pendulum/
     ├── ppo/
