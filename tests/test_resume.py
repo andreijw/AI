@@ -7,6 +7,7 @@ import gymnasium as gym
 import numpy as np
 import pytest
 
+from rl_acrobot.environments import AcrobotEnv
 from rl_cartpole.environments import CartPoleEnv
 from rl_core.agents import RandomAgent
 from rl_core.environments import ResumableEnv
@@ -457,8 +458,13 @@ def _episodes(env, n, action):
 
 @pytest.mark.parametrize(
     ("make_env", "action"),
-    [(_cartpole, 1), (_pendulum, np.array([0.5])), (lambda: _cartpole(seed=None), 1)],
-    ids=["cartpole", "pendulum", "unseeded"],
+    [
+        (_cartpole, 1),
+        (_pendulum, np.array([0.5])),
+        (lambda: AcrobotEnv(seed=3, max_episode_steps=EPISODE_STEPS, obs_noise_std=0.01), 2),
+        (lambda: _cartpole(seed=None), 1),
+    ],
+    ids=["cartpole", "pendulum", "acrobot", "unseeded"],
 )
 def test_an_environment_continues_from_its_saved_generators(make_env, action):
     """Start states, observation and action noise and domain randomization all continue."""

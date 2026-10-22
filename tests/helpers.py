@@ -29,8 +29,12 @@ def load_script(name):
     return module
 
 
-def minimal_config(tmp_path):
-    """Write a minimal YAML config to tmp_path and return its path."""
+def minimal_config(tmp_path, environment=None, training=None):
+    """
+    Write a minimal YAML config to tmp_path and return its path.
+
+    ``environment`` and ``training`` update those sections' keys.
+    """
     import yaml
 
     config = {
@@ -54,6 +58,8 @@ def minimal_config(tmp_path):
         },
         "logging": {"level": "INFO", "log_metrics": True},
     }
+    config["environment"].update(environment or {})
+    config["training"].update(training or {})
     config_path = str(tmp_path / "config.yaml")
     with open(config_path, "w") as f:
         yaml.dump(config, f)

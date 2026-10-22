@@ -15,11 +15,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_cartpole.benchmark import CartPoleChallenge  # noqa: E402
 from rl_core.agents.optim import Adam  # noqa: E402
+from rl_core.challenges import discover_challenges  # noqa: E402
 from tests.agent_internals import optimizer, weights
 
 # Step budgets (CHANGELOG.md, 2026-10-16), from the
 # rl-baselines3-zoo references where one exists; CartPole PPO gets twice its reference.
 STEP_BUDGETS = {
+    ("acrobot", "dqn"): 100_000,
+    ("acrobot", "ppo"): 500_000,
+    ("acrobot", "random"): 50_000,
     ("cartpole", "reinforce"): 500_000,
     ("cartpole", "actor_critic"): 500_000,
     ("cartpole", "ppo"): 200_000,
@@ -34,10 +38,9 @@ STEP_BUDGETS = {
 
 @pytest.mark.parametrize("challenge,agent_type", sorted(STEP_BUDGETS))
 def test_every_agent_trains_for_its_step_budget(challenge, agent_type):
-    from rl_pendulum.benchmark import PendulumChallenge
-
-    cls = {"cartpole": CartPoleChallenge, "pendulum": PendulumChallenge}[challenge]
-    env, agent, train_cfg = cls().setup_run(agent_type, seed=1, episodes=None)
+    env, agent, train_cfg = discover_challenges()[challenge]().setup_run(
+        agent_type, seed=1, episodes=None
+    )
     env.close()
     assert train_cfg["total_steps"] == STEP_BUDGETS[(challenge, agent_type)]
     anneal = getattr(agent, "anneal_steps", None)
@@ -122,3 +125,29 @@ def test_pendulum_actor_critic_uses_the_measured_settings():
         (0.4, 0.01, 0.05)
     )
     np.testing.assert_allclose(weights(agent)["log_std"], [-2.0])
+
+
+def test_acrobot_dqn_uses_rl_zoo_settings_with_a_lower_exploration_floor():
+    """rl-zoo's DQN for Acrobot-v1 (one hidden layer of 256 instead of two): one gradient step per
+    transition over 100,000 steps. Epsilon falls to 0.02 rather than rl-zoo's 0.1 over the first 12,000:
+    held -100 on 5 of 5 seeds against 1 of 5 (CHANGELOG.md, 2026-10-22)."""
+    env, agent, _ = discover_challenges()["acrobot"]().setup_run("dqn", seed=1, episodes=None)
+    env.close()
+    assert isinstance(optimizer(agent), Adam)
+    assert (agent.learning_rate, agent.gamma) == pytest.approx((6.3e-4, 0.99))
+    assert (agent.hidden_dim, agent.batch_size, agent.buffer_capacity) == (256, 128, 50_000)
+    assert agent.target_update_frequency == 250
+    assert (agent.exploration_steps, agent.epsilon_end) == (12_000, pytest.approx(0.02))
+    assert (agent.updates_per_step, agent.max_updates_per_call) == (1.0, 500)
+
+
+def test_acrobot_ppo_starts_from_rl_zoo_settings():
+    """rl-zoo's PPO for Acrobot-v1 without normalisation, on one environment: 4096-step rollouts,
+    4 epochs of 64-transition minibatches, annealed over the 500,000-step budget."""
+    env, agent, _ = discover_challenges()["acrobot"]().setup_run("ppo", seed=1, episodes=None)
+    env.close()
+    assert (agent.rollout_steps, agent.minibatch_size, agent.ppo_epochs) == (4096, 64, 4)
+    assert (agent.gamma, agent.gae_lambda, agent.entropy_coef) == pytest.approx((0.99, 0.94, 0.0))
+    assert agent.learning_rate == pytest.approx(3e-4)
+    assert (agent.clip_epsilon, agent.value_coef) == (0.2, 0.5)
+    assert optimizer(agent).max_grad_norm == pytest.approx(0.5)

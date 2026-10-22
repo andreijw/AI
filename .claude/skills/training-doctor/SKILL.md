@@ -82,9 +82,10 @@ Print one real batch and read it:
 
 - **`dones` and `terminated`**: true on the last step only. `dones` is `terminated` *or* `truncated`; a
   bootstrapping agent that reads `dones` treats a time-limit cut as a true end (DQN reads `terminated`).
-  Pendulum only ever ends by truncation.
-- **Rewards**: their scale. CartPole pays 1 per step; Pendulum pays between about -16 and 0. A learning
-  rate tuned for one is wrong by an order of magnitude for the other.
+  Pendulum only ever ends by truncation; Acrobot ends by termination at the goal or truncation at 500 steps.
+- **Rewards**: their scale. CartPole pays 1 per step; Pendulum pays between about -16 and 0; Acrobot pays -1 per
+  step until the goal, so a run that never reaches it sits flat at -500. A learning rate tuned for one is wrong by
+  an order of magnitude for another.
 - **Actions**: the dtype and range the environment expects; a continuous action inside its bounds.
 - **Observations**: finite, and of the scale the network was initialised for.
 - **Wrappers**: observation noise, action noise and domain randomization are off unless the config asks

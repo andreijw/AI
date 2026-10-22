@@ -79,3 +79,33 @@ closed too (CHANGELOG.md, 2026-10-21). What remains here are unscheduled ideas.
     - Unit tests in `tests/test_export.py`.
   - **Known edge cases**: Floating-point precision discrepancies (FP32 vs FP64); activation clipping overflows.
   - **Out of scope**: Quantization-aware training (INT8); target-specific MCU hardware optimizations (CMSIS-NN).
+
+### Phase 7 — Challenge Ladder
+
+New environments in order of difficulty, each tier adding one new hardship so that a failure points at one cause.
+Every challenge is its own `rl_<name>` package that `rl_core.challenges` discovers; solve thresholds are
+Gymnasium's `reward_threshold` unless the maintainer sets another, judged by the 100-episode training average.
+Tier 1 began with Acrobot-v1 (CHANGELOG.md, 2026-10-22). The items below are sketches to turn into full items
+when picked.
+
+- [ ] **MountainCar-v0 and MountainCarContinuous-v0 (Tier 1, exploration)**
+  - **Description**: Flat, sparse reward that a random agent almost never collects; the continuous version has a
+    "do not move" local optimum. Likely needs an exploration aid (longer or scheduled epsilon, OU noise or gSDE
+    for continuous agents, possibly a novelty bonus). Thresholds -110 and 90.
+  - **Before adding it**: Acrobot (CHANGELOG.md, 2026-10-22) made the third near-copy of a challenge's
+    `make_env_from_config` and the second copy of the discrete `make_agent`; a fourth challenge is the moment to
+    extract a shared config-reading factory into `rl_core` and a default `make_agent` over an `AGENT_CLASSES`
+    class variable.
+
+- [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
+  - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency
+    (a swig build, not checked on the Jetson's aarch64) and a stronger off-policy continuous agent. The POMDP
+    variant of CartPole is Tier 2 too, through the Phase 6 frame-stacking item.
+
+- [ ] **BipedalWalker-v3 and MuJoCo Tasks (Tier 3)**
+  - **Description**: High-dimensional continuous control over millions of steps (BipedalWalker threshold 300;
+    MuJoCo Hopper, HalfCheetah). Needs `box2d` or `mujoco` and larger networks, so it waits on the optional
+    PyTorch/GPU backend in the Code Health ideas.
+
+- [ ] **Learning from Pixels (Tier 4)**
+  - **Description**: CarRacing or Atari. Needs convolutional networks and a GPU; not practical in pure NumPy.

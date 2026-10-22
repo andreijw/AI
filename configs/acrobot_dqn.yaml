@@ -1,0 +1,48 @@
+# Acrobot-v1 Deep Q-Network (DQN) Training Configuration
+# Starts from rl-baselines3-zoo's Acrobot-v1 DQN settings (hyperparams/dqn.yml), with one hidden
+# layer of 256 where rl-zoo has two. The trainer updates once per episode, so updates_per_step 1.0
+# with a cap at the episode limit gives one gradient step per transition, as rl-zoo's train_freq 4
+# with gradient_steps -1. Measured on seeds 1 to 5 (2026-10-22): epsilon floor 0.02 solves and holds -100 on
+# 5 of 5 (final averages -90 to -96, greedy evaluation -85 +/- 6); 0.1 held on 1 of 5 and 0.05 on 5 of 5 by
+# under 1.2 points on three seeds.
+
+# Environment settings
+environment:
+  name: "Acrobot-v1"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 500
+  seed: 42
+
+# Agent settings
+agent:
+  type: "dqn"
+  config:
+    optimizer: adam                # rl-zoo / SB3 optimizer
+    learning_rate: 0.00063         # rl-zoo
+    max_grad_norm: 10.0            # Adam global gradient-norm clip (SB3 default)
+    gamma: 0.99                    # Discount factor
+    hidden_dim: 256                # One hidden layer (rl-zoo: [256, 256])
+    buffer_capacity: 50000         # Replay buffer maximum capacity (rl-zoo)
+    batch_size: 128                # Training mini-batch size (rl-zoo)
+    min_buffer_size: 128           # rl-zoo starts learning at once; one batch is the least we can sample
+    epsilon_start: 1.0             # Initial exploration probability
+    epsilon_end: 0.02              # Exploration floor after exploration_steps; rl-zoo's 0.1 held -100 on 1 of 5 seeds
+    exploration_steps: 12000       # Training actions over which epsilon falls linearly (rl-zoo: 12% of 100k)
+    target_update_frequency: 250   # Gradient steps between target network syncs (rl-zoo)
+    updates_per_step: 1.0          # Gradient steps per transition
+    max_updates_per_call: 500      # The episode limit, so the cap never binds
+    seed: 42                       # Weight initialisation and sampling seed
+
+# Training settings
+training:
+  total_steps: 100000  # Environment steps (rl-zoo)
+  max_steps_per_episode: 500
+  eval_frequency: 50             # Evaluate every N episodes
+  save_frequency: 100            # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true

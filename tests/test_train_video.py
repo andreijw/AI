@@ -395,16 +395,9 @@ def test_total_steps_override_sets_a_step_budget(tmp_path):
 
 
 def test_num_episodes_override_clears_a_step_budget(tmp_path):
-    import yaml
-
     from train import load_run_config
 
-    path = minimal_config(tmp_path)
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    data["training"]["total_steps"] = 900
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(data, f)
+    path = minimal_config(tmp_path, training={"total_steps": 900})
     config, _ = load_run_config(path, num_episodes=2)
     assert config["training"]["num_episodes"] == 2 and "total_steps" not in config["training"]
 
