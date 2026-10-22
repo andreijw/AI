@@ -13,9 +13,21 @@ from typing import Any
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
-from rl_core.utils.config import config_get
+from rl_core.utils.config import read_env_settings
 
 from .cartpole_env import CartPoleEnv
+
+# Each environment setting a CartPole config may set, by its config name, with its default.
+ENV_DEFAULTS: dict[str, Any] = {
+    "name": "CartPole-v1",
+    "max_episode_steps": 500,
+    "obs_noise_std": 0.0,
+    "action_noise_prob": 0.0,
+    "domain_randomization": None,
+}
+# What both factories accept: the vectorized one also reads async_envs, and one environment section may
+# serve both, so the single-environment factory accepts it and has no use for it.
+ACCEPTED_SETTINGS: dict[str, Any] = {**ENV_DEFAULTS, "async_envs": True}
 
 
 def make_env(
@@ -191,7 +203,8 @@ def make_env_from_config(config: dict) -> CartPoleEnv:
         CartPoleEnv instance
 
     Raises:
-        ValueError: If domain_randomization ranges are malformed.
+        ValueError: If domain_randomization ranges are malformed, or the config sets a setting
+            CartPole does not support (see ACCEPTED_SETTINGS).
 
     Example:
         >>> config = {
@@ -208,17 +221,16 @@ def make_env_from_config(config: dict) -> CartPoleEnv:
         ... }
         >>> env = make_env_from_config(config)
     """
-    # Extract and validate domain randomization
-    domain_rand = _validate_domain_randomization(config.get("domain_randomization"))
-
+    settings = read_env_settings(config, ACCEPTED_SETTINGS, "CartPole-v1")
+    del settings["async_envs"]
+    settings["domain_randomization"] = _validate_domain_randomization(
+        settings["domain_randomization"]
+    )
     return make_env(
-        env_name=config_get(config, "name", "CartPole-v1"),
+        env_name=settings.pop("name"),
         render_mode=config.get("render_mode"),
-        max_episode_steps=config_get(config, "max_episode_steps", 500),
         seed=config.get("seed"),
-        obs_noise_std=config_get(config, "obs_noise_std", 0.0),
-        action_noise_prob=config_get(config, "action_noise_prob", 0.0),
-        domain_randomization=domain_rand,
+        **settings,
     )
 
 
@@ -234,7 +246,8 @@ def make_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.Vect
         VectorEnv instance
 
     Raises:
-        ValueError: If domain_randomization ranges are malformed.
+        ValueError: If domain_randomization ranges are malformed, or the config sets a setting
+            CartPole does not support (see ACCEPTED_SETTINGS).
 
     Example:
         >>> config = {
@@ -245,17 +258,15 @@ def make_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.Vect
         ... }
         >>> vec_env = make_vec_env_from_config(config, num_envs=8)
     """
-    # Extract and validate domain randomization
-    domain_rand = _validate_domain_randomization(config.get("domain_randomization"))
-
+    settings = read_env_settings(config, ACCEPTED_SETTINGS, "CartPole-v1")
+    settings["domain_randomization"] = _validate_domain_randomization(
+        settings["domain_randomization"]
+    )
+    settings["async_envs"] = config.get("async_envs", True)  # null means synchronous, as before
     return make_vec_env(
         num_envs=num_envs,
-        env_name=config_get(config, "name", "CartPole-v1"),
+        env_name=settings.pop("name"),
         render_mode=config.get("render_mode"),
-        max_episode_steps=config_get(config, "max_episode_steps", 500),
         seed=config.get("seed"),
-        obs_noise_std=config_get(config, "obs_noise_std", 0.0),
-        action_noise_prob=config_get(config, "action_noise_prob", 0.0),
-        domain_randomization=domain_rand,
-        async_envs=config.get("async_envs", True),
+        **settings,
     )

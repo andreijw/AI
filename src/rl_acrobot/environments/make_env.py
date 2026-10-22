@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from rl_core.utils.config import config_get
+from rl_core.utils.config import read_env_settings
 
 from .acrobot_env import AcrobotEnv
 
-# Environment settings other challenges support and Acrobot does not: rejected when set, so that a
-# config copied from CartPole or Pendulum does not silently train without its noise.
-UNSUPPORTED_SETTINGS = ("action_noise_prob", "action_noise_std", "domain_randomization")
+# Each environment setting an Acrobot config may set, by its config name, with its default.
+ENV_DEFAULTS: dict[str, Any] = {
+    "name": "Acrobot-v1",
+    "max_episode_steps": 500,
+    "obs_noise_std": 0.0,
+}
 
 
 def make_env(
@@ -47,15 +50,12 @@ def make_env_from_config(config: dict[str, Any]) -> AcrobotEnv:
     Create an Acrobot environment from a configuration dictionary.
 
     Raises:
-        ValueError: If the config sets action noise or domain randomization.
+        ValueError: If the config sets a setting Acrobot does not support (see ENV_DEFAULTS).
     """
-    for name in UNSUPPORTED_SETTINGS:
-        if config.get(name):
-            raise ValueError(f"Acrobot does not support {name} (got {config[name]!r}); remove it")
+    settings = read_env_settings(config, ENV_DEFAULTS, "Acrobot-v1")
     return make_env(
-        env_name=config_get(config, "name", "Acrobot-v1"),
+        env_name=settings.pop("name"),
         render_mode=config.get("render_mode"),
-        max_episode_steps=config_get(config, "max_episode_steps", 500),
         seed=config.get("seed"),
-        obs_noise_std=config_get(config, "obs_noise_std", 0.0),
+        **settings,
     )

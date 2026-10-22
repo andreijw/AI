@@ -91,3 +91,42 @@ def config_get(config: Mapping[str, Any], key: str, default: Any) -> Any:
     """``config[key]``, or ``default`` when the key is missing or set to ``null`` in YAML."""
     value = config.get(key)
     return default if value is None else value
+
+
+# Environment settings every challenge accepts without a default: the scripts read them, and a
+# challenge passes them through as given (null meaning null).
+PASS_THROUGH_ENV_SETTINGS = frozenset({"render_mode", "seed"})
+
+
+def read_env_settings(
+    config: Mapping[str, Any], defaults: Mapping[str, Any], owner: str
+) -> dict[str, Any]:
+    """
+    A challenge's environment settings from a config's ``environment`` section.
+
+    Each key of ``defaults`` is read with :func:`config_get`. ``render_mode`` and ``seed`` are
+    allowed and left to the caller. Any other key set to a value is rejected; one left off (null,
+    0, false or empty) is accepted, so a config copied from another challenge with its noise off
+    still loads. A misspelt setting left off, such as ``obs_nosie_std: 0.0``, is accepted too.
+
+    Args:
+        config: The ``environment`` section.
+        defaults: Each setting the challenge supports, keyed by its config name, with its default.
+        owner: The challenge's environment id, named in the error.
+
+    Raises:
+        ValueError: If ``config`` sets a setting that is not in ``defaults``.
+    """
+    unsupported = sorted(
+        key
+        for key, value in config.items()
+        if key not in defaults and key not in PASS_THROUGH_ENV_SETTINGS and value
+    )
+    if unsupported:
+        supported = ", ".join(sorted(defaults))
+        passed_through = ", ".join(sorted(PASS_THROUGH_ENV_SETTINGS))
+        raise ValueError(
+            f"{owner} does not support environment setting(s) {', '.join(unsupported)}; "
+            f"supported: {supported} (and {passed_through})"
+        )
+    return {key: config_get(config, key, default) for key, default in defaults.items()}

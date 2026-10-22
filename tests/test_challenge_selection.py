@@ -1,11 +1,15 @@
 """Choosing a challenge from a run config, and building its environment and agent through it."""
 
+import gymnasium as gym
 import numpy as np
 import pytest
 
 import rl_acrobot.environments.acrobot_env as acrobot_env_module
 import rl_cartpole.environments.cartpole_env as cartpole_env_module
 import rl_pendulum.environments.pendulum_env as pendulum_env_module
+from rl_cartpole.environments import (
+    make_vec_env_from_config as cartpole_make_vec_env_from_config,
+)
 from rl_core.agents import (
     ActorCriticAgent,
     ContinuousActorCriticAgent,
@@ -18,6 +22,9 @@ from rl_core.agents import (
     ReinforceAgent,
 )
 from rl_core.challenges import CHALLENGES, discover_challenges, select_challenge
+from rl_pendulum.environments import (
+    make_vec_env_from_config as pendulum_make_vec_env_from_config,
+)
 
 discover_challenges()
 
@@ -131,6 +138,12 @@ def _capture_env_kwargs(monkeypatch, key):
              "action_noise_std": 0.3, "domain_randomization": {"g": [9.0, 11.0]},
              "render_mode": "rgb_array"},
         ),
+        (
+            "acrobot",
+            {"name": "Acrobot-v1", "max_episode_steps": 40, "seed": 5, "obs_noise_std": 0.04},
+            {"env_name": "Acrobot-v1", "max_episode_steps": 40, "seed": 5, "obs_noise_std": 0.04,
+             "render_mode": "rgb_array"},
+        ),
     ],
 )  # fmt: skip
 def test_make_env_forwards_the_environment_section(monkeypatch, key, env_config, expected):
@@ -192,8 +205,8 @@ def test_make_agent_builds_the_agent_sized_for_the_environment(key, agent_type):
     finally:
         env.close()
     assert type(agent) is EXPECTED_AGENTS[key][agent_type]
-    assert agent.observation_dim == {"acrobot": 6, "cartpole": 4, "pendulum": 3}[key]
-    assert agent.action_dim == {"acrobot": 3, "cartpole": 2, "pendulum": 1}[key]
+    assert agent.observation_dim == gym.spaces.flatdim(env.observation_space)
+    assert agent.action_dim == gym.spaces.flatdim(env.action_space)
 
 
 @pytest.mark.parametrize("agent_type", sorted(EXPECTED_AGENTS["pendulum"]))
@@ -269,3 +282,91 @@ def test_two_challenges_on_one_environment_need_a_key(isolated_registry):
     assert "cartpole" in str(error.value) and key in str(error.value)
     assert select_challenge("CartPole-v1", "cartpole") is CHALLENGES["cartpole"]
     assert select_challenge("CartPole-v1", key) is CHALLENGES[key]
+
+
+# ---------------------------------------------------------------------------
+# Environment settings each challenge reads from a config
+# ---------------------------------------------------------------------------
+
+# Each challenge's settings beyond name and max_episode_steps, which the null test sets to null.
+CONFIGURED = {
+    "acrobot": ("obs_noise_std",),
+    "cartpole": ("obs_noise_std", "action_noise_prob", "domain_randomization"),
+    "pendulum": ("obs_noise_std", "action_noise_std", "domain_randomization"),
+}
+RANDOMIZED = {"cartpole", "pendulum"}  # the challenges with domain randomization
+DEFAULT_STEPS = {"acrobot": 500, "cartpole": 500, "pendulum": 200}
+
+
+@pytest.mark.parametrize("key", sorted(CONFIGURED))
+def test_make_env_takes_the_defaults_for_null_settings(key):
+    config = dict.fromkeys(("name", "max_episode_steps", *CONFIGURED[key]))
+    env = CHALLENGES[key]().make_env(config, render_mode=None)
+    try:
+        assert env.env_name == CHALLENGES[key]().name
+        assert env.max_episode_steps == DEFAULT_STEPS[key], "the challenge's own step limit"
+        assert env.obs_noise_std == 0.0
+        if key == "cartpole":
+            assert env.action_noise_prob == 0.0
+        if key == "pendulum":
+            assert env.action_noise_std == 0.0
+        if key in RANDOMIZED:
+            assert not env.domain_randomization, "no randomization unless asked for"
+    finally:
+        env.close()
+
+
+def test_cartpole_turns_an_empty_randomization_into_none():
+    env = CHALLENGES["cartpole"]().make_env({"domain_randomization": {}}, render_mode=None)
+    try:
+        assert not env.domain_randomization
+    finally:
+        env.close()
+
+
+@pytest.mark.parametrize(
+    ("key", "setting"),
+    [
+        ("cartpole", "action_noise_std"),
+        ("cartpole", "obs_nosie_std"),
+        ("pendulum", "action_noise_prob"),
+        ("pendulum", "obs_nosie_std"),
+    ],
+)
+def test_make_env_rejects_a_setting_the_challenge_does_not_support(key, setting):
+    """Another challenge's setting, or a typo, set to a value fails instead of being ignored
+    (Acrobot's own are in tests/test_acrobot.py)."""
+    with pytest.raises(ValueError, match=f"does not support .*{setting}"):
+        CHALLENGES[key]().make_env({setting: 0.1}, render_mode=None)
+
+
+VEC_FACTORIES = {
+    "cartpole": (cartpole_make_vec_env_from_config, "action_noise_std"),
+    "pendulum": (pendulum_make_vec_env_from_config, "action_noise_prob"),
+}
+
+
+@pytest.mark.parametrize("key", sorted(VEC_FACTORIES))
+def test_vectorized_factories_reject_a_setting_the_challenge_does_not_support(key):
+    factory, foreign = VEC_FACTORIES[key]
+    with pytest.raises(ValueError, match=f"does not support .*{foreign}"):
+        factory({foreign: 0.1}, num_envs=1)
+
+
+@pytest.mark.parametrize(
+    ("key", "async_envs"), [(k, v) for k in sorted(VEC_FACTORIES) for v in (None, False)]
+)
+def test_vectorized_factories_run_synchronously_when_async_envs_is_off(key, async_envs):
+    """null keeps meaning synchronous, as before the shared settings reader."""
+    vec_env = VEC_FACTORIES[key][0]({"async_envs": async_envs}, num_envs=1)
+    try:
+        assert isinstance(vec_env, gym.vector.SyncVectorEnv)
+    finally:
+        vec_env.close()
+
+
+@pytest.mark.parametrize("key", sorted(VEC_FACTORIES))
+def test_one_environment_accepts_the_vectorized_setting(key):
+    """An environment section shared by both factories may carry async_envs."""
+    env = CHALLENGES[key]().make_env({"async_envs": True}, render_mode=None)
+    env.close()

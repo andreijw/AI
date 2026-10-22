@@ -347,21 +347,25 @@ plots/
      reset only), observation noise, episode statistics and `wrap_env`. The subclass validates its own settings,
      calls `_make_env()`, and overrides `_prepare_action` (action noise) and `_apply_domain_randomization`
      (per-episode physics); both default to doing nothing.
-   - `environments/make_env.py`: `make_env` and `make_env_from_config`; a vectorized factory only if something
-     uses it (`rl_acrobot` has none). A setting the wrapper does not support is rejected, not ignored.
-   - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`.
-     It implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and
-     `make_agent(agent_type, agent_config, env)` (a lookup in its `AGENT_CLASSES`); the base class builds benchmark
-     runs from them. `train.py` and `record.py` pick the challenge whose `name` equals the config's
-     `environment.name` exactly (`select_challenge`), or the one `--challenge` names, and build through it, so no
-     script needs an edit. Two challenges may share an environment id; the config then needs `--challenge`.
-     `discover_challenges()` imports every `src/rl_*/benchmark.py`, so the runner needs no edit; a package that
-     fails to import is reported with a warning, in `run_benchmark`'s unknown-challenge error and at the end of
-     `src/benchmark.py --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the
-     base class provides one), and its `key` must not already be registered.
+   - `environments/make_env.py`: `make_env`, an `ENV_DEFAULTS` dict naming each environment setting the challenge
+     supports with its default, and `make_env_from_config`, which reads them with
+     `rl_core.utils.config.read_env_settings`: null takes the default, and any other setting given a value is
+     rejected rather than ignored. A vectorized factory only if something uses it (`rl_acrobot` has none).
+   - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`. It
+     implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and lists its agents
+     in the class variable `AGENT_CLASSES` (agent type to class). The base class's `supported_agents` and `make_agent`
+     read that table and size each agent from the environment's spaces; a challenge overrides only
+     `agent_config(agent_config, env)` when its environment adds to the agent's config (Pendulum's torque bounds). The
+     base class builds benchmark runs from these. `train.py` and `record.py` pick the challenge whose `name` equals the
+     config's `environment.name` exactly (`select_challenge`), or the one `--challenge` names, and build through it, so
+     no script needs an edit. Two challenges may share an environment id; the config then needs `--challenge`.
+     `discover_challenges()` imports every `src/rl_*/benchmark.py`, so the runner needs no edit; a package that fails to
+     import is reported with a warning, in `run_benchmark`'s unknown-challenge error and at the end of `src/benchmark.py
+     --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the base class provides
+     one), and its `key` must not already be registered.
 2. Add reference YAML configurations under `configs/<challenge>_<agent>.yaml`.
 3. Add corresponding test suites in `tests/test_<challenge>.py`, and the challenge's rows to the per-challenge
-   tables in `tests/test_challenge_selection.py` (`EXPECTED_AGENTS`, `ENV_CLASSES`, the dimension tables) and
+   tables in `tests/test_challenge_selection.py` (`EXPECTED_AGENTS`, `ENV_CLASSES`, `CONFIGURED`) and
    `tests/test_committed_configs.py` (`STEP_BUDGETS`).
 
 ### Adding a New Continuous Algorithm

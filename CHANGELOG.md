@@ -14,6 +14,20 @@ Acrobot-v1) and
 
 ## 2026-10-22
 
+### Changed
+
+- **One agent table and one settings check per challenge** (`feature/challenge-base-agents`, the first of three
+  pull requests from the 2026-10-22 health dashboard, 94/100): `BenchmarkChallenge` now owns `AGENT_CLASSES` (a
+  class variable; the base's is empty and read-only) with default `supported_agents` and `make_agent`, and a
+  challenge overrides only `agent_config(agent_config, env)` to add what its environment implies (Pendulum's
+  torque bounds). Each package's `make_env_from_config` reads an `ENV_DEFAULTS` dict through the new
+  `rl_core.utils.config.read_env_settings`, replacing three copies of the config-reading code and Acrobot's list
+  of the other challenges' settings. CartPole and Pendulum now reject a setting they do not support, or a
+  misspelt one, when it is given a value (`action_noise_std: 0.1` on CartPole used to be ignored); left at null,
+  0 or empty it is still accepted. No committed config carries such a setting. 30 episodes of the committed
+  CartPole, Pendulum and Acrobot DQN and PPO configs and Pendulum DDPG (seed 42) give bit-identical checkpoints
+  and logged metrics before and after.
+
 ### Added
 
 - **Acrobot-v1 challenge** (`feature/acrobot-challenge`), the first rung of the Phase 7 challenge ladder:

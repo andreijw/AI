@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 import os
 from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any, ClassVar, Protocol
 
 import gymnasium as gym
@@ -40,9 +41,15 @@ class BenchmarkChallenge(abc.ABC):
     ``config_dir``, and loads them with :meth:`load_run_config`. ``train.py``, ``record.py`` and
     the benchmark build every environment and agent through :meth:`make_env` and
     :meth:`make_agent`, so a challenge is the only place that knows its wrapper and agent classes.
+
+    A challenge lists its agents in :attr:`AGENT_CLASSES` (agent type to class); the defaults of
+    :attr:`supported_agents` and :meth:`make_agent` read it, and :meth:`agent_config` is where a
+    challenge adds what its environment implies (Pendulum's torque bounds).
     """
 
     CONFIG_MAP: ClassVar[Mapping[str, str]] = {}
+    # Read-only, so a challenge that declares no table cannot add to one every such challenge shares.
+    AGENT_CLASSES: ClassVar[Mapping[str, type[BaseAgent]]] = MappingProxyType({})
 
     def __init__(self, config_dir: str = "configs") -> None:
         """
@@ -76,10 +83,9 @@ class BenchmarkChallenge(abc.ABC):
         ...
 
     @property
-    @abc.abstractmethod
     def supported_agents(self) -> list[str]:
-        """List of supported agent types for this challenge."""
-        ...
+        """The agent types this challenge can build: the keys of :attr:`AGENT_CLASSES`, sorted."""
+        return sorted(self.AGENT_CLASSES)
 
     @abc.abstractmethod
     def make_env(self, env_config: Mapping[str, Any], render_mode: str | None) -> ChallengeEnv:
@@ -96,17 +102,30 @@ class BenchmarkChallenge(abc.ABC):
         """
         ...
 
-    @abc.abstractmethod
     def make_agent(
         self, agent_type: str, agent_config: Mapping[str, Any], env: ChallengeEnv
     ) -> BaseAgent:
         """
         Build an agent of ``agent_type`` sized for ``env``, leaving ``agent_config`` unchanged.
 
+        The agent's class comes from :attr:`AGENT_CLASSES`, its dimensions from the environment's
+        flattened spaces and its config from :meth:`agent_config`.
+
         Raises:
             ValueError: If ``agent_type`` is not in :attr:`supported_agents`.
         """
-        ...
+        if agent_type not in self.AGENT_CLASSES:
+            raise self.unsupported_agent_error(agent_type)
+        return self.AGENT_CLASSES[agent_type](
+            observation_dim=gym.spaces.flatdim(env.observation_space),
+            action_dim=gym.spaces.flatdim(env.action_space),
+            config=self.agent_config(agent_config, env),
+        )
+
+    def agent_config(self, agent_config: Mapping[str, Any], env: ChallengeEnv) -> dict[str, Any]:
+        """The config an agent is built with: a copy of ``agent_config`` by default; a challenge
+        overrides this to add what its environment implies."""
+        return dict(agent_config)
 
     def setup_run(
         self, agent_type: str, seed: int, episodes: int | None, steps: int | None = None

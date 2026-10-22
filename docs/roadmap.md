@@ -92,10 +92,6 @@ when picked.
   - **Description**: Flat, sparse reward that a random agent almost never collects; the continuous version has a
     "do not move" local optimum. Likely needs an exploration aid (longer or scheduled epsilon, OU noise or gSDE
     for continuous agents, possibly a novelty bonus). Thresholds -110 and 90.
-  - **Before adding it**: Acrobot (CHANGELOG.md, 2026-10-22) made the third near-copy of a challenge's
-    `make_env_from_config` and the second copy of the discrete `make_agent`; a fourth challenge is the moment to
-    extract a shared config-reading factory into `rl_core` and a default `make_agent` over an `AGENT_CLASSES`
-    class variable.
 
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
   - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency
