@@ -5,9 +5,11 @@
 # transition, run together after each episode on that episode's data. The step budget governs the
 # run's length (default_episodes does not apply).
 # Measured 2026-10-23 on seeds 1 to 5 (CHANGELOG.md, 2026-10-23): it learns to reach the flag but does not
-# hold the -110 threshold. rl-zoo counts its target interval in environment steps, so its 600 is 300
-# gradient steps here (600 gradient steps ended at -157 to -165, 300 at -141 to -148); 300,000 steps, two
-# hidden layers, a Huber loss, scaled inputs, lr 0.001 and 16-step updates gave no solve either.
+# hold the -110 threshold. rl-zoo counts its target interval in environment steps, so its 600 is 300 gradient
+# steps here (600 gradient steps ended at -157 to -165, 300 at -141 to -148, over 120,000 steps). Decaying the
+# learning rate to zero over a 200,000-step budget beat a fixed rate over the same budget on 4 of 5 seeds (final
+# averages -121 to -146 against -135 to -146; 1 of 5 briefly solved). Two hidden layers, a Huber loss, scaled
+# inputs, lr 0.001, 16-step updates and 300,000 fixed-rate steps gave no solve either.
 
 # Environment settings
 environment:
@@ -21,7 +23,8 @@ agent:
   type: "dqn"
   config:
     optimizer: adam                # rl-zoo / SB3 optimizer
-    learning_rate: 0.004           # rl-zoo
+    learning_rate: 0.004           # rl-zoo; the rate at the start, decaying linearly to 0 over anneal_steps
+    anneal_steps: 200000           # Transitions over which the learning rate decays to 0 (= total_steps)
     max_grad_norm: 10.0            # Adam global gradient-norm clip (SB3 default)
     gamma: 0.98                    # Discount factor (rl-zoo)
     hidden_dim: 256                # One hidden layer (rl-zoo: [256, 256])
@@ -38,7 +41,7 @@ agent:
 
 # Training settings
 training:
-  total_steps: 120000  # Environment steps (rl-zoo)
+  total_steps: 200000  # Environment steps (rl-zoo: 120,000); equals anneal_steps
   max_steps_per_episode: 200
   eval_frequency: 50             # Evaluate every N episodes
   save_frequency: 100            # Save checkpoint every N episodes

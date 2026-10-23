@@ -192,6 +192,7 @@ classDiagram
 
     class DQNAgent {
         +ReplayBuffer replay_buffer
+        +int anneal_steps
         +select_action(obs, training) int
         +update(batch) dict
     }

@@ -19,10 +19,36 @@ No open items.
 
 ### Code Health
 
-The last health dashboard (brooks-health, 2026-10-21) scored 92/100. Its one Critical, the curve alignment inside
-`plot_benchmark_comparison`, and the two complexity hotspots it left, `DQNAgent.__init__` and
-`Trainer._log_metrics`, are fixed (CHANGELOG.md, 2026-10-21). The loose ends gathered from completed items are
-closed too (CHANGELOG.md, 2026-10-21). What remains here are unscheduled ideas.
+The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical, 4 Warnings. The first Warning,
+each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22). The two
+items below are the rest; then come unscheduled ideas.
+
+- [ ] **Benchmark Hygiene: Solve Numbers Apart from Plotting**
+  - **Description**: Two Warnings from the 2026-10-22 dashboard. `src/benchmark.py` imports the private
+    `_rolling_average` from `rl_core/utils/visualization.py` for the solve episode and `final_rolling_avg`, so a
+    change to plot smoothing would silently change published solve numbers; and `rl_core/utils/__init__.py`
+    imports the plotting module eagerly, so importing the trainer or the challenges loads matplotlib.
+    `_generate_markdown_report` is 98 lines mixing configuration text, solve-rule prose, row formatting and the plot
+    path, and `run_benchmark` takes 11 parameters while a `BenchmarkSettings` dataclass exists.
+  - **Acceptance criteria**:
+    - A public `rolling_average` in a module that does not plot, used by the benchmark and the plots alike.
+    - `import rl_core.training` and `import rl_core.challenges` do not import matplotlib (a test says so).
+    - The report function split into named parts; `run_benchmark` takes `BenchmarkSettings`.
+    - Reports generated before and after are byte-identical for the same metrics file.
+  - **Out of scope**: Changing what the report says, or the solve rule.
+
+- [ ] **Test Hygiene: Trainer Tests Through a Seam**
+  - **Description**: The 2026-10-22 dashboard's fourth Warning: about 13 call sites in `tests/test_trainer.py` call
+    private `Trainer` methods (`_run_episode`, `_save_checkpoint`, `_log_metrics`, `_log_info`), against the
+    rule every agent test already follows. Its suggestions belong here too: the per-challenge tables in
+    `tests/test_challenge_selection.py`, and the fake-package prefix shared implicitly between `tests/conftest.py`
+    and `tests/helpers.py`.
+  - **Acceptance criteria**:
+    - Trainer tests go through `train()`, `evaluate()` and the files and log lines they produce, or through a
+      `tests/trainer_internals.py` like `tests/agent_internals.py`; `test_source_conventions.py` enforces it.
+    - The `rl_fake` prefix is one named constant used by both files.
+    - No loss of coverage on `rl_core/training/trainer.py` (99% today).
+  - **Out of scope**: Changing `Trainer` behaviour.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
@@ -88,21 +114,14 @@ Gymnasium's `reward_threshold` unless the maintainer sets another, judged by the
 Tier 1 began with Acrobot-v1 (CHANGELOG.md, 2026-10-22). The items below are sketches to turn into full items
 when picked.
 
-- [ ] **Learning-Rate Decay for DQN (MountainCar-v0 follow-up)**
-  - **Description**: MountainCar DQN learns to reach the flag but does not solve: its 100-episode training average
-    peaks at -112 to -130 and then drifts back (-130 to -146 at the end of 120,000 steps; CHANGELOG.md, 2026-10-23).
-    Input scale, a lower fixed learning rate, update timing, a Huber loss, depth and a longer budget were ruled out.
-    The untested suspect is DQN's fixed learning rate of 0.004 with no decay; PPO already decays its rate with
-    `anneal_fraction`. Add an optional linear decay to `DQNAgent` (off by default), test it on MountainCar, and
-    re-check the CartPole and Acrobot DQN configs, which it would not change unless turned on.
-  - **Also open**: PPO on MountainCar-v0 never reached the flag without reward normalisation; it returns once the
-    framework has an exploration aid or normalisation.
-
 - [ ] **MountainCarContinuous-v0 Challenge with Ornstein-Uhlenbeck Exploration (Tier 1, exploration)**
   - **Description**: The continuous version (`Box(-1, 1)` force, threshold 90, 999-step limit) rewards reaching
     the flag with +100 but charges for force, so "do not move" is a strong local optimum. rl-baselines3-zoo's DDPG
     and TD3 use Ornstein-Uhlenbeck noise (temporally correlated, std 0.5); our DDPG has Gaussian noise only, so this
     adds OU noise as an exploration option (`algorithm-crafter`) and the challenge to the `rl_mountaincar` package.
+  - **Also open from MountainCar-v0** (CHANGELOG.md, 2026-10-23): its DQN learns but does not hold -110 even with a
+    decaying learning rate (final averages -121 to -146), and PPO never reached the flag without reward
+    normalisation. An exploration aid from this item, or normalisation, is where both would be tried next.
 
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
   - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency

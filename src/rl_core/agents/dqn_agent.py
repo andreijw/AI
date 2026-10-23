@@ -10,7 +10,7 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 
 from .base_agent import BaseAgent
 from .config_values import positive_int
-from .optim import Adam, anneal_fraction, optimizer_from_config
+from .optim import Adam, anneal_fraction, anneal_steps_from_config, optimizer_from_config
 from .replay_buffer import ReplayBuffer
 
 
@@ -39,6 +39,11 @@ class DQNAgent(BaseAgent):
     * Bootstrapping through time-limit cuts: only a true termination ends the Bellman target.
     * Plain SGD with an element-wise clip (``grad_clip_value``), or Adam with an optional
       global-norm clip (``optimizer: adam``, ``max_grad_norm``).
+    * An optional linear learning-rate decay to zero over ``anneal_steps`` transitions, as PPO's:
+      each update's step size is ``learning_rate`` times ``anneal_fraction`` of the transitions
+      given to ``update`` before it, warm-up included. Only the step is scaled; Adam's moments see
+      the full gradient. With an episode budget the decay runs over ``anneal_steps`` as set, and a
+      checkpoint saved before the option existed resumes the decay from the start.
     * Ring-buffered experience replay for uncorrelated mini-batch updates.
     * Hard target syncs every ``target_update_frequency`` gradient steps, or Polyak averaging
       with ``tau`` in (0, 1] after every step (``tau`` 1 copies the network; the frequency is then
@@ -73,6 +78,7 @@ class DQNAgent(BaseAgent):
         self.exploration_steps: int | None = self._read_exploration_steps(config)
         self.updates_per_step: float | None = _optional_real(config, "updates_per_step")
         self.max_updates_per_call: int = positive_int(config, "max_updates_per_call", 64)
+        self.anneal_steps: int | None = anneal_steps_from_config(config)
         self._validate_dims(observation_dim, action_dim)
         self._validate_rates()
         self._validate_buffer_and_optimizer(config)
@@ -80,6 +86,7 @@ class DQNAgent(BaseAgent):
         self.epsilon: float = self.epsilon_start
         self._update_counter: int = 0
         self._exploration_step: int = 0
+        self._steps_trained: int = 0
         self._explore_rng: np.random.Generator = derive_rng(
             config.get("seed"), AGENT_EXPLORATION_STREAM
         )
@@ -279,12 +286,17 @@ class DQNAgent(BaseAgent):
             Dictionary with training metrics: 'loss', 'epsilon', 'mean_q'; only 'epsilon' when no
             update happened: during warm-up (the buffer below ``min_buffer_size``), or when the
             batch stored no transition (empty, or without ``next_observations`` or either flag).
+            With ``anneal_steps`` set, 'anneal_fraction' too: the share of ``learning_rate`` this
+            call's steps used.
         """
+        fraction = anneal_fraction(self._steps_trained, self.anneal_steps)
         n_stored = self.replay_buffer.add_transitions(batch)
+        self._steps_trained += n_stored
+        annealing = {} if self.anneal_steps is None else {"anneal_fraction": float(fraction)}
 
         if n_stored == 0 or not self.replay_buffer.can_sample(self.min_buffer_size):
             # No update, so no loss or Q-value for the log to average in, and no epsilon decay.
-            return {"epsilon": self.epsilon}
+            return {"epsilon": self.epsilon, **annealing}
 
         if self.updates_per_step is not None:
             num_updates = min(
@@ -312,7 +324,7 @@ class DQNAgent(BaseAgent):
             components, grads = self._loss_and_grads(obs, actions, targets)
 
             # 3. Clipped gradient descent step
-            self._apply_gradients(grads)
+            self._apply_gradients(grads, self.learning_rate * fraction)
 
             # 4. Target network synchronization
             self._update_counter += 1
@@ -335,6 +347,7 @@ class DQNAgent(BaseAgent):
             "loss": total_loss / num_updates,
             "epsilon": float(self.epsilon),
             "mean_q": total_q / num_updates,
+            **annealing,
         }
 
     def _loss_and_grads(
@@ -385,9 +398,12 @@ class DQNAgent(BaseAgent):
         components = {"loss": loss, "mean_q": float(np.mean(pred_q))}
         return components, {"W1": grad_w1, "b1": grad_b1, "W2": grad_w2, "b2": grad_b2}
 
-    def _apply_gradients(self, grads: dict[str, np.ndarray]) -> None:
+    def _apply_gradients(
+        self, grads: dict[str, np.ndarray], learning_rate: float | None = None
+    ) -> None:
         """
-        Take one optimizer step on the online network.
+        Take one optimizer step on the online network, of size ``learning_rate`` (the configured
+        ``learning_rate`` when None).
 
         With Adam, the step comes from the shared optimizer (global-norm clip ``max_grad_norm``
         if set). With plain SGD, each gradient element is clipped to
@@ -397,22 +413,25 @@ class DQNAgent(BaseAgent):
         Args:
             grads: Gradients keyed ``W1``, ``b1``, ``W2``, ``b2``, as returned by
                    :meth:`_loss_and_grads`.
+            learning_rate: Step size of this step (the decayed rate when annealing).
         """
+        lr = self.learning_rate if learning_rate is None else learning_rate
         if self._optimizer is not None:
-            steps = self._optimizer.step(grads, self.learning_rate)
+            steps = self._optimizer.step(grads, lr)
             for name, parameter in self._parameters().items():
                 parameter -= steps[name]  # in place: the attribute holds this same array
             return
         limit = self.grad_clip_value
-        self._W1 -= self.learning_rate * np.clip(grads["W1"], -limit, limit)
-        self._b1 -= self.learning_rate * np.clip(grads["b1"], -limit, limit)
-        self._W2 -= self.learning_rate * np.clip(grads["W2"], -limit, limit)
-        self._b2 -= self.learning_rate * np.clip(grads["b2"], -limit, limit)
+        self._W1 -= lr * np.clip(grads["W1"], -limit, limit)
+        self._b1 -= lr * np.clip(grads["b1"], -limit, limit)
+        self._W2 -= lr * np.clip(grads["W2"], -limit, limit)
+        self._b2 -= lr * np.clip(grads["b2"], -limit, limit)
 
     def _checkpoint_arrays(self) -> dict[str, Any]:
         """
         Everything training needs to resume beyond the generators: both networks, epsilon, the
-        exploration and target-sync counters, the optimizer's state and the replay buffer.
+        exploration, target-sync and transitions-trained counters, the optimizer's state and the
+        replay buffer.
         """
         arrays: dict[str, Any] = {
             "W1": self._W1,
@@ -426,6 +445,7 @@ class DQNAgent(BaseAgent):
             "epsilon": np.array(self.epsilon),
             "exploration_step": np.array(self._exploration_step),
             "update_counter": np.array(self._update_counter),
+            "steps_trained": np.array(self._steps_trained),
             **self.replay_buffer.checkpoint_state(),
         }
         if self._optimizer is not None:
@@ -439,7 +459,8 @@ class DQNAgent(BaseAgent):
         An older checkpoint has no counters, optimizer state or replay buffer: the target-sync
         counter is left as it is, Adam starts from zero moments, the buffer is emptied, and with
         ``exploration_steps`` the exploration step is rebuilt from the saved epsilon so that
-        exploration does not restart.
+        exploration does not restart. Without the transitions-trained counter the learning-rate
+        decay starts again from the full rate.
         """
         self.replay_buffer.restore(data)
         self._W1 = data["W1"]
@@ -458,6 +479,7 @@ class DQNAgent(BaseAgent):
             self._exploration_step = int(data["exploration_step"])
         else:
             self._exploration_step = self._exploration_step_for(self.epsilon)
+        self._steps_trained = int(data["steps_trained"]) if "steps_trained" in data else 0
         if self._optimizer is not None:
             self._optimizer.load_state(data)
 

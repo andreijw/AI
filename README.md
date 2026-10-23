@@ -235,7 +235,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates) | 1,000,000 | 0 of 5 | — | 0 of 5 |
 | Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
 | Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
-| MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02) | 120,000 | 0 of 5 | — | 0 of 5 |
+| MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate) | 200,000 | 1 of 5 | 103k | 0 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
@@ -248,10 +248,11 @@ of -172 ± 27 beats the random agent on every seed (CHANGELOG.md, 2026-10-19).
 Acrobot was measured on 2026-10-22 (CHANGELOG.md, 2026-10-22); it has no published report under `docs/benchmarks/`
 yet. Acrobot DQN keeps exploring with 2% random actions rather than rl-zoo's 10%: with 10% its training average ended
 at -95 to -103 and held on 1 of 5 seeds; with 2% it ends at -90 to -96, and its greedy evaluation is -85 ± 6.
-MountainCar DQN does not solve: it learns to reach the flag (final training averages -130 to -146 against the random
-agent's -200; greedy evaluation -157 ± 15) but no seed holds -110, and 300,000 steps, two hidden layers, a Huber loss
-or scaled inputs did not change that (CHANGELOG.md, 2026-10-23). PPO has no MountainCar config: without reward
-normalisation it never reached the flag in 1,000,000 steps on any of 5 seeds.
+MountainCar DQN learns to reach the flag but does not hold -110: with its learning rate decaying to zero over 200,000
+steps its final training averages are -121 to -146 against the random agent's -200, its greedy evaluation -132 ± 11,
+and one seed reaches -110 for a window and drifts back. With a fixed rate the final averages were -135 to -146 over the
+same budget; two hidden layers, a Huber loss or scaled inputs did not help (CHANGELOG.md, 2026-10-23). PPO has no
+MountainCar config: without reward normalisation it never reached the flag in 1,000,000 steps on any of 5 seeds.
 
 ### Run any agent from one base config (quick overrides)
 

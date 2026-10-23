@@ -95,7 +95,7 @@ class Trainer:
             if anneal is not None and anneal > raw_steps:
                 warnings.warn(
                     f"anneal_steps {anneal} exceeds the step budget {raw_steps}: training stops "
-                    "before the learning rate and clip range finish decaying",
+                    "before the annealed learning rate (and clip range) finish decaying",
                     stacklevel=2,
                 )
         self.total_steps_trained = 0

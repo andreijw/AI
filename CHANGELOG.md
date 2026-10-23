@@ -14,6 +14,23 @@ Acrobot-v1) and
 
 ## 2026-10-23
 
+### Changed
+
+- **Learning-rate decay for DQN** (`feature/dqn-lr-decay`): `DQNAgent` takes an optional `anneal_steps`, as PPO
+  does: each update's step size is `learning_rate` times `max(0, 1 - steps_trained / anneal_steps)`, counting the
+  transitions given to `update` before it (warm-up included). Only the step is scaled, so Adam's moments see the full
+  gradient; SGD scales after its element clip. `anneal_fraction` is logged when it is set, and the counter is
+  checkpointed (`steps_trained`; an older checkpoint resumes the decay from the full rate). Unset, nothing changes: 30
+  episodes of the committed CartPole and Acrobot DQN configs (seed 42) give identical weights and logs.
+  `configs/mountaincar_dqn.yaml` now decays its rate over a 200,000-step budget (was a fixed rate over 120,000). Seeds
+  1 to 5: final 100-episode training averages -121 to -146 (mean -133) against -135 to -146 (mean -143) for a fixed
+  rate over the same 200,000 steps, greedy evaluation -132 ± 11 against -148, and seed 4 reaches -110 at about 103k
+  steps before drifting back; over 120,000 steps the decay was mixed (3 of 5 seeds better). MountainCar still does not
+  solve under the 100-episode rule. Also probed on the decaying config, seeds 1 to 5, and no better: n-step returns
+  (n 3: final averages mean -141; n 5: mean -153, two seeds collapsing late) and Double DQN targets (mean -141). For
+  comparison, rl-baselines3-zoo publishes -100.8 for its DQN, an evaluation of the trained agent over about 1,400
+  episodes rather than a training average; our greedy evaluation is -132 ± 11.
+
 ### Added
 
 - **MountainCar-v0 challenge** (`feature/mountaincar-challenge`), the second rung of the Phase 7 challenge ladder and
