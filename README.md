@@ -13,7 +13,8 @@ control loops and can be extended later.
 The architecture is designed to support:
 
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO
-  with Gaussian policies, and DDPG with a deterministic policy, for Pendulum; random, PPO and DQN for Acrobot)
+  with Gaussian policies, and DDPG with a deterministic policy, for Pendulum; random, PPO and DQN for Acrobot; random
+  and DQN for MountainCar)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -64,12 +65,16 @@ AI/
 │   ├── rl_acrobot/              # Acrobot-v1 discrete swing-up challenge
 │   │   ├── environments/        # Acrobot wrapper (observation noise) and factories
 │   │   └── benchmark.py         # Acrobot benchmark challenge implementation
+│   ├── rl_mountaincar/          # MountainCar-v0 discrete exploration challenge
+│   │   ├── environments/        # Mountain car wrapper (observation noise) and factories
+│   │   └── benchmark.py         # MountainCar benchmark challenge implementation
 │   └── benchmark.py             # Benchmark runner & CLI (finds challenges through rl_core)
 ├── tests/                       # Unit & integration test suites
 ├── configs/                     # YAML hyperparameter configurations
 │   ├── cartpole_*.yaml          # CartPole challenge configs (default, PPO, DQN, etc.)
 │   ├── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG)
-│   └── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
+│   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
+│   └── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── setup.ps1                   # Windows developer setup
@@ -203,16 +208,19 @@ python train.py --config configs/pendulum_ddpg.yaml
 # Acrobot DQN and PPO
 python train.py --config configs/acrobot_dqn.yaml
 python train.py --config configs/acrobot_ppo.yaml
+
+# MountainCar DQN (learns, does not solve)
+python train.py --config configs/mountaincar_dqn.yaml
 ```
 
 ### Which agents solve which challenge
 
 A run solves the challenge when its average training reward over 100 episodes reaches the threshold: 475 for
-CartPole-v1, -200 for Pendulum-v1, -100 for Acrobot-v1. It **holds** when the average over its last 100 episodes is
-still at or above the threshold. Each agent trains for a budget of environment steps set against its rl-baselines3-zoo
-reference (see the config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18 (CartPole PPO on
-2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment and named random streams
-([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
+CartPole-v1, -200 for Pendulum-v1, -100 for Acrobot-v1, -110 for MountainCar-v0. It **holds** when the average over its
+last 100 episodes is still at or above the threshold. Each agent trains for a budget of environment steps set against
+its rl-baselines3-zoo reference (see the config comments). Measured with the committed configs on seeds 1 to 5 on
+2026-10-18 (CartPole PPO on 2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment
+and named random streams ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md)). `train.py` uses seed 42, which was not
 measured, so a single `train.py` run may land on the unlucky side of these numbers:
 
@@ -227,6 +235,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates) | 1,000,000 | 0 of 5 | — | 0 of 5 |
 | Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
 | Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
+| MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02) | 120,000 | 0 of 5 | — | 0 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
@@ -239,6 +248,10 @@ of -172 ± 27 beats the random agent on every seed (CHANGELOG.md, 2026-10-19).
 Acrobot was measured on 2026-10-22 (CHANGELOG.md, 2026-10-22); it has no published report under `docs/benchmarks/`
 yet. Acrobot DQN keeps exploring with 2% random actions rather than rl-zoo's 10%: with 10% its training average ended
 at -95 to -103 and held on 1 of 5 seeds; with 2% it ends at -90 to -96, and its greedy evaluation is -85 ± 6.
+MountainCar DQN does not solve: it learns to reach the flag (final training averages -130 to -146 against the random
+agent's -200; greedy evaluation -157 ± 15) but no seed holds -110, and 300,000 steps, two hidden layers, a Huber loss
+or scaled inputs did not change that (CHANGELOG.md, 2026-10-23). PPO has no MountainCar config: without reward
+normalisation it never reached the flag in 1,000,000 steps on any of 5 seeds.
 
 ### Run any agent from one base config (quick overrides)
 
@@ -263,9 +276,9 @@ python train.py --config configs/cartpole_default.yaml --agent-type dqn --num-ep
 ```
 
 The challenge comes from the config's `environment.name`, which must be a registered challenge's environment id
-exactly (`Acrobot-v1`, `CartPole-v1` or `Pendulum-v1`); any other name is an error that lists the options.
-`--challenge acrobot`, `cartpole` or `pendulum` must agree with that name, and is required for a config that has no
-`environment.name`.
+exactly (`Acrobot-v1`, `CartPole-v1`, `MountainCar-v0` or `Pendulum-v1`); any other name is an error that lists the
+options. `--challenge acrobot`, `cartpole`, `mountaincar` or `pendulum` must agree with that name, and is required for
+a config that has no `environment.name`.
 An agent the challenge does not support (for example `--agent-type dqn` on Pendulum) is rejected before training.
 
 ### Visualization and video recording
@@ -552,8 +565,8 @@ Workflows are automatically synchronized from `.github/workflows` by
 ### Environment Wrapper
 
 The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment, `PendulumEnv` wraps Pendulum-v1 and `AcrobotEnv`
-wraps Acrobot-v1 (observation noise only). All three subclass `rl_core.environments.BaseEnvWrapper`, which owns
-seeding, observation noise and episode statistics. They provide:
+wraps Acrobot-v1 and `MountainCarEnv` wraps MountainCar-v0 (observation noise only for both). All four subclass
+`rl_core.environments.BaseEnvWrapper`, which owns seeding, observation noise and episode statistics. They provide:
 
 - Episode tracking and statistics
 - Standardized interface for training pipeline
@@ -593,10 +606,10 @@ The `Trainer` class orchestrates the training process:
 
 ## Next AI Progression
 
-With discrete control (CartPole: Random, REINFORCE, Actor-Critic, PPO, DQN) and continuous
-control (Pendulum: Random, Actor-Critic, PPO, DDPG) fully operational, and Acrobot (Random, PPO, DQN) added as the
-first rung of the challenge ladder, the framework provides a decoupled foundation for future AI challenges. The
-ladder of next challenges is Phase 7 of [`docs/roadmap.md`](docs/roadmap.md).
+With discrete control (CartPole: Random, REINFORCE, Actor-Critic, PPO, DQN) and continuous control (Pendulum: Random,
+Actor-Critic, PPO, DDPG) fully operational, and Acrobot (Random, PPO, DQN) and MountainCar (Random, DQN) added as the
+first rungs of the challenge ladder, the framework provides a decoupled foundation for future AI challenges. The ladder
+of next challenges is Phase 7 of [`docs/roadmap.md`](docs/roadmap.md).
 
 ### Next Steps
 

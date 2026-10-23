@@ -1,0 +1,51 @@
+# MountainCar-v0 Deep Q-Network (DQN) Training Configuration
+# Starts from rl-baselines3-zoo's MountainCar-v0 DQN settings (hyperparams/dqn.yml), with one hidden
+# layer of 256 where rl-zoo has two. rl-zoo trains 8 gradient steps every 16 environment steps; the
+# trainer here updates once per episode, so updates_per_step 0.5 gives the same 0.5 gradient steps per
+# transition, run together after each episode on that episode's data. The step budget governs the
+# run's length (default_episodes does not apply).
+# Measured 2026-10-23 on seeds 1 to 5 (CHANGELOG.md, 2026-10-23): it learns to reach the flag but does not
+# hold the -110 threshold. rl-zoo counts its target interval in environment steps, so its 600 is 300
+# gradient steps here (600 gradient steps ended at -157 to -165, 300 at -141 to -148); 300,000 steps, two
+# hidden layers, a Huber loss, scaled inputs, lr 0.001 and 16-step updates gave no solve either.
+
+# Environment settings
+environment:
+  name: "MountainCar-v0"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 200
+  seed: 42
+
+# Agent settings
+agent:
+  type: "dqn"
+  config:
+    optimizer: adam                # rl-zoo / SB3 optimizer
+    learning_rate: 0.004           # rl-zoo
+    max_grad_norm: 10.0            # Adam global gradient-norm clip (SB3 default)
+    gamma: 0.98                    # Discount factor (rl-zoo)
+    hidden_dim: 256                # One hidden layer (rl-zoo: [256, 256])
+    buffer_capacity: 10000         # Replay buffer maximum capacity (rl-zoo): 50 failed episodes
+    batch_size: 128                # Training mini-batch size (rl-zoo)
+    min_buffer_size: 1000          # Transitions stored before training starts (rl-zoo learning_starts)
+    epsilon_start: 1.0             # Initial exploration probability
+    epsilon_end: 0.02              # Exploration floor (rl-zoo 0.07): 10 to 15 points better best windows at 300k
+    exploration_steps: 24000       # Training actions over which epsilon falls linearly (rl-zoo: 20% of 120k)
+    target_update_frequency: 300   # Gradient steps between target syncs: rl-zoo's 600 environment steps x 0.5
+    updates_per_step: 0.5          # Gradient steps per transition (rl-zoo: 8 per 16 steps)
+    max_updates_per_call: 100      # Half the episode limit, so the cap never binds
+    seed: 42                       # Weight initialisation and sampling seed
+
+# Training settings
+training:
+  total_steps: 120000  # Environment steps (rl-zoo)
+  max_steps_per_episode: 200
+  eval_frequency: 50             # Evaluate every N episodes
+  save_frequency: 100            # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true

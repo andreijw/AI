@@ -115,11 +115,11 @@ def test_record_plays_back_a_challenge_it_does_not_name(fake_challenge, tmp_path
 @pytest.mark.parametrize("module", ["train", "record"])
 def test_unknown_environment_name_is_an_error(tmp_path, monkeypatch, module):
     """The bug fixed then: an unknown id (Acrobot-v1 at the time) silently trained CartPole."""
-    args = ["--config", _config(tmp_path, name="MountainCar-v0")]
+    args = ["--config", _config(tmp_path, name="Taxi-v3")]
     if module == "record":
         pytest.importorskip("moviepy")
         args += ["--checkpoint", str(tmp_path / "missing.pt")]
-    with pytest.raises(ValueError, match="Unknown environment 'MountainCar-v0'.*CartPole-v1"):
+    with pytest.raises(ValueError, match="Unknown environment 'Taxi-v3'.*CartPole-v1"):
         run_main(args, monkeypatch, module=module)
 
 

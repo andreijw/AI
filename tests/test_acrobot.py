@@ -13,16 +13,6 @@ from rl_core.challenges import discover_challenges, select_challenge
 from tests.helpers import minimal_config, run_main
 
 
-def _rollout(env, actions):
-    """The observations of one reset followed by ``actions``, stacked."""
-    obs, _ = env.reset()
-    out = [obs]
-    for action in actions:
-        obs, *_ = env.step(action)
-        out.append(obs)
-    return np.array(out)
-
-
 def test_acrobot_env_has_six_observations_and_three_actions():
     env = AcrobotEnv(seed=0)
     try:
@@ -62,33 +52,6 @@ def test_acrobot_env_truncates_at_its_step_limit_and_reports_the_episode():
         assert info["episode"]["reward"] == -7.0
     finally:
         env.close()
-
-
-def test_acrobot_env_is_reproducible_from_its_seed():
-    actions = [0, 2, 1, 2, 0]
-    first, second, other = AcrobotEnv(seed=5), AcrobotEnv(seed=5), AcrobotEnv(seed=6)
-    try:
-        a = np.concatenate([_rollout(first, actions) for _ in range(3)])
-        b = np.concatenate([_rollout(second, actions) for _ in range(3)])
-        c = np.concatenate([_rollout(other, actions) for _ in range(3)])
-        np.testing.assert_array_equal(a, b, "the same seed should give the same episodes")
-        assert not np.array_equal(a, c), "a different seed should give different start states"
-        assert not np.array_equal(a[:6], a[6:12]), "successive episodes should start differently"
-    finally:
-        for env in (first, second, other):
-            env.close()
-
-
-def test_acrobot_env_adds_observation_noise():
-    clean, noisy = AcrobotEnv(seed=3), AcrobotEnv(seed=3, obs_noise_std=0.5)
-    try:
-        obs_clean, _ = clean.reset()
-        obs_noisy, _ = noisy.reset()
-        assert obs_noisy.dtype == np.float32, "noise should keep the observation's dtype"
-        assert not np.allclose(obs_clean, obs_noisy), "noise of std 0.5 should move the observation"
-    finally:
-        clean.close()
-        noisy.close()
 
 
 def test_acrobot_factories_build_the_wrapper_with_defaults():

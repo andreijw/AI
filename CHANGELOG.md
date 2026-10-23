@@ -12,6 +12,26 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-10-23
+
+### Added
+
+- **MountainCar-v0 challenge** (`feature/mountaincar-challenge`), the second rung of the Phase 7 challenge ladder and
+  the first built on the shared challenge base class: `src/rl_mountaincar/` (`MountainCarEnv`, observation noise only;
+  `MountainCarChallenge`, key `mountaincar`, threshold -110, Gymnasium's `reward_threshold`) with `random` and `dqn`.
+  It does not solve. Measured through the benchmark on seeds 1 to 5 with `configs/mountaincar_dqn.yaml`: DQN learns
+  to reach the flag but no seed reaches -110 (final 100-episode training averages -130 to -146; greedy evaluation
+  -157 ± 15); the random agent scores -200. About 3 minutes per seed. The config starts from rl-baselines3-zoo's
+  MountainCar-v0 DQN with two changes: rl-zoo counts its target interval in environment steps, so its 600 is 300
+  gradient steps here (left at 600 gradient steps, seeds 1 to 5 ended at -157 to -165, at 300 at -141 to -148), and
+  the exploration floor is 0.02 instead of 0.07 (best 100-episode windows -112 to -130 against -127 to -135 over
+  300,000 steps). Ruled out on seeds 1 to 3 with scratch probes: scaled inputs, a learning rate of 0.001, updates
+  every 16 steps mid-episode, a Huber loss, two hidden layers of 256 (worse: four of six runs never found the flag)
+  and 300,000 steps (no seed solved; runs peak and then drift). PPO is not offered: with rl-zoo's settings and no
+  reward normalisation it never reached the flag in 1,000,000 steps on any of seeds 1 to 5. The per-file seeding and
+  noise tests of Acrobot and MountainCar moved into the shared `tests/test_env_seeding.py`, which now covers all four
+  wrappers; the "unknown environment" tests use `Taxi-v3`.
+
 ## 2026-10-22
 
 ### Changed

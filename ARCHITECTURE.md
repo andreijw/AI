@@ -9,20 +9,22 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           src/benchmark.py & CLI                            │
 │                         (Multi-Agent Benchmarking)                          │
-└───────────┬──────────────────────────┬──────────────────────────┬───────────┘
-            │                          │                          │
-            ↓                          ↓                          ↓
-┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
-│  src/rl_cartpole/     │  │  src/rl_pendulum/     │  │  src/rl_acrobot/      │
-│ (Discrete Control)    │  │ (Continuous Control)  │  │ (Discrete Swing-Up)   │
-│ - CartPoleEnv         │  │ - PendulumEnv         │  │ - AcrobotEnv          │
-│ - Noise & Domain Rand │  │ - Action Noise & DR   │  │ - Observation Noise   │
-│ - CartPoleChallenge   │  │ - PendulumChallenge   │  │ - AcrobotChallenge    │
-└───────────┬───────────┘  └───────────┬───────────┘  └───────────┬───────────┘
-            │                          │                          │
-            └──────────────────────────┼──────────────────────────┘
-                                       │
-                                       ↓
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │
+                                      ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│      Challenge packages: src/rl_<name>/  (found by discover_challenges)     │
+│                                                                             │
+│  rl_cartpole     CartPoleEnv     CartPoleChallenge     discrete; noise, DR  │
+│  rl_pendulum     PendulumEnv     PendulumChallenge     continuous; noise, DR│
+│  rl_acrobot      AcrobotEnv      AcrobotChallenge      discrete swing-up    │
+│  rl_mountaincar  MountainCarEnv  MountainCarChallenge  discrete, exploration│
+│                                                                             │
+│  Each holds a BaseEnvWrapper subclass, ENV_DEFAULTS + make_env_from_config, │
+│  and a BenchmarkChallenge subclass with AGENT_CLASSES and CONFIG_MAP        │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │
+                                      ↓
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                 src/rl_core/                                │
 │                     (Algorithm-Agnostic Core Framework)                     │
@@ -47,7 +49,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 
 1. **Core Decoupling**: Algorithms and trainers in `rl_core` have zero coupling to specific Gymnasium environments.
 2. **Challenge Isolation**: Challenge-specific environments, physics domain randomizations, and configs reside in
-   independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`).
+   independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`, `rl_mountaincar`).
 3. **Discrete & Continuous Symmetry**: Shared base interfaces support discrete action selection and continuous
    bounded control (Gaussian policies).
 4. **Structured Artifact Scoping**: Generated logs, checkpoints, plots, and videos are partitioned deterministically
@@ -94,6 +96,7 @@ flowchart TD
         CartPole["rl_cartpole: CartPoleEnv (Discrete)"]
         Pendulum["rl_pendulum: PendulumEnv (Continuous)"]
         Acrobot["rl_acrobot: AcrobotEnv (Discrete)"]
+        MountainCar["rl_mountaincar: MountainCarEnv (Discrete)"]
     end
 
     subgraph Core ["rl_core Framework"]
@@ -127,6 +130,7 @@ flowchart TD
     CartPole --> EnvBase
     Pendulum --> EnvBase
     Acrobot --> EnvBase
+    MountainCar --> EnvBase
 ```
 
 ---
@@ -262,7 +266,7 @@ sequenceDiagram
     autonumber
     actor User as User / CLI
     participant Trainer as Trainer
-    participant Env as Challenge Env (CartPole/Pendulum/Acrobot)
+    participant Env as Challenge Env (CartPole, Pendulum, Acrobot, MountainCar)
     participant Agent as Agent (Discrete / Continuous)
     participant Logger as Structured Logger
     participant Disk as Artifact Storage

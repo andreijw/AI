@@ -1,0 +1,31 @@
+# MountainCar-v0 Random Baseline Configuration
+# MountainCar-v0: 2 observations (position, velocity), 3 pushes, -1 reward per step until the car
+# reaches the flag, 200-step limit. Solved at a 100-episode training average of -110 (Gymnasium's
+# reward_threshold). A random agent almost never reaches the flag.
+
+# Environment settings
+environment:
+  name: "MountainCar-v0"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 200
+  seed: 42
+
+# Agent settings
+agent:
+  type: "random"  # Options: "random", "dqn"
+  config:
+    seed: 42  # Makes RandomAgent action selection reproducible
+
+# Training settings
+training:
+  total_steps: 40000  # Environment steps (random baseline: 200 episodes of 200 steps)
+  max_steps_per_episode: 200
+  eval_frequency: 20  # Evaluate every N episodes
+  save_frequency: 50  # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true
