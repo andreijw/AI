@@ -88,10 +88,21 @@ Gymnasium's `reward_threshold` unless the maintainer sets another, judged by the
 Tier 1 began with Acrobot-v1 (CHANGELOG.md, 2026-10-22). The items below are sketches to turn into full items
 when picked.
 
-- [ ] **MountainCar-v0 and MountainCarContinuous-v0 (Tier 1, exploration)**
-  - **Description**: Flat, sparse reward that a random agent almost never collects; the continuous version has a
-    "do not move" local optimum. Likely needs an exploration aid (longer or scheduled epsilon, OU noise or gSDE
-    for continuous agents, possibly a novelty bonus). Thresholds -110 and 90.
+- [ ] **Learning-Rate Decay for DQN (MountainCar-v0 follow-up)**
+  - **Description**: MountainCar DQN learns to reach the flag but does not solve: its 100-episode training average
+    peaks at -112 to -130 and then drifts back (-130 to -146 at the end of 120,000 steps; CHANGELOG.md, 2026-10-23).
+    Input scale, a lower fixed learning rate, update timing, a Huber loss, depth and a longer budget were ruled out.
+    The untested suspect is DQN's fixed learning rate of 0.004 with no decay; PPO already decays its rate with
+    `anneal_fraction`. Add an optional linear decay to `DQNAgent` (off by default), test it on MountainCar, and
+    re-check the CartPole and Acrobot DQN configs, which it would not change unless turned on.
+  - **Also open**: PPO on MountainCar-v0 never reached the flag without reward normalisation; it returns once the
+    framework has an exploration aid or normalisation.
+
+- [ ] **MountainCarContinuous-v0 Challenge with Ornstein-Uhlenbeck Exploration (Tier 1, exploration)**
+  - **Description**: The continuous version (`Box(-1, 1)` force, threshold 90, 999-step limit) rewards reaching
+    the flag with +100 but charges for force, so "do not move" is a strong local optimum. rl-baselines3-zoo's DDPG
+    and TD3 use Ornstein-Uhlenbeck noise (temporally correlated, std 0.5); our DDPG has Gaussian noise only, so this
+    adds OU noise as an exploration option (`algorithm-crafter`) and the challenge to the `rl_mountaincar` package.
 
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
   - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency

@@ -9,14 +9,16 @@ is separate from the base environment's.
 import numpy as np
 import pytest
 
+from rl_acrobot.environments import AcrobotEnv
 from rl_cartpole.environments import CartPoleEnv
 from rl_cartpole.environments import make_vec_env as make_cartpole_vec_env
 from rl_core.agents import BaseAgent
 from rl_core.seeding import derive_rng
 from rl_core.training import Trainer
+from rl_mountaincar.environments import MountainCarEnv
 from rl_pendulum.environments import PendulumEnv
 
-ENV_CLASSES = [CartPoleEnv, PendulumEnv]
+ENV_CLASSES = [CartPoleEnv, PendulumEnv, AcrobotEnv, MountainCarEnv]
 GRAVITY_RANGE = {CartPoleEnv: ("gravity", (5.0, 15.0)), PendulumEnv: ("g", (5.0, 15.0))}
 SEED = 42
 NOISE_STD = 0.1
@@ -26,6 +28,8 @@ def _action(env_cls, step: int):
     """A fixed, valid action for the given step of an episode."""
     if env_cls is CartPoleEnv:
         return step % 2
+    if env_cls in (AcrobotEnv, MountainCarEnv):
+        return step % 3
     return np.array([0.5 if step % 2 == 0 else -1.0], dtype=np.float32)
 
 
@@ -165,6 +169,9 @@ def test_observation_noise_continues_across_episodes(env_cls):
         for n, c in zip(noisy_obs, clean_obs, strict=True)
     ]
     assert all(np.any(np.abs(n) > 1e-6) for n in noise), "No noise was added."
+    assert all(n.dtype == c.dtype for n, c in zip(noisy_obs, clean_obs, strict=True)), (
+        "Noise should keep the observation's dtype."
+    )
     assert not np.allclose(noise[0], noise[1], atol=1e-6), "The same noise was added twice."
     for a, b in zip(noisy_obs, twin_obs, strict=True):
         np.testing.assert_array_equal(a, b)
@@ -188,7 +195,7 @@ def test_wrapper_noise_stream_is_separate_from_the_base_environment(env_cls):
     )
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
+@pytest.mark.parametrize("env_cls", sorted(GRAVITY_RANGE, key=lambda cls: cls.__name__))
 def test_domain_randomization_resamples_each_episode(env_cls):
     """A seeded environment samples different physics per episode, reproducibly."""
     key, value_range = GRAVITY_RANGE[env_cls]

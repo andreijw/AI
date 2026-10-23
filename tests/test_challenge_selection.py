@@ -6,6 +6,7 @@ import pytest
 
 import rl_acrobot.environments.acrobot_env as acrobot_env_module
 import rl_cartpole.environments.cartpole_env as cartpole_env_module
+import rl_mountaincar.environments.mountaincar_env as mountaincar_env_module
 import rl_pendulum.environments.pendulum_env as pendulum_env_module
 from rl_cartpole.environments import (
     make_vec_env_from_config as cartpole_make_vec_env_from_config,
@@ -30,6 +31,7 @@ discover_challenges()
 
 EXPECTED_AGENTS = {
     "acrobot": {"random": RandomAgent, "dqn": DQNAgent, "ppo": PPOAgent},
+    "mountaincar": {"random": RandomAgent, "dqn": DQNAgent},
     "cartpole": {
         "random": RandomAgent,
         "reinforce": ReinforceAgent,
@@ -47,6 +49,7 @@ EXPECTED_AGENTS = {
 
 ENV_CLASSES = {
     "acrobot": acrobot_env_module.AcrobotEnv,
+    "mountaincar": mountaincar_env_module.MountainCarEnv,
     "cartpole": cartpole_env_module.CartPoleEnv,
     "pendulum": pendulum_env_module.PendulumEnv,
 }
@@ -58,7 +61,12 @@ ENV_CLASSES = {
 
 @pytest.mark.parametrize(
     ("env_name", "key"),
-    [("Acrobot-v1", "acrobot"), ("CartPole-v1", "cartpole"), ("Pendulum-v1", "pendulum")],
+    [
+        ("Acrobot-v1", "acrobot"),
+        ("CartPole-v1", "cartpole"),
+        ("MountainCar-v0", "mountaincar"),
+        ("Pendulum-v1", "pendulum"),
+    ],
 )
 def test_environment_name_selects_its_challenge(env_name, key):
     assert select_challenge(env_name, None) is CHALLENGES[key]
@@ -69,9 +77,7 @@ def test_challenge_key_alone_selects_that_challenge():
     assert select_challenge(None, "pendulum") is CHALLENGES["pendulum"]
 
 
-@pytest.mark.parametrize(
-    "env_name", ["MountainCar-v0", "cartpole-v1", "CartPole-v0", "MyPendulum-v1"]
-)
+@pytest.mark.parametrize("env_name", ["Taxi-v3", "cartpole-v1", "CartPole-v0", "MyPendulum-v1"])
 def test_unknown_environment_name_is_an_error_naming_the_options(env_name):
     """Ids match exactly: no lower-casing and no substring match picks a challenge."""
     with pytest.raises(ValueError, match=f"Unknown environment '{env_name}'") as error:
@@ -79,6 +85,9 @@ def test_unknown_environment_name_is_an_error_naming_the_options(env_name):
     assert "CartPole-v1 (cartpole)" in str(error.value), "the message should list every option"
     assert "Pendulum-v1 (pendulum)" in str(error.value), "the message should list every option"
     assert "Acrobot-v1 (acrobot)" in str(error.value), "the message should list every option"
+    assert "MountainCar-v0 (mountaincar)" in str(error.value), (
+        "the message should list every option"
+    )
 
 
 def test_challenge_key_that_disagrees_with_the_environment_is_an_error():
@@ -142,6 +151,12 @@ def _capture_env_kwargs(monkeypatch, key):
             "acrobot",
             {"name": "Acrobot-v1", "max_episode_steps": 40, "seed": 5, "obs_noise_std": 0.04},
             {"env_name": "Acrobot-v1", "max_episode_steps": 40, "seed": 5, "obs_noise_std": 0.04,
+             "render_mode": "rgb_array"},
+        ),
+        (
+            "mountaincar",
+            {"name": "MountainCar-v0", "max_episode_steps": 60, "seed": 6, "obs_noise_std": 0.01},
+            {"env_name": "MountainCar-v0", "max_episode_steps": 60, "seed": 6, "obs_noise_std": 0.01,
              "render_mode": "rgb_array"},
         ),
     ],
@@ -291,11 +306,12 @@ def test_two_challenges_on_one_environment_need_a_key(isolated_registry):
 # Each challenge's settings beyond name and max_episode_steps, which the null test sets to null.
 CONFIGURED = {
     "acrobot": ("obs_noise_std",),
+    "mountaincar": ("obs_noise_std",),
     "cartpole": ("obs_noise_std", "action_noise_prob", "domain_randomization"),
     "pendulum": ("obs_noise_std", "action_noise_std", "domain_randomization"),
 }
 RANDOMIZED = {"cartpole", "pendulum"}  # the challenges with domain randomization
-DEFAULT_STEPS = {"acrobot": 500, "cartpole": 500, "pendulum": 200}
+DEFAULT_STEPS = {"acrobot": 500, "cartpole": 500, "mountaincar": 200, "pendulum": 200}
 
 
 @pytest.mark.parametrize("key", sorted(CONFIGURED))
@@ -335,7 +351,7 @@ def test_cartpole_turns_an_empty_randomization_into_none():
 )
 def test_make_env_rejects_a_setting_the_challenge_does_not_support(key, setting):
     """Another challenge's setting, or a typo, set to a value fails instead of being ignored
-    (Acrobot's own are in tests/test_acrobot.py)."""
+    (Acrobot's and MountainCar's own are in their test files)."""
     with pytest.raises(ValueError, match=f"does not support .*{setting}"):
         CHALLENGES[key]().make_env({setting: 0.1}, render_mode=None)
 

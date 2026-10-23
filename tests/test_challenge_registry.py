@@ -93,7 +93,7 @@ def test_discovering_twice_imports_each_package_once(isolated_registry):
 
 def test_default_discovery_finds_the_repository_challenges():
     found = discover_challenges()
-    assert {"acrobot", "cartpole", "pendulum"} <= set(found)
+    assert {"acrobot", "cartpole", "mountaincar", "pendulum"} <= set(found)
     assert found["cartpole"].__module__ == "rl_cartpole.benchmark"
 
 

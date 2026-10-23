@@ -82,10 +82,11 @@ Print one real batch and read it:
 
 - **`dones` and `terminated`**: true on the last step only. `dones` is `terminated` *or* `truncated`; a
   bootstrapping agent that reads `dones` treats a time-limit cut as a true end (DQN reads `terminated`).
-  Pendulum only ever ends by truncation; Acrobot ends by termination at the goal or truncation at 500 steps.
+  Pendulum only ever ends by truncation; Acrobot and MountainCar end by termination at the goal or truncation at their limit (500, 200).
 - **Rewards**: their scale. CartPole pays 1 per step; Pendulum pays between about -16 and 0; Acrobot pays -1 per
-  step until the goal, so a run that never reaches it sits flat at -500. A learning rate tuned for one is wrong by
-  an order of magnitude for another.
+  step until the goal, so a run that never reaches it sits flat at -500, and MountainCar the same at -200, where a
+  random agent stays: flat at the floor there means exploration never found the flag, not a broken update. A
+  learning rate tuned for one challenge is wrong by an order of magnitude for another.
 - **Actions**: the dtype and range the environment expects; a continuous action inside its bounds.
 - **Observations**: finite, and of the scale the network was initialised for.
 - **Wrappers**: observation noise, action noise and domain randomization are off unless the config asks
@@ -98,7 +99,10 @@ Walk the numbers with the config's real values:
 - How many updates actually happen? An off-policy agent does nothing until its buffer holds
   `min_buffer_size`, and `max_updates_per_call` caps the work per episode.
 - When does exploration end, compared with when the agent starts seeing long episodes?
-- How often does the target network sync, measured in episodes?
+- How often does the target network sync, measured in episodes? Stable-Baselines3 and rl-zoo count
+  `target_update_interval` in environment steps; ours counts gradient steps, so rl-zoo's value times
+  gradient steps per transition is ours (MountainCar: 600 × 0.5 = 300; the untranslated 600 cost about
+  15 points of training average, 2026-10-23).
 - Is the learning rate times the gradient scale a small step or a leap? Print the update's norm against
   the weight's norm for one step.
 
