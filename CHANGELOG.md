@@ -26,7 +26,10 @@ Acrobot-v1) and
   1 to 5: final 100-episode training averages -121 to -146 (mean -133) against -135 to -146 (mean -143) for a fixed
   rate over the same 200,000 steps, greedy evaluation -132 ± 11 against -148, and seed 4 reaches -110 at about 103k
   steps before drifting back; over 120,000 steps the decay was mixed (3 of 5 seeds better). MountainCar still does not
-  solve under the 100-episode rule.
+  solve under the 100-episode rule. Also probed on the decaying config, seeds 1 to 5, and no better: n-step returns
+  (n 3: final averages mean -141; n 5: mean -153, two seeds collapsing late) and Double DQN targets (mean -141). For
+  comparison, rl-baselines3-zoo publishes -100.8 for its DQN, an evaluation of the trained agent over about 1,400
+  episodes rather than a training average; our greedy evaluation is -132 ± 11.
 
 ### Added
 

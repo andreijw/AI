@@ -19,10 +19,36 @@ No open items.
 
 ### Code Health
 
-The last health dashboard (brooks-health, 2026-10-21) scored 92/100. Its one Critical, the curve alignment inside
-`plot_benchmark_comparison`, and the two complexity hotspots it left, `DQNAgent.__init__` and
-`Trainer._log_metrics`, are fixed (CHANGELOG.md, 2026-10-21). The loose ends gathered from completed items are
-closed too (CHANGELOG.md, 2026-10-21). What remains here are unscheduled ideas.
+The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical, 4 Warnings. The first Warning,
+each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22). The two
+items below are the rest; then come unscheduled ideas.
+
+- [ ] **Benchmark Hygiene: Solve Numbers Apart from Plotting**
+  - **Description**: Two Warnings from the 2026-10-22 dashboard. `src/benchmark.py` imports the private
+    `_rolling_average` from `rl_core/utils/visualization.py` for the solve episode and `final_rolling_avg`, so a
+    change to plot smoothing would silently change published solve numbers; and `rl_core/utils/__init__.py`
+    imports the plotting module eagerly, so importing the trainer or the challenges loads matplotlib.
+    `_generate_markdown_report` is 98 lines mixing configuration text, solve-rule prose, row formatting and the plot
+    path, and `run_benchmark` takes 11 parameters while a `BenchmarkSettings` dataclass exists.
+  - **Acceptance criteria**:
+    - A public `rolling_average` in a module that does not plot, used by the benchmark and the plots alike.
+    - `import rl_core.training` and `import rl_core.challenges` do not import matplotlib (a test says so).
+    - The report function split into named parts; `run_benchmark` takes `BenchmarkSettings`.
+    - Reports generated before and after are byte-identical for the same metrics file.
+  - **Out of scope**: Changing what the report says, or the solve rule.
+
+- [ ] **Test Hygiene: Trainer Tests Through a Seam**
+  - **Description**: The 2026-10-22 dashboard's fourth Warning: about 13 call sites in `tests/test_trainer.py` call
+    private `Trainer` methods (`_run_episode`, `_save_checkpoint`, `_log_metrics`, `_log_info`), against the
+    rule every agent test already follows. Its suggestions belong here too: the per-challenge tables in
+    `tests/test_challenge_selection.py`, and the fake-package prefix shared implicitly between `tests/conftest.py`
+    and `tests/helpers.py`.
+  - **Acceptance criteria**:
+    - Trainer tests go through `train()`, `evaluate()` and the files and log lines they produce, or through a
+      `tests/trainer_internals.py` like `tests/agent_internals.py`; `test_source_conventions.py` enforces it.
+    - The `rl_fake` prefix is one named constant used by both files.
+    - No loss of coverage on `rl_core/training/trainer.py` (99% today).
+  - **Out of scope**: Changing `Trainer` behaviour.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
