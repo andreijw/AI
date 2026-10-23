@@ -24,7 +24,7 @@ STEP_BUDGETS = {
     ("acrobot", "dqn"): 100_000,
     ("acrobot", "ppo"): 500_000,
     ("acrobot", "random"): 50_000,
-    ("mountaincar", "dqn"): 120_000,
+    ("mountaincar", "dqn"): 200_000,
     ("mountaincar", "random"): 40_000,
     ("cartpole", "reinforce"): 500_000,
     ("cartpole", "actor_critic"): 500_000,
@@ -155,10 +155,11 @@ def test_acrobot_ppo_starts_from_rl_zoo_settings():
     assert optimizer(agent).max_grad_norm == pytest.approx(0.5)
 
 
-def test_mountaincar_dqn_uses_rl_zoo_settings_translated_to_gradient_steps():
+def test_mountaincar_dqn_uses_rl_zoo_settings_with_a_decaying_learning_rate():
     """rl-zoo's DQN for MountainCar-v0 (one hidden layer of 256 instead of two): half a gradient step per
-    transition over 120,000 steps. Its target sync every 600 environment steps is 300 gradient steps here,
-    and epsilon falls to 0.02 rather than 0.07 (CHANGELOG.md, 2026-10-23)."""
+    transition. Its target sync every 600 environment steps is 300 gradient steps here, epsilon falls to
+    0.02 rather than 0.07, and the learning rate decays to zero over a 200,000-step budget instead of
+    staying fixed over 120,000 (CHANGELOG.md, 2026-10-23)."""
     env, agent, _ = discover_challenges()["mountaincar"]().setup_run("dqn", seed=1, episodes=None)
     env.close()
     assert isinstance(optimizer(agent), Adam)
@@ -167,3 +168,4 @@ def test_mountaincar_dqn_uses_rl_zoo_settings_translated_to_gradient_steps():
     assert (agent.min_buffer_size, agent.target_update_frequency) == (1_000, 300)
     assert (agent.exploration_steps, agent.epsilon_end) == (24_000, pytest.approx(0.02))
     assert (agent.updates_per_step, agent.max_updates_per_call) == (0.5, 100)
+    assert agent.anneal_steps == 200_000, "the rate decays over the whole budget"

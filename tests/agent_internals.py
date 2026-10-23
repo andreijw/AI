@@ -352,13 +352,13 @@ def replace_shuffle_generator(
 
 def _counter_names(agent: DQNAgent | DDPGAgent) -> tuple[str, ...]:
     if isinstance(agent, DQNAgent):
-        return ("update_counter", "exploration_step")
+        return ("update_counter", "exploration_step", "steps_trained")
     return ("training_actions", "gradient_steps")
 
 
 def counters(agent: DQNAgent | DDPGAgent) -> dict[str, int]:
-    """The counters the agent checkpoints, by checkpoint name: DQN's target-sync counter and
-    exploration step, DDPG's training actions and gradient steps."""
+    """The counters the agent checkpoints, by checkpoint name: DQN's target-sync counter, exploration
+    step and transitions trained (its learning-rate decay), DDPG's training actions and gradient steps."""
     return {name: int(getattr(agent, f"_{name}")) for name in _counter_names(agent)}
 
 

@@ -159,8 +159,8 @@ def _zeros_like(value: np.ndarray | float) -> Any:
 
 def anneal_steps_from_config(config: Mapping[str, Any]) -> int | None:
     """
-    Read ``anneal_steps``: decay the learning rate and clip range linearly to zero over this many
-    trained transitions. Unset (None) means no decay.
+    Read ``anneal_steps``: decay the learning rate (and PPO's clip range) linearly to zero over
+    this many trained transitions. Unset (None) means no decay.
 
     Raises:
         ValueError: If it is set and not a positive integer.
@@ -171,7 +171,8 @@ def anneal_steps_from_config(config: Mapping[str, Any]) -> int | None:
 def anneal_fraction(steps_trained: int, anneal_steps: int | None) -> float:
     """The share of a linearly annealed quantity still in use: 1 without annealing, else
     ``max(0, 1 − steps_trained / anneal_steps)``. PPO anneals its learning rate and clip range with
-    it (counting trained transitions); DQN anneals epsilon (counting training actions)."""
+    it and DQN its learning rate (both counting trained transitions); DQN also anneals epsilon with
+    it (counting training actions)."""
     if anneal_steps is None:
         return 1.0
     return max(0.0, 1.0 - steps_trained / anneal_steps)
