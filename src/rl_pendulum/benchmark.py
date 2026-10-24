@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-import gymnasium as gym
-
 from rl_core.agents import (
     BaseAgent,
     ContinuousActorCriticAgent,
@@ -14,7 +12,12 @@ from rl_core.agents import (
     ContinuousRandomAgent,
     DDPGAgent,
 )
-from rl_core.challenges import BenchmarkChallenge, ChallengeEnv, register_challenge
+from rl_core.challenges import (
+    BenchmarkChallenge,
+    ChallengeEnv,
+    register_challenge,
+    with_box_action_bounds,
+)
 from rl_pendulum.environments import make_env_from_config
 from rl_pendulum.environments.pendulum_env import PendulumEnv
 
@@ -57,10 +60,4 @@ class PendulumChallenge(BenchmarkChallenge):
 
     def agent_config(self, agent_config: Mapping[str, Any], env: ChallengeEnv) -> dict[str, Any]:
         """The agent's config with the environment's torque bounds, unless it sets its own."""
-        action_space = env.action_space
-        if not isinstance(action_space, gym.spaces.Box):
-            raise TypeError(f"Pendulum needs a Box action space, got {action_space}")
-        config = dict(agent_config)
-        config.setdefault("action_low", action_space.low)
-        config.setdefault("action_high", action_space.high)
-        return config
+        return with_box_action_bounds(agent_config, env, self.name)

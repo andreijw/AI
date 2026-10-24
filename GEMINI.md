@@ -34,8 +34,8 @@ To optimize token usage and context window limits:
     discrete agents (`RandomAgent`, `ReinforceAgent`, `ActorCriticAgent`, `PPOAgent`, `DQNAgent`),
     continuous agents (`ContinuousRandomAgent`, `ContinuousActorCriticAgent`, `ContinuousPPOAgent`, `DDPGAgent`),
     `ReplayBuffer`, and the shared `mlp.py` (multi-layer networks), `bounds.py` (action bounds), `softmax.py`
-    (the discrete policies' numerically stable softmax) and `config_values.py` (strict readers for integer
-    settings).
+    (the discrete policies' numerically stable softmax), `exploration_noise.py` (DDPG's Gaussian and
+    Ornstein-Uhlenbeck noise) and `config_values.py` (strict readers for integer settings).
   * `src/rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
     observation noise, episode statistics, `wrap_env`), and `checked_range` for domain randomization ranges.
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).
@@ -52,9 +52,10 @@ To optimize token usage and context window limits:
 * **`src/rl_acrobot/`**: Acrobot-v1 discrete swing-up challenge.
   * `src/rl_acrobot/environments/`: Acrobot wrapper (observation noise only) and its factories.
   * `src/rl_acrobot/benchmark.py`: Acrobot benchmark challenge implementation.
-* **`src/rl_mountaincar/`**: MountainCar-v0 discrete exploration challenge.
-  * `src/rl_mountaincar/environments/`: mountain car wrapper (observation noise only) and its factories.
-  * `src/rl_mountaincar/benchmark.py`: MountainCar benchmark challenge implementation.
+* **`src/rl_mountaincar/`**: MountainCar-v0 (discrete) and MountainCarContinuous-v0 exploration challenges.
+  * `src/rl_mountaincar/environments/`: mountain car wrapper (observation noise only), shared by both ids, and a
+    factory for each.
+  * `src/rl_mountaincar/benchmark.py`: both MountainCar benchmark challenge implementations.
 * **`src/rl_core/challenges/`**: The `BenchmarkChallenge` interface, the challenge registry and `discover_challenges`.
 * **`src/benchmark.py`**: The benchmark runner and its command line, for every discovered challenge.
 * **`tests/`** (located at [tests/](tests/)): Pytest unit and integration test suite

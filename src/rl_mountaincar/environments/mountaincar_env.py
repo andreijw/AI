@@ -7,7 +7,10 @@ from rl_core.environments import BaseEnvWrapper
 
 class MountainCarEnv(BaseEnvWrapper):
     """
-    Wrapper around Gymnasium's MountainCar-v0.
+    Wrapper around Gymnasium's MountainCar-v0 and MountainCarContinuous-v0.
+
+    MountainCarContinuous-v0 differs only in its action, one force in [-1, 1], its reward, -0.1
+    times the force squared per step and +100 at the flag, and its 999-step limit.
 
     MountainCar-v0 observes the car's position and velocity, takes one of three pushes (left,
     none, right), and gives -1 per step, the last included, until the car reaches the flag (a

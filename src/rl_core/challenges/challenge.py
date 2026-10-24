@@ -204,3 +204,28 @@ class BenchmarkChallenge(abc.ABC):
             )
         training["save_frequency"] = max(training["num_episodes"] + 1, 999999)
         return config
+
+
+def with_box_action_bounds(
+    agent_config: Mapping[str, Any], env: ChallengeEnv, owner: str
+) -> dict[str, Any]:
+    """
+    A copy of ``agent_config`` with the environment's Box action bounds as ``action_low`` and
+    ``action_high``, unless it sets its own: what a continuous challenge's
+    :meth:`BenchmarkChallenge.agent_config` returns.
+
+    Args:
+        agent_config: The agent's config.
+        env: The challenge's environment.
+        owner: The challenge's environment id, named in the error.
+
+    Raises:
+        TypeError: If the environment's action space is not a Box.
+    """
+    action_space = env.action_space
+    if not isinstance(action_space, gym.spaces.Box):
+        raise TypeError(f"{owner} needs a Box action space, got {action_space}")
+    config = dict(agent_config)
+    config.setdefault("action_low", action_space.low)
+    config.setdefault("action_high", action_space.high)
+    return config

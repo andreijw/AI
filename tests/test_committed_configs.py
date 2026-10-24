@@ -26,6 +26,8 @@ STEP_BUDGETS = {
     ("acrobot", "random"): 50_000,
     ("mountaincar", "dqn"): 200_000,
     ("mountaincar", "random"): 40_000,
+    ("mountaincar_continuous", "ddpg"): 300_000,
+    ("mountaincar_continuous", "random"): 200_000,
     ("cartpole", "reinforce"): 500_000,
     ("cartpole", "actor_critic"): 500_000,
     ("cartpole", "ppo"): 200_000,

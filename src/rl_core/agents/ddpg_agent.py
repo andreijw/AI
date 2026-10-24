@@ -22,6 +22,7 @@ from .config_values import (
     optional_positive_int,
     positive_int,
 )
+from .exploration_noise import make_exploration_noise
 from .mlp import Params, init_mlp, mlp_backward, mlp_forward
 from .optim import Adam
 from .replay_buffer import ReplayBuffer
@@ -47,8 +48,11 @@ class DDPGAgent(BaseAgent):
     * Per gradient step: the critic minimises ``mean ½ (Q(s, a) - y)²``, then the actor minimises
       ``-mean Q(s, mu(s))`` against the updated critic, then both targets move a fraction ``tau``.
     * Exploration: uniform random actions for the first ``learning_starts`` training actions,
-      then ``mu(s)`` plus Gaussian noise of ``noise_std`` in the scaled [-1, 1] space, clipped to
-      the bounds. The clipped action is stored: the critic learns the value of what was executed.
+      then ``mu(s)`` plus noise in the scaled [-1, 1] space, clipped to the bounds: Gaussian of
+      ``noise_std`` by default, or with ``noise_type: ornstein_uhlenbeck`` SB3's OU process of
+      sigma ``noise_std`` (``ou_theta``, ``ou_dt``; see ``rl_core.agents.exploration_noise``).
+      :meth:`update` resets the noise, as the Trainer calls it once at the end of every episode.
+      The clipped action is stored: the critic learns the value of what was executed.
 
     Defaults are rl-zoo's Pendulum-v1 settings. Weights, exploration and replay sampling each
     draw from their own stream of the seed (``rl_core.seeding``).
@@ -93,6 +97,7 @@ class DDPGAgent(BaseAgent):
         raw_clip = config.get("max_grad_norm")
         self.max_grad_norm: float | None = None if raw_clip is None else float(raw_clip)
         self._validate(str(config.get("optimizer", "adam")).lower())
+        self._noise = make_exploration_noise(config, action_dim, default_std=self.noise_std)
 
         self.action_low, self.action_high = action_bounds(config, action_dim, require_finite=True)
         low, high = self.action_low.astype(np.float64), self.action_high.astype(np.float64)
@@ -128,7 +133,6 @@ class DDPGAgent(BaseAgent):
             ("learning_rate", self.learning_rate > 0.0),
             ("gamma", 0.0 < self.gamma <= 1.0),
             ("tau", 0.0 < self.tau <= 1.0),
-            ("noise_std", self.noise_std >= 0.0),
             ("updates_per_step", self.updates_per_step > 0.0),
             ("max_grad_norm", self.max_grad_norm is None or self.max_grad_norm > 0.0),
         ]
@@ -225,7 +229,7 @@ class DDPGAgent(BaseAgent):
 
         Evaluation (``training=False``) returns ``mu(s)`` and changes nothing. A training action
         counts towards ``learning_starts``: uniform in the bounds during warm-up, then ``mu(s)``
-        plus Gaussian noise (``noise_std`` times ``scale``), clipped to the bounds.
+        plus the exploration noise times ``scale``, clipped to the bounds.
         """
         obs = np.asarray(observation, dtype=np.float64).reshape(1, -1)
         if not training:
@@ -236,13 +240,14 @@ class DDPGAgent(BaseAgent):
             action = self._explore_rng.uniform(self.action_low, self.action_high)
         else:
             mu = self._actor_forward(obs, self._actor)[0][0]
-            noise = self._explore_rng.normal(0.0, self.noise_std, self.action_dim) * self.scale
+            noise = self._noise.sample(self._explore_rng) * self.scale
             action = np.clip(mu + noise, self.action_low, self.action_high)
         return np.asarray(action, dtype=np.float32)
 
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
-        Store the episode's transitions, then train once warm-up is over.
+        End the episode: reset the exploration noise, store the episode's transitions, then
+        train once warm-up is over.
 
         Runs ``updates_per_step`` gradient steps per transition (at least one, at most
         ``max_updates_per_call``), each: critic step, actor step, Polyak.
@@ -253,6 +258,7 @@ class DDPGAgent(BaseAgent):
             norms ``critic_grad_norm`` and ``actor_grad_norm``; empty during warm-up or when the
             batch stored nothing.
         """
+        self._noise.reset()  # the Trainer calls update once, at the end of every episode
         n = self.replay_buffer.add_transitions(batch)
         if (
             n == 0

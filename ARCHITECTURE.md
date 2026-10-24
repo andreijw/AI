@@ -19,6 +19,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │  rl_pendulum     PendulumEnv     PendulumChallenge     continuous; noise, DR│
 │  rl_acrobot      AcrobotEnv      AcrobotChallenge      discrete swing-up    │
 │  rl_mountaincar  MountainCarEnv  MountainCarChallenge  discrete, exploration│
+│                                  MountainCarContinuousChallenge  continuous │
 │                                                                             │
 │  Each holds a BaseEnvWrapper subclass, ENV_DEFAULTS + make_env_from_config, │
 │  and a BenchmarkChallenge subclass with AGENT_CLASSES and CONFIG_MAP        │
@@ -75,7 +76,10 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    replays each episode in `n_steps` chunks, each with GAE targets bootstrapped from the chunk's next state unless
    the episode truly terminated. Both continuous Gaussian agents can bound their policy mean inside the action
    bounds (`bounded_mean`: bias + scale·tanh(z)); without it the linear mean head can drift past a bound, where every
-   executed action is the same.
+   executed action is the same. DDPG explores with Gaussian noise or, with `noise_type: ornstein_uhlenbeck`, with
+   the temporally correlated noise of `rl_core/agents/exploration_noise.py`, and resets that noise in `update`. This
+   relies on the Trainer calling `update` once, at the end of every episode: a caller that updated mid-episode would
+   zero the noise each time and make it nearly white.
 
 ---
 
@@ -96,7 +100,7 @@ flowchart TD
         CartPole["rl_cartpole: CartPoleEnv (Discrete)"]
         Pendulum["rl_pendulum: PendulumEnv (Continuous)"]
         Acrobot["rl_acrobot: AcrobotEnv (Discrete)"]
-        MountainCar["rl_mountaincar: MountainCarEnv (Discrete)"]
+        MountainCar["rl_mountaincar: MountainCarEnv (Discrete and Continuous)"]
     end
 
     subgraph Core ["rl_core Framework"]
@@ -105,7 +109,7 @@ flowchart TD
         subgraph Agents ["Agent Implementations"]
             BaseAgent["BaseAgent"]
             DiscreteAgents["Discrete: Random, Reinforce, A2C, PPO, DQN"]
-            ContinuousAgents["Continuous: Random, A2C, PPO"]
+            ContinuousAgents["Continuous: Random, A2C, PPO, DDPG"]
         end
 
         EnvBase["environments: BaseEnvWrapper"]
@@ -224,6 +228,7 @@ classDiagram
         +ndarray action_low
         +ndarray action_high
         #dict _actor, _critic, _target_actor, _target_critic
+        #ExplorationNoise _noise
         +select_action(obs, training) ndarray
         +update(batch) dict
     }
@@ -360,10 +365,14 @@ plots/
      implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and lists its agents
      in the class variable `AGENT_CLASSES` (agent type to class). The base class's `supported_agents` and `make_agent`
      read that table and size each agent from the environment's spaces; a challenge overrides only
-     `agent_config(agent_config, env)` when its environment adds to the agent's config (Pendulum's torque bounds). The
+     `agent_config(agent_config, env)` when its environment adds to the agent's config: a continuous challenge returns
+     `with_box_action_bounds(agent_config, env, self.name)` from `rl_core.challenges`, as Pendulum and
+     MountainCarContinuous do, to pass on its Box action bounds. The
      base class builds benchmark runs from these. `train.py` and `record.py` pick the challenge whose `name` equals the
      config's `environment.name` exactly (`select_challenge`), or the one `--challenge` names, and build through it, so
      no script needs an edit. Two challenges may share an environment id; the config then needs `--challenge`.
+     One package may hold several challenges sharing a wrapper, each with its own `ENV_DEFAULTS`-style table and
+     factory (`rl_mountaincar`: `make_env_from_config` and `make_continuous_env_from_config`).
      `discover_challenges()` imports every `src/rl_*/benchmark.py`, so the runner needs no edit; a package that fails to
      import is reported with a warning, in `run_benchmark`'s unknown-challenge error and at the end of `src/benchmark.py
      --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the base class provides

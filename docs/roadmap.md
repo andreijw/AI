@@ -23,6 +23,19 @@ The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical,
 each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22). The two
 items below are the rest; then come unscheduled ideas.
 
+- [ ] **PyTorch Backend: Timing Test on the Jetson**
+  - **Description**: Agreed 2026-10-23 as the next step towards GPU training. Measure, in a scratch virtual
+    environment and not `.venv`, one DDPG gradient step (batch 256) at 64×64 and 400×300 with PyTorch on the CPU and
+    on the Jetson's GPU, against NumPy's 5.6 ms and 40 ms here. PyPI's PyTorch wheels do not drive the Jetson's
+    integrated GPU: it needs NVIDIA's Jetson builds matching the installed L4T R39 and Python 3.12, and the CUDA
+    toolkit is not under `/usr/local`, so whether the GPU is usable at all is part of the answer.
+  - **Acceptance criteria**: a table of milliseconds per gradient step for the four cases, the install steps that
+    worked (or why they did not), and a recommendation the maintainer can decide on: an optional `[torch]` backend
+    beside the NumPy agents (which stay the gradient reference, with a test that both compute the same gradients),
+    or not yet.
+  - **Out of scope**: adding PyTorch to `pyproject.toml`, porting any agent, changing CI, and the pure-NumPy rule in
+    CLAUDE.md and CONTRIBUTING.md; those follow the decision.
+
 - [ ] **Benchmark Hygiene: Solve Numbers Apart from Plotting**
   - **Description**: Two Warnings from the 2026-10-22 dashboard. `src/benchmark.py` imports the private
     `_rolling_average` from `rl_core/utils/visualization.py` for the solve episode and `final_rolling_avg`, so a
@@ -55,10 +68,11 @@ items below are the rest; then come unscheduled ideas.
     - The continuous Actor-Critic's greedy policy matches rl-zoo's A2C, but its 100-episode training average stays
       at about -300 (CHANGELOG.md, 2026-10-18). True A2C updates every n steps, which needs the
       trainer to call `update` mid-episode for every agent; gSDE exploration is the other untried difference.
-    - The maintainer expects to use the Jetson's GPU later, so PyTorch should be allowed then. That would make
-      rl-zoo's 400×300 DDPG networks practical (about 16 times slower than 64×64 in NumPy here) and pixel-based or
-      larger tasks possible. It would be an optional backend beside the NumPy agents, with the NumPy versions kept
-      as the gradient reference, and needs the pure-NumPy rule in CLAUDE.md and CONTRIBUTING.md updated.
+    - The maintainer expects to use the Jetson's GPU later, so PyTorch should be allowed then (the timing test
+      above comes first). That would make rl-zoo's 400×300 DDPG networks practical (about 16 times slower than
+      64×64 in NumPy here) and pixel-based or larger tasks possible. It would be an optional backend beside the
+      NumPy agents, with the NumPy versions kept as the gradient reference, and needs the pure-NumPy rule in
+      CLAUDE.md and CONTRIBUTING.md updated.
     - Not tried, though the bars were met without them: Pendulum PPO with gSDE exploration, separate tanh actor and
       critic networks, or observation normalisation; CartPole DQN with more than `max_updates_per_call: 64` (about
       0.13 gradient steps per transition against rl-zoo's 0.5).
@@ -114,19 +128,19 @@ Gymnasium's `reward_threshold` unless the maintainer sets another, judged by the
 Tier 1 began with Acrobot-v1 (CHANGELOG.md, 2026-10-22). The items below are sketches to turn into full items
 when picked.
 
-- [ ] **MountainCarContinuous-v0 Challenge with Ornstein-Uhlenbeck Exploration (Tier 1, exploration)**
-  - **Description**: The continuous version (`Box(-1, 1)` force, threshold 90, 999-step limit) rewards reaching
-    the flag with +100 but charges for force, so "do not move" is a strong local optimum. rl-baselines3-zoo's DDPG
-    and TD3 use Ornstein-Uhlenbeck noise (temporally correlated, std 0.5); our DDPG has Gaussian noise only, so this
-    adds OU noise as an exploration option (`algorithm-crafter`) and the challenge to the `rl_mountaincar` package.
-  - **Also open from MountainCar-v0** (CHANGELOG.md, 2026-10-23): its DQN learns but does not hold -110 even with a
-    decaying learning rate (final averages -121 to -146), and PPO never reached the flag without reward
-    normalisation. An exploration aid from this item, or normalisation, is where both would be tried next.
+- [ ] **MountainCar-v0: Hold -110**
+  - **Description**: MountainCar-v0's DQN learns but does not hold -110, even with a decaying learning rate (final
+    averages -121 to -146), and PPO never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23).
+    Reward normalisation, or an exploration aid for discrete actions, is where both would be tried next; the
+    Ornstein-Uhlenbeck noise of the continuous variant applies to continuous actions only (CHANGELOG.md, 2026-10-23).
 
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
   - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency
     (a swig build, not checked on the Jetson's aarch64) and a stronger off-policy continuous agent. The POMDP
     variant of CartPole is Tier 2 too, through the Phase 6 frame-stacking item.
+  - **Episode-end hook**: DDPG resets its Ornstein-Uhlenbeck noise inside `update`, relying on the Trainer calling
+    it once per episode (ARCHITECTURE.md). A TD3 that reuses `rl_core/agents/exploration_noise.py` is the moment
+    to replace that with an explicit `BaseAgent` episode-end hook, before a per-step update loop arrives.
 
 - [ ] **BipedalWalker-v3 and MuJoCo Tasks (Tier 3)**
   - **Description**: High-dimensional continuous control over millions of steps (BipedalWalker threshold 300;

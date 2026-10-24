@@ -1,6 +1,6 @@
 """Benchmark challenges: the interface every challenge implements, and the registry that finds them."""
 
-from .challenge import BenchmarkChallenge, ChallengeEnv
+from .challenge import BenchmarkChallenge, ChallengeEnv, with_box_action_bounds
 from .registry import (
     CHALLENGES,
     discover_challenges,
@@ -19,4 +19,5 @@ __all__ = [
     "register_challenge",
     "select_challenge",
     "unknown_challenge_message",
+    "with_box_action_bounds",
 ]
