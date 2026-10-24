@@ -33,6 +33,20 @@ Acrobot-v1) and
 
 ### Added
 
+- **MountainCarContinuous-v0 challenge with Ornstein-Uhlenbeck exploration** (`feature/mountaincar-continuous-ou`),
+  the third rung of the Phase 7 challenge ladder: `MountainCarContinuousChallenge` in `src/rl_mountaincar/` (key
+  `mountaincar_continuous`, threshold 90, Gymnasium's `reward_threshold`; 999-step limit) shares `MountainCarEnv`,
+  with `random` and `ddpg`. DDPG takes `noise_type: ornstein_uhlenbeck` (`rl_core/agents/exploration_noise.py`,
+  SB3's discretisation with `ou_theta` 0.15 and `ou_dt` 0.01 by default, reset at the end of every episode); the
+  Gaussian default draws exactly as before and checkpoints gain no keys. `with_box_action_bounds` in
+  `rl_core.challenges` now passes the Box action bounds for Pendulum and MountainCarContinuous. Measured through the
+  benchmark on seeds 1 to 5 with `configs/mountaincar_continuous_ddpg.yaml` (rl-zoo's DDPG settings with OU sigma
+  0.5, 64×64 networks instead of 400×300, 300,000 steps): 5 of 5 reach 90 at 25,000 to 69,000 steps (episodes 112 to
+  252) and hold it, final 100-episode training averages 91.0 to 93.2, greedy evaluation 93.4 ± 0.2 across seed means
+  against rl-zoo's 93.5. The same config with Gaussian noise of std 0.5 solved 0 of 5: four seeds learned to stand
+  still (final averages about -23, evaluation about 0) and one reached the flag in greedy evaluation (92.3) with a
+  final training average of 48.8. The random agent scores about -33.
+
 - **MountainCar-v0 challenge** (`feature/mountaincar-challenge`), the second rung of the Phase 7 challenge ladder and
   the first built on the shared challenge base class: `src/rl_mountaincar/` (`MountainCarEnv`, observation noise only;
   `MountainCarChallenge`, key `mountaincar`, threshold -110, Gymnasium's `reward_threshold`) with `random` and `dqn`.

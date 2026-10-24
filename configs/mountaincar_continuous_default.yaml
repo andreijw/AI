@@ -1,0 +1,31 @@
+# MountainCarContinuous-v0 Random Baseline Configuration
+# MountainCarContinuous-v0: 2 observations (position, velocity), one force in [-1, 1], reward -0.1 x force^2
+# per step and +100 when the car reaches the flag, 999-step limit. Solved at a 100-episode training average
+# of 90 (Gymnasium's reward_threshold). A random agent almost never reaches the flag.
+
+# Environment settings
+environment:
+  name: "MountainCarContinuous-v0"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 999
+  seed: 42
+
+# Agent settings
+agent:
+  type: "random"  # Options: "random", "ddpg"
+  config:
+    seed: 42  # Makes the random forces reproducible; the bounds come from the environment
+
+# Training settings
+training:
+  total_steps: 200000  # Environment steps (random baseline: about 200 episodes of 999 steps)
+  max_steps_per_episode: 999
+  eval_frequency: 20  # Evaluate every N episodes
+  save_frequency: 50  # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true

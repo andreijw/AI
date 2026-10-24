@@ -1,4 +1,4 @@
-"""Factory functions for creating Gymnasium mountain car environments."""
+"""Factory functions for creating the Gymnasium mountain car environments, discrete and continuous."""
 
 from __future__ import annotations
 
@@ -12,6 +12,13 @@ from .mountaincar_env import MountainCarEnv
 ENV_DEFAULTS: dict[str, Any] = {
     "name": "MountainCar-v0",
     "max_episode_steps": 200,
+    "obs_noise_std": 0.0,
+}
+
+# The same for MountainCarContinuous-v0, which shares the wrapper.
+CONTINUOUS_ENV_DEFAULTS: dict[str, Any] = {
+    "name": "MountainCarContinuous-v0",
+    "max_episode_steps": 999,
     "obs_noise_std": 0.0,
 }
 
@@ -52,7 +59,23 @@ def make_env_from_config(config: dict[str, Any]) -> MountainCarEnv:
     Raises:
         ValueError: If the config sets a setting MountainCar does not support (see ENV_DEFAULTS).
     """
-    settings = read_env_settings(config, ENV_DEFAULTS, "MountainCar-v0")
+    return _make_env_from_settings(config, ENV_DEFAULTS)
+
+
+def make_continuous_env_from_config(config: dict[str, Any]) -> MountainCarEnv:
+    """
+    Create a MountainCarContinuous-v0 environment from a configuration dictionary.
+
+    Raises:
+        ValueError: If the config sets a setting it does not support (see
+            CONTINUOUS_ENV_DEFAULTS).
+    """
+    return _make_env_from_settings(config, CONTINUOUS_ENV_DEFAULTS)
+
+
+def _make_env_from_settings(config: dict[str, Any], defaults: dict[str, Any]) -> MountainCarEnv:
+    """The wrapper for ``config``, reading the settings ``defaults`` lists, with its defaults."""
+    settings = read_env_settings(config, defaults, defaults["name"])
     return make_env(
         env_name=settings.pop("name"),
         render_mode=config.get("render_mode"),

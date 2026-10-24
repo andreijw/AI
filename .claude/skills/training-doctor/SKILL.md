@@ -82,10 +82,13 @@ Print one real batch and read it:
 
 - **`dones` and `terminated`**: true on the last step only. `dones` is `terminated` *or* `truncated`; a
   bootstrapping agent that reads `dones` treats a time-limit cut as a true end (DQN reads `terminated`).
-  Pendulum only ever ends by truncation; Acrobot and MountainCar end by termination at the goal or truncation at their limit (500, 200).
+  Pendulum only ever ends by truncation; Acrobot and the two MountainCars end by termination at the goal or truncation at their limit (500, 200, 999).
 - **Rewards**: their scale. CartPole pays 1 per step; Pendulum pays between about -16 and 0; Acrobot pays -1 per
   step until the goal, so a run that never reaches it sits flat at -500, and MountainCar the same at -200, where a
-  random agent stays: flat at the floor there means exploration never found the flag, not a broken update. A
+  random agent stays: flat at the floor there means exploration never found the flag, not a broken update.
+  MountainCarContinuous charges -0.1·force² per step and pays +100 at the flag, so a run stuck just below 0 has
+  learned to stand still (the local optimum), and its exploration noise alone costs about -50 per 999-step
+  episode at OU sigma 0.5. A
   learning rate tuned for one challenge is wrong by an order of magnitude for another.
 - **Actions**: the dtype and range the environment expects; a continuous action inside its bounds.
 - **Observations**: finite, and of the scale the network was initialised for.

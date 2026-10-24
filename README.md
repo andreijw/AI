@@ -14,7 +14,7 @@ The architecture is designed to support:
 
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO
   with Gaussian policies, and DDPG with a deterministic policy, for Pendulum; random, PPO and DQN for Acrobot; random
-  and DQN for MountainCar)
+  and DQN for MountainCar; random and DDPG with Ornstein-Uhlenbeck exploration noise for MountainCarContinuous)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -65,16 +65,17 @@ AI/
 │   ├── rl_acrobot/              # Acrobot-v1 discrete swing-up challenge
 │   │   ├── environments/        # Acrobot wrapper (observation noise) and factories
 │   │   └── benchmark.py         # Acrobot benchmark challenge implementation
-│   ├── rl_mountaincar/          # MountainCar-v0 discrete exploration challenge
-│   │   ├── environments/        # Mountain car wrapper (observation noise) and factories
-│   │   └── benchmark.py         # MountainCar benchmark challenge implementation
+│   ├── rl_mountaincar/          # MountainCar-v0 and MountainCarContinuous-v0 exploration challenges
+│   │   ├── environments/        # Mountain car wrapper (observation noise) and a factory for each id
+│   │   └── benchmark.py         # Both MountainCar benchmark challenge implementations
 │   └── benchmark.py             # Benchmark runner & CLI (finds challenges through rl_core)
 ├── tests/                       # Unit & integration test suites
 ├── configs/                     # YAML hyperparameter configurations
 │   ├── cartpole_*.yaml          # CartPole challenge configs (default, PPO, DQN, etc.)
 │   ├── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG)
 │   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
-│   └── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
+│   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
+│   └── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── setup.ps1                   # Windows developer setup
@@ -211,12 +212,16 @@ python train.py --config configs/acrobot_ppo.yaml
 
 # MountainCar DQN (learns, does not solve)
 python train.py --config configs/mountaincar_dqn.yaml
+
+# MountainCarContinuous DDPG with Ornstein-Uhlenbeck exploration noise
+python train.py --config configs/mountaincar_continuous_ddpg.yaml
 ```
 
 ### Which agents solve which challenge
 
 A run solves the challenge when its average training reward over 100 episodes reaches the threshold: 475 for
-CartPole-v1, -200 for Pendulum-v1, -100 for Acrobot-v1, -110 for MountainCar-v0. It **holds** when the average over its
+CartPole-v1, -200 for Pendulum-v1, -100 for Acrobot-v1, -110 for MountainCar-v0, 90 for MountainCarContinuous-v0. It
+**holds** when the average over its
 last 100 episodes is still at or above the threshold. Each agent trains for a budget of environment steps set against
 its rl-baselines3-zoo reference (see the config comments). Measured with the committed configs on seeds 1 to 5 on
 2026-10-18 (CartPole PPO on 2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment
@@ -236,6 +241,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
 | Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
 | MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate) | 200,000 | 1 of 5 | 103k | 0 of 5 |
+| MountainCarContinuous-v0 | DDPG | `mountaincar_continuous_ddpg.yaml` (rl-zoo settings, OU noise, 64×64 networks) | 300,000 | 5 of 5 | 25k to 69k | 5 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
@@ -253,6 +259,10 @@ steps its final training averages are -121 to -146 against the random agent's -2
 and one seed reaches -110 for a window and drifts back. With a fixed rate the final averages were -135 to -146 over the
 same budget; two hidden layers, a Huber loss or scaled inputs did not help (CHANGELOG.md, 2026-10-23). PPO has no
 MountainCar config: without reward normalisation it never reached the flag in 1,000,000 steps on any of 5 seeds.
+MountainCarContinuous DDPG explores with Ornstein-Uhlenbeck noise (sigma 0.5), as rl-zoo's does; its greedy evaluation
+averages 93.4 (± 0.2 across seed means) against rl-zoo's 93.5. With Gaussian noise of the same std it solved no seed:
+four learned to stand still (CHANGELOG.md, 2026-10-23). It was measured on 2026-10-23 and has no published report
+under `docs/benchmarks/`.
 
 ### Run any agent from one base config (quick overrides)
 
@@ -277,9 +287,9 @@ python train.py --config configs/cartpole_default.yaml --agent-type dqn --num-ep
 ```
 
 The challenge comes from the config's `environment.name`, which must be a registered challenge's environment id
-exactly (`Acrobot-v1`, `CartPole-v1`, `MountainCar-v0` or `Pendulum-v1`); any other name is an error that lists the
-options. `--challenge acrobot`, `cartpole`, `mountaincar` or `pendulum` must agree with that name, and is required for
-a config that has no `environment.name`.
+exactly (`Acrobot-v1`, `CartPole-v1`, `MountainCar-v0`, `MountainCarContinuous-v0` or `Pendulum-v1`); any other name
+is an error that lists the options. `--challenge acrobot`, `cartpole`, `mountaincar`, `mountaincar_continuous` or
+`pendulum` must agree with that name, and is required for a config that has no `environment.name`.
 An agent the challenge does not support (for example `--agent-type dqn` on Pendulum) is rejected before training.
 
 ### Visualization and video recording
@@ -566,7 +576,8 @@ Workflows are automatically synchronized from `.github/workflows` by
 ### Environment Wrapper
 
 The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment, `PendulumEnv` wraps Pendulum-v1 and `AcrobotEnv`
-wraps Acrobot-v1 and `MountainCarEnv` wraps MountainCar-v0 (observation noise only for both). All four subclass
+wraps Acrobot-v1 and `MountainCarEnv` wraps MountainCar-v0 and MountainCarContinuous-v0 (observation noise only for
+both). All four subclass
 `rl_core.environments.BaseEnvWrapper`, which owns seeding, observation noise and episode statistics. They provide:
 
 - Episode tracking and statistics
@@ -594,7 +605,9 @@ Implemented agents (in `src/rl_core/agents/`):
   - `ContinuousRandomAgent`: Uniform random continuous torque baseline policy
   - `ContinuousActorCriticAgent`: Continuous Gaussian policy A2C with state-value critic
   - `ContinuousPPOAgent`: Continuous Gaussian policy PPO with clipped surrogate objective
-  - `DDPGAgent`: Deep Deterministic Policy Gradient with replay, a Q critic and Polyak target networks
+  - `DDPGAgent`: Deep Deterministic Policy Gradient with replay, a Q critic and Polyak target networks; it explores
+    with Gaussian noise or, with `noise_type: ornstein_uhlenbeck`, temporally correlated Ornstein-Uhlenbeck noise
+    (`rl_core/agents/exploration_noise.py`)
 
 ### Training Pipeline
 
@@ -608,15 +621,16 @@ The `Trainer` class orchestrates the training process:
 ## Next AI Progression
 
 With discrete control (CartPole: Random, REINFORCE, Actor-Critic, PPO, DQN) and continuous control (Pendulum: Random,
-Actor-Critic, PPO, DDPG) fully operational, and Acrobot (Random, PPO, DQN) and MountainCar (Random, DQN) added as the
-first rungs of the challenge ladder, the framework provides a decoupled foundation for future AI challenges. The ladder
-of next challenges is Phase 7 of [`docs/roadmap.md`](docs/roadmap.md).
+Actor-Critic, PPO, DDPG) fully operational, and Acrobot (Random, PPO, DQN), MountainCar (Random, DQN) and
+MountainCarContinuous (Random, DDPG) added as the first rungs of the challenge ladder, the framework provides a
+decoupled foundation for future AI challenges.
+The ladder of next challenges is Phase 7 of [`docs/roadmap.md`](docs/roadmap.md).
 
 ### Next Steps
 
 1. **More Continuous Off-Policy Learning**: TD3 (twin critics, delayed actor updates) or SAC (Soft Actor-Critic) on
    the replay buffer, networks and target updates DDPG already uses.
-2. **Advanced Environments**: MountainCar, LunarLander and BipedalWalker (the Phase 7 challenge ladder).
+2. **Advanced Environments**: LunarLander and BipedalWalker (the Phase 7 challenge ladder).
 3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 
 ## Future Enhancements

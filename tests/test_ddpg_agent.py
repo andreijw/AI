@@ -262,6 +262,95 @@ def test_noise_is_gaussian_with_noise_std_in_the_scaled_action_space():
     np.testing.assert_allclose(actions.std(axis=0), 0.1 * np.array([1.5, 2.0]), rtol=0.08)
 
 
+def test_gaussian_noise_is_drawn_exactly_as_before_the_noise_option():
+    """The default path draws normal(0, noise_std, A) times scale once per action, so Pendulum DDPG
+    runs and checkpoints repeat bit for bit."""
+    agent = _agent(noise_std=0.1)
+    _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias
+    rng = exploration_generator(agent)
+    for _ in range(3):
+        expected = np.clip(_mu(agent) + rng.normal(0.0, 0.1, ACT_DIM) * agent.scale, LOW, HIGH)
+        np.testing.assert_array_equal(
+            agent.select_action(OBS, training=True), expected.astype(np.float32)
+        )
+
+
+OU = {"noise_type": "ornstein_uhlenbeck", "noise_std": 0.2, "ou_theta": 0.5, "ou_dt": 0.1}
+
+
+def _ou_increments(agent: DDPGAgent, steps: int) -> list[np.ndarray]:
+    """The OU states the agent's next ``steps`` training actions should carry, from a zero start."""
+    rng, x, states = exploration_generator(agent), np.zeros(ACT_DIM), []
+    for _ in range(steps):
+        x = x - 0.5 * x * 0.1 + 0.2 * np.sqrt(0.1) * rng.standard_normal(ACT_DIM)
+        states.append(x.copy())
+    return states
+
+
+def _noise_of(agent: DDPGAgent) -> np.ndarray:
+    """A training action minus the greedy one, in the scaled [-1, 1] space."""
+    action = agent.select_action(OBS, training=True)
+    return (action - agent.select_action(OBS, training=False)) / agent.scale
+
+
+def test_ou_noise_is_added_to_mu_in_the_scaled_action_space():
+    agent = _agent(**OU)
+    _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias, so no action is clipped
+    expected = _ou_increments(agent, 5)
+    for x in expected:
+        np.testing.assert_allclose(_noise_of(agent), x, atol=1e-6, err_msg="mu + scale * x_t")
+
+
+def test_ou_training_actions_are_correlated_from_step_to_step():
+    agent = _agent(**{**OU, "ou_theta": 0.15, "ou_dt": 0.01, "noise_std": 0.5})
+    _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias, far from the bounds
+    noise = np.array([_noise_of(agent)[0] for _ in range(400)])
+    assert np.corrcoef(noise[:-1], noise[1:])[0, 1] > 0.9, (
+        "OU noise should hold its direction across steps; white noise would not"
+    )
+
+
+@pytest.mark.parametrize("batch_change", ["empty", "too_few_to_sample", "trains"])
+def test_update_resets_the_ou_noise_for_the_next_episode(batch_change):
+    """The Trainer calls update once at the end of every episode, so the next action starts the OU
+    process from zero again, whether or not the update trained."""
+    agent = _agent(**OU, batch_size=64 if batch_change == "too_few_to_sample" else 4)
+    _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias, so no action is clipped
+    for _ in range(25):
+        agent.select_action(OBS, training=True)
+    batch = _batch()
+    if batch_change == "empty":
+        batch = {key: value[:0] for key, value in batch.items()}
+    metrics = agent.update(batch)
+    assert bool(metrics) == (batch_change == "trains"), "only the full batch should train"
+    expected = _ou_increments(agent, 1)[0]  # before acting: it copies the generator's state
+    np.testing.assert_allclose(_noise_of(agent), expected, atol=1e-6, err_msg="one step from zero")
+
+
+def test_evaluation_does_not_advance_the_ou_noise():
+    agent, reference = _agent(**OU), _agent(**OU)
+    # The twin never evaluates: if evaluation drew noise or stepped the OU state, they would part.
+    for _ in range(4):
+        agent.select_action(OBS, training=False)
+        np.testing.assert_array_equal(
+            agent.select_action(OBS, training=True), reference.select_action(OBS, training=True)
+        )
+
+
+def test_the_noise_option_adds_nothing_to_the_checkpoint(tmp_path):
+    """The OU state is zero at every save (saves follow an episode's update), so the format is
+    unchanged."""
+    paths = {}
+    for name, extra in (("gaussian", {}), ("ou", OU)):
+        agent = _agent(**extra)
+        agent.select_action(OBS, training=True)
+        agent.update(_batch())
+        paths[name] = tmp_path / f"{name}.npz"
+        agent.save(str(paths[name]))
+    with np.load(paths["gaussian"]) as gaussian, np.load(paths["ou"]) as ou:
+        assert sorted(ou.files) == sorted(gaussian.files)
+
+
 def test_training_actions_stay_in_the_bounds_when_the_actor_is_saturated():
     agent = _agent(noise_std=0.5)
     nets = ddpg_networks(agent)
@@ -384,6 +473,9 @@ def test_update_replays_as_critic_then_actor_then_polyak(config, expected_update
         {"learning_rate": 0.0},
         {"learning_starts": -1},
         {"noise_std": -0.1},
+        {"noise_type": "pink"},
+        {"noise_type": "ornstein_uhlenbeck", "ou_theta": 20.0, "ou_dt": 0.1},
+        {"ou_dt": 0.01},
         {"hidden_sizes": []},
         {"hidden_sizes": [4, 0]},
         {"hidden_sizes": 64},
@@ -429,17 +521,18 @@ def test_two_agents_with_one_seed_act_and_learn_identically():
         )
 
 
-def test_a_loaded_agent_resumes_weights_optimizers_and_counters(tmp_path):
+@pytest.mark.parametrize("noise", [{}, OU], ids=["gaussian", "ou"])
+def test_a_loaded_agent_resumes_weights_optimizers_and_counters(tmp_path, noise):
     """The checkpoint alone resumes training: networks, optimizers, counters, replay buffer and
-    generators."""
-    agent = _agent(learning_starts=2)
+    generators; the OU state needs nothing saved, as update has just reset it."""
+    agent = _agent(learning_starts=2, **noise)
     for _ in range(3):
         agent.select_action(OBS, training=True)
     agent.update(_batch(seed=1))
     path = str(tmp_path / "ddpg.pt")
     agent.save(path)
 
-    resumed = _agent(learning_starts=2)
+    resumed = _agent(learning_starts=2, seed=99, **noise)
     resumed.load(path)  # the checkpoint holds the replay buffer and every generator
     assert counters(resumed) == {"training_actions": 3, "gradient_steps": 6}
 

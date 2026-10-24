@@ -32,6 +32,7 @@ discover_challenges()
 EXPECTED_AGENTS = {
     "acrobot": {"random": RandomAgent, "dqn": DQNAgent, "ppo": PPOAgent},
     "mountaincar": {"random": RandomAgent, "dqn": DQNAgent},
+    "mountaincar_continuous": {"random": ContinuousRandomAgent, "ddpg": DDPGAgent},
     "cartpole": {
         "random": RandomAgent,
         "reinforce": ReinforceAgent,
@@ -50,6 +51,7 @@ EXPECTED_AGENTS = {
 ENV_CLASSES = {
     "acrobot": acrobot_env_module.AcrobotEnv,
     "mountaincar": mountaincar_env_module.MountainCarEnv,
+    "mountaincar_continuous": mountaincar_env_module.MountainCarEnv,
     "cartpole": cartpole_env_module.CartPoleEnv,
     "pendulum": pendulum_env_module.PendulumEnv,
 }
@@ -65,6 +67,7 @@ ENV_CLASSES = {
         ("Acrobot-v1", "acrobot"),
         ("CartPole-v1", "cartpole"),
         ("MountainCar-v0", "mountaincar"),
+        ("MountainCarContinuous-v0", "mountaincar_continuous"),
         ("Pendulum-v1", "pendulum"),
     ],
 )
@@ -307,11 +310,18 @@ def test_two_challenges_on_one_environment_need_a_key(isolated_registry):
 CONFIGURED = {
     "acrobot": ("obs_noise_std",),
     "mountaincar": ("obs_noise_std",),
+    "mountaincar_continuous": ("obs_noise_std",),
     "cartpole": ("obs_noise_std", "action_noise_prob", "domain_randomization"),
     "pendulum": ("obs_noise_std", "action_noise_std", "domain_randomization"),
 }
 RANDOMIZED = {"cartpole", "pendulum"}  # the challenges with domain randomization
-DEFAULT_STEPS = {"acrobot": 500, "cartpole": 500, "mountaincar": 200, "pendulum": 200}
+DEFAULT_STEPS = {
+    "acrobot": 500,
+    "cartpole": 500,
+    "mountaincar": 200,
+    "mountaincar_continuous": 999,
+    "pendulum": 200,
+}
 
 
 @pytest.mark.parametrize("key", sorted(CONFIGURED))

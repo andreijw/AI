@@ -1,0 +1,51 @@
+# MountainCarContinuous-v0 DDPG Training Configuration
+# rl-baselines3-zoo's DDPG settings for MountainCarContinuous-v0 (hyperparams/ddpg.yml: 93.5 +/- 0.05 at
+# 300,000 steps in its benchmark.md), SB3 DDPG defaults for the rest, except the network: 64x64 instead of
+# rl-zoo's 400x300, as configs/pendulum_ddpg.yaml does (measured here: 5.6 ms against 40 ms per gradient
+# step, about 28 minutes against 3.3 hours per 300,000-step run).
+# Exploration is Ornstein-Uhlenbeck noise: with theta 0.15 and dt 0.01 a push direction lasts about
+# 1 / (theta x dt) = 667 steps, and the noise grows from 0 to a standard deviation of 0.47 by step 100 and
+# 0.76 by step 400 of each episode. White Gaussian noise averages out within a few steps, so the car never
+# rocks far enough to find the +100 that outweighs the force cost.
+# The trainer updates at the end of each episode, so the policy is fixed for an episode (SB3 updates every
+# step): results are this framework's, not a reproduction of rl-zoo's.
+# Measured 2026-10-23, seeds 1-5, 100-episode rule: 5 of 5 solve (90) at 25,000 to 69,000 steps and hold (final
+# training averages 91.0 to 93.2); greedy evaluation 93.4 (+/- 0.2 across seed means) against rl-zoo's 93.5. The
+# same config with Gaussian noise of std 0.5 solved 0 of 5: 4 seeds learned to stand still (evaluation about 0)
+# and 1 reached the flag only in greedy evaluation (CHANGELOG.md, 2026-10-23).
+
+environment:
+  name: "MountainCarContinuous-v0"
+  render_mode: null
+  max_episode_steps: 999
+  seed: 42
+
+agent:
+  type: "ddpg"
+  config:
+    hidden_sizes: [64, 64]           # Actor and critic hidden layers (rl-zoo: [400, 300]; see the header)
+    learning_rate: 0.001             # Adam step size for actor and critic (rl-zoo)
+    gamma: 0.99                      # Discount factor (SB3 default): the +100 seen 100 steps ahead is worth 37
+    tau: 0.005                       # Polyak rate per gradient step (SB3 default); target half-life 139 steps
+    batch_size: 256                  # Mini-batch size (rl-zoo)
+    buffer_capacity: 300000          # Replay buffer size (SB3 default 1,000,000); holds the whole run
+    learning_starts: 100             # Uniform random training actions before learning (SB3 default)
+    noise_type: ornstein_uhlenbeck   # Temporally correlated exploration noise (rl-zoo)
+    noise_std: 0.5                   # OU sigma in the scaled [-1, 1] action space (rl-zoo)
+    ou_theta: 0.15                   # OU mean reversion rate (SB3 default)
+    ou_dt: 0.01                      # OU time step (SB3 default); theta x dt = 0.0015 decay per step
+    updates_per_step: 1.0            # Gradient steps per stored transition (rl-zoo train_freq 1, gradient_steps 1)
+    optimizer: adam
+    seed: 42
+
+training:
+  total_steps: 300000  # Environment steps (rl-zoo); at least 300 episodes, more once episodes end at the flag
+  max_steps_per_episode: 999
+  eval_frequency: 25
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true
