@@ -107,6 +107,15 @@ installs the package with `[dev,video]` extras, and runs the same checks as CI (
 
 If script execution is disabled, run it once with `powershell -ExecutionPolicy Bypass -File .\setup.ps1`.
 
+### Linux and macOS Setup
+
+```bash
+./setup.sh                  # .venv, the CPU profile: .[dev,video], no PyTorch (as CI)
+./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG backend (backend: torch); about 5 GiB
+```
+
+Each creates its environment if missing, upgrades its packages and runs the CI checks (`--skip-checks` to skip).
+
 ### Manual Setup (any OS)
 
 1. Clone the repository:
@@ -608,6 +617,14 @@ Implemented agents (in `src/rl_core/agents/`):
   - `DDPGAgent`: Deep Deterministic Policy Gradient with replay, a Q critic and Polyak target networks; it explores
     with Gaussian noise or, with `noise_type: ornstein_uhlenbeck`, temporally correlated Ornstein-Uhlenbeck noise
     (`rl_core/agents/exploration_noise.py`)
+- **Optional PyTorch backend**: `TorchDDPGAgent` trains DDPG's gradient steps in PyTorch, on the GPU as a CUDA graph,
+  and keeps everything else, acting included, in NumPy. Add `backend: torch` to a DDPG config's `agent.config`
+  (optional: `device: auto|cpu|cuda`, `dtype: float32|float64`, `cuda_graph: true|false`). It needs PyTorch, which
+  `.venv` and CI do not have: build a separate environment as in
+  [`docs/pytorch_jetson_timing.md`](docs/pytorch_jetson_timing.md) and run `train.py` from it. Its checkpoints are
+  DDPGAgent's format, so `record.py` can replay a GPU-trained checkpoint without PyTorch by setting `backend: numpy`
+  in the run's config. Build the environment with `./setup.sh --profile gpu` (`.venv-gpu`). Measured speed: see the
+  timing document.
 
 ### Training Pipeline
 

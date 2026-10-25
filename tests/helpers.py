@@ -186,3 +186,15 @@ def write_package(root, name, benchmark, init=True):
 def unique_name(prefix="rl_fake"):
     """A package or key name no other test uses, so imports never collide."""
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
+
+def torch_backend_cases(ddpg_config: Mapping[str, object]) -> list[tuple[type, dict[str, object]]]:
+    """The PyTorch DDPG backend as an agent-contract case, float64 on the CPU, where PyTorch is
+    installed; none elsewhere (.venv and CI). Append it to a list of DDPG cases."""
+    if importlib.util.find_spec("torch") is None:
+        return []
+    from rl_core.agents.torch_ddpg_agent import TorchDDPGAgent
+
+    return [
+        (TorchDDPGAgent, {**ddpg_config, "backend": "torch", "device": "cpu", "dtype": "float64"})
+    ]

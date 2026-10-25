@@ -23,22 +23,6 @@ The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical,
 each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22). The two
 items below are the rest; then come unscheduled ideas.
 
-- [ ] **Optional PyTorch Backend for Off-Policy Agents (Awaiting the Maintainer's Decision)**
-  - **Description**: The timing test (CHANGELOG.md, 2026-10-25; [pytorch_jetson_timing.md](pytorch_jetson_timing.md))
-    found that PyTorch's own `cu132` wheel drives the Orin's GPU, and that a DDPG step replayed as a CUDA graph takes
-    0.84 ms at 64×64 and 2.5 ms at 400×300 (float32), against NumPy's 5.5 ms and 45 ms (float64). Without graphs the
-    GPU is slower than NumPy at 64×64 and no faster than PyTorch on the CPU at 400×300. The recommendation is an
-    optional `[torch]` backend for DDPG first, then TD3 and SAC, measured again for each: CUDA graphs
-    from the start, acting on the CPU, the NumPy agents kept as default and gradient reference. Not yet is the
-    alternative. Nothing is built until the maintainer decides.
-  - **Acceptance criteria (if approved)**: a `[torch]` extra; DDPG choosable per config with the NumPy version the
-    default; `tests/test_ddpg_torch_reference.py` run in CI (in float64, or with a stated tolerance); an
-    end-to-end 400×300 Pendulum run timed
-    against NumPy; the pure-NumPy rule in CLAUDE.md and CONTRIBUTING.md rewritten to say where PyTorch is allowed.
-  - **Known edge cases**: CI has no GPU, so GPU paths are tested on the board only; CUDA graphs need fixed shapes and
-    Adam with `capturable=True`; float64 is slow on this GPU.
-  - **Out of scope**: on-policy agents, pixel inputs and porting more than one agent in the first pull request.
-
 - [ ] **Benchmark Hygiene: Solve Numbers Apart from Plotting**
   - **Description**: Two Warnings from the 2026-10-22 dashboard. `src/benchmark.py` imports the private
     `_rolling_average` from `rl_core/utils/visualization.py` for the solve episode and `final_rolling_avg`, so a
@@ -141,6 +125,9 @@ when picked.
   - **Episode-end hook**: DDPG resets its Ornstein-Uhlenbeck noise inside `update`, relying on the Trainer calling
     it once per episode (ARCHITECTURE.md). A TD3 that reuses `rl_core/agents/exploration_noise.py` is the moment
     to replace that with an explicit `BaseAgent` episode-end hook, before a per-step update loop arrives.
+  - **PyTorch backend**: a TD3 or SAC gets one as DDPG did, through its `BACKENDS` and a `torch_*.py` subclass that
+    overrides only the gradient steps, measured again against NumPy (CHANGELOG.md, 2026-10-25). Splitting DDPG's
+    maths from its bookkeeping first would spare the subclass DDPG's NumPy maths (ARCHITECTURE.md).
 
 - [ ] **BipedalWalker-v3 and MuJoCo Tasks (Tier 3)**
   - **Description**: High-dimensional continuous control over millions of steps (BipedalWalker threshold 300;

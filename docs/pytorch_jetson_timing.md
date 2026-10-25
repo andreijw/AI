@@ -60,22 +60,56 @@ What the table shows:
 
 ## Is It the Same Computation?
 
-[tests/test_ddpg_torch_reference.py](../tests/test_ddpg_torch_reference.py) checks it. The step lives in
-[torch_ddpg.py](../scripts/pytorch_timing/torch_ddpg.py), which `time_torch.py` also times. The test starts from the
-NumPy agent's weights, with a buffer that holds exactly one batch (some steps terminal). It runs one public `update`
-of the NumPy agent and one PyTorch step on the same batch, in float64 on the CPU. All four networks then agree to a
-relative 1e-10: the critic and actor Adam steps, their order and the Polyak update included. Five deliberate breaks,
-on either side, all fail it. The test skips unless PyTorch is installed, so CI and `.venv` never run it; to run it:
+When this was measured, the PyTorch step was a script, `scripts/pytorch_timing/torch_ddpg.py`, checked against the
+NumPy agent by `tests/test_ddpg_torch_reference.py`: one step on one batch in float64 on the CPU agreed with the NumPy
+agent's `update` to a relative 1e-10, Adam and Polyak included. Both are in git history at commit `8afafc5`, and the
+tables above were measured with them. That step is now `TorchDDPGAgent` (`src/rl_core/agents/torch_ddpg_agent.py`),
+and `tests/test_torch_ddpg_agent.py` checks it more widely: several episodes of training against the NumPy agent in
+float64, with and without gradient clipping; checkpoints in both directions; and on CUDA, the graph against the same
+step run eagerly, and loading into an agent whose graph is captured.
 
-```bash
-<torch-venv>/bin/pip install -e ".[dev]"
-<torch-venv>/bin/python -m pytest tests/test_ddpg_torch_reference.py --no-cov
-```
+## Through the Agent (2026-10-25)
 
-What it does not cover: float32, the GPU and CUDA-graph replay. By hand on 2026-10-25, three replays of the graph
-each moved the actor's weights by about the learning rate, moved the target networks and advanced Adam's step
-count, so the graph trains rather than replaying a stale step; no committed check repeats that. Sampling differs
-slightly in the timings: NumPy draws the batch without replacement, PyTorch with replacement.
+The same measurement through `TorchDDPGAgent` and `DDPGAgent`'s public `update`, with
+[time_ddpg.py](../scripts/pytorch_timing/time_ddpg.py), 25W mode. **Per call** is an `update` with one transition
+and one gradient step: for the PyTorch agent it includes the fixed cost of every call (staging the batches, mirroring
+all weights and Adam states back to NumPy, reading the metrics). **Per step in an episode** is an `update` with a
+200-step Pendulum episode, so 200 gradient steps, divided by 200: what training pays. Medians in milliseconds:
+
+| Backend | Per call, 64×64 | Per call, 400×300 | Per step in an episode, 64×64 | Per step in an episode, 400×300 |
+| :--- | ---: | ---: | ---: | ---: |
+| NumPy, float64 | 5.42 | 44.0 | 5.43 | 36.6 |
+| PyTorch CPU, float32 | 11.5 | 26.1 | 10.4 | 21.3 |
+| PyTorch GPU, float32, no graph | 25.8 | 30.4 | 17.8 | 17.9 |
+| **PyTorch GPU, float32, CUDA graph** | 11.0 | 22.9 | **0.86** | **2.80** |
+
+- **The fixed cost per call is about 10 ms.** Spread over a 200-step episode, it leaves the step at 0.86 ms and
+  2.80 ms: 6.3 and 13 times faster than NumPy.
+- **NumPy's 400×300 step is faster here than in the table above** (36.6 against 44 ms), probably because repeated
+  steps keep its arrays in cache. The ratio through the agent is therefore lower than the 18 times of the bare step.
+- **Acting costs the same as in NumPy** (0.04 and 0.12 ms), because the agent acts on the CPU.
+
+## End-to-End Training (2026-10-25)
+
+`configs/pendulum_ddpg.yaml` through the benchmark: 40,000 steps, of which the first 10,000 are random warm-up
+actions, then one gradient step per transition, and 10 greedy evaluation episodes at the end. Same seeds, same
+interpreter (`.venv-gpu`) and one run at a time for both backends, 25W mode. The PyTorch runs add only
+`backend: torch` to the config; the 400×300 runs change only `hidden_sizes`. Wall-clock is the benchmark's
+`duration`: the whole run, environment steps, warm-up and evaluation included.
+
+| Networks | Backend | Seeds | Wall-clock per run (mean) | Solved / held | Solve step | Final training average | Greedy evaluation |
+| :--- | :--- | :---: | ---: | :---: | :---: | :---: | :---: |
+| 64×64 | NumPy | 1 to 5 | 144 s | 5 / 5 | 31,200 | -144 to -166 | -122 to -185 |
+| 64×64 | **PyTorch, GPU** | 1 to 5 | **34 s** | 5 / 5 | 31,200 to 31,600 | -152 to -166 | -127 to -179 |
+| 400×300 | NumPy | 1 to 3 | 1,074 s | 3 / 3 | 31,000 to 31,200 | -139 to -167 | -119 to -176 |
+| 400×300 | **PyTorch, GPU** | 1 to 3 | **98 s** | 3 / 3 | 31,000 to 31,200 | -140 to -166 | -122 to -180 |
+
+- **Learning is the same.** Every run solved -200 and held it. Seed by seed, the solve step matches to within one
+  episode and the final averages and evaluations lie within each other's spread.
+- **Whole runs are 4.2 times faster at 64×64 and 11 times faster at 400×300** (18 minutes to 98 seconds). The gain
+  is below the per-step 6.3 and 13 times because environment steps, warm-up and evaluation do not speed up.
+- **Not measured:** other challenges (MountainCarContinuous DDPG takes 300,000 steps), seeds 4 and 5 at 400×300,
+  and MAXN SUPER mode.
 
 ## Install Steps That Worked
 
@@ -92,16 +126,21 @@ compute capability 8.0 run on 8.7, so this works without a warning. Jetson AI La
 (`pypi.jetson-ai-lab.io`) had no JetPack 7 PyTorch wheels on 2026-10-25, so it was not needed. The wheel brings its
 own CUDA 13.2 libraries (cuBLAS, cuDNN 9.24), so the system toolkit is not used.
 
-To reproduce the tables (`time_numpy.py` uses only the agent's public `update` and `select_action`):
+In the repository, `./setup.sh --profile gpu` does all of this: it builds `.venv-gpu` with `.[dev,video,torch]`
+from that index and runs the checks. `.venv` stays the CPU profile, without PyTorch, as CI is.
+
+To reproduce the agent table (the first table's scripts are at commit `8afafc5`):
 
 ```bash
-.venv/bin/python scripts/pytorch_timing/time_numpy.py
-<torch-venv>/bin/python scripts/pytorch_timing/time_torch.py cuda float32 graph   # or: cpu float64, cuda float32
+.venv/bin/python scripts/pytorch_timing/time_ddpg.py
+.venv-gpu/bin/python scripts/pytorch_timing/time_ddpg.py torch cuda float32   # or: ... eager, torch cpu float32
+.venv-gpu/bin/python -m pytest tests/test_torch_ddpg_agent.py --no-cov
 ```
 
-## Recommendation (for the Maintainer to Decide)
+## Recommendation (Approved 2026-10-25)
 
-**Add an optional PyTorch backend, for the off-policy agents only, built around CUDA graphs from the start.**
+**Add an optional PyTorch backend, for the off-policy agents only, built around CUDA graphs from the start.** The
+maintainer approved it on 2026-10-25; DDPG's is `TorchDDPGAgent`.
 
 - **Where it pays.** DDPG, and later TD3 and SAC, take one or more gradient steps per environment step, so the
   update dominates training time. At 400×300, the 300,000 steps of `configs/mountaincar_continuous_ddpg.yaml` would
@@ -111,12 +150,14 @@ To reproduce the tables (`time_numpy.py` uses only the agent's public `update` a
 - **Where it does not.** PPO, Actor-Critic and REINFORCE on CartPole or Pendulum use small networks and few updates,
   and NumPy is already fast for them.
 - **Shape.** A `[torch]` extra in `pyproject.toml`, chosen per agent in the config. The NumPy agents stay the default
-  and the gradient reference, with a test that both take the same step, as `test_ddpg_torch_reference.py` does.
-  That test has to run the PyTorch agent in float64, or compare with a stated tolerance, because float32 is not
-  bit-exact, and it should run in CI once PyTorch is a dependency.
+  and the gradient reference, with a test that both take the same step. That test has to run the PyTorch agent in
+  float64, or compare with a stated tolerance, because float32 is not bit-exact. (Built: `TorchDDPGAgent`, tested by
+  `tests/test_torch_ddpg_agent.py` on the board; CI never installs PyTorch.)
 - **Rules to keep.**
   - Act on the CPU: copy the actor's weights to NumPy after each update, or keep a CPU copy of the actor.
-  - Keep the replay buffer on the GPU, so sampling stays inside the graph.
+  - Keep the replay buffer on the GPU, so sampling stays inside the graph. (Built otherwise: the agent samples from
+    the NumPy buffer, so a seed draws the same batches in both backends, and stages them in chunks; the agent table
+    shows the cost.)
   - Float32 on the GPU; float64 is slower there.
   - Accumulate the per-step metrics that `update` returns (losses, `mean_q`, gradient norms) on the GPU and read
     them once per `update` call. A `.item()` on every step forces a synchronisation, and the 0.84 ms excludes it.

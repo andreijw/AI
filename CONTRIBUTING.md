@@ -27,8 +27,16 @@ contributing, writing code, refactoring components, or submitting pull requests.
 
 ### Pure NumPy Mathematical Integrity
 
-- **Framework Independence**: Agent neural networks and policy representations must be implemented cleanly in pure
-  NumPy without external deep learning frameworks (e.g., PyTorch, TensorFlow).
+- **Framework Independence**: Agent neural networks and policy representations are implemented in pure NumPy; that
+  version of every agent is the default and the reference. The one exception is an optional PyTorch backend for
+  off-policy agents, DDPG so far (`TorchDDPGAgent`, chosen with `backend: torch`):
+  - It lives only in `src/rl_core/agents/torch_*.py`, subclasses the NumPy agent and overrides only its gradient
+    steps; nothing imports those modules except `BaseAgent.class_for_config`, through the agent's `BACKENDS`
+    (`tests/test_source_conventions.py` enforces both).
+  - It must train as the NumPy agent does: in float64 on the CPU it matches it to rounding
+    (`tests/test_torch_ddpg_agent.py`), and its checkpoints are the NumPy agent's format.
+  - PyTorch is never a required dependency: it is the `[torch]` extra, and CI does not install it.
+  - TensorFlow, JAX and other frameworks remain out.
 - **Numerical Stability**:
   - Use the shared numerically stable softmax, `rl_core.agents.softmax.stable_softmax`, which computes
     `exp(z - max(z))` per row to prevent overflow; do not write another copy.

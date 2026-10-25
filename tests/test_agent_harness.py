@@ -20,6 +20,7 @@ from rl_core.agents import (
     RandomAgent,
     ReinforceAgent,
 )
+from tests.helpers import torch_backend_cases
 
 ALL_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
     (RandomAgent, {"seed": 42}),
@@ -112,6 +113,8 @@ CONTINUOUS_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
     (ContinuousPPOAgent, {"seed": 42}),
     (DDPGAgent, {"seed": 42, "batch_size": 2, "learning_starts": 0}),
 ]
+# The PyTorch backend, where it is installed.
+CONTINUOUS_AGENTS += torch_backend_cases({"seed": 42, "batch_size": 2, "learning_starts": 0})
 
 
 @pytest.mark.parametrize("agent_cls,config", CONTINUOUS_AGENTS)
@@ -125,7 +128,7 @@ def test_continuous_select_action_contract(
         action = agent.select_action(obs, training=training_mode)
         assert isinstance(action, np.ndarray) and action.shape == (ACT_DIM,)
         assert np.issubdtype(action.dtype, np.floating)
-        if not training_mode or agent_cls in (ContinuousRandomAgent, DDPGAgent):
+        if not training_mode or issubclass(agent_cls, (ContinuousRandomAgent, DDPGAgent)):
             # Gaussian agents train on the unclipped sample; the wrapper clips what it applies.
             assert np.all(action >= -1.0) and np.all(action <= 1.0)
 

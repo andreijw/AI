@@ -366,3 +366,80 @@ def test_private_access_scan_allows_self_dunders_and_plain_strings():
     )
 
     assert private_accesses(source) == []
+
+
+# PyTorch is an optional backend: only these modules import it, and they are loaded only through
+# an agent's BACKENDS when a config chooses them (BaseAgent.class_for_config).
+TORCH_MODULE_GLOB = "rl_core/agents/torch_*.py"
+
+
+def torch_imports(source: str) -> list[tuple[int, str]]:
+    """(line, what) for every import of torch or of a torch_* module, relative imports included."""
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            base = "." * node.level + (node.module or "")
+            names = [base] + [f"{base}.{alias.name}" for alias in node.names]
+        else:
+            continue
+        for name in names:
+            parts = [part for part in name.split(".") if part]
+            if (parts and parts[0] == "torch" and not name.startswith(".")) or any(
+                part.startswith("torch_") for part in parts
+            ):
+                found.append((node.lineno, name))
+                break
+    return found
+
+
+def test_only_the_torch_backend_modules_import_torch():
+    torch_modules = set((REPO_ROOT / "src").glob(TORCH_MODULE_GLOB))
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}:{line} imports {module}"
+        for path in SOURCE_FILES
+        if path not in torch_modules
+        for line, module in torch_imports(path.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, (
+        "Only rl_core/agents/torch_*.py may import torch, and nothing may import those modules: "
+        "name them in an agent's BACKENDS instead:\n" + "\n".join(offenders)
+    )
+
+
+def test_the_torch_import_scan_sees_every_spelling():
+    source = (
+        "import torch\n"
+        "from torch import nn\n"
+        "from .torch_ddpg_agent import TorchDDPGAgent\n"
+        "from . import torch_ddpg_agent\n"
+        "def f():\n    from rl_core.agents.torch_ddpg_agent import TorchDDPGAgent\n"
+        "import torchvision_like_name_is_fine\n"
+        "from .ddpg_agent import DDPGAgent\n"
+    )
+    assert [line for line, _ in torch_imports(source)] == [1, 2, 3, 4, 6]
+
+
+def test_the_torch_scan_covers_a_backend_module():
+    assert sorted((REPO_ROOT / "src").glob(TORCH_MODULE_GLOB)), (
+        "the scan should see the torch modules"
+    )
+
+
+def test_importing_the_framework_does_not_load_torch():
+    """Training, the challenges and every agent import without PyTorch, installed or not."""
+    import subprocess
+    import sys
+
+    code = (
+        "import sys; sys.path.insert(0, 'src'); "
+        "import rl_core, rl_core.agents, rl_core.training, rl_core.challenges; "
+        "rl_core.challenges.discover_challenges(); "
+        "print('torch' in sys.modules)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False", "importing the framework should not load torch"

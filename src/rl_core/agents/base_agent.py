@@ -1,5 +1,6 @@
 """Base agent interface for reinforcement learning."""
 
+import importlib
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
@@ -8,6 +9,15 @@ from typing import Any, ClassVar, final
 import numpy as np
 
 from rl_core.seeding import check_generator_state, generator_state, restore_generator
+
+# What to tell someone whose config chooses a backend whose library is missing.
+BACKEND_INSTALL_HINTS = {
+    "torch": (
+        "backend: torch needs PyTorch: pip install -e '.[torch]' (on the Jetson, add "
+        "--index-url https://download.pytorch.org/whl/cu132 --extra-index-url "
+        "https://pypi.org/simple; see docs/pytorch_jetson_timing.md)"
+    ),
+}
 
 # Checkpoint key of a generator attribute: "rng_" and its name without leading underscores.
 GENERATOR_KEY_PREFIX = "rng_"
@@ -34,6 +44,46 @@ class BaseAgent(ABC):
     # Exploration generator, created by each subclass that samples through
     # :meth:`_select_action_from_probs` (AGENT_EXPLORATION_STREAM).
     _explore_rng: np.random.Generator
+    # The library this class computes with: the value of the config's ``backend`` key it serves.
+    BACKEND: ClassVar[str] = "numpy"
+    # This agent in other backends: {backend: "module:Class"}, imported only when a config chooses
+    # it, so a backend's library is needed only then. Each class declares its own; a subclass does
+    # not inherit its parent's (a TD3Agent(DDPGAgent) is not built as TorchDDPGAgent).
+    BACKENDS: ClassVar[dict[str, str]] = {}
+
+    @final
+    @classmethod
+    def class_for_config(cls, config: Mapping[str, Any]) -> type["BaseAgent"]:
+        """
+        The class to build for ``config``: this one, or the version its ``backend`` key names.
+
+        A config without the key asks for ``numpy``, the default backend. (Building a class
+        directly with no key builds that class: see ``__init__``.)
+
+        Raises:
+            ValueError: If this agent has no version in the requested backend.
+            ImportError: If the backend's library is not installed, naming how to install it.
+        """
+        backend = config.get("backend", "numpy")
+        if backend == cls.BACKEND:
+            return cls
+        others: dict[str, str] = vars(cls).get("BACKENDS", {})
+        if backend not in others:
+            allowed = [cls.BACKEND, *others]
+            raise ValueError(
+                f"backend must be one of {allowed} for {cls.__name__}, got {backend!r}"
+            )
+        module_name, _, class_name = others[backend].partition(":")
+        try:
+            module = importlib.import_module(module_name)
+        except ModuleNotFoundError as error:
+            if error.name != backend or backend not in BACKEND_INSTALL_HINTS:
+                raise
+            raise ImportError(BACKEND_INSTALL_HINTS[backend]) from error
+        chosen = getattr(module, class_name)
+        if not (isinstance(chosen, type) and issubclass(chosen, cls)) or backend != chosen.BACKEND:
+            raise TypeError(f"{others[backend]} is not {cls.__name__} in the {backend} backend")
+        return chosen
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
         """
@@ -44,6 +94,12 @@ class BaseAgent(ABC):
             action_dim: Dimension of action space
             config: Configuration dictionary for the agent
         """
+        backend = config.get("backend", self.BACKEND)  # no key: the class built is the choice
+        if backend != self.BACKEND:
+            raise ValueError(
+                f"{type(self).__name__} is the {self.BACKEND} backend; the config asks for "
+                f"{backend!r}: build agents with class_for_config(config), as challenges do"
+            )
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.config = config

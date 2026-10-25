@@ -12,7 +12,8 @@
 ## Project Standards
 
 Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥1.0**
-· **pure NumPy** agents (no PyTorch/TensorFlow) · **pytest** · **Ruff** (line length 100) · **mypy**.
+· **NumPy** agents, with an optional **PyTorch** backend for DDPG only (`backend: torch`; see CONTRIBUTING.md
+"Framework Independence") · **pytest** · **Ruff** (line length 100) · **mypy**.
 
 - **Coding standards** → **[CONTRIBUTING.md](CONTRIBUTING.md)** §1–3.
 - **Feature/bug workflow** → **[CONTRIBUTING.md §4](CONTRIBUTING.md#4-feature--bug-workflow)**. Follow it in order for
@@ -86,6 +87,11 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
   `.venv/Scripts/python -m mypy src`. Never use bare `python` — on this machine it is the Microsoft Store stub.
   On Linux and macOS the interpreter is `.venv/bin/python`; the skills write `python` and mean whichever applies.
 - If `.venv` is missing, ask the user to run `.\setup.ps1`; do not `pip install` into a global interpreter.
+- Linux and macOS: `./setup.sh --profile cpu|gpu`. **`cpu`** (the default) builds `.venv` with `.[dev,video]`: no
+  PyTorch, like CI, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with `.[dev,video,torch]` from
+  PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests (`tests/test_torch_ddpg_agent.py`,
+  skipped elsewhere) and for `train.py` runs with `backend: torch`. CI never installs PyTorch (maintainer's decision,
+  2026-10-25).
 
 ## Tool Mapping (GEMINI.md → Claude Code)
 

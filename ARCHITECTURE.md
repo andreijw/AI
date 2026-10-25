@@ -223,7 +223,14 @@ classDiagram
         +update(trajectory) dict
     }
 
+    class TorchDDPGAgent {
+        +BACKEND = "torch"
+        +device, dtype, cuda_graph
+        #_train_steps(num_updates) dict
+    }
+
     class DDPGAgent {
+        +BACKENDS = torch: TorchDDPGAgent
         +ReplayBuffer replay_buffer
         +ndarray action_low
         +ndarray action_high
@@ -231,6 +238,7 @@ classDiagram
         #ExplorationNoise _noise
         +select_action(obs, training) ndarray
         +update(batch) dict
+        #_train_steps(num_updates) dict
     }
 
     BaseAgent <|-- RandomAgent
@@ -244,7 +252,18 @@ classDiagram
     ContinuousActorCriticBase <|-- ContinuousActorCriticAgent
     ContinuousActorCriticBase <|-- ContinuousPPOAgent
     BaseAgent <|-- DDPGAgent
+    DDPGAgent <|-- TorchDDPGAgent
 ```
+
+Every agent is NumPy by default. `BaseAgent.class_for_config(config)` returns the class to build for the config's
+`backend` key (`numpy` when absent): the class itself, or the version its `BACKENDS` names, imported only then.
+`BenchmarkChallenge.make_agent` builds through it, so `backend: torch` in a DDPG config builds `TorchDDPGAgent`, which
+runs DDPG's gradient steps in PyTorch (`_train_steps`, on the GPU as a CUDA graph) and keeps everything else, acting
+included, in NumPy. Its checkpoints are DDPGAgent's format, so either backend loads the other's. Only
+`rl_core/agents/torch_*.py` import torch; nothing imports them directly. Inheriting DDPGAgent brings its NumPy
+training maths too: TorchDDPGAgent overrides those methods to raise, since running them would train the NumPy
+mirror of its weights rather than the device. If TD3 or SAC need the same backend, splitting DDPG's maths from its
+bookkeeping is the cleaner shape.
 
 ---
 
