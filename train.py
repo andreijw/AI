@@ -18,8 +18,9 @@ from rl_core.challenges import (
 from rl_core.seeding import eval_seed_for
 from rl_core.training import Trainer
 from rl_core.training.budget import apply_budget_override
-from rl_core.utils import load_config, plot_training_metrics, setup_logger
+from rl_core.utils import load_config, setup_logger
 from rl_core.utils.video import TrainingVideoRecorder
+from rl_core.utils.visualization import plot_training_metrics
 
 
 def load_run_config(config_path, agent_type=None, num_episodes=None, total_steps=None):

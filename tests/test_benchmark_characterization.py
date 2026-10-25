@@ -18,7 +18,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import benchmark
-from benchmark import BenchmarkRunner
+from benchmark import BenchmarkRunner, BenchmarkSettings
 from tests.test_benchmark import PerAgentBudgetChallenge, ScriptedTrainer
 
 EXPECTED_DIR = Path(__file__).parent / "data" / "benchmark_characterization"
@@ -49,11 +49,11 @@ class _FixedClock:
 SCENARIOS = {
     "own_budgets_training_env_eval": (
         PerAgentBudgetChallenge,
-        {"agents": ["long", "short"], "seeds": [1, 2], "window": 1, "eval_episodes": 1},
+        {"agents": ("long", "short"), "seeds": (1, 2), "window": 1, "eval_episodes": 1},
     ),
     "episode_override_separate_eval": (
         _SeparateEvalChallenge,
-        {"agents": ["short", "long"], "seeds": [3, 2, 1], "episodes": 4, "window": 2},
+        {"agents": ("short", "long"), "seeds": (3, 2, 1), "episodes": 4, "window": 2},
     ),
 }
 
@@ -65,7 +65,9 @@ def _run(scenario, tmp_path, monkeypatch, capsys):
     out_dir = tmp_path / "out"
     report = tmp_path / "report.md"
     result = BenchmarkRunner(challenge_cls()).run(
-        output_dir=str(out_dir), report_path=str(report), save_plot=False, **kwargs
+        BenchmarkSettings(output_dir=str(out_dir), **kwargs),
+        report_path=str(report),
+        save_plot=False,
     )
     console = capsys.readouterr().out
 
