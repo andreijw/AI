@@ -624,7 +624,8 @@ With discrete control (CartPole: Random, REINFORCE, Actor-Critic, PPO, DQN) and 
 Actor-Critic, PPO, DDPG) fully operational, and Acrobot (Random, PPO, DQN), MountainCar (Random, DQN) and
 MountainCarContinuous (Random, DDPG) added as the first rungs of the challenge ladder, the framework provides a
 decoupled foundation for future AI challenges.
-The ladder of next challenges is Phase 7 of [`docs/roadmap.md`](docs/roadmap.md).
+The ladder of next challenges is Phase 7 of [`docs/roadmap.md`](docs/roadmap.md). Whether the Jetson's GPU can
+speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch_jetson_timing.md).
 
 ### Next Steps
 
