@@ -16,6 +16,24 @@ Acrobot-v1) and
 
 ### Added
 
+- **TD3 agent** (`feature/td3-agent`, the first pull request of the TD3 roadmap item): `TD3Agent`, a `DDPGAgent`
+  subclass, as Stable-Baselines3 implements TD3: twin critics with the smaller target, target-policy smoothing
+  (noise 0.2 clipped to 0.5 in the scaled action space, from its own seed stream, `AGENT_TARGET_NOISE_STREAM` 14) and
+  actor and target updates on every second gradient step, counted as SB3 counts them and checkpointed. For a seed,
+  its actor and first critic start as DDPG's and exploration and replay draw as DDPG's. `configs/pendulum_td3.yaml`
+  is rl-zoo's TD3 Pendulum settings with `pendulum_ddpg.yaml`'s two departures (64×64, 40,000 steps).
+  - **Learning:** on seeds 1 to 5, every run solves -200 at 32,600 to 33,400 steps and holds it (final averages -143
+    to -165, greedy evaluation -157 ± 24), against DDPG's 31,200 steps and -158 ± 25 on the same seeds: TD3's actor
+    updates half as often and solves about 1,700 steps later (1,400 to 2,200 by seed). 163 s per run on average
+    against DDPG's 144 s. A DDPG agent loads a TD3 checkpoint as actor and first critic only; the reverse is
+    refused.
+  - **Episode-end hook:** `BaseAgent.end_episode()`, called by the Trainer after every training episode's `update`
+    and before any checkpoint save. DDPG's noise reset moved there from `update`; seeded DDPG training is
+    byte-identical before and after (Gaussian and OU noise, 62 checkpoint arrays each), so its published results
+    stand.
+  - Behaviour-preserving DDPG refactors for TD3: `_build_networks(weights_rng)`, `_target_pairs()` and a `params`
+    argument to `_critic_loss_and_grads`.
+
 - **Optional PyTorch backend for DDPG** (`feature/torch-ddpg-backend`), completing the roadmap item:
   `backend: torch` in a DDPG config's `agent.config` builds `TorchDDPGAgent`, which runs DDPG's gradient steps in
   PyTorch, on the GPU as a CUDA graph, and keeps acting, exploration and the replay buffer in NumPy. NumPy stays the

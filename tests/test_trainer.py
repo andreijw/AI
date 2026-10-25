@@ -731,3 +731,57 @@ def test_log_metrics_with_neither_log_nor_info_uses_the_module_logger(env, agent
     with caplog.at_level(logging.INFO, logger="rl_core.training.trainer"):
         trainer._log_metrics(_RAW_METRICS)
     assert f"METRICS: {_SAFE_METRICS}" in caplog.messages
+
+
+# ---------------------------------------------------------------------------
+# The episode-end hook
+# ---------------------------------------------------------------------------
+
+
+class _RecordingAgent(RandomAgent):
+    """A RandomAgent that records the order of the calls the Trainer makes."""
+
+    def __init__(self, calls):
+        super().__init__(observation_dim=4, action_dim=2, config={"seed": 0})
+        self.calls = calls
+
+    def select_action(self, observation, training=True):
+        self.calls.append("train_action" if training else "eval_action")
+        return super().select_action(observation, training)
+
+    def update(self, batch):
+        self.calls.append("update")
+        return super().update(batch)
+
+    def end_episode(self):
+        self.calls.append("end_episode")
+
+    def save(self, path):
+        self.calls.append("save")
+        super().save(path)
+
+
+def test_end_episode_follows_every_training_update_and_precedes_saves(env, tmp_path):
+    calls = []
+    config = {
+        "num_episodes": 3,
+        "max_steps_per_episode": 5,
+        "eval_frequency": 1,
+        "save_frequency": 1,
+        "checkpoint_dir": str(tmp_path / "checkpoints"),
+    }
+    Trainer(env=env, agent=_RecordingAgent(calls), config=config).train()
+
+    events = [c for c in calls if c != "train_action"]
+    assert events.count("update") == events.count("end_episode") == 3, (
+        "end_episode should be called once per training episode, as update is"
+    )
+    assert "eval_action" in calls, "the config evaluates every episode"
+    for i, event in enumerate(events):
+        if event == "end_episode":
+            assert events[i - 1] == "update", (
+                "end_episode should come straight after a training update, never after evaluation"
+            )
+        if event == "save":
+            latest = [e for e in events[:i] if e in ("update", "end_episode")][-1]
+            assert latest == "end_episode", "a checkpoint should be saved after the episode ended"

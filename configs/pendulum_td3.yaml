@@ -1,0 +1,43 @@
+# Pendulum TD3 Training Configuration
+# rl-baselines3-zoo's TD3 settings for Pendulum-v1 (hyperparams/td3.yml; SB3 TD3 defaults for the rest), with the
+# two departures of configs/pendulum_ddpg.yaml: 64x64 networks instead of rl-zoo's 400x300 (about 16x longer in
+# NumPy here; 400x300 is practical with the PyTorch backend), and 40,000 steps instead of 20,000, as a 100-episode
+# training window cannot pass -200 while it still holds the 50 random warm-up episodes.
+# Measured 2026-10-25, seeds 1-5, 100-episode rule: 5 of 5 solve at 32,600 to 33,400 steps and hold; greedy evaluation
+# -157 (+/- 24 across seed means) against DDPG's -158 (+/- 25) on the same seeds (CHANGELOG.md, 2026-10-25).
+
+environment:
+  name: "Pendulum-v1"
+  render_mode: null
+  max_episode_steps: 200
+  seed: 42
+
+agent:
+  type: "td3"
+  config:
+    hidden_sizes: [64, 64]     # Actor and both critics' hidden layers (rl-zoo: [400, 300]; see the header)
+    learning_rate: 0.001       # Adam step size for actor and critics (rl-zoo)
+    gamma: 0.98                # Discount factor (rl-zoo)
+    tau: 0.005                 # Polyak rate per actor step (every policy_delay gradient steps): half-life ~280 steps
+    batch_size: 256            # Mini-batch size (SB3 TD3 default)
+    buffer_capacity: 200000    # Replay buffer size (rl-zoo buffer_size)
+    learning_starts: 10000     # Uniform random training actions before learning (rl-zoo): 50 episodes
+    noise_std: 0.1             # Gaussian exploration noise in the scaled [-1, 1] action space (rl-zoo)
+    updates_per_step: 1.0      # Gradient steps per stored transition (rl-zoo train_freq 1, gradient_steps 1)
+    policy_delay: 2            # Gradient steps per actor and target update (SB3 default)
+    target_policy_noise: 0.2   # Std of the target-action smoothing noise, scaled space (SB3 default)
+    target_noise_clip: 0.5     # Bound on that noise, scaled space (SB3 default)
+    optimizer: adam
+    seed: 42
+
+training:
+  total_steps: 40000  # Environment steps: twice rl-zoo's 20,000, as a 100-episode window needs room
+  max_steps_per_episode: 200
+  eval_frequency: 25
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

@@ -77,9 +77,12 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    the episode truly terminated. Both continuous Gaussian agents can bound their policy mean inside the action
    bounds (`bounded_mean`: bias + scale·tanh(z)); without it the linear mean head can drift past a bound, where every
    executed action is the same. DDPG explores with Gaussian noise or, with `noise_type: ornstein_uhlenbeck`, with
-   the temporally correlated noise of `rl_core/agents/exploration_noise.py`, and resets that noise in `update`. This
-   relies on the Trainer calling `update` once, at the end of every episode: a caller that updated mid-episode would
-   zero the noise each time and make it nearly white.
+   the temporally correlated noise of `rl_core/agents/exploration_noise.py`, and resets that noise in `end_episode`,
+   which the Trainer calls after every training episode's `update` and before any checkpoint save
+   (`BaseAgent.end_episode`, a no-op by default). `update` itself no longer resets it, so an agent updated
+   mid-episode keeps its noise process running. TD3 (`TD3Agent`, a `DDPGAgent` subclass) adds a second critic and
+   target critic (taking the smaller target), target-policy smoothing noise drawn from its own seed stream, and
+   actor and target updates on every `policy_delay`-th gradient step.
 
 ---
 
@@ -253,6 +256,7 @@ classDiagram
     ContinuousActorCriticBase <|-- ContinuousPPOAgent
     BaseAgent <|-- DDPGAgent
     DDPGAgent <|-- TorchDDPGAgent
+    DDPGAgent <|-- TD3Agent
 ```
 
 Every agent is NumPy by default. `BaseAgent.class_for_config(config)` returns the class to build for the config's

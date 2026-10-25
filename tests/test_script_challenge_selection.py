@@ -143,7 +143,7 @@ def test_agent_the_challenge_does_not_support_is_an_error(tmp_path, monkeypatch)
     path = _config(tmp_path, name="Pendulum-v1")
     with pytest.raises(ValueError, match="'dqn'.*pendulum") as error:
         run_main(["--config", path, "--agent-type", "dqn"], monkeypatch)
-    assert "['actor_critic', 'ddpg', 'ppo', 'random']" in str(error.value)
+    assert "['actor_critic', 'ddpg', 'ppo', 'random', 'td3']" in str(error.value)
     assert not (tmp_path / "logs").exists(), "the run should stop before creating any output"
 
 

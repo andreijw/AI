@@ -19,6 +19,7 @@ from rl_core.agents import (
     PPOAgent,
     RandomAgent,
     ReinforceAgent,
+    TD3Agent,
 )
 from tests.helpers import torch_backend_cases
 
@@ -112,6 +113,7 @@ CONTINUOUS_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
     (ContinuousActorCriticAgent, {"seed": 42}),
     (ContinuousPPOAgent, {"seed": 42}),
     (DDPGAgent, {"seed": 42, "batch_size": 2, "learning_starts": 0}),
+    (TD3Agent, {"seed": 42, "batch_size": 2, "learning_starts": 0}),
 ]
 # The PyTorch backend, where it is installed.
 CONTINUOUS_AGENTS += torch_backend_cases({"seed": 42, "batch_size": 2, "learning_starts": 0})
@@ -181,3 +183,21 @@ def test_continuous_dimension_validation(
         agent_cls(observation_dim=0, action_dim=ACT_DIM, config=config)
     with pytest.raises(ValueError):
         agent_cls(observation_dim=OBS_DIM, action_dim=-1, config=config)
+
+
+@pytest.mark.parametrize(
+    "agent_cls,config",
+    ALL_AGENTS + CONTINUOUS_AGENTS,
+    ids=[f"{cls.__name__}-{i}" for i, (cls, _) in enumerate(ALL_AGENTS + CONTINUOUS_AGENTS)],
+)
+def test_end_episode_is_safe_for_every_agent(agent_cls: type[BaseAgent], config: dict[str, object]):
+    """The Trainer calls end_episode after every training episode: every agent accepts it, and it
+    changes no greedy action."""
+    dims = (OBS_DIM, ACT_DIM) if (agent_cls, config) in CONTINUOUS_AGENTS else (4, 2)
+    agent = agent_cls(observation_dim=dims[0], action_dim=dims[1], config=config)
+    obs = np.linspace(-0.3, 0.3, dims[0])
+    if agent_cls not in (RandomAgent, ContinuousRandomAgent):
+        before = agent.select_action(obs, training=False)
+    assert agent.end_episode() is None
+    if agent_cls not in (RandomAgent, ContinuousRandomAgent):
+        np.testing.assert_array_equal(agent.select_action(obs, training=False), before)

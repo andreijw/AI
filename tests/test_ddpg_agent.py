@@ -311,9 +311,9 @@ def test_ou_training_actions_are_correlated_from_step_to_step():
 
 
 @pytest.mark.parametrize("batch_change", ["empty", "too_few_to_sample", "trains"])
-def test_update_resets_the_ou_noise_for_the_next_episode(batch_change):
-    """The Trainer calls update once at the end of every episode, so the next action starts the OU
-    process from zero again, whether or not the update trained."""
+def test_end_episode_resets_the_ou_noise_for_the_next_episode(batch_change):
+    """The Trainer calls end_episode after every training episode's update, so the next action
+    starts the OU process from zero again, whether or not the update trained."""
     agent = _agent(**OU, batch_size=64 if batch_change == "too_few_to_sample" else 4)
     _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias, so no action is clipped
     for _ in range(25):
@@ -323,8 +323,23 @@ def test_update_resets_the_ou_noise_for_the_next_episode(batch_change):
         batch = {key: value[:0] for key, value in batch.items()}
     metrics = agent.update(batch)
     assert bool(metrics) == (batch_change == "trains"), "only the full batch should train"
+    agent.end_episode()
     expected = _ou_increments(agent, 1)[0]  # before acting: it copies the generator's state
     np.testing.assert_allclose(_noise_of(agent), expected, atol=1e-6, err_msg="one step from zero")
+
+
+def test_update_alone_does_not_reset_the_ou_noise():
+    """Resetting is the episode's end, not the update's: an agent updating mid-episode keeps its
+    noise process running."""
+    agent = _agent(**OU, batch_size=4)
+    _constant(ddpg_networks(agent)["actor"], 0.0)
+    for _ in range(25):
+        agent.select_action(OBS, training=True)
+    agent.update(_batch())
+    from_zero = _ou_increments(agent, 1)[0]
+    assert not np.allclose(_noise_of(agent), from_zero, atol=1e-6), (
+        "Without end_episode the OU process should continue from its state, not restart at zero."
+    )
 
 
 def test_evaluation_does_not_advance_the_ou_noise():
@@ -338,13 +353,14 @@ def test_evaluation_does_not_advance_the_ou_noise():
 
 
 def test_the_noise_option_adds_nothing_to_the_checkpoint(tmp_path):
-    """The OU state is zero at every save (saves follow an episode's update), so the format is
+    """The OU state is zero at every save (the Trainer saves after end_episode), so the format is
     unchanged."""
     paths = {}
     for name, extra in (("gaussian", {}), ("ou", OU)):
         agent = _agent(**extra)
         agent.select_action(OBS, training=True)
         agent.update(_batch())
+        agent.end_episode()
         paths[name] = tmp_path / f"{name}.npz"
         agent.save(str(paths[name]))
     with np.load(paths["gaussian"]) as gaussian, np.load(paths["ou"]) as ou:
@@ -524,11 +540,12 @@ def test_two_agents_with_one_seed_act_and_learn_identically():
 @pytest.mark.parametrize("noise", [{}, OU], ids=["gaussian", "ou"])
 def test_a_loaded_agent_resumes_weights_optimizers_and_counters(tmp_path, noise):
     """The checkpoint alone resumes training: networks, optimizers, counters, replay buffer and
-    generators; the OU state needs nothing saved, as update has just reset it."""
+    generators; the OU state needs nothing saved, as end_episode has just reset it."""
     agent = _agent(learning_starts=2, **noise)
     for _ in range(3):
         agent.select_action(OBS, training=True)
     agent.update(_batch(seed=1))
+    agent.end_episode()
     path = str(tmp_path / "ddpg.pt")
     agent.save(path)
 
@@ -536,8 +553,11 @@ def test_a_loaded_agent_resumes_weights_optimizers_and_counters(tmp_path, noise)
     resumed.load(path)  # the checkpoint holds the replay buffer and every generator
     assert counters(resumed) == {"training_actions": 3, "gradient_steps": 6}
 
+    actions = [
+        [run.select_action(OBS, training=True) for _ in range(3)] for run in (agent, resumed)
+    ]
+    np.testing.assert_array_equal(actions[1], actions[0], err_msg="the next training actions")
     for run in (agent, resumed):
-        run.select_action(OBS, training=True)
         run.update(_batch(seed=5))
     assert_same_weights(resumed, agent, rtol=0.0)
 

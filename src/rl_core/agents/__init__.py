@@ -12,6 +12,7 @@ from .ppo_agent import PPOAgent
 from .random_agent import RandomAgent
 from .reinforce_agent import ReinforceAgent
 from .replay_buffer import ReplayBuffer
+from .td3_agent import TD3Agent
 
 __all__ = [
     "ActorCriticAgent",
@@ -22,6 +23,7 @@ __all__ = [
     "ContinuousPPOAgent",
     "ContinuousRandomAgent",
     "DDPGAgent",
+    "TD3Agent",
     "DQNAgent",
     "PPOAgent",
     "RandomAgent",

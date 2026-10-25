@@ -25,6 +25,7 @@ from rl_core.agents import (
     PPOAgent,
     RandomAgent,
     ReinforceAgent,
+    TD3Agent,
 )
 from rl_core.seeding import WRAPPER_STREAM, derive_rng
 from tests.helpers import torch_backend_cases
@@ -42,6 +43,7 @@ CONTINUOUS = [
     (ContinuousActorCriticAgent, {"n_steps": 2}),
     (ContinuousPPOAgent, {"batch_size": 2}),
     (DDPGAgent, {"batch_size": 2, "learning_starts": 0, "hidden_sizes": [4, 4]}),
+    (TD3Agent, {"batch_size": 2, "learning_starts": 0, "hidden_sizes": [4, 4]}),
 ]
 # The PyTorch backend, where it is installed.
 CONTINUOUS += torch_backend_cases({"batch_size": 2, "learning_starts": 0, "hidden_sizes": [4, 4]})

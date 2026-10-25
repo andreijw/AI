@@ -21,6 +21,7 @@ from rl_core.agents import (
     PPOAgent,
     RandomAgent,
     ReinforceAgent,
+    TD3Agent,
 )
 from rl_core.challenges import CHALLENGES, discover_challenges, select_challenge
 from rl_pendulum.environments import (
@@ -45,6 +46,7 @@ EXPECTED_AGENTS = {
         "actor_critic": ContinuousActorCriticAgent,
         "ppo": ContinuousPPOAgent,
         "ddpg": DDPGAgent,
+        "td3": TD3Agent,
     },
 }
 

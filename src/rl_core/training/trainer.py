@@ -415,6 +415,7 @@ class Trainer:
                 "terminated": np.array(terminateds, dtype=bool),
             }
             self._record_update_metrics(self.agent.update(batch))
+            self.agent.end_episode()
 
         return episode_reward, episode_length
 
