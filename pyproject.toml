@@ -36,6 +36,11 @@ video = [
     "imageio-ffmpeg>=0.4.0",
     "gymnasium[classic-control]>=1.0.0",
 ]
+# The optional PyTorch backend (backend: torch). On the Jetson it installs from PyTorch's own index:
+# see docs/pytorch_jetson_timing.md.
+torch = [
+    "torch>=2.14",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=7.1.0",

@@ -54,6 +54,31 @@ Acrobot-v1) and
 
 ### Added
 
+- **Optional PyTorch backend for DDPG** (`feature/torch-ddpg-backend`), completing the roadmap item:
+  `backend: torch` in a DDPG config's `agent.config` builds `TorchDDPGAgent`, which runs DDPG's gradient steps in
+  PyTorch, on the GPU as a CUDA graph, and keeps acting, exploration and the replay buffer in NumPy. NumPy stays the
+  default; no committed config changes.
+  - **How a backend is chosen:** `BaseAgent.class_for_config(config)`, which `BenchmarkChallenge.make_agent` now
+    builds through; each agent class names its other backends in `BACKENDS`, imported only when chosen, so nothing
+    else needs PyTorch. `backend: torch` on an agent without a PyTorch version is an error. `DDPGAgent.update` now
+    hands its gradient steps to `_train_steps`, the one method the PyTorch backend overrides.
+  - **Same training, same checkpoints:** in float64 the backend trains as DDPGAgent does to rounding, on the CPU and
+    on CUDA, and its checkpoints are DDPGAgent's format in both directions (`tests/test_torch_ddpg_agent.py`, run
+    on the board: CI never installs PyTorch).
+  - **Speed through the agent** (25W mode, 200 gradient steps per update as in a Pendulum episode): 0.86 ms per
+    step at 64×64 and 2.80 ms at 400×300 on the GPU, against NumPy's 5.43 and 36.6 ms (`docs/pytorch_jetson_timing.md`,
+    "Through the Agent"). End to end, `configs/pendulum_ddpg.yaml` runs took 34 s on the GPU against 144 s in
+    NumPy (seeds 1 to 5) and, with 400×300 networks, 98 s against 1,074 s (seeds 1 to 3). Every run on both
+    backends solved -200 and held it, with the same solve steps to within one episode.
+  - **No committed config switches backend:** committed configs must run in `.venv` and CI, which have no PyTorch.
+    A GPU run adds `backend: torch` to a copy. `./setup.sh --profile gpu` builds the PyTorch environment
+    (`.venv-gpu`); the default `cpu` profile builds `.venv` as before.
+  - **Rules and setup:** the `[torch]` extra; the pure-NumPy rule in CLAUDE.md, CONTRIBUTING.md and
+    `.brooks-lint.yaml` now allows PyTorch only in `rl_core/agents/torch_*.py`, which only `class_for_config` loads
+    (`tests/test_source_conventions.py`). The timing test's `torch_ddpg.py`, `time_torch.py` and
+    `test_ddpg_torch_reference.py`, described in the entry below, are replaced by the agent, `time_ddpg.py` and
+    `test_torch_ddpg_agent.py`.
+
 - **PyTorch timing test on the Jetson** (`feature/pytorch-timing-test`), a measurement only: nothing in the
   framework uses PyTorch. Results, install steps and the recommendation are in `docs/pytorch_jetson_timing.md`; the
   scripts are in `scripts/pytorch_timing/`, the PyTorch step in its `torch_ddpg.py`.

@@ -108,7 +108,8 @@ class BenchmarkChallenge(abc.ABC):
         """
         Build an agent of ``agent_type`` sized for ``env``, leaving ``agent_config`` unchanged.
 
-        The agent's class comes from :attr:`AGENT_CLASSES`, its dimensions from the environment's
+        The agent's class comes from :attr:`AGENT_CLASSES`, in the backend the config's ``backend``
+        key chooses (``BaseAgent.class_for_config``), its dimensions from the environment's
         flattened spaces and its config from :meth:`agent_config`.
 
         Raises:
@@ -116,10 +117,11 @@ class BenchmarkChallenge(abc.ABC):
         """
         if agent_type not in self.AGENT_CLASSES:
             raise self.unsupported_agent_error(agent_type)
-        return self.AGENT_CLASSES[agent_type](
+        config = self.agent_config(agent_config, env)
+        return self.AGENT_CLASSES[agent_type].class_for_config(config)(
             observation_dim=gym.spaces.flatdim(env.observation_space),
             action_dim=gym.spaces.flatdim(env.action_space),
-            config=self.agent_config(agent_config, env),
+            config=config,
         )
 
     def agent_config(self, agent_config: Mapping[str, Any], env: ChallengeEnv) -> dict[str, Any]:

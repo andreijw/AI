@@ -27,6 +27,7 @@ from rl_core.agents import (
     ReinforceAgent,
 )
 from rl_core.seeding import WRAPPER_STREAM, derive_rng
+from tests.helpers import torch_backend_cases
 
 SEED = 7
 DISCRETE = [
@@ -42,6 +43,8 @@ CONTINUOUS = [
     (ContinuousPPOAgent, {"batch_size": 2}),
     (DDPGAgent, {"batch_size": 2, "learning_starts": 0, "hidden_sizes": [4, 4]}),
 ]
+# The PyTorch backend, where it is installed.
+CONTINUOUS += torch_backend_cases({"batch_size": 2, "learning_starts": 0, "hidden_sizes": [4, 4]})
 
 
 def _batch(continuous: bool) -> dict[str, np.ndarray]:

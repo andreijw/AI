@@ -128,6 +128,8 @@ def set_weights(agent: LearningAgent, **arrays: Any) -> None:
         if replacement.shape != current.shape:
             raise ValueError(f"{name} has shape {current.shape}, got {replacement.shape}")
         _write(agent, name, replacement)
+    if hasattr(agent, "_push_to_device"):  # another backend: its device holds the live weights
+        agent._push_to_device()
 
 
 def assert_same_weights(actual: Any, expected: Any, rtol: float = 1e-12) -> None:

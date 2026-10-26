@@ -28,11 +28,12 @@ custom_risks:
       - "A file under src/rl_core/agents/ imports gymnasium, rl_cartpole, rl_pendulum, matplotlib or yaml"
       - "src/rl_core/utils/__init__.py, or anything the trainer or a challenge imports, imports the plotting module; solve numbers computed in visualization.py instead of rl_core.utils.smoothing"
       - "src/rl_core/ imports a challenge package, or one challenge package imports another"
-      - "An import of torch, tensorflow, jax or another autodiff or deep learning library anywhere"
+      - "An import of torch outside src/rl_core/agents/torch_*.py, a static import of a torch_* module (name it in an agent's BACKENDS instead), or an import of tensorflow, jax or another deep learning library anywhere"
+      - "A PyTorch backend that does more than override the NumPy agent's gradient steps, or that has no float64 test matching the NumPy agent"
       - "Update-rule maths (returns, advantages, targets, gradients) written in train.py, record.py, Trainer or a benchmark adapter instead of an agent"
       - "An agent steps an environment, writes files other than its own checkpoint, or prints"
     severity:
-      critical: "rl_core now needs a specific environment or a learning framework to import, or the pure NumPy rule is broken"
+      critical: "rl_core now needs a specific environment or a learning framework to import, or an agent has no NumPy reference"
       warning: "A testable rule is buried in the trainer or a script, so only a training run can reach it"
       suggestion: "A small calculation in a script that would read better as a named function in rl_core"
   C2:

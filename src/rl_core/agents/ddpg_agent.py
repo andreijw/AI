@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import numpy.typing as npt
@@ -57,6 +57,8 @@ class DDPGAgent(BaseAgent):
     Defaults are rl-zoo's Pendulum-v1 settings. Weights, exploration and replay sampling each
     draw from their own stream of the seed (``rl_core.seeding``).
     """
+
+    BACKENDS: ClassVar[dict[str, str]] = {"torch": "rl_core.agents.torch_ddpg_agent:TorchDDPGAgent"}
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """
@@ -270,7 +272,14 @@ class DDPGAgent(BaseAgent):
         num_updates = max(1, int(n * self.updates_per_step))
         if self.max_updates_per_call is not None:
             num_updates = min(num_updates, self.max_updates_per_call)
+        return self._train_steps(num_updates)
 
+    def _train_steps(self, num_updates: int) -> dict[str, float]:
+        """
+        Take ``num_updates`` gradient steps, each on a fresh sample from the replay buffer, and
+        return the mean of each metric over them. The step's backend: another backend overrides
+        only this.
+        """
         totals: dict[str, float] = {}
         for _ in range(num_updates):
             sample = self.replay_buffer.sample(self.batch_size)

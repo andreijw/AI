@@ -91,6 +91,10 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
     captured = {}
 
     class _StubReinforce:
+        @classmethod
+        def class_for_config(cls, config):
+            return cls
+
         def __init__(self, observation_dim, action_dim, config):
             captured["agent_observation_dim"] = observation_dim
             captured["agent_action_dim"] = action_dim
