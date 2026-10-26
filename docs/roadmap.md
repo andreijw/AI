@@ -20,23 +20,9 @@ No open items.
 ### Code Health
 
 The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical, 4 Warnings. The first Warning,
-each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22), and so is
-the fourth, trainer tests calling private methods (CHANGELOG.md, 2026-10-25). The item below is the rest; then come
-unscheduled ideas.
-
-- [ ] **Benchmark Hygiene: Solve Numbers Apart from Plotting**
-  - **Description**: Two Warnings from the 2026-10-22 dashboard. `src/benchmark.py` imports the private
-    `_rolling_average` from `rl_core/utils/visualization.py` for the solve episode and `final_rolling_avg`, so a
-    change to plot smoothing would silently change published solve numbers; and `rl_core/utils/__init__.py`
-    imports the plotting module eagerly, so importing the trainer or the challenges loads matplotlib.
-    `_generate_markdown_report` is 98 lines mixing configuration text, solve-rule prose, row formatting and the plot
-    path, and `run_benchmark` takes 11 parameters while a `BenchmarkSettings` dataclass exists.
-  - **Acceptance criteria**:
-    - A public `rolling_average` in a module that does not plot, used by the benchmark and the plots alike.
-    - `import rl_core.training` and `import rl_core.challenges` do not import matplotlib (a test says so).
-    - The report function split into named parts; `run_benchmark` takes `BenchmarkSettings`.
-    - Reports generated before and after are byte-identical for the same metrics file.
-  - **Out of scope**: Changing what the report says, or the solve rule.
+each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22); so are the
+second and third, the benchmark's solve numbers and report, and the fourth, trainer tests calling private methods
+(CHANGELOG.md, 2026-10-25). What follows are unscheduled ideas.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
@@ -49,6 +35,8 @@ unscheduled ideas.
       critic networks, or observation normalisation; CartPole DQN with more than `max_updates_per_call: 64` (about
       0.13 gradient steps per transition against rl-zoo's 0.5).
     - Candidates once wanted: double, dueling or prioritised-replay DQN.
+    - `src/benchmark.py` still imports matplotlib at module level, so `--no-plot` loads it too; importing
+      `plot_benchmark_comparison` inside `_save_plot` would end that (review suggestion, 2026-10-25).
     - Found 2026-10-18 and not yet investigated: on the one-state overfit batch of
       `tests/test_policy_gradient_maths.py`, the discrete Actor-Critic (SGD, learning rate 0.05) reaches probability
       1.0 and can then collapse to the other action (seeds 6 and 7; 9 of 30 seeds under the old seeding) once the
@@ -101,10 +89,19 @@ Tier 1 began with Acrobot-v1 (CHANGELOG.md, 2026-10-22). The items below are ske
 when picked.
 
 - [ ] **MountainCar-v0: Hold -110**
-  - **Description**: MountainCar-v0's DQN learns but does not hold -110, even with a decaying learning rate (final
-    averages -121 to -146), and PPO never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23).
-    Reward normalisation, or an exploration aid for discrete actions, is where both would be tried next; the
-    Ornstein-Uhlenbeck noise of the continuous variant applies to continuous actions only (CHANGELOG.md, 2026-10-23).
+  - **Description**: MountainCar-v0's DQN does not reliably hold -110: with a 100,000-transition buffer, 2 of 10 seeds
+    end at or above it (both crossing it only near the end of the run), and the final averages are -107 to -132
+    (CHANGELOG.md, 2026-10-25).
+  - **Diagnosis (2026-10-25)**: the agent reaches the flag reliably, so exploration is unlikely to be the limit. On seed
+    4 the greedy policy evaluated -100 to -107 from episode 550 to 700, then settled near -125 with a spread of about
+    20 and did not stay good: consistent with a good policy found and then forgotten. A larger buffer helps the
+    training average (better on 10 of 10 seeds, by +6 on the held-out seeds 6 to 10) but not the held-out greedy
+    evaluation. Next
+    levers, untried: a smaller step once the policy is good (the current rate is still half its start at episode 700),
+    prioritised replay, or keeping the best greedy policy. Note that -110 is judged on the training average, exploration
+    included, while rl-zoo's -100.8 is a greedy evaluation.
+  - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
+    examined by the diagnosis above.
 
 - [~] **TD3 Agent (Prerequisite for Tier 2)**
   - **Description**: TD3 (Fujimoto et al., 2018) as Stable-Baselines3 implements it, the stronger off-policy

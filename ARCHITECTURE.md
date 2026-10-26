@@ -35,6 +35,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │  - Discrete Agents     - Checkpoint manager      - logger.py (JSONL)        │
 │  - Continuous Agents                             - video.py (MP4 recording) │
 │  - ReplayBuffer                                  - visualization.py (plots) │
+│                                                  - smoothing.py (averages)  │
 │                                                                             │
 │  challenges/                                                                │
 │  - BenchmarkChallenge, CHALLENGES registry, discover_challenges()           │
@@ -122,6 +123,7 @@ flowchart TD
             Logger["logger.py"]
             Video["video.py"]
             Viz["visualization.py"]
+            Smooth["smoothing.py"]
         end
     end
 

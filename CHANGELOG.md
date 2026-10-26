@@ -16,6 +16,42 @@ Acrobot-v1) and
 
 ### Changed
 
+- **Benchmark solve numbers apart from plotting** (`feature/benchmark-hygiene`, the second and third Warnings of the
+  2026-10-22 health dashboard): the rolling average behind the solve episode, `final_rolling_avg` and the plotted
+  curves is now the public `rl_core.utils.smoothing.rolling_average` (the same per-episode mean as before, so no
+  number moves; it raises for a window below 1 instead of returning NaN). `rl_core.utils` no longer re-exports
+  `plot_training_metrics` and `plot_benchmark_comparison` (import them from `rl_core.utils.visualization`), so
+  importing the trainer or the challenges no longer loads matplotlib; `tests/test_import_footprint.py` checks it in
+  a fresh process. `run_benchmark(challenge_name, *, settings, config_dir, report_path, save_plot)` and
+  `BenchmarkRunner.run(settings, *, report_path, save_plot)` take a `BenchmarkSettings` (agents, seeds, budget,
+  window, evaluation episodes, output folder; its defaults are the CLI's, which now reads them from it) instead of
+  up to 11 keyword arguments, so an older keyword call fails with a TypeError. The benchmark now rejects
+  `--window` or `--eval-episodes` below 1 before training (`--window 0` used to train every run, then write NaN to
+  the metrics JSON). The Markdown report is built from five named parts. Console output, metrics JSON and reports
+  are unchanged: the recorded characterization files pass untouched, and a review compared the old and new report
+  code on 288 generated cases byte for byte. No learning run: no agent, trainer or config changed.
+
+- **MountainCar DQN keeps a 100,000-transition replay buffer** (`feature/mountaincar-hold`), up from rl-zoo's 10,000.
+  - **Diagnosis:** the update showed no sign of a fault: the loss stayed finite and small, and the mean Q settled near
+    -30, which fits episodes of about 110 steps. A failed episode is stored as cut by the time limit, not as ended.
+    The agent reaches the flag reliably. On seed 4, the greedy policy evaluated -100 to -107 between episodes 550 and
+    700, then sat near -122 to -131 with a spread of about 20 from episode 850. That is consistent with a good policy
+    being forgotten once 10,000 transitions hold only the last ~85 episodes. The learning rate, still 45% of its start
+    at episode 700, is a competing explanation that was not tested.
+  - **Seeds 1 to 10** (100,000 against 10,000), the size chosen on seeds 1 to 5 and checked on 6 to 10:
+    - Final 100-episode training averages: -107 to -132 (mean -120.5) against -121 to -146 (mean -131.2), better on
+      all 10 seeds. The gain was +15 on seeds 1 to 5 and +6 on seeds 6 to 10.
+    - Greedy evaluation: -120 ± 13 against -127 ± 12. It was better on seeds 1 to 5, but on seeds 6 to 10 it was no
+      better on average (-122.6 against -121.9).
+    - Seeds 3 and 5 end at or above -110, both crossing it only in their last 5,000 to 14,000 steps, while the
+      learning rate is near zero. Seed 6 reaches -110 at 146k steps and drifts back. With 10,000, only seed 4
+      reached it and none ended above it.
+  - **Other sizes, seeds 1 to 5 (final training averages):** 30,000, 50,000 and 200,000 each beat 10,000, with means of
+    -125.6, -125.6 and -127.3. 100,000 scored highest on these same seeds (-117.8), but the differences among the
+    larger sizes are within the seed spread. 100,000 with a 300,000-step budget and decay, which changes two things at
+    once, scored -124.6.
+  - **Still open:** MountainCar still does not reliably hold -110; the roadmap item stays open with the diagnosis.
+
 - **Trainer tests through a seam** (`feature/trainer-test-seam`, the fourth Warning of the 2026-10-22 health
   dashboard; tests only, no behaviour change): `tests/test_trainer.py` no longer calls private `Trainer` methods. Its
   episode, checkpoint and progress-line tests go through `train()` and `evaluate()` and the files and log lines they

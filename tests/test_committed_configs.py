@@ -181,12 +181,13 @@ def test_mountaincar_dqn_uses_rl_zoo_settings_with_a_decaying_learning_rate():
     """rl-zoo's DQN for MountainCar-v0 (one hidden layer of 256 instead of two): half a gradient step per
     transition. Its target sync every 600 environment steps is 300 gradient steps here, epsilon falls to
     0.02 rather than 0.07, and the learning rate decays to zero over a 200,000-step budget instead of
-    staying fixed over 120,000 (CHANGELOG.md, 2026-10-23)."""
+    staying fixed over 120,000 (CHANGELOG.md, 2026-10-23). The replay buffer holds 100,000 transitions,
+    not rl-zoo's 10,000, so a good policy found mid-run is forgotten less often (CHANGELOG.md, 2026-10-25)."""
     env, agent, _ = discover_challenges()["mountaincar"]().setup_run("dqn", seed=1, episodes=None)
     env.close()
     assert isinstance(optimizer(agent), Adam)
     assert (agent.learning_rate, agent.gamma) == pytest.approx((0.004, 0.98))
-    assert (agent.hidden_dim, agent.batch_size, agent.buffer_capacity) == (256, 128, 10_000)
+    assert (agent.hidden_dim, agent.batch_size, agent.buffer_capacity) == (256, 128, 100_000)
     assert (agent.min_buffer_size, agent.target_update_frequency) == (1_000, 300)
     assert (agent.exploration_steps, agent.epsilon_end) == (24_000, pytest.approx(0.02))
     assert (agent.updates_per_step, agent.max_updates_per_call) == (0.5, 100)
