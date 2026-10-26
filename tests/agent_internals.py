@@ -475,3 +475,22 @@ def actor_loss_and_grads(
 def polyak_update(agent: DDPGAgent) -> None:
     """Move DDPG's target networks a fraction ``tau`` towards the online ones."""
     agent._polyak()
+
+
+# ---------------------------------------------------------------------------
+# The PyTorch DDPG backend (tests/test_torch_ddpg_agent.py; needs PyTorch)
+# ---------------------------------------------------------------------------
+
+
+def device_arrays(agent: DDPGAgent) -> dict[str, np.ndarray]:
+    """What a PyTorch-backend agent holds on its device, as float64 arrays keyed as its checkpoint
+    keys them: every network (``critic_2_W0`` …) and every Adam state (``critic_adam_m_W0`` …)."""
+    arrays = {
+        f"{net}_{name}": tensor.detach().cpu().numpy().astype(np.float64)
+        for net, params in agent._nets.items()  # type: ignore[attr-defined]
+        for name, tensor in params.items()
+    }
+    for net in agent._optimizers:  # type: ignore[attr-defined]
+        adam = agent._adam_arrays(net)  # type: ignore[attr-defined]
+        arrays.update({f"{net}_adam_{key}": value for key, value in adam.items()})
+    return arrays

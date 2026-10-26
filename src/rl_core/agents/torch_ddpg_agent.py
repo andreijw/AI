@@ -7,6 +7,7 @@ docs/pytorch_jetson_timing.md.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
@@ -18,20 +19,10 @@ from .mlp import Params
 
 DEVICES = ("auto", "cpu", "cuda")
 DTYPES = {"float32": torch.float32, "float64": torch.float64}
-# The metrics DDPGAgent.update returns, in the order the device accumulates them.
-METRICS = (
-    "critic_loss",
-    "mean_q",
-    "critic_grad_norm",
-    "actor_loss",
-    "saturation",
-    "actor_grad_norm",
-)
 # Batches sampled and moved to the device at a time.
 STAGE_CHUNK = 64
 # Eager steps run on a side stream before capturing the CUDA graph, then undone.
 CAPTURE_WARMUP = 3
-NETWORKS = ("actor", "critic", "target_actor", "target_critic")
 
 TensorParams = dict[str, torch.Tensor]
 
@@ -59,8 +50,9 @@ class TorchDDPGAgent(DDPGAgent):
     sampling stream, and acting, which stays on the CPU with NumPy (acting on the GPU costs
     about 1 ms per environment step).
 
-    * The device holds the four networks and both Adam states, laid out as NumPy's (``W`` is
-      inputs x outputs), starting from the weights DDPGAgent drew for the seed. After every
+    * The device holds every network and Adam state the NumPy agent declares (``_networks`` and
+      ``_optimizers_by_net``), laid out as NumPy's (``W`` is inputs x outputs), starting from the
+      weights the NumPy agent drew for the seed. After every
       :meth:`update` that trained, and after :meth:`load`, all of it is mirrored back into
       DDPGAgent's NumPy arrays in float64, so acting, checkpoints and test helpers read the
       current values. Writing those NumPy arrays does not reach the device.
@@ -77,8 +69,14 @@ class TorchDDPGAgent(DDPGAgent):
     float64 matches DDPGAgent to rounding, on the CPU and on CUDA (tests/test_torch_ddpg_agent.py);
     float32 on the GPU agrees to about 1e-3 relative over a few updates and is not bit-exact
     across runs. Adam's step count is held in the agent's dtype, so in float32 it stops counting
-    exactly after 2**24 (16.7 million) gradient steps. The agent changes no global PyTorch state: no seeding, default dtype or matmul
-    precision.
+    exactly after 2**24 (16.7 million) gradient steps. The agent changes no global PyTorch state:
+    no seeding, default dtype or matmul precision.
+
+    A backend for a subclass of DDPGAgent subclasses both (``class TorchX(TorchDDPGAgent, X)``)
+    and supplies its device step: :meth:`_step` for each kind :meth:`_step_kind` names (each kind
+    is captured as its own graph), the inputs a step reads (:meth:`_input_shapes`,
+    :meth:`_sample_inputs`), ``STEP_METRICS`` and :meth:`_reduce_metrics`. Networks, optimizers,
+    target pairs, staging, capture, the mirror and checkpoints follow the NumPy agent's hooks.
 
     Config keys beyond DDPGAgent's (``backend: torch`` selects this class):
 
@@ -88,6 +86,15 @@ class TorchDDPGAgent(DDPGAgent):
     """
 
     BACKEND: ClassVar[str] = "torch"
+    # The metrics one step adds to the device's sums, in order.
+    STEP_METRICS: ClassVar[tuple[str, ...]] = (
+        "critic_loss",
+        "mean_q",
+        "critic_grad_norm",
+        "actor_loss",
+        "saturation",
+        "actor_grad_norm",
+    )
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """
@@ -104,7 +111,8 @@ class TorchDDPGAgent(DDPGAgent):
             }
             for net, params in self._networks().items()
         }
-        for net in ("actor", "critic"):
+        trained = self._optimizers_by_net()
+        for net in trained:
             for tensor in self._nets[net].values():
                 tensor.requires_grad_(True)
                 tensor.grad = torch.zeros_like(tensor)
@@ -116,7 +124,7 @@ class TorchDDPGAgent(DDPGAgent):
                 eps=1e-8,
                 capturable=self.device.type == "cuda",  # one Adam code path, graph or not
             )
-            for net in ("actor", "critic")
+            for net in trained
         }
         for optimizer in self._optimizers.values():
             for tensor in optimizer.param_groups[0]["params"]:
@@ -135,13 +143,9 @@ class TorchDDPGAgent(DDPGAgent):
         self._scale_t = torch.tensor(self.scale, dtype=self.dtype, device=self.device)
         self._bias_t = torch.tensor(self.bias, dtype=self.dtype, device=self.device)
 
-        b, o, a = self.batch_size, observation_dim, action_dim
         self._inputs = {
-            "observations": torch.zeros((b, o), dtype=self.dtype, device=self.device),
-            "actions": torch.zeros((b, a), dtype=self.dtype, device=self.device),
-            "rewards": torch.zeros((b,), dtype=self.dtype, device=self.device),
-            "next_observations": torch.zeros((b, o), dtype=self.dtype, device=self.device),
-            "dones": torch.zeros((b,), dtype=self.dtype, device=self.device),
+            key: torch.zeros(shape, dtype=self.dtype, device=self.device)
+            for key, shape in self._input_shapes().items()
         }
         pin = self.device.type == "cuda"
         self._host_chunk = {
@@ -153,12 +157,42 @@ class TorchDDPGAgent(DDPGAgent):
             for key, tensor in self._inputs.items()
         }
         self._chunk_copied: torch.cuda.Event | None = None
-        self._metric_sums = torch.zeros(len(METRICS), dtype=self.dtype, device=self.device)
-        self._graph: torch.cuda.CUDAGraph | None = None
+        self._metric_sums = torch.zeros(
+            len(self.STEP_METRICS), dtype=self.dtype, device=self.device
+        )
+        self._graphs: dict[str, torch.cuda.CUDAGraph] = {}
 
     # ------------------------------------------------------------------
-    # The gradient step
+    # The gradient step: what a subclass's backend supplies
     # ------------------------------------------------------------------
+
+    def _input_shapes(self) -> dict[str, tuple[int, ...]]:
+        """The shape of each tensor one step reads, by name; :meth:`_sample_inputs` fills them."""
+        b, o, a = self.batch_size, self.observation_dim, self.action_dim
+        return {
+            "observations": (b, o),
+            "actions": (b, a),
+            "rewards": (b,),
+            "next_observations": (b, o),
+            "dones": (b,),
+        }
+
+    def _sample_inputs(self) -> Mapping[str, np.ndarray]:
+        """One step's inputs, drawn on the host in the order the NumPy agent draws them. Called
+        for a whole chunk before its steps run; ``_gradient_steps`` counts only the steps of
+        earlier calls until :meth:`_train_steps` returns."""
+        return self.replay_buffer.sample(self.batch_size)
+
+    def _step_kind(self, gradient_step: int) -> str:
+        """The kind of step ``gradient_step`` (counted from 1 over the agent's life) is: DDPG's
+        steps are all alike."""
+        return "full"
+
+    def _reduce_metrics(self, sums: torch.Tensor, kinds: Counter[str]) -> dict[str, float]:
+        """What :meth:`update` returns, from the device's sums of ``STEP_METRICS`` and the number
+        of steps of each kind: here the mean of each over all the steps."""
+        means = (sums / sum(kinds.values())).cpu().numpy()
+        return {name: float(value) for name, value in zip(self.STEP_METRICS, means, strict=True)}
 
     def _policy(self, params: TensorParams, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         u = torch.tanh(_forward(params, obs))
@@ -179,8 +213,10 @@ class TorchDDPGAgent(DDPGAgent):
             tensor.grad.copy_(grad if coef is None else grad * coef)
         return norm
 
-    def _step(self) -> None:
+    def _step(self, kind: str) -> None:
         """One gradient step on the batch in ``self._inputs``: critic, then actor, then Polyak.
+        ``_gradient_steps`` is not advanced until :meth:`_train_steps` returns: a step that needs
+        its number gets it through ``kind`` (:meth:`_step_kind`).
 
         The same step as DDPGAgent's; it allocates nothing outside the graph's pool and reads
         nothing back to the host, so it can be captured.
@@ -209,7 +245,7 @@ class TorchDDPGAgent(DDPGAgent):
         self._optimizers["actor"].step()
 
         with torch.no_grad():
-            for online, target in (("actor", "target_actor"), ("critic", "target_critic")):
+            for online, target in self._target_names():
                 torch._foreach_lerp_(
                     list(nets[target].values()), list(nets[online].values()), self.tau
                 )
@@ -224,32 +260,36 @@ class TorchDDPGAgent(DDPGAgent):
 
     def _train_steps(self, num_updates: int) -> dict[str, float]:
         """Run ``num_updates`` steps on the device, then mirror the result into NumPy."""
-        if self.cuda_graph and self._graph is None:
-            self._capture()
         self._metric_sums.zero_()
+        kinds: Counter[str] = Counter()
         done = 0
         while done < num_updates:
             count = min(STAGE_CHUNK, num_updates - done)
             self._stage(count)
             for i in range(count):
+                kind = self._step_kind(self._gradient_steps + done + i + 1)
+                if self.cuda_graph and kind not in self._graphs:
+                    self._capture(kind)
                 for key, tensor in self._inputs.items():
                     tensor.copy_(self._device_chunk[key][i])
-                if self._graph is not None:
-                    self._graph.replay()
+                graph = self._graphs.get(kind)
+                if graph is not None:
+                    graph.replay()
                 else:
-                    self._step()
+                    self._step(kind)
+                kinds[kind] += 1
             done += count
         self._gradient_steps += num_updates
-        means = (self._metric_sums / num_updates).cpu().numpy()
+        metrics = self._reduce_metrics(self._metric_sums, kinds)
         self._mirror_to_numpy()
-        return {name: float(value) for name, value in zip(METRICS, means, strict=True)}
+        return metrics
 
     def _stage(self, count: int) -> None:
-        """Sample ``count`` batches from the replay buffer and copy them to the device at once."""
+        """Sample ``count`` steps' inputs and copy them to the device at once."""
         if self._chunk_copied is not None:
             self._chunk_copied.synchronize()  # the last chunk has left the host buffer
         for i in range(count):
-            sample = self.replay_buffer.sample(self.batch_size)
+            sample = self._sample_inputs()
             for key, host in self._host_chunk.items():
                 host[i].copy_(torch.from_numpy(np.asarray(sample[key], dtype=np.float64)))
         for key, host in self._host_chunk.items():
@@ -258,30 +298,31 @@ class TorchDDPGAgent(DDPGAgent):
             self._chunk_copied = torch.cuda.Event()
             self._chunk_copied.record()
 
-    def _capture(self) -> None:
-        """Capture :meth:`_step` as a CUDA graph without training: warm-up steps run on a side
-        stream (as capture requires), then every parameter, Adam state and gradient is put back."""
+    def _capture(self, kind: str) -> None:
+        """Capture :meth:`_step` of ``kind`` as a CUDA graph without training: warm-up steps run on
+        a side stream (as capture requires), then every parameter, Adam state and gradient is put
+        back."""
         saved = [t.detach().clone() for t in self._state_tensors()]
         side = torch.cuda.Stream(self.device)
         side.wait_stream(torch.cuda.current_stream(self.device))
         with torch.cuda.stream(side):
             for _ in range(CAPTURE_WARMUP):
-                self._step()
+                self._step(kind)
         torch.cuda.current_stream(self.device).wait_stream(side)
         graph = torch.cuda.CUDAGraph()
         with torch.cuda.graph(graph):
-            self._step()
+            self._step(kind)
         with torch.no_grad():
             for tensor, value in zip(self._state_tensors(), saved, strict=True):
                 tensor.copy_(value)
-        self._graph = graph
+        self._graphs[kind] = graph
 
     def _state_tensors(self) -> list[torch.Tensor]:
         """Every tensor a step changes: weights, gradients, Adam state and the metric sums."""
-        tensors = [t for net in NETWORKS for t in self._nets[net].values()]
-        for net in ("actor", "critic"):
+        tensors = [t for params in self._nets.values() for t in params.values()]
+        for net, optimizer in self._optimizers.items():
             tensors += [t.grad for t in self._nets[net].values() if t.grad is not None]
-            for state in self._optimizers[net].state.values():
+            for state in optimizer.state.values():
                 tensors += [state["step"], state["exp_avg"], state["exp_avg_sq"]]
         return [*tensors, self._metric_sums]
 
@@ -305,26 +346,20 @@ class TorchDDPGAgent(DDPGAgent):
         return arrays
 
     def _mirror_to_numpy(self) -> None:
-        """Copy all four networks and both Adam states from the device into DDPGAgent's arrays."""
+        """Copy every network and Adam state from the device into the NumPy agent's arrays."""
         for net, params in self._networks().items():
             for name, tensor in self._nets[net].items():
                 params[name] = tensor.detach().cpu().numpy().astype(np.float64)
-        for net, numpy_adam in (
-            ("actor", self._actor_optimizer),
-            ("critic", self._critic_optimizer),
-        ):
+        for net, numpy_adam in self._optimizers_by_net().items():
             numpy_adam.load_state(self._adam_arrays(net), prefix="")
 
     def _push_to_device(self) -> None:
-        """Copy DDPGAgent's NumPy networks and Adam states into the device tensors, in place."""
+        """Copy the NumPy agent's networks and Adam states into the device tensors, in place."""
         with torch.no_grad():
             for net, params in self._networks().items():
                 for name, tensor in self._nets[net].items():
                     tensor.copy_(torch.from_numpy(params[name]))
-            for net, numpy_adam in (
-                ("actor", self._actor_optimizer),
-                ("critic", self._critic_optimizer),
-            ):
+            for net, numpy_adam in self._optimizers_by_net().items():
                 stored = numpy_adam.state(prefix="")
                 for name, tensor in self._nets[net].items():
                     state = self._optimizers[net].state[tensor]

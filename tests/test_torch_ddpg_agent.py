@@ -16,10 +16,10 @@ torch = pytest.importorskip("torch")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from rl_core.agents import DDPGAgent  # noqa: E402
+from rl_core.agents import DDPGAgent, TD3Agent  # noqa: E402
 from rl_core.agents.torch_ddpg_agent import TorchDDPGAgent  # noqa: E402
 from rl_core.challenges import discover_challenges  # noqa: E402
-from tests.agent_internals import weights  # noqa: E402
+from tests.agent_internals import device_arrays, weights  # noqa: E402
 
 needs_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA GPU")
 
@@ -156,6 +156,33 @@ def test_a_loaded_torch_agent_continues_as_its_numpy_twin(tmp_path):
     _assert_same(weights(numpy_agent), weights(torch_agent), what="after loading, weight ")
 
 
+class TwinCriticProbe(TorchDDPGAgent, TD3Agent):
+    """TD3's networks and optimizers on the PyTorch backend, declared by TD3Agent alone; its step
+    is still DDPG's. The device must follow what the NumPy agent declares, not a fixed list."""
+
+
+def test_the_device_holds_every_network_and_optimizer_the_numpy_agent_declares(tmp_path):
+    """Loading a trained TD3 checkpoint puts all six networks and all three Adam states on the
+    device, so a second critic needs no change to the backend."""
+    numpy_td3 = TD3Agent(OBS, ACT, CONFIG)
+    _train_in_lockstep([numpy_td3], episodes=3)
+    numpy_td3.save(str(tmp_path / "td3.pt"))
+    probe = TwinCriticProbe(OBS, ACT, {**CONFIG, "seed": 3, **CPU64})
+    probe.load(str(tmp_path / "td3.pt"))
+
+    device = device_arrays(probe)
+
+    nets = ("actor", "critic", "target_actor", "target_critic", "critic_2", "target_critic_2")
+    with np.load(tmp_path / "td3.pt") as saved:
+        expected = {k: saved[k] for k in saved.files if k.startswith(tuple(f"{n}_" for n in nets))}
+    assert sorted(device) == sorted(expected), (
+        "The device should hold exactly the checkpoint's networks and Adam states; missing: "
+        f"{sorted(set(expected) - set(device))}"
+    )
+    for key, value in expected.items():
+        np.testing.assert_array_equal(device[key], value, err_msg=f"{key} differs on the device")
+
+
 def test_challenges_build_the_torch_agent_with_their_action_bounds():
     challenge = discover_challenges()["pendulum"]()
     env = challenge.make_env({"seed": 1}, render_mode=None)
@@ -232,3 +259,55 @@ def test_loading_into_a_captured_agent_retargets_its_graph(tmp_path):
     _train_in_lockstep([captured, fresh], episodes=2, seed=5)
 
     _assert_same(weights(fresh), weights(captured), rtol=1e-6, atol=1e-7, what="after loading, ")
+
+
+class TwoStepKinds(TorchDDPGAgent):
+    """Odd gradient steps are DDPG's step; even ones take it twice on the same batch. Each kind is
+    its own graph, so a graph replayed for the wrong kind trains a different number of steps."""
+
+    def _step_kind(self, gradient_step):
+        return "single" if gradient_step % 2 else "double"
+
+    def _step(self, kind):
+        super()._step(kind)
+        if kind == "double":
+            super()._step(kind)
+
+
+@needs_cuda
+def test_each_step_kind_replays_its_own_graph():
+    """Alternating kinds, captured mid-call and across staging chunks (80 steps per update, 64 per
+    chunk), train as the same steps run eagerly: same metrics, same weights."""
+    cuda64 = {**CONFIG, "backend": "torch", "device": "cuda", "dtype": "float64"}
+    graphed = TwoStepKinds(OBS, ACT, {**cuda64, "cuda_graph": True})
+    eager = TwoStepKinds(OBS, ACT, {**cuda64, "cuda_graph": False})
+
+    history = _train_in_lockstep([graphed, eager], episodes=4)
+
+    for step, (from_graph, from_eager) in enumerate(history[1:], start=1):
+        _assert_same(from_eager, from_graph, what=f"episode {step} metric ")
+    _assert_same(weights(eager), weights(graphed), what="graph against eager, ")
+
+
+class StepNumbers(TorchDDPGAgent):
+    """Records the number each gradient step is asked its kind with."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.seen = []
+
+    def _step_kind(self, gradient_step):
+        self.seen.append(gradient_step)
+        return super()._step_kind(gradient_step)
+
+
+def test_step_kinds_are_asked_with_each_steps_number_over_the_agents_life():
+    """1, 2, 3 … across update calls and staging chunks (80 steps per update, 64 per chunk), as
+    TD3 counts the steps its delay is judged by."""
+    agent = StepNumbers(OBS, ACT, {**CONFIG, **CPU64})
+
+    history = _train_in_lockstep([agent], episodes=4)
+
+    trained = 80 * sum(1 for (metrics,) in history if metrics)
+    assert trained == 240, "three of the four episodes should train, 80 steps each"
+    assert agent.seen == list(range(1, trained + 1)), "step numbers should run on without a gap"

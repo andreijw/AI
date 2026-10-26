@@ -111,9 +111,12 @@ when picked.
     hook replacing DDPG's noise reset inside `update`; `configs/pendulum_td3.yaml` from rl-zoo; a 5-seed Pendulum
     run against DDPG; a PyTorch backend through `BACKENDS`, and MountainCarContinuous at rl-zoo's 400×300 on the GPU.
   - **Progress**: the first pull request (`feature/td3-agent`) adds the hook, `TD3Agent`, the Pendulum config and
-    its learning run. Open: the PyTorch backend (sharing `TorchDDPGAgent`'s staging, capture and mirror) and
-    MountainCarContinuous. Splitting DDPG's maths from its bookkeeping first would spare a PyTorch subclass the NumPy
-    maths it has to refuse (ARCHITECTURE.md).
+    its learning run. The second (`feature/torch-backend-hooks`) makes `TorchDDPGAgent` read its networks,
+    optimizers, target pairs, step inputs and metrics from hooks, and gives TD3 one home for its delay rule
+    (`_is_actor_step`) and its metric means (`_step_means`) (CHANGELOG.md, 2026-10-26). Open: `TorchTD3Agent`
+    (`class TorchTD3Agent(TorchDDPGAgent, TD3Agent)`: a critic-only and a full `_step`, the target noise staged from
+    TD3's NumPy generator so float64 matches TD3Agent, `_reduce_metrics` through `_step_means`), registered in
+    `TD3Agent.BACKENDS`; then MountainCarContinuous. Check first that two captured graphs fit the Jetson's memory.
   - **Out of scope**: SAC; n-step returns; LunarLander itself.
 
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**

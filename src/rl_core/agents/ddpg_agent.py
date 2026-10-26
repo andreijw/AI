@@ -215,9 +215,16 @@ class DDPGAgent(BaseAgent):
         for name, step in optimizer.step(grads, self.learning_rate).items():
             params[name] -= step
 
+    def _target_names(self) -> list[tuple[str, str]]:
+        """(online, target) names in :meth:`_networks` for every network with a target, in the
+        order they are averaged."""
+        return [("actor", "target_actor"), ("critic", "target_critic")]
+
     def _target_pairs(self) -> list[tuple[Params, Params]]:
-        """(online, target) for every network with a target, in the order they are averaged."""
-        return [(self._actor, self._target_actor), (self._critic, self._target_critic)]
+        """(online, target) parameters for every network with a target, in the order they are
+        averaged."""
+        networks = self._networks()
+        return [(networks[online], networks[target]) for online, target in self._target_names()]
 
     def _polyak(self) -> None:
         """Move each target parameter a fraction ``tau`` towards its online parameter."""
@@ -309,6 +316,7 @@ class DDPGAgent(BaseAgent):
     # ------------------------------------------------------------------
 
     def _networks(self) -> dict[str, Params]:
+        """Every network by name, targets included, in checkpoint order."""
         return {
             "actor": self._actor,
             "critic": self._critic,
@@ -316,16 +324,21 @@ class DDPGAgent(BaseAgent):
             "target_critic": self._target_critic,
         }
 
+    def _optimizers_by_net(self) -> dict[str, Adam]:
+        """The Adam of every trained network, by the network's name in :meth:`_networks`. Another
+        backend trains these same networks and mirrors its optimizer state into these."""
+        return {"actor": self._actor_optimizer, "critic": self._critic_optimizer}
+
     def _checkpoint_arrays(self) -> dict[str, Any]:
-        """Everything training needs to resume beyond the generators: the four networks, both
-        Adam states, the action and gradient-step counters and the replay buffer."""
+        """Everything training needs to resume beyond the generators: every network, every Adam
+        state (``<net>_adam_``), the action and gradient-step counters and the replay buffer."""
         arrays: dict[str, Any] = {
             f"{net}_{name}": value
             for net, params in self._networks().items()
             for name, value in params.items()
         }
-        arrays.update(self._actor_optimizer.state(prefix="actor_adam_"))
-        arrays.update(self._critic_optimizer.state(prefix="critic_adam_"))
+        for net, optimizer in self._optimizers_by_net().items():
+            arrays.update(optimizer.state(prefix=f"{net}_adam_"))
         arrays["training_actions"] = np.array(self._training_actions)
         arrays["gradient_steps"] = np.array(self._gradient_steps)
         arrays.update(self.replay_buffer.checkpoint_state())
@@ -351,7 +364,7 @@ class DDPGAgent(BaseAgent):
         for net, params in self._networks().items():
             for name in params:
                 params[name] = np.array(data[f"{net}_{name}"], dtype=np.float64)
-        self._actor_optimizer.load_state(data, prefix="actor_adam_")
-        self._critic_optimizer.load_state(data, prefix="critic_adam_")
+        for net, optimizer in self._optimizers_by_net().items():
+            optimizer.load_state(data, prefix=f"{net}_adam_")
         self._training_actions = int(data["training_actions"])
         self._gradient_steps = int(data["gradient_steps"])
