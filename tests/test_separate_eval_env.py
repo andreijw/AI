@@ -200,10 +200,17 @@ def test_the_benchmark_evaluates_on_a_separate_environment(tmp_path, monkeypatch
 
     monkeypatch.setattr(benchmark, "Trainer", spy)
     benchmark.run_benchmark(
-        challenge_name="cartpole", agents=["random"], seeds=[2], episodes=2,
-        output_dir=str(tmp_path / "out"), report_path=str(tmp_path / "report.md"), save_plot=False,
-        eval_episodes=1,
-    )  # fmt: skip
+        challenge_name="cartpole",
+        settings=benchmark.BenchmarkSettings(
+            agents=("random",),
+            seeds=(2,),
+            episodes=2,
+            eval_episodes=1,
+            output_dir=str(tmp_path / "out"),
+        ),
+        report_path=str(tmp_path / "report.md"),
+        save_plot=False,
+    )
     (eval_env, eval_seed) = seen[0]
     assert isinstance(eval_env, CartPoleEnv)
     assert eval_seed == eval_seed_for(2)
@@ -214,14 +221,21 @@ SEPARATE_EVAL_SENTENCE = "Evaluation runs on a separate environment"
 
 
 def test_the_report_does_not_claim_separate_evaluation_for_a_challenge_without_configs(tmp_path):
-    from benchmark import BenchmarkRunner
+    from benchmark import BenchmarkRunner, BenchmarkSettings
     from tests.test_benchmark import CustomGenericChallenge
 
     report = tmp_path / "report.md"
     BenchmarkRunner(CustomGenericChallenge()).run(
-        agents=["mock_agent"], episodes=2, seeds=[11], output_dir=str(tmp_path / "out"),
-        report_path=str(report), save_plot=False, eval_episodes=1,
-    )  # fmt: skip
+        settings=BenchmarkSettings(
+            agents=("mock_agent",),
+            seeds=(11,),
+            episodes=2,
+            eval_episodes=1,
+            output_dir=str(tmp_path / "out"),
+        ),
+        report_path=str(report),
+        save_plot=False,
+    )
     assert SEPARATE_EVAL_SENTENCE not in report.read_text(encoding="utf-8")
 
 

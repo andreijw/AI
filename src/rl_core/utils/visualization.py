@@ -19,27 +19,11 @@ if not _has_display and not os.environ.get("MPLBACKEND"):
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from .smoothing import rolling_average  # noqa: E402
+
 __all__ = ["plot_training_metrics", "plot_benchmark_comparison"]
 
 _PLOT_FILENAME = "training_metrics.png"
-
-
-def _rolling_average(data: list[float], window: int) -> list[float]:
-    """
-    Compute a trailing rolling average.
-
-    Args:
-        data: Sequence of float values.
-        window: Look-back window size (must be >= 1).
-
-    Returns:
-        List of rolling-average values the same length as *data*.
-    """
-    result: list[float] = []
-    for i in range(len(data)):
-        start = max(0, i - window + 1)
-        result.append(float(np.mean(data[start : i + 1])))
-    return result
 
 
 def plot_training_metrics(
@@ -89,8 +73,8 @@ def plot_training_metrics(
         raise ValueError(f"window must be >= 1; got {window}.")
 
     episodes = list(range(1, len(episode_rewards) + 1))
-    rewards_avg = _rolling_average(episode_rewards, window)
-    lengths_avg = _rolling_average([float(x) for x in episode_lengths], window)
+    rewards_avg = rolling_average(episode_rewards, window)
+    lengths_avg = rolling_average([float(x) for x in episode_lengths], window)
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
     fig.suptitle(title, fontsize=14)
@@ -182,7 +166,7 @@ def aligned_curves(
         raise ValueError(
             f"aligned_curves needs window >= 1 and non-empty runs; got window {window}."
         )
-    smoothed = [_rolling_average(run, window) for run in runs]
+    smoothed = [rolling_average(run, window) for run in runs]
     if episode_lengths is not None:
         if [len(lengths) for lengths in episode_lengths] != [len(r) for r in smoothed]:
             raise EpisodeLengthsMismatchError("episode_lengths do not match the runs.")
