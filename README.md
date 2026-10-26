@@ -210,7 +210,7 @@ python train.py --config configs/pendulum_ddpg.yaml
 python train.py --config configs/acrobot_dqn.yaml
 python train.py --config configs/acrobot_ppo.yaml
 
-# MountainCar DQN (learns, does not solve)
+# MountainCar DQN (learns, does not reliably solve)
 python train.py --config configs/mountaincar_dqn.yaml
 
 # MountainCarContinuous DDPG with Ornstein-Uhlenbeck exploration noise
@@ -240,7 +240,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates) | 1,000,000 | 0 of 5 | — | 0 of 5 |
 | Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
 | Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
-| MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate) | 200,000 | 1 of 5 | 103k | 0 of 5 |
+| MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate, 100k buffer); seeds 1 to 10, 2026-10-25 | 200,000 | 3 of 10 | 146k to 195k | 2 of 10 |
 | MountainCarContinuous-v0 | DDPG | `mountaincar_continuous_ddpg.yaml` (rl-zoo settings, OU noise, 64×64 networks) | 300,000 | 5 of 5 | 25k to 69k | 5 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
@@ -254,10 +254,12 @@ of -172 ± 27 beats the random agent on every seed (CHANGELOG.md, 2026-10-19).
 Acrobot was measured on 2026-10-22 (CHANGELOG.md, 2026-10-22); it has no published report under `docs/benchmarks/`
 yet. Acrobot DQN keeps exploring with 2% random actions rather than rl-zoo's 10%: with 10% its training average ended
 at -95 to -103 and held on 1 of 5 seeds; with 2% it ends at -90 to -96, and its greedy evaluation is -85 ± 6.
-MountainCar DQN learns to reach the flag but does not hold -110: with its learning rate decaying to zero over 200,000
-steps its final training averages are -121 to -146 against the random agent's -200, its greedy evaluation -132 ± 11,
-and one seed reaches -110 for a window and drifts back. With a fixed rate the final averages were -135 to -146 over the
-same budget; two hidden layers, a Huber loss or scaled inputs did not help (CHANGELOG.md, 2026-10-23). PPO has no
+MountainCar DQN learns to reach the flag but does not reliably hold -110. Its greedy policy reaches about -100 mid-run
+and does not stay there; a 100,000-transition replay buffer (rl-zoo: 10,000) helps the training average. On seeds 1 to
+10 the final training averages are -107 to -132 (mean -120.5, against -131.2 with 10,000) against the random agent's
+-200, its greedy evaluation is -120 ± 13, and 2 of 10 seeds end at or above -110, both crossing it in their last 5,000
+to 14,000 steps (CHANGELOG.md, 2026-10-25). Two hidden layers, a
+Huber loss or scaled inputs did not help (CHANGELOG.md, 2026-10-23). PPO has no
 MountainCar config: without reward normalisation it never reached the flag in 1,000,000 steps on any of 5 seeds.
 MountainCarContinuous DDPG explores with Ornstein-Uhlenbeck noise (sigma 0.5), as rl-zoo's does; its greedy evaluation
 averages 93.4 (± 0.2 across seed means) against rl-zoo's 93.5. With Gaussian noise of the same std it solved no seed:

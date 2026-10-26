@@ -118,10 +118,19 @@ Tier 1 began with Acrobot-v1 (CHANGELOG.md, 2026-10-22). The items below are ske
 when picked.
 
 - [ ] **MountainCar-v0: Hold -110**
-  - **Description**: MountainCar-v0's DQN learns but does not hold -110, even with a decaying learning rate (final
-    averages -121 to -146), and PPO never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23).
-    Reward normalisation, or an exploration aid for discrete actions, is where both would be tried next; the
-    Ornstein-Uhlenbeck noise of the continuous variant applies to continuous actions only (CHANGELOG.md, 2026-10-23).
+  - **Description**: MountainCar-v0's DQN does not reliably hold -110: with a 100,000-transition buffer, 2 of 10 seeds
+    end at or above it (both crossing it only near the end of the run), and the final averages are -107 to -132
+    (CHANGELOG.md, 2026-10-25).
+  - **Diagnosis (2026-10-25)**: the agent reaches the flag reliably, so exploration is unlikely to be the limit. On seed
+    4 the greedy policy evaluated -100 to -107 from episode 550 to 700, then settled near -125 with a spread of about
+    20 and did not stay good: consistent with a good policy found and then forgotten. A larger buffer helps the
+    training average (better on 10 of 10 seeds, by +6 on the held-out seeds 6 to 10) but not the held-out greedy
+    evaluation. Next
+    levers, untried: a smaller step once the policy is good (the current rate is still half its start at episode 700),
+    prioritised replay, or keeping the best greedy policy. Note that -110 is judged on the training average, exploration
+    included, while rl-zoo's -100.8 is a greedy evaluation.
+  - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
+    examined by the diagnosis above.
 
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
   - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency
