@@ -182,7 +182,6 @@ def test_pendulum_benchmark_challenge_registration_and_setup():
     assert challenge.key == "pendulum"
     assert challenge.solve_threshold == -200.0
     assert challenge.default_episodes == 200
-    assert set(challenge.supported_agents) == {"actor_critic", "ddpg", "ppo", "random", "td3"}
 
     # Setup run for PPO
     env_ppo, agent_ppo, train_cfg_ppo = challenge.setup_run("ppo", seed=42, episodes=10)

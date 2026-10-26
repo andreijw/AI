@@ -167,8 +167,10 @@ an aliased target only shows on the update after a sync.
   (`tests.helpers.assert_same_checkpoint`, loading into a differently seeded agent that has trained at least
   once, so a load that skips a zero-initialised bias still fails). Maths tests that need weights, the forward
   pass or a loss method go through `tests/agent_internals.py`, the one module allowed to name an agent's
-  private members. `test_migrated_agent_tests_use_only_the_public_interface` holds every `tests/test_*.py` to
-  that except the non-agent files in `PRIVATE_ACCESS_EXEMPT`; a new agent test is checked automatically.
+  private members; `tests/trainer_internals.py` is the same for `Trainer`, whose tests otherwise go through
+  `train()`, `evaluate()` and the files and log lines they produce.
+  `test_migrated_agent_tests_use_only_the_public_interface` holds every `tests/test_*.py` to that except the
+  non-agent files in `PRIVATE_ACCESS_EXEMPT`; a new test file is checked automatically.
 - **Every assertion message says what should have happened**, in words a person reading CI output
   understands.
 

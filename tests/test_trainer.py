@@ -18,6 +18,7 @@ from rl_cartpole.environments import CartPoleEnv
 from rl_core.agents import BaseAgent, DQNAgent, RandomAgent
 from rl_core.training import Trainer
 from rl_core.utils.logger import Logger
+from tests.trainer_internals import log_metrics
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -124,51 +125,61 @@ def test_trainer_accepts_logger(env, agent):
     assert trainer.logger is logger
 
 
-def test_log_info_uses_logger_when_available(env, agent):
-    """_log_info should delegate to logger.info when a logger is set."""
+def test_progress_lines_go_to_the_logger_when_it_has_one(env, agent, tmp_path):
+    """Progress lines are the logger's info, when the trainer has a logger."""
     logger = MagicMock()
-    trainer = Trainer(env=env, agent=agent, config={}, logger=logger)
-    trainer._log_info("test message")
-    logger.info.assert_called_once_with("test message")
+    Trainer(
+        env=env,
+        agent=agent,
+        config={
+            "num_episodes": 10,
+            "max_steps_per_episode": 5,
+            "eval_frequency": 100,
+            "save_frequency": 100,
+            "checkpoint_dir": str(tmp_path / "ckpt"),
+        },
+        logger=logger,
+    ).train()
+    messages = [call.args[0] for call in logger.info.call_args_list]
+    assert any(m.startswith("Starting training for") for m in messages), messages
+    assert any(m.startswith("Episode 10") for m in messages), messages
 
 
-def test_log_info_falls_back_to_logging_without_logger(env, agent, caplog):
-    """_log_info should emit via the module logger when no logger is provided."""
-    trainer = Trainer(env=env, agent=agent, config={})
+def test_progress_lines_fall_back_to_the_module_logger(env, agent, tmp_path, caplog):
+    """Without a logger, progress lines go to the trainer module's logger."""
     with caplog.at_level(logging.INFO, logger="rl_core.training.trainer"):
-        trainer._log_info("fallback message")
-    assert "fallback message" in caplog.text
+        Trainer(
+            env=env,
+            agent=agent,
+            config={
+                "num_episodes": 10,
+                "max_steps_per_episode": 5,
+                "eval_frequency": 100,
+                "save_frequency": 100,
+                "checkpoint_dir": str(tmp_path / "ckpt"),
+            },
+        ).train()
+    assert any(m.startswith("Episode 10") for m in caplog.messages), caplog.messages
 
 
 # ---------------------------------------------------------------------------
-# _run_episode
+# Episodes
 # ---------------------------------------------------------------------------
 
 
-def test_run_episode_returns_scalars(trainer):
-    """_run_episode should return (float, int)."""
-    episode_reward, episode_length = trainer._run_episode(training=True)
-
-    assert isinstance(episode_reward, float)
-    assert isinstance(episode_length, int)
-    assert episode_length >= 1
+def test_evaluation_episodes_take_at_least_one_step(trainer):
+    """Evaluation runs real episodes: each takes at least one step and its reward is a float."""
+    stats = trainer.evaluate(num_episodes=2)
+    assert stats["mean_length"] >= 1.0
+    assert isinstance(stats["mean_reward"], float)
 
 
-def test_run_episode_non_training(trainer):
-    """_run_episode in eval mode should still return valid scalars."""
-    episode_reward, episode_length = trainer._run_episode(training=False)
-
-    assert isinstance(episode_reward, float)
-    assert isinstance(episode_length, int)
-
-
-def test_run_episode_respects_max_steps(env, agent):
-    """max_steps_per_episode should cap the episode length."""
-    config = {"num_episodes": 1, "max_steps_per_episode": 5}
-    trainer = Trainer(env=env, agent=agent, config=config)
-
-    _, episode_length = trainer._run_episode(training=True)
-    assert episode_length <= 5
+def test_max_steps_per_episode_caps_training_and_evaluation_episodes(env, agent):
+    """max_steps_per_episode cuts every episode, training and evaluation alike."""
+    trainer = Trainer(env=env, agent=agent, config={"num_episodes": 3, "max_steps_per_episode": 5})
+    trainer.train()
+    assert trainer.episode_lengths and max(trainer.episode_lengths) <= 5
+    assert trainer.evaluate(num_episodes=2)["mean_length"] <= 5
 
 
 # ---------------------------------------------------------------------------
@@ -196,30 +207,36 @@ def test_evaluate_std_for_single_episode(trainer):
 
 
 # ---------------------------------------------------------------------------
-# _save_checkpoint
+# Checkpoints
 # ---------------------------------------------------------------------------
 
 
-def test_save_checkpoint_creates_file(env, agent, tmp_path):
-    """_save_checkpoint creates the directory and writes the agent's and the trainer's files."""
+def test_a_save_writes_the_agents_and_the_trainers_files(env, agent, tmp_path):
+    """At save_frequency, train() creates the folder and writes both checkpoint files."""
     tmpdir = str(tmp_path / "ckpt")
-    trainer = Trainer(env=env, agent=agent, config={"num_episodes": 1, "checkpoint_dir": tmpdir})
-
-    trainer._save_checkpoint(episode=1)
+    config = {
+        "num_episodes": 1,
+        "save_frequency": 1,
+        "eval_frequency": 100,
+        "checkpoint_dir": tmpdir,
+    }
+    Trainer(env=env, agent=agent, config=config).train()
 
     assert sorted(os.listdir(tmpdir)) == ["agent_episode_1.pt", "trainer_episode_1.npz"]
     agent.load(os.path.join(tmpdir, "agent_episode_1.pt"))
 
 
-def test_save_checkpoint_creates_nested_directory(env, agent, tmp_path):
-    """_save_checkpoint should create nested checkpoint directories."""
-    nested = str(tmp_path / "deep" / "nested" / "checkpoints")
-    config = {"num_episodes": 1, "checkpoint_dir": nested}
-    trainer = Trainer(env=env, agent=agent, config=config)
+def test_a_save_creates_nested_checkpoint_folders(env, agent, tmp_path):
+    nested = tmp_path / "deep" / "nested" / "checkpoints"
+    config = {
+        "num_episodes": 1,
+        "save_frequency": 1,
+        "eval_frequency": 100,
+        "checkpoint_dir": str(nested),
+    }
+    Trainer(env=env, agent=agent, config=config).train()
 
-    trainer._save_checkpoint(episode=5)
-
-    assert os.path.isdir(nested)
+    assert (nested / "agent_episode_1.pt").is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -249,33 +266,58 @@ def test_train_accumulates_metrics(trainer):
     assert all(isinstance(ep_len, int) for ep_len in trainer.episode_lengths)
 
 
-def test_train_exposes_training_progress(trainer):
-    """current_episode tracks the 1-based training episode; evaluating is set only during eval."""
+class _ProgressAgent(RandomAgent):
+    """Records, at every action the trainer asks for, whether it trains and what the trainer's
+    progress attributes say."""
+
+    def __init__(self):
+        super().__init__(observation_dim=4, action_dim=2, config={"seed": 0})
+        self.trainer = None
+        self.seen = []
+
+    def select_action(self, observation, training=True):
+        self.seen.append((training, self.trainer.current_episode, self.trainer.evaluating))
+        return super().select_action(observation, training)
+
+
+def test_train_exposes_training_progress(env, tmp_path):
+    """current_episode tracks the 1-based training episode; evaluating is set only during eval, for
+    each of the evaluation's 10 episodes (one action each here)."""
+    agent = _ProgressAgent()
+    config = {
+        "num_episodes": 3,
+        "max_steps_per_episode": 1,
+        "eval_frequency": 2,
+        "save_frequency": 100,
+        "checkpoint_dir": str(tmp_path / "ckpt"),
+    }
+    trainer = Trainer(env=env, agent=agent, config=config)
+    agent.trainer = trainer
     assert trainer.current_episode == 0
     assert trainer.evaluating is False
 
-    seen = []
-    original_run_episode = trainer._run_episode
+    trainer.train()
 
-    def spy_run_episode(training=True):
-        seen.append((training, trainer.current_episode, trainer.evaluating))
-        return original_run_episode(training=training)
-
-    with patch.object(trainer, "_run_episode", side_effect=spy_run_episode):
-        trainer.train()
-
-    training_calls = [(ep, ev) for training, ep, ev in seen if training]
-    eval_calls = [(ep, ev) for training, ep, ev in seen if not training]
-    assert training_calls == [(1, False), (2, False), (3, False)]
-    # eval_frequency=2 -> one evaluation of 10 episodes after training episode 2
-    assert eval_calls == [(2, True)] * 10
+    training = [(ep, ev) for is_training, ep, ev in agent.seen if is_training]
+    evaluation = [(ep, ev) for is_training, ep, ev in agent.seen if not is_training]
+    assert training == [(1, False), (2, False), (3, False)]
+    assert evaluation == [(2, True)] * 10, (
+        "eval_frequency 2: one 10-episode evaluation after episode 2"
+    )
     assert trainer.evaluating is False
 
 
-def test_evaluating_flag_reset_when_evaluation_fails(trainer):
+class _FailingEvalAgent(RandomAgent):
+    def select_action(self, observation, training=True):
+        if not training:
+            raise RuntimeError("boom")
+        return super().select_action(observation, training)
+
+
+def test_evaluating_flag_reset_when_evaluation_fails(env):
     """evaluating must be cleared even if an evaluation episode raises."""
-    failing_episode = patch.object(trainer, "_run_episode", side_effect=RuntimeError("boom"))
-    with failing_episode, pytest.raises(RuntimeError):
+    trainer = Trainer(env=env, agent=_FailingEvalAgent(4, 2, {"seed": 0}), config={})
+    with pytest.raises(RuntimeError, match="boom"):
         trainer.evaluate()
 
     assert trainer.evaluating is False
@@ -299,7 +341,7 @@ def test_train_with_logger_calls_log(env, agent, tmp_path):
 
 
 def test_train_triggers_checkpoint_save(env, agent, tmp_path):
-    """Trainer should call _save_checkpoint when episode reaches save_frequency."""
+    """Trainer saves a checkpoint when the episode reaches save_frequency."""
     config = {
         "num_episodes": 2,
         "max_steps_per_episode": 20,
@@ -307,12 +349,11 @@ def test_train_triggers_checkpoint_save(env, agent, tmp_path):
         "save_frequency": 2,
         "checkpoint_dir": str(tmp_path / "ckpt"),
     }
-    trainer = Trainer(env=env, agent=agent, config=config)
-
-    # Patch _save_checkpoint to verify that it is called during training.
-    with patch.object(trainer, "_save_checkpoint", wraps=trainer._save_checkpoint) as mock_save:
-        trainer.train()
-        assert mock_save.called
+    Trainer(env=env, agent=agent, config=config).train()
+    assert sorted(os.listdir(tmp_path / "ckpt")) == [
+        "agent_episode_2.pt",
+        "trainer_episode_2.npz",
+    ], "save_frequency 2 over 2 episodes: one save, after episode 2"
 
 
 def test_train_triggers_evaluation(env, agent, tmp_path):
@@ -681,7 +722,7 @@ def test_train_writes_update_metrics_to_jsonl_with_real_agent(env, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _log_metrics: one normalised record, sent to whichever logger the trainer has
+# Metrics records: one normalised record, sent to whichever logger the trainer has
 # ---------------------------------------------------------------------------
 
 _RAW_METRICS = {"episode": np.int64(10), "loss": float("nan")}
@@ -691,7 +732,7 @@ _SAFE_METRICS = {"episode": 10, "loss": None}
 def test_log_metrics_without_a_logger_uses_the_module_logger(env, agent, caplog):
     trainer = Trainer(env=env, agent=agent, config={})
     with caplog.at_level(logging.INFO, logger="rl_core.training.trainer"):
-        trainer._log_metrics(_RAW_METRICS)
+        log_metrics(trainer, _RAW_METRICS)
     assert f"METRICS: {_SAFE_METRICS}" in caplog.messages
 
 
@@ -699,13 +740,13 @@ def test_log_metrics_with_a_standard_logger_uses_info(env, agent, caplog):
     std_logger = logging.getLogger("test_log_metrics_standard")
     trainer = Trainer(env=env, agent=agent, config={}, logger=std_logger)
     with caplog.at_level(logging.INFO, logger="test_log_metrics_standard"):
-        trainer._log_metrics(_RAW_METRICS)
+        log_metrics(trainer, _RAW_METRICS)
     assert caplog.messages == [f"Metrics: {_SAFE_METRICS}"]
 
 
 def test_log_metrics_hands_a_custom_logger_the_normalised_dict(env, agent):
     custom = MagicMock()
-    Trainer(env=env, agent=agent, config={}, logger=custom)._log_metrics(_RAW_METRICS)
+    log_metrics(Trainer(env=env, agent=agent, config={}, logger=custom), _RAW_METRICS)
     custom.log.assert_called_once_with(_SAFE_METRICS)
     custom.info.assert_not_called()
 
@@ -722,14 +763,14 @@ def test_log_metrics_falls_back_to_info_when_log_takes_other_arguments(env, agen
             self.lines.append(msg)
 
     custom = LevelLogger()
-    Trainer(env=env, agent=agent, config={}, logger=custom)._log_metrics(_RAW_METRICS)
+    log_metrics(Trainer(env=env, agent=agent, config={}, logger=custom), _RAW_METRICS)
     assert custom.lines == [f"Metrics: {_SAFE_METRICS}"]
 
 
 def test_log_metrics_with_neither_log_nor_info_uses_the_module_logger(env, agent, caplog):
     trainer = Trainer(env=env, agent=agent, config={}, logger=object())
     with caplog.at_level(logging.INFO, logger="rl_core.training.trainer"):
-        trainer._log_metrics(_RAW_METRICS)
+        log_metrics(trainer, _RAW_METRICS)
     assert f"METRICS: {_SAFE_METRICS}" in caplog.messages
 
 
