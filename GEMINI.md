@@ -64,9 +64,10 @@ To optimize token usage and context window limits:
 * **`configs/`** (located at [configs/](configs/)): YAML files specifying hyperparameter
   configs for training default, REINFORCE, Actor-Critic, and PPO algorithms.
 * **`scripts/`** (located at [scripts/](scripts/)): Automation scripts
-  (e.g., `sync_workflow_docs.py`).
+  (e.g., `sync_workflow_docs.py`), and `pytorch_timing/`, the DDPG timing scripts behind
+  `docs/pytorch_jetson_timing.md`; all but `time_numpy.py` need a separate PyTorch environment, not `.venv`.
 * **`docs/`** (located at [docs/](docs/)): Feature guides, setup documents, summaries,
-  and roadmaps (`roadmap.md`, `environment_setup_summary.md`).
+  and roadmaps (`roadmap.md`, `environment_setup_summary.md`, `pytorch_jetson_timing.md`).
 * **`examples/`** (located at [examples/](examples/)): Demonstration scripts showcasing
   features (e.g., [demo_env_features.py](examples/demo_env_features.py)).
 * **`train.py`** (located at [train.py](train.py)): The main command-line entrypoint for
