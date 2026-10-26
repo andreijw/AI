@@ -52,6 +52,28 @@ Acrobot-v1) and
     once, scored -124.6.
   - **Still open:** MountainCar still does not reliably hold -110; the roadmap item stays open with the diagnosis.
 
+### Added
+
+- **PyTorch timing test on the Jetson** (`feature/pytorch-timing-test`), a measurement only: nothing in the
+  framework uses PyTorch. Results, install steps and the recommendation are in `docs/pytorch_jetson_timing.md`; the
+  scripts are in `scripts/pytorch_timing/`, the PyTorch step in its `torch_ddpg.py`.
+  - **Setup:** PyTorch's own `torch 2.14.1+cu132` aarch64 wheel drives the Orin's GPU on JetPack 7.2.1 (its `sm_80`
+    kernels run on compute capability 8.7). No NVIDIA-specific build is needed, and it installs into a separate
+    5.2 GiB virtual environment.
+  - **Measurement:** one DDPG gradient step (Pendulum shapes, batch 256), median of 300 steps, 25W power mode.
+  - **Results:**
+    - NumPy float64: 5.46 ms at 64×64 and 44.7 ms at 400×300.
+    - PyTorch CPU float32: 11.3 and 22.2 ms.
+    - PyTorch GPU float32 without CUDA graphs: about 22 ms at both sizes, apparently limited by kernel launches.
+    - The same step replayed as a CUDA graph: 0.84 and 2.50 ms, 6.5 and 18 times faster than NumPy (float32
+      against NumPy's float64; NumPy float32 was not timed).
+    - One greedy action costs about 1.1 ms on the GPU against 0.04 ms in NumPy.
+  - **Same computation:** `tests/test_ddpg_torch_reference.py` (skipped without PyTorch) runs one NumPy `update`
+    and one PyTorch step on the same batch in float64 on the CPU; all four networks agree to a relative 1e-10,
+    Adam and Polyak included. Float32, the GPU and CUDA-graph replay are not covered.
+  - **Next:** the recommendation is an optional backend for the off-policy agents, DDPG first. It awaits the
+    maintainer's decision in `docs/roadmap.md`.
+
 ## 2026-10-23
 
 ### Changed
