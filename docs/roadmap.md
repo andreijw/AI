@@ -116,16 +116,25 @@ when picked.
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 
+- [~] **TD3 Agent (Prerequisite for Tier 2)**
+  - **Description**: TD3 (Fujimoto et al., 2018) as Stable-Baselines3 implements it, the stronger off-policy
+    continuous agent the LunarLander rung needs, built and measured on the challenges that exist now.
+  - **Acceptance criteria**: `TD3Agent` in NumPy beside `DDPGAgent` (twin critics, target-policy smoothing, delayed
+    actor and target updates), checked against a hand replay of SB3's step; an explicit `BaseAgent.end_episode`
+    hook replacing DDPG's noise reset inside `update`; `configs/pendulum_td3.yaml` from rl-zoo; a 5-seed Pendulum
+    run against DDPG; a PyTorch backend through `BACKENDS`, and MountainCarContinuous at rl-zoo's 400×300 on the GPU.
+  - **Progress**: the first pull request (`feature/td3-agent`) adds the hook, `TD3Agent`, the Pendulum config and
+    its learning run. Open: the PyTorch backend (sharing `TorchDDPGAgent`'s staging, capture and mirror) and
+    MountainCarContinuous. Splitting DDPG's maths from its bookkeeping first would spare a PyTorch subclass the NumPy
+    maths it has to refuse (ARCHITECTURE.md).
+  - **Out of scope**: SAC; n-step returns; LunarLander itself.
+
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
   - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency
     (a swig build, not checked on the Jetson's aarch64) and a stronger off-policy continuous agent. The POMDP
     variant of CartPole is Tier 2 too, through the Phase 6 frame-stacking item.
-  - **Episode-end hook**: DDPG resets its Ornstein-Uhlenbeck noise inside `update`, relying on the Trainer calling
-    it once per episode (ARCHITECTURE.md). A TD3 that reuses `rl_core/agents/exploration_noise.py` is the moment
-    to replace that with an explicit `BaseAgent` episode-end hook, before a per-step update loop arrives.
-  - **PyTorch backend**: a TD3 or SAC gets one as DDPG did, through its `BACKENDS` and a `torch_*.py` subclass that
-    overrides only the gradient steps, measured again against NumPy (CHANGELOG.md, 2026-10-25). Splitting DDPG's
-    maths from its bookkeeping first would spare the subclass DDPG's NumPy maths (ARCHITECTURE.md).
+  - **Agent**: TD3 is the item above; SAC is the next candidate and the trigger for a shared off-policy base
+    class.
 
 - [ ] **BipedalWalker-v3 and MuJoCo Tasks (Tier 3)**
   - **Description**: High-dimensional continuous control over millions of steps (BipedalWalker threshold 300;

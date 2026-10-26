@@ -35,6 +35,7 @@ STEP_BUDGETS = {
     ("cartpole", "random"): 50_000,
     ("pendulum", "ppo"): 200_000,
     ("pendulum", "ddpg"): 40_000,
+    ("pendulum", "td3"): 40_000,
     ("pendulum", "actor_critic"): 1_000_000,
     ("pendulum", "random"): 40_000,
 }
@@ -94,6 +95,25 @@ def test_pendulum_ppo_uses_the_measured_settings():
     )
     assert (agent.anneal_steps, agent.clip_ratio, agent.mean_init_scale) == (200_000, 0.2, 0.01)
     assert (agent.rollout_steps, agent.ppo_epochs) == (2048, 10)
+
+
+def test_pendulum_td3_uses_rl_zoo_settings_with_a_smaller_network():
+    """rl-zoo's TD3 for Pendulum-v1 with SB3's TD3 defaults and pendulum_ddpg.yaml's two departures
+    (64x64, 40,000 steps): 5 of 5 seeds solved and held (CHANGELOG.md, 2026-10-25)."""
+    from rl_pendulum.benchmark import PendulumChallenge
+
+    env, agent, _ = PendulumChallenge().setup_run("td3", seed=1, episodes=None)
+    env.close()
+    assert agent.hidden_sizes == [64, 64]
+    assert (agent.learning_rate, agent.gamma, agent.tau) == pytest.approx((0.001, 0.98, 0.005))
+    assert (agent.batch_size, agent.learning_starts, agent.buffer_capacity) == (
+        256,
+        10_000,
+        200_000,
+    )
+    assert (agent.noise_std, agent.updates_per_step) == pytest.approx((0.1, 1.0))
+    assert agent.policy_delay == 2
+    assert (agent.target_policy_noise, agent.target_noise_clip) == pytest.approx((0.2, 0.5))
 
 
 def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():

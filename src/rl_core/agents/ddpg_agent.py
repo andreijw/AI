@@ -51,7 +51,7 @@ class DDPGAgent(BaseAgent):
       then ``mu(s)`` plus noise in the scaled [-1, 1] space, clipped to the bounds: Gaussian of
       ``noise_std`` by default, or with ``noise_type: ornstein_uhlenbeck`` SB3's OU process of
       sigma ``noise_std`` (``ou_theta``, ``ou_dt``; see ``rl_core.agents.exploration_noise``).
-      :meth:`update` resets the noise, as the Trainer calls it once at the end of every episode.
+      :meth:`end_episode` resets the noise; the Trainer calls it after every training episode.
       The clipped action is stored: the critic learns the value of what was executed.
 
     Defaults are rl-zoo's Pendulum-v1 settings. Weights, exploration and replay sampling each
@@ -107,17 +107,7 @@ class DDPGAgent(BaseAgent):
         self.bias: Array = (high + low) / 2.0
 
         seed = config.get("seed")
-        weights_rng = derive_rng(seed, AGENT_WEIGHTS_STREAM)
-        self._actor: Params = init_mlp(
-            [observation_dim, *self.hidden_sizes, action_dim], weights_rng
-        )
-        self._critic: Params = init_mlp(
-            [observation_dim + action_dim, *self.hidden_sizes, 1], weights_rng
-        )
-        self._target_actor: Params = {k: v.copy() for k, v in self._actor.items()}
-        self._target_critic: Params = {k: v.copy() for k, v in self._critic.items()}
-        self._actor_optimizer = Adam(self._actor, self.max_grad_norm)
-        self._critic_optimizer = Adam(self._critic, self.max_grad_norm)
+        self._build_networks(derive_rng(seed, AGENT_WEIGHTS_STREAM))
 
         self._explore_rng = derive_rng(seed, AGENT_EXPLORATION_STREAM)
         # The buffer samples on the replay stream of the seed itself.
@@ -126,6 +116,17 @@ class DDPGAgent(BaseAgent):
         )
         self._training_actions = 0
         self._gradient_steps = 0
+
+    def _build_networks(self, weights_rng: np.random.Generator) -> None:
+        """The actor and critic drawn from the weights stream, in that order, their targets as
+        copies and an Adam for each. A subclass with more networks draws them after these."""
+        obs_dim, act_dim = self.observation_dim, self.action_dim
+        self._actor: Params = init_mlp([obs_dim, *self.hidden_sizes, act_dim], weights_rng)
+        self._critic: Params = init_mlp([obs_dim + act_dim, *self.hidden_sizes, 1], weights_rng)
+        self._target_actor: Params = {k: v.copy() for k, v in self._actor.items()}
+        self._target_critic: Params = {k: v.copy() for k, v in self._critic.items()}
+        self._actor_optimizer = Adam(self._actor, self.max_grad_norm)
+        self._critic_optimizer = Adam(self._critic, self.max_grad_norm)
 
     def _validate(self, optimizer: str) -> None:
         """Raise ValueError for any hyperparameter outside its range."""
@@ -169,17 +170,19 @@ class DDPGAgent(BaseAgent):
         return np.asarray(rewards, dtype=np.float64) + self.gamma * not_done * next_q
 
     def _critic_loss_and_grads(
-        self, obs: Array, actions: Array, targets: Array
+        self, obs: Array, actions: Array, targets: Array, params: Params | None = None
     ) -> tuple[dict[str, float], Params]:
         """
-        Critic loss ``mean ½ (Q(s, a) - y)²`` and its gradients, with ``targets`` constant.
+        Critic loss ``mean ½ (Q(s, a) - y)²`` and its gradients, with ``targets`` constant, for
+        ``params`` (the critic by default).
 
         Changes no state.
         """
-        q, cache = self._critic_forward(obs, actions, self._critic)
+        params = self._critic if params is None else params
+        q, cache = self._critic_forward(obs, actions, params)
         td_error = q - targets
         d_q = (td_error / len(q))[:, None]
-        grads, _ = mlp_backward(self._critic, cache, d_q)
+        grads, _ = mlp_backward(params, cache, d_q)
         components = {
             "critic_loss": float(np.mean(0.5 * td_error**2)),
             "mean_q": float(np.mean(q)),
@@ -212,12 +215,13 @@ class DDPGAgent(BaseAgent):
         for name, step in optimizer.step(grads, self.learning_rate).items():
             params[name] -= step
 
+    def _target_pairs(self) -> list[tuple[Params, Params]]:
+        """(online, target) for every network with a target, in the order they are averaged."""
+        return [(self._actor, self._target_actor), (self._critic, self._target_critic)]
+
     def _polyak(self) -> None:
         """Move each target parameter a fraction ``tau`` towards its online parameter."""
-        for online, target in (
-            (self._actor, self._target_actor),
-            (self._critic, self._target_critic),
-        ):
+        for online, target in self._target_pairs():
             for name in online:
                 target[name] = self.tau * online[name] + (1.0 - self.tau) * target[name]
 
@@ -246,10 +250,13 @@ class DDPGAgent(BaseAgent):
             action = np.clip(mu + noise, self.action_low, self.action_high)
         return np.asarray(action, dtype=np.float32)
 
+    def end_episode(self) -> None:
+        """Restart the exploration noise: OU noise starts the next episode from zero."""
+        self._noise.reset()
+
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
-        End the episode: reset the exploration noise, store the episode's transitions, then
-        train once warm-up is over.
+        Store the episode's transitions, then train once warm-up is over.
 
         Runs ``updates_per_step`` gradient steps per transition (at least one, at most
         ``max_updates_per_call``), each: critic step, actor step, Polyak.
@@ -260,7 +267,6 @@ class DDPGAgent(BaseAgent):
             norms ``critic_grad_norm`` and ``actor_grad_norm``; empty during warm-up or when the
             batch stored nothing.
         """
-        self._noise.reset()  # the Trainer calls update once, at the end of every episode
         n = self.replay_buffer.add_transitions(batch)
         if (
             n == 0

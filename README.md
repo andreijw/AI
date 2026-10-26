@@ -12,9 +12,9 @@ control loops and can be extended later.
 
 The architecture is designed to support:
 
-- Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO
-  with Gaussian policies, and DDPG with a deterministic policy, for Pendulum; random, PPO and DQN for Acrobot; random
-  and DQN for MountainCar; random and DDPG with Ornstein-Uhlenbeck exploration noise for MountainCarContinuous)
+- Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO with
+  Gaussian policies, and DDPG and TD3 with deterministic policies, for Pendulum; random, PPO and DQN for Acrobot;
+  random and DQN for MountainCar; random and DDPG with Ornstein-Uhlenbeck exploration noise for MountainCarContinuous)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -72,7 +72,7 @@ AI/
 ├── tests/                       # Unit & integration test suites
 ├── configs/                     # YAML hyperparameter configurations
 │   ├── cartpole_*.yaml          # CartPole challenge configs (default, PPO, DQN, etc.)
-│   ├── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG)
+│   ├── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG, TD3)
 │   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
 │   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
 │   └── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise)
@@ -215,6 +215,9 @@ python train.py --config configs/pendulum_ppo.yaml
 # Pendulum DDPG
 python train.py --config configs/pendulum_ddpg.yaml
 
+# Pendulum TD3
+python train.py --config configs/pendulum_td3.yaml
+
 # Acrobot DQN and PPO
 python train.py --config configs/acrobot_dqn.yaml
 python train.py --config configs/acrobot_ppo.yaml
@@ -245,6 +248,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 500,000 | 4 of 5 | 255k to 376k | 3 of 5 |
 | CartPole-v1 | DQN | `cartpole_dqn.yaml` (Adam, per-step exploration) | 300,000 | 5 of 5 | 144k to 183k | 5 of 5 |
 | Pendulum-v1 | DDPG | `pendulum_ddpg.yaml` (rl-zoo settings, 64×64 networks) | 40,000 | 5 of 5 | 31k | 5 of 5 |
+| Pendulum-v1 | TD3 | `pendulum_td3.yaml` (rl-zoo settings, 64×64 networks); CHANGELOG.md, 2026-10-25 | 40,000 | 5 of 5 | 32.6k to 33.4k | 5 of 5 |
 | Pendulum-v1 | PPO | `pendulum_ppo.yaml` (2048-step rollouts, annealed) | 200,000 | 5 of 5 | 72k to 157k | 4 of 5 |
 | Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates) | 1,000,000 | 0 of 5 | — | 0 of 5 |
 | Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
@@ -619,6 +623,8 @@ Implemented agents (in `src/rl_core/agents/`):
   - `DDPGAgent`: Deep Deterministic Policy Gradient with replay, a Q critic and Polyak target networks; it explores
     with Gaussian noise or, with `noise_type: ornstein_uhlenbeck`, temporally correlated Ornstein-Uhlenbeck noise
     (`rl_core/agents/exploration_noise.py`)
+  - `TD3Agent`: Twin Delayed DDPG: two critics with the smaller target, smoothed target actions and delayed actor
+    and target updates (`configs/pendulum_td3.yaml`)
 - **Optional PyTorch backend**: `TorchDDPGAgent` trains DDPG's gradient steps in PyTorch, on the GPU as a CUDA graph,
   and keeps everything else, acting included, in NumPy. Add `backend: torch` to a DDPG config's `agent.config`
   (optional: `device: auto|cpu|cuda`, `dtype: float32|float64`, `cuda_graph: true|false`). It needs PyTorch, which

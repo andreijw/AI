@@ -270,6 +270,14 @@ class BaseAgent(ABC):
             Selected action (discrete int or continuous float/vector)
         """
 
+    def end_episode(self) -> None:
+        """
+        Called by the Trainer after every training episode's :meth:`update`, before anything is
+        saved; never for an evaluation episode. Nothing by default: an agent resets per-episode
+        state here (DDPG's exploration noise).
+        """
+        return None  # nothing to reset by default
+
     @abstractmethod
     def update(self, batch: Any) -> dict[str, float]:
         """

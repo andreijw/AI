@@ -29,6 +29,7 @@ from rl_core.agents import (
     DQNAgent,
     PPOAgent,
     ReinforceAgent,
+    TD3Agent,
 )
 from rl_core.agents.actor_critic_base import ActorCriticBase
 from rl_core.agents.continuous_actor_critic import ContinuousActorCriticBase
@@ -50,7 +51,6 @@ ACTOR_CRITIC_WEIGHTS = ("W1", "b1", "W_pi", "b_pi", "W_v", "b_v")
 GAUSSIAN_WEIGHTS = ("W1", "b1", "W_mu", "b_mu", "log_std", "W_v", "b_v")
 DQN_ONLINE_WEIGHTS = ("W1", "b1", "W2", "b2")
 DQN_WEIGHTS = (*DQN_ONLINE_WEIGHTS, *(f"target_{name}" for name in DQN_ONLINE_WEIGHTS))
-DDPG_NETWORKS = ("actor", "critic", "target_actor", "target_critic")
 _FLOAT_WEIGHTS = {"b_v"}  # stored as a Python float, not an array
 
 
@@ -70,11 +70,13 @@ def weight_names(agent: LearningAgent) -> tuple[str, ...]:
 
 
 def _ddpg_slot(agent: DDPGAgent, name: str) -> tuple[dict[str, np.ndarray], str]:
-    """The network dict and key that hold DDPG weight ``name`` (``target_actor_W0`` …)."""
-    for net in sorted(DDPG_NETWORKS, key=len, reverse=True):  # target_actor before actor
-        if name.startswith(f"{net}_"):
-            return ddpg_networks(agent)[net], name[len(net) + 1 :]
-    raise KeyError(name)
+    """The network dict and key that hold DDPG or TD3 weight ``name`` (``target_actor_W0``,
+    ``critic_2_b1`` …): the network's name, then the layer's (``W0``, ``b1``)."""
+    net, _, key = name.rpartition("_")
+    networks = ddpg_networks(agent)
+    if net not in networks or key not in networks[net]:
+        raise KeyError(name)
+    return networks[net], key
 
 
 def _read(agent: LearningAgent, name: str) -> Any:
@@ -426,10 +428,41 @@ def critic_forward(
 
 
 def critic_loss_and_grads(
-    agent: DDPGAgent, observations: np.ndarray, actions: np.ndarray, targets: np.ndarray
+    agent: DDPGAgent,
+    observations: np.ndarray,
+    actions: np.ndarray,
+    targets: np.ndarray,
+    params: dict[str, np.ndarray] | None = None,
 ) -> tuple[dict[str, float], dict[str, np.ndarray]]:
-    """DDPG's critic loss and gradients for one mini-batch, targets held constant."""
-    return agent._critic_loss_and_grads(observations, actions, targets)
+    """DDPG's critic loss and gradients for one mini-batch, targets held constant, for the critic
+    or ``params`` laid out like it (TD3's second critic)."""
+    return agent._critic_loss_and_grads(observations, actions, targets, params)
+
+
+def target_actions(agent: TD3Agent, next_obs: np.ndarray, noise: np.ndarray) -> np.ndarray:
+    """TD3's smoothed target actions for ``next_obs`` with the given clipped target noise."""
+    return agent._target_actions(next_obs, noise)
+
+
+def td3_targets(
+    agent: TD3Agent,
+    rewards: np.ndarray,
+    next_obs: np.ndarray,
+    terminated: np.ndarray,
+    noise: np.ndarray,
+) -> np.ndarray:
+    """TD3's TD targets: the smaller of the two target critics at the smoothed target action."""
+    return agent._td3_targets(rewards, next_obs, terminated, noise)
+
+
+def draw_target_noise(agent: TD3Agent, batch_size: int) -> np.ndarray:
+    """One step's clipped target-policy noise, drawn as update draws it."""
+    return agent._draw_target_noise(batch_size)
+
+
+def target_noise_generator(agent: TD3Agent) -> np.random.Generator:
+    """The generator TD3 draws its target-policy noise from."""
+    return agent._target_noise_rng
 
 
 def actor_loss_and_grads(
