@@ -61,8 +61,9 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 - **A smoke run is not evidence of learning.** Report which config, how many episodes and how many seeds; say
   "not verified" for anything not run.
 - Shared tooling: gradient checks in `tests/helpers.py` (`assert_gradients_match`), agent internals for maths
-  tests in `tests/agent_internals.py` (tests touch no private attribute elsewhere), the mutation runner in
-  `.claude/skills/test-crafter/scripts/`, and a Markdown line-length check in `.claude/skills/doc-sync/scripts/`.
+  tests in `tests/agent_internals.py` and `tests/trainer_internals.py` (tests touch no private attribute elsewhere),
+  the mutation runner in `.claude/skills/test-crafter/scripts/`, and a Markdown line-length check in
+  `.claude/skills/doc-sync/scripts/`.
 - When a review or a bug teaches a lesson worth keeping, put it where it will be applied: a rule in
   `.brooks-lint.yaml`, or a line in the relevant skill.
 

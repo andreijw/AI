@@ -5,6 +5,7 @@ import sys
 import pytest
 
 from rl_core.challenges import CHALLENGES, registry
+from tests.helpers import FAKE_PACKAGE_PREFIX
 
 
 @pytest.fixture
@@ -16,18 +17,18 @@ def isolated_registry(monkeypatch, tmp_path):
     yield tmp_path
     # A real challenge first imported during the test stays in sys.modules, so it would never
     # register again: keep it, and drop only what the test's fake packages registered (fake packages
-    # are named by tests.helpers.unique_name, prefix rl_fake).
+    # are named by tests.helpers.unique_name, with FAKE_PACKAGE_PREFIX).
     real = {
         key: cls
         for key, cls in CHALLENGES.items()
-        if cls.__module__.startswith("rl_") and not cls.__module__.startswith("rl_fake")
+        if cls.__module__.startswith("rl_") and not cls.__module__.startswith(FAKE_PACKAGE_PREFIX)
     }
     CHALLENGES.clear()
     CHALLENGES.update({**real, **challenges})
     registry.IMPORT_FAILURES.clear()
     registry.IMPORT_FAILURES.update(failures)
     for name in set(sys.modules) - modules:
-        if name.startswith("rl_fake"):
+        if name.startswith(FAKE_PACKAGE_PREFIX):
             del sys.modules[name]
 
 

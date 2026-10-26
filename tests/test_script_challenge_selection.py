@@ -11,6 +11,7 @@ import yaml
 from rl_core.agents import RandomAgent
 from rl_core.challenges import discover_challenges
 from tests.helpers import minimal_config, run_main, unique_name, write_package
+from tests.test_challenge_selection import EXPECTED_AGENTS
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -143,7 +144,7 @@ def test_agent_the_challenge_does_not_support_is_an_error(tmp_path, monkeypatch)
     path = _config(tmp_path, name="Pendulum-v1")
     with pytest.raises(ValueError, match="'dqn'.*pendulum") as error:
         run_main(["--config", path, "--agent-type", "dqn"], monkeypatch)
-    assert "['actor_critic', 'ddpg', 'ppo', 'random', 'td3']" in str(error.value)
+    assert str(sorted(EXPECTED_AGENTS["pendulum"])) in str(error.value)
     assert not (tmp_path / "logs").exists(), "the run should stop before creating any output"
 
 

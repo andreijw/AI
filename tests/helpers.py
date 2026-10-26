@@ -183,7 +183,11 @@ def write_package(root, name, benchmark, init=True):
         (package / "benchmark.py").write_text(benchmark, encoding="utf-8")
 
 
-def unique_name(prefix="rl_fake"):
+# Prefix of every fake challenge package a test writes; conftest.py drops them after each test.
+FAKE_PACKAGE_PREFIX = "rl_fake"
+
+
+def unique_name(prefix=FAKE_PACKAGE_PREFIX):
     """A package or key name no other test uses, so imports never collide."""
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
 

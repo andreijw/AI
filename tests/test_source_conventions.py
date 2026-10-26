@@ -220,7 +220,6 @@ def test_the_seeded_default_rng_scan_flags_what_it_claims():
 # Every test file is held to the agents' public interface (CHANGELOG.md,
 # 2026-10-20), except these, which test something other than an agent and reach into it on purpose.
 PRIVATE_ACCESS_EXEMPT = {
-    "test_trainer.py": "Trainer integration tests (out of scope of the public-interface work)",
     "test_train_video.py": "script tests (out of scope of the public-interface work)",
     "test_environment.py": "environment wrapper internals (action noise, domain randomization)",
     "test_pendulum.py": "environment wrapper internals (action noise)",

@@ -52,6 +52,16 @@ Acrobot-v1) and
     once, scored -124.6.
   - **Still open:** MountainCar still does not reliably hold -110; the roadmap item stays open with the diagnosis.
 
+- **Trainer tests through a seam** (`feature/trainer-test-seam`, the fourth Warning of the 2026-10-22 health
+  dashboard; tests only, no behaviour change): `tests/test_trainer.py` no longer calls private `Trainer` methods. Its
+  episode, checkpoint and progress-line tests go through `train()` and `evaluate()` and the files and log lines they
+  produce, with recording agents in place of patched methods; the five metrics-dispatch tests go through the new
+  `tests/trainer_internals.py`. The file left `PRIVATE_ACCESS_EXEMPT`, so the convention test now enforces it.
+  `trainer.py` keeps the same coverage (255 statements, the same 3 uncovered). The fake-package prefix is one constant,
+  `tests.helpers.FAKE_PACKAGE_PREFIX`, used by `conftest.py`. A new agent is listed in one table fewer: the script
+  test reads the supported agents from `EXPECTED_AGENTS` in `test_challenge_selection.py`, and the Pendulum test no
+  longer repeats that check.
+
 ### Added
 
 - **TD3 agent** (`feature/td3-agent`, the first pull request of the TD3 roadmap item): `TD3Agent`, a `DDPGAgent`

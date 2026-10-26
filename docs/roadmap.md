@@ -20,22 +20,9 @@ No open items.
 ### Code Health
 
 The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical, 4 Warnings. The first Warning,
-each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22), and so are
-the second and third, the benchmark's solve numbers and report (CHANGELOG.md, 2026-10-25). The trainer-test item
-below is the last; then come unscheduled ideas.
-
-- [ ] **Test Hygiene: Trainer Tests Through a Seam**
-  - **Description**: The 2026-10-22 dashboard's fourth Warning: about 13 call sites in `tests/test_trainer.py` call
-    private `Trainer` methods (`_run_episode`, `_save_checkpoint`, `_log_metrics`, `_log_info`), against the
-    rule every agent test already follows. Its suggestions belong here too: the per-challenge tables in
-    `tests/test_challenge_selection.py`, and the fake-package prefix shared implicitly between `tests/conftest.py`
-    and `tests/helpers.py`.
-  - **Acceptance criteria**:
-    - Trainer tests go through `train()`, `evaluate()` and the files and log lines they produce, or through a
-      `tests/trainer_internals.py` like `tests/agent_internals.py`; `test_source_conventions.py` enforces it.
-    - The `rl_fake` prefix is one named constant used by both files.
-    - No loss of coverage on `rl_core/training/trainer.py` (99% today).
-  - **Out of scope**: Changing `Trainer` behaviour.
+each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22); so are the
+second and third, the benchmark's solve numbers and report, and the fourth, trainer tests calling private methods
+(CHANGELOG.md, 2026-10-25). What follows are unscheduled ideas.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
