@@ -11,7 +11,6 @@ import pytest
 
 from rl_core.utils import visualization
 from rl_core.utils.visualization import (
-    _rolling_average,
     plot_benchmark_comparison,
     plot_training_metrics,
 )
@@ -28,36 +27,6 @@ def sample_data():
     rewards = rng.uniform(1, 100, size=50).tolist()
     lengths = rng.integers(1, 200, size=50).tolist()
     return rewards, lengths
-
-
-# ---------------------------------------------------------------------------
-# _rolling_average unit tests
-# ---------------------------------------------------------------------------
-
-
-def test_rolling_average_single_element():
-    """Single-element list should return itself."""
-    assert _rolling_average([5.0], 3) == pytest.approx([5.0])
-
-
-def test_rolling_average_window_one():
-    """Window of 1 should return the input unchanged."""
-    data = [1.0, 2.0, 3.0]
-    assert _rolling_average(data, 1) == pytest.approx(data)
-
-
-def test_rolling_average_full_window():
-    """Rolling average with window equal to list length."""
-    data = [1.0, 2.0, 3.0, 4.0]
-    result = _rolling_average(data, 4)
-    assert result[-1] == pytest.approx(2.5)
-
-
-def test_rolling_average_window_larger_than_data():
-    """Window larger than data length should use all available values."""
-    data = [2.0, 4.0]
-    result = _rolling_average(data, 100)
-    assert result[-1] == pytest.approx(3.0)
 
 
 # ---------------------------------------------------------------------------

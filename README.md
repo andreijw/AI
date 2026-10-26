@@ -53,7 +53,7 @@ AI/
 │   │   │   └── softmax.py       # Numerically stable softmax shared by the discrete policies
 │   │   ├── environments/        # BaseEnvWrapper: seeding, observation noise, episode statistics
 │   │   ├── training/            # Generic training pipeline (trainer.py)
-│   │   ├── utils/               # Config, logging, video recording & plotting utilities
+│   │   ├── utils/               # Config, logging, video recording, plotting & rolling averages
 │   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges
 │   │   └── seeding.py           # Separate seeded random streams (derive_rng)
 │   ├── rl_cartpole/             # CartPole-v1 discrete balance control challenge
