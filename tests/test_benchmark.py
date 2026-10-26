@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from benchmark import (
     BenchmarkRunner,
+    BenchmarkSettings,
     classify_run,
     find_solved_episode,
     main,
@@ -56,22 +57,22 @@ def test_run_benchmark_invalid_challenge():
 def test_run_benchmark_invalid_agents():
     """Invalid agent lists or types raise ValueError."""
     with pytest.raises(ValueError, match="agents list must not be empty"):
-        run_benchmark(agents=[])
+        run_benchmark(settings=BenchmarkSettings(agents=()))
 
     with pytest.raises(ValueError, match="is not supported by challenge"):
-        run_benchmark(agents=["unsupported_agent"])
+        run_benchmark(settings=BenchmarkSettings(agents=("unsupported_agent",)))
 
 
 def test_run_benchmark_invalid_episodes():
     """Non-positive episodes raise ValueError."""
     with pytest.raises(ValueError, match="episodes must be positive"):
-        run_benchmark(agents=["random"], episodes=0)
+        run_benchmark(settings=BenchmarkSettings(agents=("random",), episodes=0))
 
 
 def test_run_benchmark_invalid_seeds():
     """Empty seeds list raises ValueError."""
     with pytest.raises(ValueError, match="seeds list must not be empty"):
-        run_benchmark(agents=["random"], seeds=[])
+        run_benchmark(settings=BenchmarkSettings(agents=("random",), seeds=()))
 
 
 def test_cartpole_challenge_registered():
@@ -87,13 +88,11 @@ def test_run_benchmark_cartpole_minimal_execution(tmp_path):
 
     bench_res = run_benchmark(
         challenge_name="cartpole",
-        agents=["random", "ppo"],
-        episodes=3,
-        seeds=[42],
-        output_dir=out_dir,
+        settings=BenchmarkSettings(
+            agents=("random", "ppo"), seeds=(42,), episodes=3, eval_episodes=2, output_dir=out_dir
+        ),
         report_path=report_file,
         save_plot=True,
-        eval_episodes=2,
     )
 
     assert bench_res["challenge"] == "CartPole-v1"
@@ -118,19 +117,20 @@ def test_run_benchmark_cartpole_minimal_execution(tmp_path):
     assert "# CartPole-v1 Multi-Agent Benchmark Results" in md
     assert "random" in md
     assert "ppo" in md
+    assert md.endswith(
+        "\n## Learning Trajectories\n\n![Benchmark Learning Curves](bench_out/benchmark_comparison.png)\n"
+    ), "The report should end by linking the plot relative to the report's own folder."
 
 
 def test_run_benchmark_no_plot(tmp_path):
     """Running with save_plot=False skips plot generation."""
     out_dir = str(tmp_path / "bench_no_plot")
     bench_res = run_benchmark(
-        agents=["random"],
-        episodes=2,
-        seeds=[42],
-        output_dir=out_dir,
+        settings=BenchmarkSettings(
+            agents=("random",), seeds=(42,), episodes=2, eval_episodes=1, output_dir=out_dir
+        ),
         report_path=None,
         save_plot=False,
-        eval_episodes=1,
     )
     assert bench_res["plot_path"] is None
     assert not os.path.exists(os.path.join(out_dir, "benchmark_comparison.png"))
@@ -202,12 +202,10 @@ def test_custom_challenge_runner(tmp_path):
 
     out_dir = str(tmp_path / "custom_out")
     res = runner.run(
-        agents=["mock_agent"],
-        episodes=2,
-        seeds=[11],
-        output_dir=out_dir,
+        settings=BenchmarkSettings(
+            agents=("mock_agent",), seeds=(11,), episodes=2, eval_episodes=1, output_dir=out_dir
+        ),
         save_plot=False,
-        eval_episodes=1,
     )
 
     assert res["challenge"] == "GenericWorld-v0"
@@ -258,17 +256,18 @@ def test_benchmark_cli_execution(tmp_path, monkeypatch):
     assert os.path.isfile(report_file)
 
 
-def test_benchmark_cli_default_report(monkeypatch):
-    """CLI defaults report path to docs/benchmarks/<challenge>_results.md when omitted."""
-    called_kwargs = {}
-
-    def mock_run_benchmark(**kwargs):
-        called_kwargs.update(kwargs)
-        return {}
-
+@pytest.fixture()
+def cli_call(monkeypatch):
+    """The keyword arguments main() passes to run_benchmark, which is replaced by a recorder."""
     import benchmark
 
-    monkeypatch.setattr(benchmark, "run_benchmark", mock_run_benchmark)
+    called: dict = {}
+    monkeypatch.setattr(benchmark, "run_benchmark", lambda **kwargs: called.update(kwargs) or {})
+    return called
+
+
+def test_benchmark_cli_default_report(monkeypatch, cli_call):
+    """CLI defaults report path to docs/benchmarks/<challenge>_results.md when omitted."""
     monkeypatch.setattr(
         sys,
         "argv",
@@ -276,7 +275,34 @@ def test_benchmark_cli_default_report(monkeypatch):
     )
     main()
 
-    assert called_kwargs.get("report_path") == "docs/benchmarks/cartpole_results.md"
+    assert cli_call.get("report_path") == "docs/benchmarks/cartpole_results.md"
+
+
+def test_benchmark_cli_passes_its_flags_as_settings(monkeypatch, cli_call):
+    """Each CLI flag lands in the BenchmarkSettings that run_benchmark receives."""
+    argv = ["benchmark", "--agents", "random", "ppo", "--steps", "60", "--seeds", "3", "4"]
+    argv += ["--window", "7", "--eval-episodes", "2", "--output-dir", "out", "--no-plot"]
+    monkeypatch.setattr(sys, "argv", argv)
+    main()
+
+    assert cli_call["settings"] == BenchmarkSettings(
+        agents=("random", "ppo"),
+        seeds=(3, 4),
+        steps=60,
+        window=7,
+        eval_episodes=2,
+        output_dir="out",
+    ), "The CLI flags should be passed on unchanged, as tuples, in one BenchmarkSettings."
+    assert cli_call["save_plot"] is False
+
+
+def test_benchmark_settings_defaults_match_the_cli_defaults(monkeypatch, cli_call):
+    """Called from Python with no settings, the benchmark runs as the bare CLI does."""
+    monkeypatch.setattr(sys, "argv", ["benchmark"])
+    main()
+    assert cli_call["settings"] == BenchmarkSettings(), (
+        "The CLI with no flags should pass exactly the BenchmarkSettings() defaults."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +327,8 @@ def test_runner_rejects_a_non_positive_override_for_any_challenge(tmp_path):
     """The runner checks --episodes itself, even for a challenge that loads no config."""
     with pytest.raises(ValueError, match="^episodes must be positive, got 0$"):
         BenchmarkRunner(CustomGenericChallenge()).run(
-            episodes=0, seeds=[1], output_dir=str(tmp_path / "zero"), save_plot=False
+            settings=BenchmarkSettings(seeds=(1,), episodes=0, output_dir=str(tmp_path / "zero")),
+            save_plot=False,
         )
 
 
@@ -482,11 +509,9 @@ def test_runner_trains_each_agent_for_its_own_budget(tmp_path):
     out_dir = tmp_path / "budgets"
     report = tmp_path / "budgets.md"
     res = BenchmarkRunner(PerAgentBudgetChallenge()).run(
-        seeds=[1],
-        output_dir=str(out_dir),
+        settings=BenchmarkSettings(seeds=(1,), eval_episodes=1, output_dir=str(out_dir)),
         report_path=str(report),
         save_plot=False,
-        eval_episodes=1,
     )
 
     assert res["results"]["short"][0]["total_episodes"] == 2
@@ -509,12 +534,11 @@ def test_runner_override_applies_to_every_agent(tmp_path):
     """An explicit episodes value trains every agent for that number and is recorded."""
     report = tmp_path / "override.md"
     res = BenchmarkRunner(PerAgentBudgetChallenge()).run(
-        episodes=4,
-        seeds=[1],
-        output_dir=str(tmp_path / "override"),
+        settings=BenchmarkSettings(
+            seeds=(1,), episodes=4, eval_episodes=1, output_dir=str(tmp_path / "override")
+        ),
         report_path=str(report),
         save_plot=False,
-        eval_episodes=1,
     )
     assert [res["results"][a][0]["total_episodes"] for a in ("long", "short")] == [4, 4]
     with open(res["metrics_json"]) as f:
@@ -550,13 +574,15 @@ def test_runner_reports_evaluation_successes_separately(tmp_path, monkeypatch):
     monkeypatch.setattr(benchmark, "Trainer", ScriptedTrainer)
     report = tmp_path / "rule.md"
     res = BenchmarkRunner(PerAgentBudgetChallenge()).run(
-        agents=["long"],
-        seeds=[1, 2, 3],
-        output_dir=str(tmp_path / "rule"),
+        settings=BenchmarkSettings(
+            agents=("long",),
+            seeds=(1, 2, 3),
+            window=1,
+            eval_episodes=1,
+            output_dir=str(tmp_path / "rule"),
+        ),
         report_path=str(report),
         save_plot=False,
-        eval_episodes=1,
-        window=1,
     )
     runs = {r["seed"]: r for r in res["results"]["long"]}
     stats = res["summary"]["long"]
@@ -616,9 +642,9 @@ def test_runner_claims_separate_evaluation_only_when_every_agent_had_it(tmp_path
     monkeypatch.setattr(benchmark, "Trainer", ScriptedTrainer)
     report = tmp_path / "mixed.md"
     BenchmarkRunner(_ClosingChallenge(separate=("long",))).run(
-        agents=["long", "short"],
-        seeds=[1],
-        output_dir=str(tmp_path / "mixed"),
+        settings=BenchmarkSettings(
+            agents=("long", "short"), seeds=(1,), output_dir=str(tmp_path / "mixed")
+        ),
         report_path=str(report),
         save_plot=False,
     )
@@ -631,7 +657,10 @@ def test_runner_closes_every_environment_it_opens(tmp_path, monkeypatch):
     monkeypatch.setattr(benchmark, "Trainer", ScriptedTrainer)
     challenge = _ClosingChallenge()
     BenchmarkRunner(challenge).run(
-        agents=["long", "short"], seeds=[1, 2], output_dir=str(tmp_path), save_plot=False
+        settings=BenchmarkSettings(
+            agents=("long", "short"), seeds=(1, 2), output_dir=str(tmp_path)
+        ),
+        save_plot=False,
     )
     assert len(challenge.opened) == 8  # a training and an evaluation environment per run
     assert all(env.was_closed for env in challenge.opened)
@@ -648,19 +677,30 @@ def test_runner_closes_both_environments_when_training_fails(tmp_path, monkeypat
     challenge = _ClosingChallenge()
     with pytest.raises(RuntimeError, match="diverged"):
         BenchmarkRunner(challenge).run(
-            agents=["long"], seeds=[1], output_dir=str(tmp_path), save_plot=False
+            settings=BenchmarkSettings(agents=("long",), seeds=(1,), output_dir=str(tmp_path)),
+            save_plot=False,
         )
     assert len(challenge.opened) == 2
     assert all(env.was_closed for env in challenge.opened)
 
 
 @pytest.mark.parametrize(
-    "bad", [{"agents": []}, {"seeds": []}, {"episodes": 0}, {"episodes": 2, "steps": 50}]
+    "bad",
+    [
+        {"agents": ()},
+        {"seeds": ()},
+        {"episodes": 0},
+        {"episodes": 2, "steps": 50},
+        {"window": 0},
+        {"eval_episodes": 0},
+    ],
 )
 def test_runner_rejects_bad_arguments_before_writing_anything(tmp_path, bad):
     out_dir = tmp_path / "never"
     with pytest.raises(ValueError):
-        BenchmarkRunner(PerAgentBudgetChallenge()).run(output_dir=str(out_dir), **bad)
+        BenchmarkRunner(PerAgentBudgetChallenge()).run(
+            BenchmarkSettings(output_dir=str(out_dir), **bad)
+        )
     assert not out_dir.exists()
 
 
@@ -674,12 +714,11 @@ def test_report_without_threshold_says_nothing_can_solve(tmp_path):
 
     report = tmp_path / "none.md"
     BenchmarkRunner(NoThresholdChallenge()).run(
-        agents=["short"],
-        seeds=[1],
-        output_dir=str(tmp_path / "none"),
+        settings=BenchmarkSettings(
+            agents=("short",), seeds=(1,), eval_episodes=3, output_dir=str(tmp_path / "none")
+        ),
         report_path=str(report),
         save_plot=False,
-        eval_episodes=3,
     )
     md = report.read_text(encoding="utf-8")
     assert "no solve threshold, so no run counts as solved" in md
@@ -693,13 +732,15 @@ def test_report_without_threshold_says_nothing_can_solve(tmp_path):
 
 def test_runner_trains_for_a_step_budget_and_records_steps(tmp_path):
     res = BenchmarkRunner(CartPoleChallenge()).run(
-        agents=["random"],
-        steps=60,
-        seeds=[1],
-        output_dir=str(tmp_path / "steps"),
+        settings=BenchmarkSettings(
+            agents=("random",),
+            seeds=(1,),
+            steps=60,
+            eval_episodes=1,
+            output_dir=str(tmp_path / "steps"),
+        ),
         report_path=str(tmp_path / "steps.md"),
         save_plot=True,
-        eval_episodes=1,
     )
     run = res["results"]["random"][0]
     assert run["total_steps"] >= 60
@@ -722,11 +763,9 @@ def test_runner_trains_for_a_step_budget_and_records_steps(tmp_path):
 def test_runner_rejects_an_episode_and_a_step_budget_together(tmp_path):
     with pytest.raises(ValueError, match="either an episode or a step budget"):
         BenchmarkRunner(CartPoleChallenge()).run(
-            agents=["random"],
-            episodes=2,
-            steps=60,
-            seeds=[1],
-            output_dir=str(tmp_path / "x"),
+            settings=BenchmarkSettings(
+                agents=("random",), seeds=(1,), episodes=2, steps=60, output_dir=str(tmp_path / "x")
+            ),
             save_plot=False,
         )
 
@@ -735,13 +774,15 @@ def test_report_states_the_window_used(tmp_path):
     for window, text in ((100, "100 consecutive"), (7, "7 consecutive")):
         report = tmp_path / f"w{window}.md"
         BenchmarkRunner(PerAgentBudgetChallenge()).run(
-            agents=["short"],
-            seeds=[1],
-            output_dir=str(tmp_path / f"w{window}"),
+            settings=BenchmarkSettings(
+                agents=("short",),
+                seeds=(1,),
+                window=window,
+                eval_episodes=1,
+                output_dir=str(tmp_path / f"w{window}"),
+            ),
             report_path=str(report),
             save_plot=False,
-            eval_episodes=1,
-            window=window,
         )
         md = report.read_text(encoding="utf-8")
         assert text in md
@@ -755,14 +796,11 @@ def test_cli_rejects_episodes_and_steps_together(monkeypatch, capsys):
     assert "not allowed with argument" in capsys.readouterr().err
 
 
-def test_cli_default_window_is_100(monkeypatch):
-    called = {}
-    import benchmark
-
-    monkeypatch.setattr(benchmark, "run_benchmark", lambda **kwargs: called.update(kwargs) or {})
+def test_cli_default_window_is_100(monkeypatch, cli_call):
     monkeypatch.setattr(sys, "argv", ["benchmark", "--agents", "random", "--steps", "60"])
     main()
-    assert (called["window"], called["steps"], called["episodes"]) == (100, 60, None)
+    settings = cli_call["settings"]
+    assert (settings.window, settings.steps, settings.episodes) == (100, 60, None)
 
 
 def test_load_run_config_applies_a_step_budget(tmp_path):

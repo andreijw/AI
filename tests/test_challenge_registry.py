@@ -159,9 +159,9 @@ def test_run_benchmark_discovers_challenges_in_a_fresh_process(tmp_path):
     """Called from Python with nothing imported first, run_benchmark still finds the challenges."""
     code = (
         "import sys; sys.path.insert(0, 'src'); import benchmark; "
-        "benchmark.run_benchmark(challenge_name='pendulum', agents=['random'], episodes=1, "
-        f"seeds=[1], output_dir={str(tmp_path / 'out')!r}, report_path=None, save_plot=False, "
-        "eval_episodes=1); print('ran')"
+        "benchmark.run_benchmark(challenge_name='pendulum', settings=benchmark.BenchmarkSettings("
+        f"agents=('random',), episodes=1, seeds=(1,), output_dir={str(tmp_path / 'out')!r}, "
+        "eval_episodes=1), report_path=None, save_plot=False); print('ran')"
     )
     result = subprocess.run(
         [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=300

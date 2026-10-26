@@ -40,7 +40,8 @@ To optimize token usage and context window limits:
     observation noise, episode statistics, `wrap_env`), and `checked_range` for domain randomization ranges.
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).
   * `src/rl_core/utils/`: Configuration parsing (`config.py`), structured logging (`logger.py`),
-    video recording (`video.py`), and visualization helpers (`visualization.py`).
+    video recording (`video.py`), visualization helpers (`visualization.py`, imported directly: the package does
+    not re-export them), and the rolling average behind solve numbers and plots (`smoothing.py`).
 * **`src/rl_cartpole/`**: CartPole-v1 discrete balance control challenge.
   * `src/rl_cartpole/environments/`: Gymnasium wrapper implementations, observation/action noise injections,
     domain randomization configurations, and vectorized environment factories.
