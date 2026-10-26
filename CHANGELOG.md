@@ -16,6 +16,21 @@ Acrobot-v1) and
 
 ### Changed
 
+- **Benchmark solve numbers apart from plotting** (`feature/benchmark-hygiene`, the second and third Warnings of the
+  2026-10-22 health dashboard): the rolling average behind the solve episode, `final_rolling_avg` and the plotted
+  curves is now the public `rl_core.utils.smoothing.rolling_average` (the same per-episode mean as before, so no
+  number moves; it raises for a window below 1 instead of returning NaN). `rl_core.utils` no longer re-exports
+  `plot_training_metrics` and `plot_benchmark_comparison` (import them from `rl_core.utils.visualization`), so
+  importing the trainer or the challenges no longer loads matplotlib; `tests/test_import_footprint.py` checks it in
+  a fresh process. `run_benchmark(challenge_name, *, settings, config_dir, report_path, save_plot)` and
+  `BenchmarkRunner.run(settings, *, report_path, save_plot)` take a `BenchmarkSettings` (agents, seeds, budget,
+  window, evaluation episodes, output folder; its defaults are the CLI's, which now reads them from it) instead of
+  up to 11 keyword arguments, so an older keyword call fails with a TypeError. The benchmark now rejects
+  `--window` or `--eval-episodes` below 1 before training (`--window 0` used to train every run, then write NaN to
+  the metrics JSON). The Markdown report is built from five named parts. Console output, metrics JSON and reports
+  are unchanged: the recorded characterization files pass untouched, and a review compared the old and new report
+  code on 288 generated cases byte for byte. No learning run: no agent, trainer or config changed.
+
 - **MountainCar DQN keeps a 100,000-transition replay buffer** (`feature/mountaincar-hold`), up from rl-zoo's 10,000.
   - **Diagnosis:** the update showed no sign of a fault: the loss stayed finite and small, and the mean Q settled near
     -30, which fits episodes of about 110 steps. A failed episode is stored as cut by the time limit, not as ended.

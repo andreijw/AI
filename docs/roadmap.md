@@ -20,8 +20,9 @@ No open items.
 ### Code Health
 
 The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical, 4 Warnings. The first Warning,
-each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22). The two
-items below are the rest; then come unscheduled ideas.
+each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22), and so are
+the second and third, the benchmark's solve numbers and report (CHANGELOG.md, 2026-10-25). The trainer-test item
+below is the last; then come unscheduled ideas.
 
 - [ ] **PyTorch Backend: Timing Test on the Jetson**
   - **Description**: Agreed 2026-10-23 as the next step towards GPU training. Measure, in a scratch virtual
@@ -35,20 +36,6 @@ items below are the rest; then come unscheduled ideas.
     or not yet.
   - **Out of scope**: adding PyTorch to `pyproject.toml`, porting any agent, changing CI, and the pure-NumPy rule in
     CLAUDE.md and CONTRIBUTING.md; those follow the decision.
-
-- [ ] **Benchmark Hygiene: Solve Numbers Apart from Plotting**
-  - **Description**: Two Warnings from the 2026-10-22 dashboard. `src/benchmark.py` imports the private
-    `_rolling_average` from `rl_core/utils/visualization.py` for the solve episode and `final_rolling_avg`, so a
-    change to plot smoothing would silently change published solve numbers; and `rl_core/utils/__init__.py`
-    imports the plotting module eagerly, so importing the trainer or the challenges loads matplotlib.
-    `_generate_markdown_report` is 98 lines mixing configuration text, solve-rule prose, row formatting and the plot
-    path, and `run_benchmark` takes 11 parameters while a `BenchmarkSettings` dataclass exists.
-  - **Acceptance criteria**:
-    - A public `rolling_average` in a module that does not plot, used by the benchmark and the plots alike.
-    - `import rl_core.training` and `import rl_core.challenges` do not import matplotlib (a test says so).
-    - The report function split into named parts; `run_benchmark` takes `BenchmarkSettings`.
-    - Reports generated before and after are byte-identical for the same metrics file.
-  - **Out of scope**: Changing what the report says, or the solve rule.
 
 - [ ] **Test Hygiene: Trainer Tests Through a Seam**
   - **Description**: The 2026-10-22 dashboard's fourth Warning: about 13 call sites in `tests/test_trainer.py` call
@@ -77,6 +64,8 @@ items below are the rest; then come unscheduled ideas.
       critic networks, or observation normalisation; CartPole DQN with more than `max_updates_per_call: 64` (about
       0.13 gradient steps per transition against rl-zoo's 0.5).
     - Candidates once wanted: double, dueling or prioritised-replay DQN.
+    - `src/benchmark.py` still imports matplotlib at module level, so `--no-plot` loads it too; importing
+      `plot_benchmark_comparison` inside `_save_plot` would end that (review suggestion, 2026-10-25).
     - Found 2026-10-18 and not yet investigated: on the one-state overfit batch of
       `tests/test_policy_gradient_maths.py`, the discrete Actor-Critic (SGD, learning rate 0.05) reaches probability
       1.0 and can then collapse to the other action (seeds 6 and 7; 9 of 30 seeds under the old seeding) once the

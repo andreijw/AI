@@ -197,9 +197,9 @@ def test_runner_plots_against_steps_only_when_every_budget_is_in_steps(tmp_path,
     from rl_cartpole.benchmark import CartPoleChallenge
 
     runner = benchmark.BenchmarkRunner(CartPoleChallenge())
-    kwargs = {"agents": ["random"], "seeds": [1], "eval_episodes": 1, "save_plot": True}
-    runner.run(steps=60, output_dir=str(tmp_path / "a"), **kwargs)
-    runner.run(episodes=3, output_dir=str(tmp_path / "b"), **kwargs)
+    common = {"agents": ("random",), "seeds": (1,), "eval_episodes": 1}
+    runner.run(benchmark.BenchmarkSettings(steps=60, output_dir=str(tmp_path / "a"), **common))
+    runner.run(benchmark.BenchmarkSettings(episodes=3, output_dir=str(tmp_path / "b"), **common))
     assert seen[0] is not None and seen[1] is None
 
 
