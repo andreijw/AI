@@ -227,32 +227,47 @@ class TorchDDPGAgent(DDPGAgent):
             next_actions, _ = self._policy(nets["target_actor"], x["next_observations"])
             next_q = self._q(nets["target_critic"], x["next_observations"], next_actions)
             targets = x["rewards"] + self.gamma * (1.0 - x["dones"]) * next_q
-
-        q = self._q(nets["critic"], x["observations"], x["actions"])
-        critic_loss = torch.mean(0.5 * (q - targets) ** 2)
-        critic_params = list(nets["critic"].values())
-        critic_norm = self._clip_and_set(
-            nets["critic"], torch.autograd.grad(critic_loss, critic_params)
-        )
-        self._optimizers["critic"].step()
-
-        mu, u = self._policy(nets["actor"], x["observations"])
-        actor_loss = -torch.mean(self._q(nets["critic"], x["observations"], mu))
-        # Gradients for the actor only: the critic's stay those of its own loss.
-        actor_norm = self._clip_and_set(
-            nets["actor"], torch.autograd.grad(actor_loss, list(nets["actor"].values()))
-        )
-        self._optimizers["actor"].step()
-
+        critic_loss, q, critic_norm = self._critic_update("critic", targets)
+        actor_loss, saturation, actor_norm = self._actor_update()
+        self._move_targets()
         with torch.no_grad():
-            for online, target in self._target_names():
-                torch._foreach_lerp_(
-                    list(nets[target].values()), list(nets[online].values()), self.tau
-                )
-            saturation = torch.mean((torch.abs(u) > 0.99).to(self.dtype))
             self._metric_sums += torch.stack(
                 [critic_loss, q.mean(), critic_norm, actor_loss, saturation, actor_norm]
             ).detach()
+
+    def _critic_update(
+        self, net: str, targets: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """One Adam step of critic ``net`` on ``mean ½ (Q(s, a) - targets)²``. Returns the loss,
+        Q (B,) and the gradient norm before clipping."""
+        x, params = self._inputs, self._nets[net]
+        q = self._q(params, x["observations"], x["actions"])
+        loss = torch.mean(0.5 * (q - targets) ** 2)
+        norm = self._clip_and_set(params, torch.autograd.grad(loss, list(params.values())))
+        self._optimizers[net].step()
+        return loss, q, norm
+
+    def _actor_update(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """One Adam step of the actor on ``-mean Q1(s, mu(s))``. Returns the loss, the fraction of
+        saturated tanh outputs and the gradient norm before clipping."""
+        x, nets = self._inputs, self._nets
+        mu, u = self._policy(nets["actor"], x["observations"])
+        loss = -torch.mean(self._q(nets["critic"], x["observations"], mu))
+        # Gradients for the actor only: the critic's stay those of its own loss.
+        norm = self._clip_and_set(
+            nets["actor"], torch.autograd.grad(loss, list(nets["actor"].values()))
+        )
+        self._optimizers["actor"].step()
+        saturation = torch.mean((torch.abs(u.detach()) > 0.99).to(self.dtype))
+        return loss, saturation, norm
+
+    def _move_targets(self) -> None:
+        """Move every target network a fraction ``tau`` towards its online network."""
+        with torch.no_grad():
+            for online, target in self._target_names():
+                torch._foreach_lerp_(
+                    list(self._nets[target].values()), list(self._nets[online].values()), self.tau
+                )
 
     # ------------------------------------------------------------------
     # Training

@@ -113,10 +113,12 @@ when picked.
   - **Progress**: the first pull request (`feature/td3-agent`) adds the hook, `TD3Agent`, the Pendulum config and
     its learning run. The second (`feature/torch-backend-hooks`) makes `TorchDDPGAgent` read its networks,
     optimizers, target pairs, step inputs and metrics from hooks, and gives TD3 one home for its delay rule
-    (`_is_actor_step`) and its metric means (`_step_means`) (CHANGELOG.md, 2026-10-26). Open: `TorchTD3Agent`
-    (`class TorchTD3Agent(TorchDDPGAgent, TD3Agent)`: a critic-only and a full `_step`, the target noise staged from
-    TD3's NumPy generator so float64 matches TD3Agent, `_reduce_metrics` through `_step_means`), registered in
-    `TD3Agent.BACKENDS`; then MountainCarContinuous. Check first that two captured graphs fit the Jetson's memory.
+    (`_is_actor_step`) and its metric means (`_step_means`) (CHANGELOG.md, 2026-10-26). The third
+    (`feature/torch-td3-agent`) adds `TorchTD3Agent`; its two graphs hold 56 MiB at 400×300 (CHANGELOG.md,
+    2026-10-26). Open: `configs/mountaincar_continuous_td3.yaml` from rl-zoo's TD3 entry (400×300, OU noise 0.5,
+    lr 1e-3, batch 256, 300,000 steps), registered for the `mountaincar_continuous` challenge, and its 5-seed run on
+    the GPU (about 20 to 25 minutes per seed). To decide first: whether the committed config sets `backend: torch`,
+    which CI and a `.venv` benchmark cannot build without PyTorch.
   - **Out of scope**: SAC; n-step returns; LunarLander itself.
 
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**

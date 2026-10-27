@@ -97,11 +97,6 @@ def test_invalid_td3_settings_are_rejected_by_name(bad, key):
         _agent(**bad)
 
 
-def test_td3_has_no_pytorch_backend_yet():
-    with pytest.raises(ValueError, match=r"backend must be one of \['numpy'\] for TD3Agent"):
-        TD3Agent.class_for_config({"backend": "torch"})
-
-
 def test_the_actor_and_first_critic_start_as_ddpgs_and_the_second_critic_differs():
     """Critic 2 is drawn after them from the same weights stream: a seed pairs TD3 with DDPG."""
     td3, ddpg = _agent(), DDPGAgent(OBS_DIM, ACT_DIM, SMALL)
