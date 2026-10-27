@@ -284,7 +284,8 @@ averages 93.4 (± 0.2 across seed means) against rl-zoo's 93.5. With Gaussian no
 four learned to stand still (CHANGELOG.md, 2026-10-23). It was measured on 2026-10-23 and has no published report
 under `docs/benchmarks/`. MountainCarContinuous TD3 trains rl-zoo's 400×300 networks on the PyTorch backend, so it
 needs `.venv-gpu`; its greedy evaluation averages 93.8 (± 0.2 across seed means), and a seed takes about 20 minutes
-on the Jetson's GPU (CHANGELOG.md, 2026-10-27). It has no published report under `docs/benchmarks/` either.
+on the Jetson's GPU (CHANGELOG.md, 2026-10-27). Seed 42, which `train.py` uses, was measured too: it reaches 90 at
+about episode 150 and holds it (last 100 episodes 92.3). It has no published report under `docs/benchmarks/` either.
 
 ### Run any agent from one base config (quick overrides)
 

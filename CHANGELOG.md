@@ -29,7 +29,8 @@ Acrobot-v1) and
   through the benchmark on seeds 1 to 5 on the Jetson's GPU: 5 of 5 reach 90 at 36,800 to 70,500 steps (episodes 125
   to 163) and hold it, final 100-episode training averages 92.3 to 93.9, greedy evaluation 93.8 ± 0.2 across seed
   means, against DDPG's 93.4 ± 0.2 at 64×64 (CHANGELOG.md, 2026-10-23). A seed took about 20
-  minutes alone and 35 with two benchmark processes running at once.
+  minutes alone and 35 with two benchmark processes running at once. Seed 42 through `train.py` (TR-18): 90 at about
+  episode 150, held with a last-100 average of 92.3, greedy evaluation 93.9; its recording (VID-9) scores 93.9 ± 0.1.
 
 ## 2026-10-26
 
