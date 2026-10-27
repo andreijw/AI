@@ -12,6 +12,25 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-10-27
+
+### Added
+
+- **MountainCarContinuous TD3 at rl-zoo's 400×300 on the GPU** (`feature/mountaincar-continuous-td3`, the last pull
+  request of the TD3 roadmap item, which is now complete): `configs/mountaincar_continuous_td3.yaml` takes rl-zoo's
+  TD3 entry (400×300 networks, OU noise sigma 0.5, learning rate 1e-3, batch 256, 300,000 steps; SB3's TD3 defaults
+  for the rest) with `backend: torch`, and `td3` is registered for the `mountaincar_continuous` challenge. The config
+  needs PyTorch (`.venv-gpu`): CI and `.venv` never build it, and the tests that would are skipped without PyTorch
+  (`needs_torch` in `tests/helpers.py`, chosen from each config's `backend`), while its settings are still checked
+  from the YAML. The benchmark now checks that every selected agent's config can be built before any agent trains
+  (`BenchmarkChallenge.check_agent_buildable`): without it, `src/benchmark.py --challenge mountaincar_continuous`
+  outside `.venv-gpu` would have trained DDPG for hours, then failed on TD3 and saved nothing. Now it fails at once
+  with the PyTorch install hint; `--agents random ddpg` runs the others. Measured 2026-10-26
+  through the benchmark on seeds 1 to 5 on the Jetson's GPU: 5 of 5 reach 90 at 36,800 to 70,500 steps (episodes 125
+  to 163) and hold it, final 100-episode training averages 92.3 to 93.9, greedy evaluation 93.8 ± 0.2 across seed
+  means, against DDPG's 93.4 ± 0.2 at 64×64 (CHANGELOG.md, 2026-10-23). A seed took about 20
+  minutes alone and 35 with two benchmark processes running at once.
+
 ## 2026-10-26
 
 ### Added

@@ -10,6 +10,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 def run_main(args, monkeypatch, module="train"):
@@ -190,6 +191,13 @@ FAKE_PACKAGE_PREFIX = "rl_fake"
 def unique_name(prefix=FAKE_PACKAGE_PREFIX):
     """A package or key name no other test uses, so imports never collide."""
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
+
+# A committed config that sets ``backend: torch`` builds only where PyTorch is installed (.venv-gpu),
+# never in .venv or CI.
+needs_torch = pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="the config sets backend: torch"
+)
 
 
 def torch_backend_cases(ddpg_config: Mapping[str, object]) -> list[tuple[type, dict[str, object]]]:

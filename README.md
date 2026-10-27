@@ -14,7 +14,8 @@ The architecture is designed to support:
 
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO with
   Gaussian policies, and DDPG and TD3 with deterministic policies, for Pendulum; random, PPO and DQN for Acrobot;
-  random and DQN for MountainCar; random and DDPG with Ornstein-Uhlenbeck exploration noise for MountainCarContinuous)
+  random and DQN for MountainCar; random, DDPG and TD3 with Ornstein-Uhlenbeck exploration noise for
+  MountainCarContinuous)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -75,7 +76,7 @@ AI/
 │   ├── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG, TD3)
 │   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
 │   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
-│   └── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise)
+│   └── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── setup.ps1                   # Windows developer setup
@@ -227,6 +228,9 @@ python train.py --config configs/mountaincar_dqn.yaml
 
 # MountainCarContinuous DDPG with Ornstein-Uhlenbeck exploration noise
 python train.py --config configs/mountaincar_continuous_ddpg.yaml
+
+# MountainCarContinuous TD3 at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu)
+.venv-gpu/bin/python train.py --config configs/mountaincar_continuous_td3.yaml
 ```
 
 ### Which agents solve which challenge
@@ -255,6 +259,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
 | MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate, 100k buffer); seeds 1 to 10, 2026-10-25 | 200,000 | 3 of 10 | 146k to 195k | 2 of 10 |
 | MountainCarContinuous-v0 | DDPG | `mountaincar_continuous_ddpg.yaml` (rl-zoo settings, OU noise, 64×64 networks) | 300,000 | 5 of 5 | 25k to 69k | 5 of 5 |
+| MountainCarContinuous-v0 | TD3 | `mountaincar_continuous_td3.yaml` (rl-zoo settings, OU noise, 400×300 networks, PyTorch backend); CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 37k to 70k | 5 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
@@ -277,7 +282,9 @@ MountainCar config: without reward normalisation it never reached the flag in 1,
 MountainCarContinuous DDPG explores with Ornstein-Uhlenbeck noise (sigma 0.5), as rl-zoo's does; its greedy evaluation
 averages 93.4 (± 0.2 across seed means) against rl-zoo's 93.5. With Gaussian noise of the same std it solved no seed:
 four learned to stand still (CHANGELOG.md, 2026-10-23). It was measured on 2026-10-23 and has no published report
-under `docs/benchmarks/`.
+under `docs/benchmarks/`. MountainCarContinuous TD3 trains rl-zoo's 400×300 networks on the PyTorch backend, so it
+needs `.venv-gpu`; its greedy evaluation averages 93.8 (± 0.2 across seed means), and a seed takes about 20 minutes
+on the Jetson's GPU (CHANGELOG.md, 2026-10-27). It has no published report under `docs/benchmarks/` either.
 
 ### Run any agent from one base config (quick overrides)
 
@@ -439,6 +446,10 @@ average training reward over `--window` consecutive episodes (default 100) reach
 CartPole-v1, -200 for Pendulum-v1); the report gives the episode and the environment steps it took, and **Held**: the
 share of runs whose last `--window` episodes still average at or above the threshold. The final greedy evaluation is
 reported in its own column and does not count as a solve. `train.py --total-steps N` trains for a step budget too.
+Without `--agents`, every agent the challenge supports runs. Before any agent trains, the benchmark checks that each
+one's config can be built, so a backend that is not installed stops the run at once: the MountainCarContinuous TD3
+config needs PyTorch, so outside `.venv-gpu` name the others (`--challenge mountaincar_continuous --agents random
+ddpg`).
 
 Outputs:
 
@@ -654,8 +665,8 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 
 ### Next Steps
 
-1. **More Continuous Off-Policy Learning**: TD3 (twin critics, delayed actor updates) or SAC (Soft Actor-Critic) on
-   the replay buffer, networks and target updates DDPG already uses.
+1. **More Continuous Off-Policy Learning**: SAC (Soft Actor-Critic) on the replay buffer, networks and target updates
+   DDPG and TD3 already use.
 2. **Advanced Environments**: LunarLander and BipedalWalker (the Phase 7 challenge ladder).
 3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 

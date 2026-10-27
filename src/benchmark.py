@@ -247,6 +247,11 @@ class BenchmarkRunner:
 
         Returns:
             Dictionary containing raw runs, aggregated statistics, and output artifact paths.
+
+        Raises:
+            ValueError: For invalid settings, before anything is written.
+            ImportError: If an agent's config needs a backend that is not installed, before any
+                agent trains.
         """
         resolved = self._resolve(BenchmarkSettings() if settings is None else settings)
         os.makedirs(resolved.output_dir, exist_ok=True)
@@ -297,6 +302,7 @@ class BenchmarkRunner:
                     f"Agent '{agent_type}' is not supported by challenge '{self.challenge.name}'. "
                     f"Supported: {self.challenge.supported_agents}"
                 )
+            self.challenge.check_agent_buildable(agent_type)
 
         if episodes is not None and episodes <= 0:
             raise ValueError(f"episodes must be positive, got {episodes}")

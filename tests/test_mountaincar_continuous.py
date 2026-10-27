@@ -17,7 +17,7 @@ from rl_mountaincar.environments import (
     make_env_from_config,
 )
 from tests.agent_internals import exploration_generator, set_counters
-from tests.helpers import minimal_config, run_main
+from tests.helpers import minimal_config, needs_torch, run_main
 
 
 def test_mountaincar_continuous_env_takes_a_bounded_force_and_charges_for_it():
@@ -57,19 +57,31 @@ def test_mountaincar_continuous_challenge_is_discovered_and_selected_by_its_envi
     assert select_challenge("MountainCarContinuous-v0", None) is MountainCarContinuousChallenge
     challenge = MountainCarContinuousChallenge()
     assert challenge.solve_threshold == 90.0, "Gymnasium's reward_threshold"
-    assert challenge.supported_agents == ["ddpg", "random"]
+    assert challenge.supported_agents == ["ddpg", "random", "td3"]
+
+
+def _torch_td3_agent() -> type:
+    from rl_core.agents.torch_td3_agent import TorchTD3Agent  # here, not above: torch is optional
+
+    return TorchTD3Agent
 
 
 @pytest.mark.parametrize(
-    ("agent_type", "agent_class"),
-    [("random", ContinuousRandomAgent), ("ddpg", DDPGAgent)],
+    ("agent_type", "expected_class"),
+    [
+        ("random", lambda: ContinuousRandomAgent),
+        ("ddpg", lambda: DDPGAgent),
+        pytest.param("td3", _torch_td3_agent, marks=needs_torch),
+    ],
+    ids=["random", "ddpg", "td3"],
 )
 def test_mountaincar_continuous_setup_run_builds_each_agent_from_its_committed_config(
-    agent_type, agent_class
+    agent_type, expected_class
 ):
     env, agent, training = MountainCarContinuousChallenge().setup_run(agent_type, 1, episodes=2)
     try:
-        assert type(agent) is agent_class, f"{agent_type} should build {agent_class.__name__}"
+        expected = expected_class()
+        assert type(agent) is expected, f"{agent_type} should build {expected.__name__}"
         assert (agent.observation_dim, agent.action_dim) == (2, 1), "sized from the spaces"
         assert training["num_episodes"] == 2, "the episode override should apply"
         action = agent.select_action(env.reset()[0], training=False)
