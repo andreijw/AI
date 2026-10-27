@@ -232,6 +232,8 @@ classDiagram
         +BACKEND = "torch"
         +device, dtype, cuda_graph
         #_train_steps(num_updates) dict
+        #_step(kind)
+        #_step_kind(gradient_step) str
     }
 
     class DDPGAgent {
@@ -268,8 +270,17 @@ runs DDPG's gradient steps in PyTorch (`_train_steps`, on the GPU as a CUDA grap
 included, in NumPy. Its checkpoints are DDPGAgent's format, so either backend loads the other's. Only
 `rl_core/agents/torch_*.py` import torch; nothing imports them directly. Inheriting DDPGAgent brings its NumPy
 training maths too: TorchDDPGAgent overrides those methods to raise, since running them would train the NumPy
-mirror of its weights rather than the device. If TD3 or SAC need the same backend, splitting DDPG's maths from its
-bookkeeping is the cleaner shape.
+mirror of its weights rather than the device.
+
+The backend reads its layout from the NumPy agent rather than naming it: the networks (`_networks`), the Adam of
+each trained network (`_optimizers_by_net`, which also names the checkpoint's `<net>_adam_*` keys) and the target
+pairs (`_target_names`). A subclass that declares more, as TD3Agent declares a second critic, gets them on the device,
+in the mirror and in each captured graph's saved state without a change to TorchDDPGAgent. A backend for such a
+subclass is `class TorchX(TorchDDPGAgent, X)`, which `class_for_config` accepts because it subclasses `X`, and
+supplies only the device step: `_step` for each kind `_step_kind` names (each kind is its own CUDA graph, so TD3's
+critic-only and full steps can both be captured), the inputs a step reads (`_input_shapes`, `_sample_inputs`) and its
+metrics (`STEP_METRICS`, `_reduce_metrics`). Moving the NumPy maths out of the agent classes instead was considered
+and rejected on 2026-10-26: it would have left every one of those names hard-coded in the backend.
 
 ---
 

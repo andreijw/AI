@@ -12,6 +12,24 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-10-26
+
+### Changed
+
+- **The PyTorch backend reads its layout from the NumPy agent** (`feature/torch-backend-hooks`, the second pull
+  request of the TD3 roadmap item; no change to any number): `TorchDDPGAgent` no longer names DDPG's two trained
+  networks, its target pairs, its step inputs or its metrics. It takes them from `_networks`, the new
+  `_optimizers_by_net` and `_target_names`, and from overridable `_input_shapes`, `_sample_inputs`, `STEP_METRICS`
+  and `_reduce_metrics`; CUDA graphs are captured per step kind (`_step_kind`), lazily. So a `TorchTD3Agent` only
+  supplies its device step. TD3's delay rule and metric means each have one home (`_is_actor_step`, `_step_means`),
+  and its checkpoints derive their `<net>_adam_*` keys from `_optimizers_by_net`: a TD3 file lists
+  `critic_2_adam_*` earlier, with the same keys and values. The alternative, moving the NumPy maths out of the agents,
+  was rejected in review, since it left all of those names hard-coded.
+  - **Unchanged numbers:** `tests/test_ddpg_td3_golden.py` pins seeded DDPG (Gaussian, OU, clipped) and TD3 training
+    to arrays recorded from `develop` (bit for bit on the recording machine, 1e-12 relative elsewhere). Full runs of
+    `pendulum_ddpg.yaml` and `pendulum_td3.yaml` (seed 42, 40,000 steps) on the branch and on `develop` wrote
+    identical checkpoints at episodes 50, 100, 150 and 200.
+
 ## 2026-10-25
 
 ### Changed

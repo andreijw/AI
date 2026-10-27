@@ -71,8 +71,11 @@ class TD3Agent(DDPGAgent):
             "target_critic_2": self._target_critic_2,
         }
 
-    def _target_pairs(self) -> list[tuple[Params, Params]]:
-        return [*super()._target_pairs(), (self._critic_2, self._target_critic_2)]
+    def _optimizers_by_net(self) -> dict[str, Adam]:
+        return {**super()._optimizers_by_net(), "critic_2": self._critic_2_optimizer}
+
+    def _target_names(self) -> list[tuple[str, str]]:
+        return [*super()._target_names(), ("critic_2", "target_critic_2")]
 
     # ------------------------------------------------------------------
     # Targets
@@ -103,6 +106,27 @@ class TD3Agent(DDPGAgent):
     # ------------------------------------------------------------------
     # Training
     # ------------------------------------------------------------------
+
+    def _is_actor_step(self, gradient_step: int) -> bool:
+        """Whether gradient step ``gradient_step`` (counted from 1 over the agent's life) also
+        updates the actor and the targets; every backend's TD3 asks this."""
+        return gradient_step % self.policy_delay == 0
+
+    @staticmethod
+    def _step_means(
+        critic_totals: dict[str, float],
+        actor_totals: dict[str, float],
+        num_updates: int,
+        actor_updates: int,
+    ) -> dict[str, float]:
+        """What :meth:`update` returns from the summed per-step metrics: critic metrics over
+        every step, actor metrics over the actor steps (absent without one), and
+        ``actor_updates``. Every backend's TD3 reduces its sums with this."""
+        metrics = {name: total / num_updates for name, total in critic_totals.items()}
+        if actor_updates:
+            metrics.update({name: total / actor_updates for name, total in actor_totals.items()})
+        metrics["actor_updates"] = float(actor_updates)
+        return metrics
 
     def _train_steps(self, num_updates: int) -> dict[str, float]:
         """
@@ -136,29 +160,18 @@ class TD3Agent(DDPGAgent):
             }
             for name, value in step.items():
                 critic_totals[name] = critic_totals.get(name, 0.0) + value
-            if self._gradient_steps % self.policy_delay == 0:
+            if self._is_actor_step(self._gradient_steps):
                 actor, actor_grads = self._actor_loss_and_grads(obs)
                 self._apply(self._actor, self._actor_optimizer, actor_grads)
                 self._polyak()
                 actor_updates += 1
                 for name, value in actor.items():
                     actor_totals[name] = actor_totals.get(name, 0.0) + value
-        metrics = {name: total / num_updates for name, total in critic_totals.items()}
-        if actor_updates:
-            metrics.update({name: total / actor_updates for name, total in actor_totals.items()})
-        metrics["actor_updates"] = float(actor_updates)
-        return metrics
+        return self._step_means(critic_totals, actor_totals, num_updates, actor_updates)
 
     # ------------------------------------------------------------------
     # Checkpoints
     # ------------------------------------------------------------------
-
-    def _checkpoint_arrays(self) -> dict[str, Any]:
-        """DDPGAgent's arrays (all networks, through :meth:`_networks`) plus the second critic's
-        Adam state; the target-noise generator is saved with the others."""
-        arrays = super()._checkpoint_arrays()
-        arrays.update(self._critic_2_optimizer.state(prefix="critic_2_adam_"))
-        return arrays
 
     def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
         """
@@ -176,4 +189,3 @@ class TD3Agent(DDPGAgent):
             more = ", ..." if len(missing) > 2 else ""
             raise ValueError(f"not a TD3 checkpoint: it has no {', '.join(missing[:2])}{more}")
         super()._load_checkpoint_arrays(data)
-        self._critic_2_optimizer.load_state(data, prefix="critic_2_adam_")
