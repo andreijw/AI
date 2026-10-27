@@ -18,7 +18,7 @@ from rl_core.agents.optim import Adam  # noqa: E402
 from rl_core.challenges import discover_challenges  # noqa: E402
 from rl_core.utils.config import load_config  # noqa: E402
 from tests.agent_internals import optimizer, weights
-from tests.helpers import needs_torch
+from tests.helpers import env_marks, needs_torch
 
 # Step budgets (CHANGELOG.md, 2026-10-16), from the
 # rl-baselines3-zoo references where one exists; CartPole PPO gets twice its reference.
@@ -31,6 +31,8 @@ STEP_BUDGETS = {
     ("mountaincar_continuous", "ddpg"): 300_000,
     ("mountaincar_continuous", "random"): 200_000,
     ("mountaincar_continuous", "td3"): 300_000,
+    ("lunarlander", "random"): 50_000,
+    ("lunarlander_continuous", "random"): 50_000,
     ("cartpole", "reinforce"): 500_000,
     ("cartpole", "actor_critic"): 500_000,
     ("cartpole", "ppo"): 200_000,
@@ -47,18 +49,18 @@ STEP_BUDGETS = {
 CONFIGS_DIR = os.path.join(os.path.dirname(__file__), "..", "configs")
 
 
-def _uses_torch(challenge, agent_type):
-    """Whether the committed config sets backend: torch, so builds only where PyTorch is installed."""
-    name = discover_challenges()[challenge].CONFIG_MAP[agent_type]
-    return load_config(os.path.join(CONFIGS_DIR, name))["agent"]["config"].get("backend") == "torch"
+def _marks(challenge, agent_type):
+    """What building the committed run needs: PyTorch when the config sets backend: torch, and
+    whatever the challenge's environment needs (Box2D for LunarLander)."""
+    challenge_cls = discover_challenges()[challenge]
+    config = load_config(os.path.join(CONFIGS_DIR, challenge_cls.CONFIG_MAP[agent_type]))
+    torch = [needs_torch] if config["agent"]["config"].get("backend") == "torch" else []
+    return torch + env_marks(challenge_cls().name)
 
 
 @pytest.mark.parametrize(
     "challenge,agent_type",
-    [
-        pytest.param(*key, marks=[needs_torch] if _uses_torch(*key) else [])
-        for key in sorted(STEP_BUDGETS)
-    ],
+    [pytest.param(*key, marks=_marks(*key)) for key in sorted(STEP_BUDGETS)],
 )
 def test_every_agent_trains_for_its_step_budget(challenge, agent_type):
     env, agent, train_cfg = discover_challenges()[challenge]().setup_run(

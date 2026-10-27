@@ -16,6 +16,19 @@ Acrobot-v1) and
 
 ### Added
 
+- **LunarLander-v3 challenges, discrete and continuous** (`feature/lunarlander-challenge`, the first pull request of
+  the LunarLander roadmap item): `rl_lunarlander` with `LunarLanderEnv` (observation noise only) and two challenges,
+  `lunarlander` (`LunarLander-v3`, four engine actions) and `lunarlander_continuous` (`LunarLanderContinuous-v3`, two
+  throttles in [-1, 1]), threshold 200 (Gymnasium's), random agents only, with `configs/lunarlander_default.yaml` and
+  `configs/lunarlander_continuous_default.yaml` (50,000 steps). Box2D is a new optional `box2d` extra naming
+  `box2d-py==2.3.5` and `pygame-ce`: Gymnasium 1.4's own extra pins `box2d==2.3.10`, which has no build for the
+  Jetson, so `./setup.sh` builds `box2d-py` from source with `swig` first, in both profiles (about 90 seconds). CI
+  does not install it; the tests that build a Box2D environment skip without it (`env_marks` in `tests/helpers.py`,
+  from Gymnasium's entry point), and without it building a LunarLander environment fails at once naming `./setup.sh`.
+  Acrobot, MountainCar and LunarLander now build their wrappers through one `rl_core.environments.env_from_config`.
+  Measured on seeds 1 to 5 through the benchmark: the random agent's final 100-episode training averages are -178 to
+  -194 (discrete) and -214 to -228 (continuous), greedy evaluation -233 ± 31 and -230 ± 26.
+
 - **MountainCarContinuous TD3 at rl-zoo's 400×300 on the GPU** (`feature/mountaincar-continuous-td3`, the last pull
   request of the TD3 roadmap item, which is now complete): `configs/mountaincar_continuous_td3.yaml` takes rl-zoo's
   TD3 entry (400×300 networks, OU noise sigma 0.5, learning rate 1e-3, batch 256, 300,000 steps; SB3's TD3 defaults

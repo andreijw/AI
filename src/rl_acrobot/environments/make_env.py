@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rl_core.utils.config import read_env_settings
+from rl_core.environments import env_from_config
 
 from .acrobot_env import AcrobotEnv
 
@@ -52,10 +52,4 @@ def make_env_from_config(config: dict[str, Any]) -> AcrobotEnv:
     Raises:
         ValueError: If the config sets a setting Acrobot does not support (see ENV_DEFAULTS).
     """
-    settings = read_env_settings(config, ENV_DEFAULTS, "Acrobot-v1")
-    return make_env(
-        env_name=settings.pop("name"),
-        render_mode=config.get("render_mode"),
-        seed=config.get("seed"),
-        **settings,
-    )
+    return env_from_config(make_env, config, ENV_DEFAULTS)

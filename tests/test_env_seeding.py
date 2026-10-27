@@ -1,4 +1,4 @@
-"""Seeding contract shared by the CartPole and Pendulum environment wrappers.
+"""Seeding contract shared by the challenge environment wrappers.
 
 A seeded wrapper yields a reproducible sequence of *different* episodes: the constructor seed
 is applied on the first reset, later unseeded resets continue the generators, and an explicit
@@ -6,6 +6,7 @@ is applied on the first reset, later unseeded resets continue the generators, an
 is separate from the base environment's.
 """
 
+import gymnasium as gym
 import numpy as np
 import pytest
 
@@ -15,32 +16,52 @@ from rl_cartpole.environments import make_vec_env as make_cartpole_vec_env
 from rl_core.agents import BaseAgent
 from rl_core.seeding import derive_rng
 from rl_core.training import Trainer
+from rl_lunarlander.environments import LunarLanderEnv
 from rl_mountaincar.environments import MountainCarEnv
 from rl_pendulum.environments import PendulumEnv
+from tests.helpers import env_marks
 
-ENV_CLASSES = [CartPoleEnv, PendulumEnv, AcrobotEnv, MountainCarEnv]
+
+def lunarlander_continuous_env(**kwargs) -> LunarLanderEnv:
+    """The LunarLander wrapper on LunarLanderContinuous-v3."""
+    return LunarLanderEnv(env_name="LunarLanderContinuous-v3", **kwargs)
+
+
+# Each wrapper's constructor (or a factory taking the same keywords), marked as its environment
+# needs: the Box2D ones build only where box2d-py is installed.
+ENV_CLASSES = [
+    CartPoleEnv,
+    PendulumEnv,
+    AcrobotEnv,
+    MountainCarEnv,
+    pytest.param(LunarLanderEnv, marks=env_marks("LunarLander-v3"), id="LunarLanderEnv"),
+    pytest.param(
+        lunarlander_continuous_env,
+        marks=env_marks("LunarLanderContinuous-v3"),
+        id="LunarLanderContinuous",
+    ),
+]
 GRAVITY_RANGE = {CartPoleEnv: ("gravity", (5.0, 15.0)), PendulumEnv: ("g", (5.0, 15.0))}
 SEED = 42
 NOISE_STD = 0.1
 
 
-def _action(env_cls, step: int):
-    """A fixed, valid action for the given step of an episode."""
-    if env_cls is CartPoleEnv:
-        return step % 2
-    if env_cls in (AcrobotEnv, MountainCarEnv):
-        return step % 3
-    return np.array([0.5 if step % 2 == 0 else -1.0], dtype=np.float32)
+def _action(env, step: int):
+    """A fixed, valid action for the given step of an episode, from the environment's action space:
+    the actions in turn when discrete, else 0.5 and -1.0 in turn in every dimension."""
+    if isinstance(env.action_space, gym.spaces.Discrete):
+        return step % int(env.action_space.n)
+    return np.full(env.action_space.shape, 0.5 if step % 2 == 0 else -1.0, dtype=np.float32)
 
 
-def _play(env, env_cls, episodes: int = 3, steps: int = 4) -> list[np.ndarray]:
+def _play(env, episodes: int = 3, steps: int = 4) -> list[np.ndarray]:
     """Reset and step through several episodes; return every observation and reward seen."""
     seen: list[np.ndarray] = []
     for _ in range(episodes):
         obs, _ = env.reset()
         seen.append(np.asarray(obs, dtype=np.float64))
         for step in range(steps):
-            obs, reward, terminated, truncated, _ = env.step(_action(env_cls, step))
+            obs, reward, terminated, truncated, _ = env.step(_action(env, step))
             seen.append(np.append(np.asarray(obs, dtype=np.float64), reward))
             if terminated or truncated:
                 break
@@ -81,7 +102,7 @@ def test_two_envs_with_the_same_seed_agree_episode_by_episode(env_cls):
     """The sequence of episodes is reproducible from the constructor seed."""
     first, second = env_cls(seed=SEED), env_cls(seed=SEED)
     try:
-        seen_first, seen_second = _play(first, env_cls), _play(second, env_cls)
+        seen_first, seen_second = _play(first), _play(second)
     finally:
         first.close()
         second.close()

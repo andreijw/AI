@@ -199,6 +199,21 @@ needs_torch = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="the config sets backend: torch"
 )
 
+# A Box2D environment (LunarLander) builds only where box2d-py is installed (./setup.sh), never in
+# CI.
+needs_box2d = pytest.mark.skipif(
+    importlib.util.find_spec("Box2D") is None, reason="Box2D is not installed (./setup.sh)"
+)
+
+
+def env_marks(environment_id: str) -> list[pytest.MarkDecorator]:
+    """The marks a test that builds ``environment_id`` needs: ``needs_box2d`` for Gymnasium's Box2D
+    environments, by their registered entry point, else none."""
+    import gymnasium as gym
+
+    entry_point = str(gym.spec(environment_id).entry_point)
+    return [needs_box2d] if entry_point.startswith("gymnasium.envs.box2d") else []
+
 
 def torch_backend_cases(ddpg_config: Mapping[str, object]) -> list[tuple[type, dict[str, object]]]:
     """The PyTorch DDPG and TD3 backends as agent-contract cases, float64 on the CPU, where PyTorch

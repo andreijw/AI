@@ -31,3 +31,25 @@ def test_trainer_and_challenges_do_not_import_matplotlib():
         f"load matplotlib; loaded {result.stdout.strip()}, so something on that path imports "
         "rl_core.utils.visualization."
     )
+
+
+def test_discovering_the_challenges_does_not_import_box2d():
+    """LunarLander's challenges register without Box2D, which CI does not install: only building
+    the environment needs it. A fresh process, because this session may have built one."""
+    code = (
+        "import sys; sys.path.insert(0, 'src'); "
+        "from rl_core.challenges import CHALLENGES, discover_challenges, import_failures_text; "
+        "discover_challenges(); "
+        "assert 'lunarlander' in CHALLENGES, sorted(CHALLENGES); "
+        "assert not import_failures_text(), import_failures_text(); "
+        "print(sorted(m for m in sys.modules "
+        "if m.split('.')[0] == 'Box2D' or m.startswith('gymnasium.envs.box2d')))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", (
+        f"Discovering the challenges loaded {result.stdout.strip()}: something imports Box2D at "
+        "module level, so the challenges would not register where it is not installed."
+    )

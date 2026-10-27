@@ -58,6 +58,11 @@ To optimize token usage and context window limits:
   * `src/rl_mountaincar/environments/`: mountain car wrapper (observation noise only), shared by both ids, and a
     factory for each.
   * `src/rl_mountaincar/benchmark.py`: both MountainCar benchmark challenge implementations.
+* **`src/rl_lunarlander/`**: LunarLander-v3 (discrete) and LunarLanderContinuous-v3 challenges, which need Box2D
+  (the `box2d` extra, built by `./setup.sh`; README, LunarLander).
+  * `src/rl_lunarlander/environments/`: lunar lander wrapper (observation noise only), shared by both ids, and a
+    factory for each.
+  * `src/rl_lunarlander/benchmark.py`: both LunarLander benchmark challenge implementations.
 * **`src/rl_core/challenges/`**: The `BenchmarkChallenge` interface, the challenge registry and `discover_challenges`.
 * **`src/benchmark.py`**: The benchmark runner and its command line, for every discovered challenge.
 * **`tests/`** (located at [tests/](tests/)): Pytest unit and integration test suite
@@ -121,7 +126,11 @@ Run these commands in the root workspace directory:
 # Windows: one-shot setup (Python 3.12 + .venv + dependencies + CI checks)
 .\setup.ps1
 
+# Linux and macOS: .venv with .[dev,video,box2d], Box2D built first (--profile gpu adds PyTorch)
+./setup.sh
+
 # Any OS: install dependencies in editable development mode inside an activated venv
+# (LunarLander's Box2D needs the extra steps in README, LunarLander)
 pip install -e ".[dev,video]"
 ```
 
