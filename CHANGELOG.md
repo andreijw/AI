@@ -14,6 +14,22 @@ Acrobot-v1) and
 
 ## 2026-10-26
 
+### Added
+
+- **TD3 on the PyTorch backend** (`feature/torch-td3-agent`, the third pull request of the TD3 roadmap item):
+  `backend: torch` in a TD3 config builds `TorchTD3Agent(TorchDDPGAgent, TD3Agent)`, which runs TD3's gradient steps
+  in PyTorch, on the GPU as two CUDA graphs: a critic-only step and a full step that also trains the actor and moves
+  the three targets, chosen by TD3Agent's `_is_actor_step`. The target-policy noise is drawn from TD3Agent's own
+  generator with each batch, so float64 on the CPU or GPU matches the NumPy `TD3Agent` to rounding (metrics in the
+  same order, checkpoints, greedy actions; delays of 2, 3 and 100, with and without clipping;
+  `tests/test_torch_ddpg_agent.py`). Checkpoints are TD3Agent's format. `TorchDDPGAgent`'s step is now built from
+  `_critic_update`, `_actor_update` and `_move_targets`, which TD3's step reuses.
+  - **Measured on the Jetson** (2026-10-26, MountainCarContinuous shapes, 400×300, batch 256, float32 with CUDA
+    graphs, `scripts/pytorch_timing/gpu_memory.py`): both TD3 graphs hold 56 MiB on the device (104 MiB reserved)
+    against DDPG's 38 MiB, of 7.3 GiB; an update of 999 steps, acting included, takes 3.3 s against DDPG's 2.8 s
+    (`docs/pytorch_jetson_timing.md`). No learning run on MountainCarContinuous
+    yet: that config is the next pull request.
+
 ### Changed
 
 - **The PyTorch backend reads its layout from the NumPy agent** (`feature/torch-backend-hooks`, the second pull

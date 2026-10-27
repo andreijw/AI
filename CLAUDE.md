@@ -12,7 +12,7 @@
 ## Project Standards
 
 Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥1.0**
-· **NumPy** agents, with an optional **PyTorch** backend for DDPG only (`backend: torch`; see CONTRIBUTING.md
+· **NumPy** agents, with an optional **PyTorch** backend for DDPG and TD3 only (`backend: torch`; see CONTRIBUTING.md
 "Framework Independence") · **pytest** · **Ruff** (line length 100) · **mypy**.
 
 - **Coding standards** → **[CONTRIBUTING.md](CONTRIBUTING.md)** §1–3.

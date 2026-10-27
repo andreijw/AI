@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from rl_core.agents import DDPGAgent, PPOAgent  # noqa: E402
+from rl_core.agents import DDPGAgent, PPOAgent, TD3Agent  # noqa: E402
 from rl_core.challenges import discover_challenges  # noqa: E402
 from tests.test_agent_harness import ALL_AGENTS, CONTINUOUS_AGENTS  # noqa: E402
 
@@ -47,7 +47,7 @@ def test_an_unknown_backend_is_rejected_with_the_allowed_ones():
 
 
 def test_a_subclass_does_not_inherit_its_parents_backends():
-    """A future TD3Agent(DDPGAgent) must not build TorchDDPGAgent for backend: torch."""
+    """A subclass of DDPGAgent without its own BACKENDS must not build TorchDDPGAgent."""
 
     class SubDDPG(DDPGAgent):
         pass
@@ -64,15 +64,17 @@ def test_building_a_class_against_its_configs_backend_is_rejected():
         DDPGAgent(3, 1, {**DDPG_CONFIG, "backend": "torch"})
 
 
-def test_backend_torch_without_pytorch_names_the_install_command(monkeypatch):
+@pytest.mark.parametrize("agent_cls", [DDPGAgent, TD3Agent])
+def test_backend_torch_without_pytorch_names_the_install_command(agent_cls, monkeypatch):
     """Without PyTorch, choosing it fails at once with the command that installs it."""
     # import torch now raises, whether PyTorch is installed or not
     monkeypatch.setitem(sys.modules, "torch", None)
-    monkeypatch.delitem(sys.modules, "rl_core.agents.torch_ddpg_agent", raising=False)
+    for module in ("torch_ddpg_agent", "torch_td3_agent"):
+        monkeypatch.delitem(sys.modules, f"rl_core.agents.{module}", raising=False)
     with pytest.raises(
         ImportError, match=r"backend: torch needs PyTorch.*pip install -e '\.\[torch\]'"
     ):
-        DDPGAgent.class_for_config({"backend": "torch"})
+        agent_cls.class_for_config({"backend": "torch"})
 
 
 def test_challenges_build_the_class_the_config_chooses():

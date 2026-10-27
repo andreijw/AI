@@ -29,7 +29,7 @@ contributing, writing code, refactoring components, or submitting pull requests.
 
 - **Framework Independence**: Agent neural networks and policy representations are implemented in pure NumPy; that
   version of every agent is the default and the reference. The one exception is an optional PyTorch backend for
-  off-policy agents, DDPG so far (`TorchDDPGAgent`, chosen with `backend: torch`):
+  off-policy agents, DDPG and TD3 so far (`TorchDDPGAgent`, `TorchTD3Agent`, chosen with `backend: torch`):
   - It lives only in `src/rl_core/agents/torch_*.py`, subclasses the NumPy agent and overrides only its gradient
     steps; nothing imports those modules except `BaseAgent.class_for_config`, through the agent's `BACKENDS`
     (`tests/test_source_conventions.py` enforces both).

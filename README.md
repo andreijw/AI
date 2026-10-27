@@ -111,7 +111,7 @@ If script execution is disabled, run it once with `powershell -ExecutionPolicy B
 
 ```bash
 ./setup.sh                  # .venv, the CPU profile: .[dev,video], no PyTorch (as CI)
-./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG backend (backend: torch); about 5 GiB
+./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG and TD3 backend (backend: torch); about 5 GiB
 ```
 
 Each creates its environment if missing, upgrades its packages and runs the CI checks (`--skip-checks` to skip).
@@ -625,14 +625,14 @@ Implemented agents (in `src/rl_core/agents/`):
     (`rl_core/agents/exploration_noise.py`)
   - `TD3Agent`: Twin Delayed DDPG: two critics with the smaller target, smoothed target actions and delayed actor
     and target updates (`configs/pendulum_td3.yaml`)
-- **Optional PyTorch backend**: `TorchDDPGAgent` trains DDPG's gradient steps in PyTorch, on the GPU as a CUDA graph,
-  and keeps everything else, acting included, in NumPy. Add `backend: torch` to a DDPG config's `agent.config`
-  (optional: `device: auto|cpu|cuda`, `dtype: float32|float64`, `cuda_graph: true|false`). It needs PyTorch, which
-  `.venv` and CI do not have: build a separate environment as in
+- **Optional PyTorch backend**: `TorchDDPGAgent` and `TorchTD3Agent` train DDPG's and TD3's gradient steps in PyTorch,
+  on the GPU as CUDA graphs, and keep everything else, acting included, in NumPy. Add `backend: torch` to a DDPG or
+  TD3 config's `agent.config` (optional: `device: auto|cpu|cuda`, `dtype: float32|float64`,
+  `cuda_graph: true|false`). It needs PyTorch, which `.venv` and CI do not have: build a separate environment as in
   [`docs/pytorch_jetson_timing.md`](docs/pytorch_jetson_timing.md) and run `train.py` from it. Its checkpoints are
-  DDPGAgent's format, so `record.py` can replay a GPU-trained checkpoint without PyTorch by setting `backend: numpy`
-  in the run's config. Build the environment with `./setup.sh --profile gpu` (`.venv-gpu`). Measured speed: see the
-  timing document.
+  the NumPy agent's format, so `record.py` can replay a GPU-trained checkpoint without PyTorch by setting
+  `backend: numpy` in the run's config. Build the environment with `./setup.sh --profile gpu` (`.venv-gpu`).
+  Measured speed: see the timing document.
 
 ### Training Pipeline
 

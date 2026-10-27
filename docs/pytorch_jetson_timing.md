@@ -89,6 +89,14 @@ all weights and Adam states back to NumPy, reading the metrics). **Per step in a
   steps keep its arrays in cache. The ratio through the agent is therefore lower than the 18 times of the bare step.
 - **Acting costs the same as in NumPy** (0.04 and 0.12 ms), because the agent acts on the CPU.
 
+## TD3's Two Graphs (2026-10-26)
+
+`TorchTD3Agent` captures two CUDA graphs, a critic-only step and a full one, where DDPG captures one. Measured with
+[gpu_memory.py](../scripts/pytorch_timing/gpu_memory.py) at MountainCarContinuous shapes, 400×300, batch 256,
+float32: after training, DDPG holds 37.6 MiB on the device (peak 44.3, 56 MiB reserved) and TD3 56.3 MiB (peak 65.3,
+104 MiB reserved), of the board's 7.3 GiB shared memory. An `update` of 999 gradient steps, acting included, takes
+2.8 s for DDPG and 3.3 s for TD3, so a 300,000-step run spends roughly 15 to 17 minutes in updates.
+
 ## End-to-End Training (2026-10-25)
 
 `configs/pendulum_ddpg.yaml` through the benchmark: 40,000 steps, of which the first 10,000 are random warm-up
@@ -140,7 +148,7 @@ To reproduce the agent table (the first table's scripts are at commit `8afafc5`)
 ## Recommendation (Approved 2026-10-25)
 
 **Add an optional PyTorch backend, for the off-policy agents only, built around CUDA graphs from the start.** The
-maintainer approved it on 2026-10-25; DDPG's is `TorchDDPGAgent`.
+maintainer approved it on 2026-10-25; DDPG's is `TorchDDPGAgent`, TD3's `TorchTD3Agent` (2026-10-26).
 
 - **Where it pays.** DDPG, and later TD3 and SAC, take one or more gradient steps per environment step, so the
   update dominates training time. At 400×300, the 300,000 steps of `configs/mountaincar_continuous_ddpg.yaml` would
@@ -151,8 +159,8 @@ maintainer approved it on 2026-10-25; DDPG's is `TorchDDPGAgent`.
   and NumPy is already fast for them.
 - **Shape.** A `[torch]` extra in `pyproject.toml`, chosen per agent in the config. The NumPy agents stay the default
   and the gradient reference, with a test that both take the same step. That test has to run the PyTorch agent in
-  float64, or compare with a stated tolerance, because float32 is not bit-exact. (Built: `TorchDDPGAgent`, tested by
-  `tests/test_torch_ddpg_agent.py` on the board; CI never installs PyTorch.)
+  float64, or compare with a stated tolerance, because float32 is not bit-exact. (Built: `TorchDDPGAgent` and
+  `TorchTD3Agent`, tested by `tests/test_torch_ddpg_agent.py` on the board; CI never installs PyTorch.)
 - **Rules to keep.**
   - Act on the CPU: copy the actor's weights to NumPy after each update, or keep a CPU copy of the actor.
   - Keep the replay buffer on the GPU, so sampling stays inside the graph. (Built otherwise: the agent samples from

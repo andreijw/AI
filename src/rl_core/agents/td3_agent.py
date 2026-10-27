@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -37,6 +37,8 @@ class TD3Agent(DDPGAgent):
     both would be without clipping; ``max_grad_norm`` (SB3's TD3 has none) clips each critic on
     its own. ``critic_loss`` is the mean of the two critics' losses, comparable with DDPG's.
     """
+
+    BACKENDS: ClassVar[dict[str, str]] = {"torch": "rl_core.agents.torch_td3_agent:TorchTD3Agent"}
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """
