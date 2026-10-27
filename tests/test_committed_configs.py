@@ -16,7 +16,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rl_cartpole.benchmark import CartPoleChallenge  # noqa: E402
 from rl_core.agents.optim import Adam  # noqa: E402
 from rl_core.challenges import discover_challenges  # noqa: E402
+from rl_core.utils.config import load_config  # noqa: E402
 from tests.agent_internals import optimizer, weights
+from tests.helpers import needs_torch
 
 # Step budgets (CHANGELOG.md, 2026-10-16), from the
 # rl-baselines3-zoo references where one exists; CartPole PPO gets twice its reference.
@@ -28,6 +30,7 @@ STEP_BUDGETS = {
     ("mountaincar", "random"): 40_000,
     ("mountaincar_continuous", "ddpg"): 300_000,
     ("mountaincar_continuous", "random"): 200_000,
+    ("mountaincar_continuous", "td3"): 300_000,
     ("cartpole", "reinforce"): 500_000,
     ("cartpole", "actor_critic"): 500_000,
     ("cartpole", "ppo"): 200_000,
@@ -41,7 +44,22 @@ STEP_BUDGETS = {
 }
 
 
-@pytest.mark.parametrize("challenge,agent_type", sorted(STEP_BUDGETS))
+CONFIGS_DIR = os.path.join(os.path.dirname(__file__), "..", "configs")
+
+
+def _uses_torch(challenge, agent_type):
+    """Whether the committed config sets backend: torch, so builds only where PyTorch is installed."""
+    name = discover_challenges()[challenge].CONFIG_MAP[agent_type]
+    return load_config(os.path.join(CONFIGS_DIR, name))["agent"]["config"].get("backend") == "torch"
+
+
+@pytest.mark.parametrize(
+    "challenge,agent_type",
+    [
+        pytest.param(*key, marks=[needs_torch] if _uses_torch(*key) else [])
+        for key in sorted(STEP_BUDGETS)
+    ],
+)
 def test_every_agent_trains_for_its_step_budget(challenge, agent_type):
     env, agent, train_cfg = discover_challenges()[challenge]().setup_run(
         agent_type, seed=1, episodes=None
@@ -114,6 +132,33 @@ def test_pendulum_td3_uses_rl_zoo_settings_with_a_smaller_network():
     assert (agent.noise_std, agent.updates_per_step) == pytest.approx((0.1, 1.0))
     assert agent.policy_delay == 2
     assert (agent.target_policy_noise, agent.target_noise_clip) == pytest.approx((0.2, 0.5))
+
+
+def test_mountaincar_continuous_td3_uses_rl_zoo_settings_on_the_torch_backend():
+    """rl-zoo's TD3 for MountainCarContinuous-v0 at its 400x300, with SB3's TD3 defaults and the OU
+    settings of mountaincar_continuous_ddpg.yaml. Read from the file, so CI checks it without
+    PyTorch, which the config's backend needs."""
+    config = load_config(
+        os.path.join(os.path.dirname(__file__), "..", "configs", "mountaincar_continuous_td3.yaml")
+    )
+    agent = config["agent"]["config"]
+    assert config["agent"]["type"] == "td3" and agent["backend"] == "torch"
+    assert agent["hidden_sizes"] == [400, 300]
+    assert (agent["learning_rate"], agent["gamma"], agent["tau"]) == pytest.approx(
+        (0.001, 0.99, 0.005)
+    )
+    assert (agent["batch_size"], agent["learning_starts"], agent["buffer_capacity"]) == (
+        256,
+        100,
+        300_000,
+    )
+    assert (agent["noise_type"], agent["noise_std"]) == ("ornstein_uhlenbeck", 0.5)
+    assert (agent["ou_theta"], agent["ou_dt"], agent["updates_per_step"]) == pytest.approx(
+        (0.15, 0.01, 1.0)
+    )
+    assert agent["policy_delay"] == 2
+    assert (agent["target_policy_noise"], agent["target_noise_clip"]) == pytest.approx((0.2, 0.5))
+    assert config["training"]["total_steps"] == 300_000
 
 
 def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():

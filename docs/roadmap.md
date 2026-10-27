@@ -103,30 +103,12 @@ when picked.
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 
-- [~] **TD3 Agent (Prerequisite for Tier 2)**
-  - **Description**: TD3 (Fujimoto et al., 2018) as Stable-Baselines3 implements it, the stronger off-policy
-    continuous agent the LunarLander rung needs, built and measured on the challenges that exist now.
-  - **Acceptance criteria**: `TD3Agent` in NumPy beside `DDPGAgent` (twin critics, target-policy smoothing, delayed
-    actor and target updates), checked against a hand replay of SB3's step; an explicit `BaseAgent.end_episode`
-    hook replacing DDPG's noise reset inside `update`; `configs/pendulum_td3.yaml` from rl-zoo; a 5-seed Pendulum
-    run against DDPG; a PyTorch backend through `BACKENDS`, and MountainCarContinuous at rl-zoo's 400×300 on the GPU.
-  - **Progress**: the first pull request (`feature/td3-agent`) adds the hook, `TD3Agent`, the Pendulum config and
-    its learning run. The second (`feature/torch-backend-hooks`) makes `TorchDDPGAgent` read its networks,
-    optimizers, target pairs, step inputs and metrics from hooks, and gives TD3 one home for its delay rule
-    (`_is_actor_step`) and its metric means (`_step_means`) (CHANGELOG.md, 2026-10-26). The third
-    (`feature/torch-td3-agent`) adds `TorchTD3Agent`; its two graphs hold 56 MiB at 400×300 (CHANGELOG.md,
-    2026-10-26). Open: `configs/mountaincar_continuous_td3.yaml` from rl-zoo's TD3 entry (400×300, OU noise 0.5,
-    lr 1e-3, batch 256, 300,000 steps), registered for the `mountaincar_continuous` challenge, and its 5-seed run on
-    the GPU (about 20 to 25 minutes per seed). To decide first: whether the committed config sets `backend: torch`,
-    which CI and a `.venv` benchmark cannot build without PyTorch.
-  - **Out of scope**: SAC; n-step returns; LunarLander itself.
-
 - [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
   - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency
     (a swig build, not checked on the Jetson's aarch64) and a stronger off-policy continuous agent. The POMDP
     variant of CartPole is Tier 2 too, through the Phase 6 frame-stacking item.
-  - **Agent**: TD3 is the item above; SAC is the next candidate and the trigger for a shared off-policy base
-    class.
+  - **Agent**: TD3, in NumPy and on the PyTorch backend (CHANGELOG.md, 2026-10-27); SAC is the next candidate
+    and the trigger for a shared off-policy base class. n-step returns stay out of scope.
 
 - [ ] **BipedalWalker-v3 and MuJoCo Tasks (Tier 3)**
   - **Description**: High-dimensional continuous control over millions of steps (BipedalWalker threshold 300;

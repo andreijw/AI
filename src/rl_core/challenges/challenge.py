@@ -124,6 +124,21 @@ class BenchmarkChallenge(abc.ABC):
             config=config,
         )
 
+    def check_agent_buildable(self, agent_type: str) -> None:
+        """
+        Resolve the class :meth:`setup_run` would build for ``agent_type`` from its config, without
+        building an environment or an agent, so a run that cannot start fails before any other
+        agent trains. A challenge with no config for ``agent_type`` has nothing to check here.
+
+        Raises:
+            ValueError: If the config names a backend this agent has no version in.
+            ImportError: If the backend's library is not installed, naming how to install it.
+        """
+        if agent_type not in self.CONFIG_MAP or agent_type not in self.AGENT_CLASSES:
+            return
+        config = load_config(os.path.join(self.config_dir, self.CONFIG_MAP[agent_type]))
+        self.AGENT_CLASSES[agent_type].class_for_config(config.get("agent", {}).get("config", {}))
+
     def agent_config(self, agent_config: Mapping[str, Any], env: ChallengeEnv) -> dict[str, Any]:
         """The config an agent is built with: a copy of ``agent_config`` by default; a challenge
         overrides this to add what its environment implies."""

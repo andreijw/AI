@@ -11,6 +11,7 @@ from rl_core.agents import (
     DDPGAgent,
     DQNAgent,
     RandomAgent,
+    TD3Agent,
 )
 from rl_core.challenges import (
     BenchmarkChallenge,
@@ -72,10 +73,12 @@ class MountainCarContinuousChallenge(BenchmarkChallenge):
     AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {
         "random": ContinuousRandomAgent,
         "ddpg": DDPGAgent,
+        "td3": TD3Agent,
     }
     CONFIG_MAP: ClassVar[dict[str, str]] = {
         "random": "mountaincar_continuous_default.yaml",
         "ddpg": "mountaincar_continuous_ddpg.yaml",
+        "td3": "mountaincar_continuous_td3.yaml",
     }
 
     @property

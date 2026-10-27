@@ -96,6 +96,9 @@ all weights and Adam states back to NumPy, reading the metrics). **Per step in a
 float32: after training, DDPG holds 37.6 MiB on the device (peak 44.3, 56 MiB reserved) and TD3 56.3 MiB (peak 65.3,
 104 MiB reserved), of the board's 7.3 GiB shared memory. An `update` of 999 gradient steps, acting included, takes
 2.8 s for DDPG and 3.3 s for TD3, so a 300,000-step run spends roughly 15 to 17 minutes in updates.
+End to end, `configs/mountaincar_continuous_td3.yaml` (300,000 steps) took about 20 minutes per seed through the
+benchmark with the GPU to itself, and about 35 with two benchmark processes sharing it (2026-10-26; CHANGELOG.md,
+2026-10-27).
 
 ## End-to-End Training (2026-10-25)
 

@@ -25,6 +25,7 @@ from rl_cartpole.environments.cartpole_env import CartPoleEnv
 from rl_core.agents.random_agent import RandomAgent
 from rl_core.challenges import CHALLENGES, BenchmarkChallenge
 from rl_core.utils.config import load_config
+from rl_mountaincar.benchmark import MountainCarContinuousChallenge
 from rl_pendulum.benchmark import PendulumChallenge
 
 
@@ -702,6 +703,25 @@ def test_runner_rejects_bad_arguments_before_writing_anything(tmp_path, bad):
             BenchmarkSettings(output_dir=str(out_dir), **bad)
         )
     assert not out_dir.exists()
+
+
+def test_runner_refuses_an_agent_it_cannot_build_before_training_any(tmp_path, monkeypatch):
+    """Without PyTorch, every agent of MountainCarContinuous fails at once on TD3's backend: no
+    hours of DDPG first, then an error and nothing saved."""
+    # import torch now raises, whether PyTorch is installed or not
+    monkeypatch.setitem(sys.modules, "torch", None)
+    for module in ("torch_ddpg_agent", "torch_td3_agent"):
+        monkeypatch.delitem(sys.modules, f"rl_core.agents.{module}", raising=False)
+    challenge = MountainCarContinuousChallenge()
+
+    def train(*args, **kwargs):
+        raise AssertionError("an agent trained before every agent was checked")
+
+    monkeypatch.setattr(challenge, "setup_run", train)
+    out_dir = tmp_path / "never"
+    with pytest.raises(ImportError, match="backend: torch needs PyTorch"):
+        BenchmarkRunner(challenge).run(BenchmarkSettings(output_dir=str(out_dir), seeds=(1,)))
+    assert not out_dir.exists(), "nothing should be written for a run that cannot start"
 
 
 def test_report_without_threshold_says_nothing_can_solve(tmp_path):

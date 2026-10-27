@@ -33,7 +33,11 @@ discover_challenges()
 EXPECTED_AGENTS = {
     "acrobot": {"random": RandomAgent, "dqn": DQNAgent, "ppo": PPOAgent},
     "mountaincar": {"random": RandomAgent, "dqn": DQNAgent},
-    "mountaincar_continuous": {"random": ContinuousRandomAgent, "ddpg": DDPGAgent},
+    "mountaincar_continuous": {
+        "random": ContinuousRandomAgent,
+        "ddpg": DDPGAgent,
+        "td3": TD3Agent,
+    },
     "cartpole": {
         "random": RandomAgent,
         "reinforce": ReinforceAgent,
