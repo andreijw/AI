@@ -10,7 +10,9 @@
 # step): results are this framework's, not a reproduction of rl-zoo's.
 # Measured 2026-10-26 through the benchmark on seeds 1 to 5 (CHANGELOG.md, 2026-10-27): 5 of 5 reach 90 at 36,800 to
 # 70,500 steps and hold it, final 100-episode averages 92.3 to 93.9, greedy evaluation 93.8 +/- 0.2 across seed
-# means; about 20 minutes per seed alone on the Jetson, 35 with two running at once. Seed 42 not measured.
+# means; about 20 minutes per seed alone on the Jetson, 35 with two running at once. Seed 42 through train.py
+# (2026-10-27, 23 minutes): reaches 90 at about episode 150 and holds it (last 100 episodes 92.3), greedy evaluation
+# 93.9.
 
 environment:
   name: "MountainCarContinuous-v0"
