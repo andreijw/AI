@@ -110,8 +110,14 @@ when picked.
     5, paired -0.9, one seed -20 worse); the baseline held 2 of 5. A lower rate cut greedy-action churn on a fixed grid
     of probe states from 0.12 to 0.07 between checkpoints yet ended worse, and churn did not track the swings in
     greedy return (correlation +0.10 over 20 runs), so "noisy Q estimates against small action gaps" is not supported
-    as the cause. Next levers, untried: prioritised replay (new code), or keeping the best greedy policy (which does
-    not change the training average the rule judges).
+    as the cause.
+  - **Prioritised replay, not shown to help (2026-10-27)**: proportional prioritised replay (Schaul et al. 2016) for
+    DQN, opt-in, on the parked branch `feature/dqn-prioritized-replay` (tested, not merged). Same protocol, seeds 1 to
+    5: alpha 0.6 held 1 of 5 (mean final -120.0, paired -2.9, one seed -21 worse), alpha 0.4 held 0 of 5 (-121.1,
+    paired -4.0); the baseline again held 2 of 5 with the same finals. The prediction written beforehand, fewer
+    mid-run losses of a greedy policy at -110 or better and smaller late swings, did not hold (losses 1 and 3 against
+    1; swing 13.3 and 12.2 against 11.1). Untried: keeping the best greedy policy (which does not change the training
+    average the rule judges).
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 
