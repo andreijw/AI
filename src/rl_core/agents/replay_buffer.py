@@ -249,6 +249,12 @@ class ReplayBuffer:
         Raises:
             ValueError: If batch_size <= 0 or batch_size > len(self).
         """
+        self._check_sample_size(batch_size)
+        indices = self._rng.choice(self._size, size=batch_size, replace=False)
+        return self._gather(indices)
+
+    def _check_sample_size(self, batch_size: int) -> None:
+        """Refuse a batch size that is not positive or exceeds the transitions stored."""
         if batch_size <= 0:
             raise ValueError(f"batch_size must be a positive integer, got {batch_size!r}")
         if batch_size > self._size:
@@ -256,15 +262,9 @@ class ReplayBuffer:
                 f"Cannot sample {batch_size} samples from buffer with size {self._size}"
             )
 
-        indices = self._rng.choice(self._size, size=batch_size, replace=False)
-
-        return {
-            "observations": self.observations[indices],
-            "actions": self.actions[indices],
-            "rewards": self.rewards[indices],
-            "next_observations": self.next_observations[indices],
-            "dones": self.dones[indices],
-        }
+    def _gather(self, indices: npt.NDArray[np.int64]) -> dict[str, Any]:
+        """The stored columns at ``indices``, keyed as :meth:`sample` returns them."""
+        return {name: getattr(self, name)[indices] for name in _COLUMNS}
 
     def can_sample(self, batch_size: int) -> bool:
         """Return True if the buffer contains at least batch_size transitions."""
@@ -347,3 +347,182 @@ class ReplayBuffer:
     def __len__(self) -> int:
         """Return the current number of transitions stored."""
         return self._size
+
+
+def importance_weights(
+    probs: npt.NDArray[np.float64], p_min: float, beta: float
+) -> npt.NDArray[np.float64]:
+    """
+    Importance-sampling weights of samples drawn with probabilities ``probs``:
+    ``(N·P(i))^-β`` over the buffer's largest such weight ``(N·P_min)^-β`` (Schaul et al. 2016,
+    section 3.4, as OpenAI Baselines scales them). N cancels, leaving ``(P(i) / P_min)^-β``, so
+    every weight is at most 1 and the scale is the same for every batch drawn from one buffer.
+    """
+    return np.asarray((probs / p_min) ** -beta, dtype=np.float64)
+
+
+class PrioritizedReplayBuffer(ReplayBuffer):
+    """
+    Proportional prioritised replay (Schaul et al. 2016, section 3.3): the ring buffer of
+    :class:`ReplayBuffer` with a priority per slot.
+
+    A priority is stored already raised to ``alpha``: ``(|δ| + epsilon)^alpha`` once
+    :meth:`update_priorities` has seen the transition's TD error δ, and before that the largest
+    priority so far (1 in an empty buffer), so every new transition is likely to be replayed.
+    :meth:`sample` draws one index from each of ``batch_size`` equal slices of the cumulative
+    priority (stratified, with replacement), and weights each sample with
+    :func:`importance_weights`. ``alpha`` 0 is uniform sampling with replacement.
+
+    Checkpoints add ``replay_priorities`` and ``replay_max_priority``; a uniform buffer's
+    checkpoint restores with every priority at 1, and a uniform buffer loading this one's drops
+    them.
+    """
+
+    def __init__(
+        self,
+        capacity: int,
+        observation_dim: int,
+        seed: int | None = None,
+        *,
+        alpha: float,
+        epsilon: float,
+        action_dim: int | None = None,
+    ) -> None:
+        """
+        Raises:
+            ValueError: If ``alpha`` is outside [0, 1] or ``epsilon`` is not positive, besides
+                :class:`ReplayBuffer`'s checks.
+        """
+        super().__init__(capacity, observation_dim, seed, action_dim=action_dim)
+        if not 0.0 <= alpha <= 1.0:
+            raise ValueError(f"alpha must be in [0, 1], got {alpha!r}")
+        if not epsilon > 0.0:
+            raise ValueError(f"epsilon must be positive, got {epsilon!r}")
+        self.alpha: float = float(alpha)
+        self.epsilon: float = float(epsilon)
+        self.priorities: npt.NDArray[np.float64] = np.zeros(self.capacity, dtype=np.float64)
+        self.max_priority: float = 1.0
+
+    def add(
+        self,
+        obs: npt.ArrayLike,
+        action: int | npt.ArrayLike,
+        reward: float,
+        next_obs: npt.ArrayLike,
+        done: bool,
+    ) -> None:
+        """Insert one transition at the largest priority so far (see :meth:`ReplayBuffer.add`)."""
+        start = self._idx
+        super().add(obs, action, reward, next_obs, done)
+        self.priorities[start] = self.max_priority
+
+    def add_batch(
+        self,
+        obs: npt.ArrayLike,
+        actions: npt.ArrayLike,
+        rewards: npt.ArrayLike,
+        next_obs: npt.ArrayLike,
+        dones: npt.ArrayLike,
+    ) -> None:
+        """Insert transitions at the largest priority so far (see :meth:`ReplayBuffer.add_batch`)."""
+        start = self._idx
+        super().add_batch(obs, actions, rewards, next_obs, dones)
+        written = min(len(np.asarray(obs)), self.capacity)
+        self.priorities[(start + np.arange(written)) % self.capacity] = self.max_priority
+
+    def sample(self, batch_size: int, *, beta: float = 1.0) -> dict[str, Any]:
+        """
+        Draw ``batch_size`` transitions in proportion to their priorities, stratified.
+
+        Args:
+            batch_size: Number of transitions to draw (at most the number stored).
+            beta: Strength of the importance-sampling correction in [0, 1]; 1 corrects fully.
+
+        Returns:
+            :class:`ReplayBuffer`'s columns plus ``indices`` (the slots drawn, for
+            :meth:`update_priorities`) and ``weights`` (their importance weights, at most 1).
+
+        Raises:
+            ValueError: If ``beta`` is outside [0, 1], or as :meth:`ReplayBuffer.sample`.
+        """
+        if not 0.0 <= beta <= 1.0:
+            raise ValueError(f"beta must be in [0, 1], got {beta!r}")
+        self._check_sample_size(batch_size)
+        stored = self.priorities[: self._size]
+        cumulative = np.cumsum(stored)
+        total = cumulative[-1]
+        points = (np.arange(batch_size) + self._rng.random(batch_size)) * (total / batch_size)
+        indices = np.minimum(np.searchsorted(cumulative, points, side="right"), self._size - 1)
+        batch = self._gather(indices)
+        batch["indices"] = indices
+        batch["weights"] = importance_weights(stored[indices] / total, stored.min() / total, beta)
+        return batch
+
+    def update_priorities(self, indices: npt.ArrayLike, td_errors: npt.ArrayLike) -> None:
+        """Set the priorities of the slots ``indices`` to ``(|td_errors| + epsilon)^alpha``; a
+        slot drawn twice takes the last of its (equal) errors."""
+        priorities = (np.abs(np.asarray(td_errors, dtype=np.float64)) + self.epsilon) ** self.alpha
+        self.priorities[np.asarray(indices)] = priorities
+        self.max_priority = max(self.max_priority, float(priorities.max(initial=0.0)))
+
+    def checkpoint_state(self) -> dict[str, np.ndarray]:
+        """:meth:`ReplayBuffer.checkpoint_state` plus the stored priorities and the largest."""
+        state = super().checkpoint_state()
+        state[f"{self.KEY_PREFIX}priorities"] = self.priorities[: self._size]
+        state[f"{self.KEY_PREFIX}max_priority"] = np.array(self.max_priority)
+        return state
+
+    def restore(self, data: Mapping[str, Any]) -> None:
+        """
+        :meth:`ReplayBuffer.restore`, with the priorities when the checkpoint has them and every
+        priority at 1 when it comes from a uniform buffer.
+
+        Raises:
+            ValueError: Naming the key, if only one of the priority keys is present, or the
+                priorities are not one positive float64 per stored transition; or as
+                :meth:`ReplayBuffer.restore`. The buffer is then unchanged.
+        """
+        priorities, max_priority = self._checked_priorities(data)
+        super().restore(data)
+        if priorities is None:
+            self.priorities[: self._size] = 1.0
+            self.max_priority = 1.0
+        else:
+            self.priorities[: self._size] = priorities
+            self.max_priority = max_priority
+
+    def _checked_priorities(
+        self, data: Mapping[str, Any]
+    ) -> tuple[npt.NDArray[np.float64] | None, float]:
+        """The saved priorities and their maximum, once they fit the saved size; (None, 1) for a
+        checkpoint without them."""
+        key = self.KEY_PREFIX
+        names = (f"{key}priorities", f"{key}max_priority")
+        present = [name in data for name in names]
+        if not any(present):
+            return None, 1.0
+        if not all(present):
+            missing = [name for name, there in zip(names, present, strict=True) if not there]
+            raise ValueError(
+                f"Checkpoint holds part of a prioritised replay buffer; missing {missing[0]}"
+            )
+        size = int(data[f"{key}size"]) if f"{key}size" in data else 0
+        priorities = np.asarray(data[names[0]])
+        if (
+            priorities.shape != (size,)
+            or priorities.dtype != np.float64
+            or not np.all(priorities > 0.0)
+        ):
+            raise ValueError(
+                f"{names[0]} must hold {size} positive float64 values, got shape "
+                f"{priorities.shape} and dtype {priorities.dtype}"
+            )
+        max_priority = np.asarray(data[names[1]])
+        if max_priority.shape != () or not float(max_priority) > 0.0:
+            raise ValueError(f"{names[1]} must be a single positive number")
+        return priorities, float(max_priority)
+
+    def clear(self) -> None:
+        """Empty the buffer and reset the largest priority to 1."""
+        super().clear()
+        self.max_priority = 1.0

@@ -9,9 +9,12 @@ import numpy.typing as npt
 from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, derive_rng
 
 from .base_agent import BaseAgent
-from .config_values import positive_int
+from .config_values import optional_positive_int, positive_int
 from .optim import Adam, anneal_fraction, anneal_steps_from_config, optimizer_from_config
-from .replay_buffer import ReplayBuffer
+from .replay_buffer import PrioritizedReplayBuffer, ReplayBuffer
+
+# Settings of prioritised replay, refused unless prioritized_replay is on.
+PRIORITY_KEYS = ("priority_alpha", "priority_beta_start", "priority_epsilon", "priority_beta_steps")
 
 
 def _optional_real(config: dict[str, Any], key: str) -> float | None:
@@ -44,7 +47,13 @@ class DQNAgent(BaseAgent):
       given to ``update`` before it, warm-up included. Only the step is scaled; Adam's moments see
       the full gradient. With an episode budget the decay runs over ``anneal_steps`` as set, and a
       checkpoint saved before the option existed resumes the decay from the start.
-    * Ring-buffered experience replay for uncorrelated mini-batch updates.
+    * Ring-buffered experience replay for uncorrelated mini-batch updates, uniform by default or
+      proportional prioritised replay (Schaul et al. 2016) with ``prioritized_replay: true``:
+      transitions are drawn in proportion to ``(|δ| + priority_epsilon)^priority_alpha`` from
+      their last TD error δ, and the loss weights each sample by its importance weight, whose
+      exponent beta rises linearly from ``priority_beta_start`` to 1 over
+      ``priority_beta_steps`` transitions (``anneal_steps`` when unset). Each gradient step writes
+      its TD errors back as the sampled transitions' priorities.
     * Hard target syncs every ``target_update_frequency`` gradient steps, or Polyak averaging
       with ``tau`` in (0, 1] after every step (``tau`` 1 copies the network; the frequency is then
       unused).
@@ -91,10 +100,16 @@ class DQNAgent(BaseAgent):
             config.get("seed"), AGENT_EXPLORATION_STREAM
         )
         self._init_q_networks(derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM))
-        self.replay_buffer: ReplayBuffer = ReplayBuffer(
-            capacity=self.buffer_capacity,
-            observation_dim=self.observation_dim,
-            seed=config.get("seed"),
+        # The same object as replay_buffer when prioritised replay is on, typed for its methods.
+        self._prioritized: PrioritizedReplayBuffer | None = self._read_prioritized_buffer(config)
+        self.replay_buffer: ReplayBuffer = (
+            self._prioritized
+            if self._prioritized is not None
+            else ReplayBuffer(
+                capacity=self.buffer_capacity,
+                observation_dim=self.observation_dim,
+                seed=config.get("seed"),
+            )
         )
         self._optimizer: Adam | None = optimizer_from_config(config, self._parameters())
 
@@ -151,6 +166,53 @@ class DQNAgent(BaseAgent):
                 "grad_clip_value is the element-wise clip of plain SGD; "
                 "with Adam, clip the global norm with max_grad_norm"
             )
+
+    def _read_prioritized_buffer(self, config: dict[str, Any]) -> PrioritizedReplayBuffer | None:
+        """
+        The prioritised buffer ``prioritized_replay`` asks for, or None; sets
+        ``priority_beta_start`` and ``priority_beta_steps``.
+
+        Raises:
+            ValueError: Naming the key, for a ``priority_*`` setting without
+                ``prioritized_replay``, one out of range, or no beta schedule (neither
+                ``priority_beta_steps`` nor ``anneal_steps``).
+        """
+        enabled = config.get("prioritized_replay", False)
+        if not isinstance(enabled, bool):
+            raise ValueError(f"prioritized_replay must be true or false, got {enabled!r}")
+        self.priority_beta_start: float | None = None
+        self.priority_beta_steps: int | None = None
+        if not enabled:
+            for key in PRIORITY_KEYS:
+                if config.get(key) is not None:
+                    raise ValueError(f"{key} is set, but prioritized_replay is not")
+            return None
+        alpha = _optional_real(config, "priority_alpha")
+        alpha = 0.6 if alpha is None else alpha
+        epsilon = _optional_real(config, "priority_epsilon")
+        epsilon = 1e-6 if epsilon is None else epsilon
+        beta_start = _optional_real(config, "priority_beta_start")
+        beta_start = 0.4 if beta_start is None else beta_start
+        if not 0.0 <= alpha <= 1.0:
+            raise ValueError(f"priority_alpha must be in [0, 1], got {alpha!r}")
+        if not epsilon > 0.0:
+            raise ValueError(f"priority_epsilon must be positive, got {epsilon!r}")
+        if not 0.0 <= beta_start <= 1.0:
+            raise ValueError(f"priority_beta_start must be in [0, 1], got {beta_start!r}")
+        beta_steps = optional_positive_int(config, "priority_beta_steps") or self.anneal_steps
+        if beta_steps is None:
+            raise ValueError(
+                "priority_beta_steps must be set when anneal_steps is not: the transitions over "
+                "which the importance-sampling exponent rises to 1"
+            )
+        self.priority_beta_start, self.priority_beta_steps = beta_start, beta_steps
+        return PrioritizedReplayBuffer(
+            capacity=self.buffer_capacity,
+            observation_dim=self.observation_dim,
+            seed=config.get("seed"),
+            alpha=alpha,
+            epsilon=epsilon,
+        )
 
     def _init_q_networks(self, weights_rng: np.random.Generator) -> None:
         """He-initialised online Q-network (W1 drawn before W2) and an identical target copy."""
@@ -287,9 +349,11 @@ class DQNAgent(BaseAgent):
             update happened: during warm-up (the buffer below ``min_buffer_size``), or when the
             batch stored no transition (empty, or without ``next_observations`` or either flag).
             With ``anneal_steps`` set, 'anneal_fraction' too: the share of ``learning_rate`` this
-            call's steps used.
+            call's steps used. With prioritised replay, 'priority_beta' (this call's exponent) and
+            'mean_is_weight' (the mean importance weight of its samples) too.
         """
         fraction = anneal_fraction(self._steps_trained, self.anneal_steps)
+        beta = self._priority_beta()
         n_stored = self.replay_buffer.add_transitions(batch)
         self._steps_trained += n_stored
         annealing = {} if self.anneal_steps is None else {"anneal_fraction": float(fraction)}
@@ -307,10 +371,16 @@ class DQNAgent(BaseAgent):
 
         total_loss = 0.0
         total_q = 0.0
+        total_weight = 0.0
 
         for _ in range(num_updates):
-            # Sample mini-batch from experience replay
-            samples = self.replay_buffer.sample(self.batch_size)
+            # Sample mini-batch from experience replay, by priority when prioritised
+            if self._prioritized is not None:
+                samples = self._prioritized.sample(self.batch_size, beta=beta)
+                sample_weights = samples["weights"]
+            else:
+                samples = self.replay_buffer.sample(self.batch_size)
+                sample_weights = None
             obs = samples["observations"]
             actions = samples["actions"]
             rewards = samples["rewards"]
@@ -321,10 +391,15 @@ class DQNAgent(BaseAgent):
             targets = self._compute_bellman_targets(rewards, next_obs, dones)
 
             # 2. TD loss and its gradients for the online network
-            components, grads = self._loss_and_grads(obs, actions, targets)
+            components, grads, td_error = self._loss_and_grads(
+                obs, actions, targets, sample_weights
+            )
 
-            # 3. Clipped gradient descent step
+            # 3. Clipped gradient descent step; the step's TD errors become the priorities
             self._apply_gradients(grads, self.learning_rate * fraction)
+            if self._prioritized is not None:
+                self._prioritized.update_priorities(samples["indices"], td_error)
+                total_weight += float(np.mean(samples["weights"]))
 
             # 4. Target network synchronization
             self._update_counter += 1
@@ -343,34 +418,52 @@ class DQNAgent(BaseAgent):
         if self.exploration_steps is None:
             self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
+        prioritized = (
+            {}
+            if self._prioritized is None
+            else {"priority_beta": beta, "mean_is_weight": total_weight / num_updates}
+        )
         return {
             "loss": total_loss / num_updates,
             "epsilon": float(self.epsilon),
             "mean_q": total_q / num_updates,
             **annealing,
+            **prioritized,
         }
+
+    def _priority_beta(self) -> float:
+        """The importance-sampling exponent after ``_steps_trained`` transitions: linear from
+        ``priority_beta_start`` to 1 over ``priority_beta_steps`` (1 without prioritised replay)."""
+        if self.priority_beta_start is None:
+            return 1.0
+        remaining = anneal_fraction(self._steps_trained, self.priority_beta_steps)
+        return 1.0 - (1.0 - self.priority_beta_start) * remaining
 
     def _loss_and_grads(
         self,
         obs: np.ndarray,
         actions: np.ndarray,
         targets: np.ndarray,
-    ) -> tuple[dict[str, float], dict[str, np.ndarray]]:
+        weights: np.ndarray | None = None,
+    ) -> tuple[dict[str, float], dict[str, np.ndarray], np.ndarray]:
         """
         Compute the TD loss and its gradients for one mini-batch, changing no state.
 
-        The loss is ``mean(½·(Q(s, a) − y)²)`` over the mini-batch, for the online network.
-        The targets ``y`` are held constant when differentiating.
+        The loss is ``mean(w·½·(Q(s, a) − y)²)`` over the mini-batch, for the online network,
+        with ``w`` the importance weights (1 when ``weights`` is None). The targets ``y`` and the
+        weights are held constant when differentiating.
 
         Args:
             obs:     Array of shape (B, observation_dim).
             actions: Integer array of shape (B,): the action taken in each state.
             targets: Array of shape (B,): the Bellman target of each transition.
+            weights: Array of shape (B,): each sample's importance weight, or None.
 
         Returns:
-            Tuple of (components, gradients). Components holds ``loss`` and ``mean_q``, the
-            mean of the predicted Q-values. Gradients are those of ``loss``, keyed ``W1``,
-            ``b1``, ``W2``, ``b2``, and are not clipped; :meth:`_apply_gradients` clips them.
+            Tuple of (components, gradients, TD errors). Components holds ``loss`` and
+            ``mean_q``, the mean of the predicted Q-values. Gradients are those of ``loss``, keyed
+            ``W1``, ``b1``, ``W2``, ``b2``, and are not clipped; :meth:`_apply_gradients` clips
+            them. The TD errors ``Q(s, a) − y`` have shape (B,).
         """
         b_size = len(actions)
 
@@ -380,11 +473,12 @@ class DQNAgent(BaseAgent):
 
         # TD error and MSE loss: 0.5 * (pred_q - targets)^2
         td_error = pred_q - targets
-        loss = float(np.mean(0.5 * (td_error**2)))
+        weighted = td_error if weights is None else weights * td_error
+        loss = float(np.mean(0.5 * (weighted * td_error)))
 
         # Backward pass
         d_q = np.zeros_like(q_vals)
-        d_q[np.arange(b_size), actions] = td_error
+        d_q[np.arange(b_size), actions] = weighted
 
         grad_w2 = (h.T @ d_q) / b_size
         grad_b2 = np.mean(d_q, axis=0)
@@ -396,7 +490,8 @@ class DQNAgent(BaseAgent):
         grad_b1 = np.mean(d_pre_h, axis=0)
 
         components = {"loss": loss, "mean_q": float(np.mean(pred_q))}
-        return components, {"W1": grad_w1, "b1": grad_b1, "W2": grad_w2, "b2": grad_b2}
+        grads = {"W1": grad_w1, "b1": grad_b1, "W2": grad_w2, "b2": grad_b2}
+        return components, grads, td_error
 
     def _apply_gradients(
         self, grads: dict[str, np.ndarray], learning_rate: float | None = None

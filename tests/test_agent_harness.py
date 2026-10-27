@@ -32,6 +32,17 @@ ALL_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
         DQNAgent,
         {"seed": 42, "learning_rate": 0.001, "batch_size": 2, "min_buffer_size": 2},
     ),
+    (
+        DQNAgent,
+        {
+            "seed": 42,
+            "learning_rate": 0.001,
+            "batch_size": 2,
+            "min_buffer_size": 2,
+            "prioritized_replay": True,
+            "priority_beta_steps": 100,
+        },
+    ),
 ]
 
 

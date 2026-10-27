@@ -255,18 +255,24 @@ def loss_and_grads(
     actions: np.ndarray,
     returns: np.ndarray,
     advantages: np.ndarray | None = None,
+    *,
+    weights: np.ndarray | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """
     One episode's loss and gradients, summed over steps, with nothing applied.
 
     For REINFORCE ``returns`` are the return weights it scales log-probabilities by and the loss
     is a float; for the actor-critic agents the loss is a dict of components and ``advantages``
-    are optional. For DQN ``returns`` are the TD targets of one mini-batch, held constant.
+    are optional. For DQN ``returns`` are the TD targets of one mini-batch and ``weights`` its
+    importance weights (None for uniform replay), both held constant.
     """
     if isinstance(agent, DQNAgent):
         if advantages is not None:
             raise TypeError("DQN takes no advantages")
-        return agent._loss_and_grads(observations, actions, returns)
+        components, grads, _ = agent._loss_and_grads(observations, actions, returns, weights)
+        return components, grads
+    if weights is not None:
+        raise TypeError("only DQN takes importance weights")
     if isinstance(agent, ReinforceAgent):
         if advantages is not None:
             raise TypeError("REINFORCE takes no advantages")
