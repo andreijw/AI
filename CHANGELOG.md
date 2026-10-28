@@ -16,6 +16,17 @@ Acrobot-v1) and
 
 ### Added
 
+- **LunarLander DQN** (`feature/lunarlander-dqn`, the second pull request of the LunarLander roadmap item):
+  `configs/lunarlander_dqn.yaml` translates rl-zoo's LunarLander-v3 DQN (the same entry as Acrobot's) with one hidden
+  layer of 256 and a squared-error loss (SB3 uses Huber): one gradient step per transition, target sync every 250
+  gradient steps, epsilon to rl-zoo's 0.1 over 12,000 actions, 300,000 steps (rl-zoo: 100,000, judged by a greedy
+  evaluation), and the trainer's episode cut set to the 1,000-step limit (its default is 500). Measured through the
+  benchmark's runner, single-threaded: on seeds 1 to 5 the 0.1 floor reached 200 on 5 of 5 at 152,000 to 228,000
+  steps and held it on 5 of 5 (final 100-episode training averages 214 to 251, greedy evaluation 224 on average),
+  against 0.02 holding on 3 of 5 (181 to 260); on held-out seeds 11 to 15 it reached 200 on 5 of 5 at 166,000 to
+  297,000 steps and held it on 4 of 5 (198 to 231), greedy evaluation 238 ± 25. Seed 42 through `train.py` reaches 200
+  at about episode 450 and ends at 236.9. The random agent ends at -178 to -194.
+
 - **LunarLander-v3 challenges, discrete and continuous** (`feature/lunarlander-challenge`, the first pull request of
   the LunarLander roadmap item): `rl_lunarlander` with `LunarLanderEnv` (observation noise only) and two challenges,
   `lunarlander` (`LunarLander-v3`, four engine actions) and `lunarlander_continuous` (`LunarLanderContinuous-v3`, two

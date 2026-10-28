@@ -15,7 +15,7 @@ The architecture is designed to support:
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO with
   Gaussian policies, and DDPG and TD3 with deterministic policies, for Pendulum; random, PPO and DQN for Acrobot;
   random and DQN for MountainCar; random, DDPG and TD3 with Ornstein-Uhlenbeck exploration noise for
-  MountainCarContinuous; random for LunarLander, discrete and continuous, so far)
+  MountainCarContinuous; random and DQN for LunarLander; random for LunarLanderContinuous, so far)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -80,7 +80,7 @@ AI/
 │   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
 │   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
 │   ├── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
-│   └── lunarlander_*.yaml       # LunarLander configs (random baselines, discrete and continuous)
+│   └── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── setup.ps1                   # Windows developer setup
@@ -256,6 +256,9 @@ python train.py --config configs/mountaincar_continuous_ddpg.yaml
 # LunarLander random baselines, discrete and continuous (need Box2D: see LunarLander above)
 python train.py --config configs/lunarlander_default.yaml
 python train.py --config configs/lunarlander_continuous_default.yaml
+
+# LunarLander DQN (rl-zoo settings; solves 200)
+python train.py --config configs/lunarlander_dqn.yaml
 ```
 
 ### Which agents solve which challenge
@@ -285,6 +288,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate, 100k buffer); seeds 1 to 10, 2026-10-25 | 200,000 | 3 of 10 | 146k to 195k | 2 of 10 |
 | MountainCarContinuous-v0 | DDPG | `mountaincar_continuous_ddpg.yaml` (rl-zoo settings, OU noise, 64×64 networks) | 300,000 | 5 of 5 | 25k to 69k | 5 of 5 |
 | MountainCarContinuous-v0 | TD3 | `mountaincar_continuous_td3.yaml` (rl-zoo settings, OU noise, 400×300 networks, PyTorch backend); CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 37k to 70k | 5 of 5 |
+| LunarLander-v3 | DQN | `lunarlander_dqn.yaml` (rl-zoo settings, one hidden layer of 256, epsilon floor 0.1); seeds 1 to 5, which chose the floor; held-out seeds 11 to 15: 5 of 5 reach (166k to 297k), 4 of 5 hold; CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 152k to 228k | 5 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
@@ -311,6 +315,11 @@ under `docs/benchmarks/`. MountainCarContinuous TD3 trains rl-zoo's 400×300 net
 needs `.venv-gpu`; its greedy evaluation averages 93.8 (± 0.2 across seed means), and a seed takes about 20 minutes
 on the Jetson's GPU (CHANGELOG.md, 2026-10-27). Seed 42, which `train.py` uses, was measured too: it reaches 90 at
 about episode 150 and holds it (last 100 episodes 92.3). It has no published report under `docs/benchmarks/` either.
+LunarLander DQN uses rl-zoo's settings with one hidden layer of 256 and a squared-error loss (SB3 uses Huber), for
+300,000 steps against rl-zoo's 100,000. rl-zoo's exploration floor of 0.1 held 200 on 5 of 5 seeds against 3 of 5 for
+0.02. On held-out seeds 11 to 15 it reached 200 on 5 of 5 (one at 297,000 steps, near the end of the budget) and held it
+on 4 of 5, greedy evaluation 238 ± 25; seed 42 reaches 200 at about episode 450 and ends at 237 (CHANGELOG.md,
+2026-10-27). The random agent's final averages are -178 to -194.
 
 ### Run any agent from one base config (quick overrides)
 

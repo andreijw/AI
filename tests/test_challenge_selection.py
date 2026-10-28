@@ -56,7 +56,7 @@ EXPECTED_AGENTS = {
         "ddpg": DDPGAgent,
         "td3": TD3Agent,
     },
-    "lunarlander": {"random": RandomAgent},
+    "lunarlander": {"random": RandomAgent, "dqn": DQNAgent},
     "lunarlander_continuous": {"random": ContinuousRandomAgent},
 }
 
