@@ -12,6 +12,18 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-10-28
+
+### Changed
+
+- **matplotlib only when plotting** (`fix/benchmark-lazy-matplotlib`, the first of the five Code Health pull requests
+  picked 2026-10-28): `train.py` and `src/benchmark.py` import `rl_core.utils.visualization` inside the code that
+  plots instead of at module level, so a run without `--plot` (or with `--no-plot`), and every `record.py` run, no
+  longer loads matplotlib and pyplot. Importing `record` takes 0.33 s instead of 1.10 s on the Jetson.
+  `tests/test_import_footprint.py` now fails if `train`, `record` or `benchmark` loads matplotlib on import. The Code
+  Health idea "larger networks on a GPU" is dropped from the roadmap: it pointed at the PyTorch backend, which has
+  shipped (CHANGELOG.md, 2026-10-25).
+
 ## 2026-10-27
 
 ### Added

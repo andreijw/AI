@@ -20,7 +20,6 @@ from rl_core.training import Trainer
 from rl_core.training.budget import apply_budget_override
 from rl_core.utils import load_config, setup_logger
 from rl_core.utils.video import TrainingVideoRecorder
-from rl_core.utils.visualization import plot_training_metrics
 
 
 def load_run_config(config_path, agent_type=None, num_episodes=None, total_steps=None):
@@ -272,6 +271,9 @@ def train_and_plot(trainer, plot, plot_dir, challenge, agent_type, logger):
         logger.info(f"Training complete. Final stats: {stats}")
 
         if plot:
+            # Imported here: matplotlib adds about 0.8 s to every start-up, plotted or not.
+            from rl_core.utils.visualization import plot_training_metrics
+
             plot_path = plot_training_metrics(
                 episode_rewards=trainer.episode_rewards,
                 episode_lengths=trainer.episode_lengths,
