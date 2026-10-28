@@ -31,6 +31,7 @@ STEP_BUDGETS = {
     ("mountaincar_continuous", "ddpg"): 300_000,
     ("mountaincar_continuous", "random"): 200_000,
     ("mountaincar_continuous", "td3"): 300_000,
+    ("lunarlander", "dqn"): 300_000,
     ("lunarlander", "random"): 50_000,
     ("lunarlander_continuous", "random"): 50_000,
     ("cartpole", "reinforce"): 500_000,
@@ -160,6 +161,37 @@ def test_mountaincar_continuous_td3_uses_rl_zoo_settings_on_the_torch_backend():
     )
     assert agent["policy_delay"] == 2
     assert (agent["target_policy_noise"], agent["target_noise_clip"]) == pytest.approx((0.2, 0.5))
+    assert config["training"]["total_steps"] == 300_000
+
+
+def test_lunarlander_dqn_translates_rl_zoo_for_a_trainer_that_updates_after_each_episode():
+    """rl-zoo's DQN for LunarLander-v3 (the same entry as Acrobot-v1's), one hidden layer of 256
+    instead of two: one gradient step per transition (train_freq 4, gradient_steps -1), so its
+    250-step target interval is 250 gradient steps; epsilon falls over the first 12,000 training
+    actions. The update cap, the trainer's episode cut and the environment's limit are all 1000: the
+    Trainer would otherwise cut episodes at its default of 500. rl-zoo's exploration floor of 0.1 held
+    200 on 5 of 5 seeds against 3 of 5 for 0.02 (CHANGELOG.md, 2026-10-27). Read from the file, so CI
+    checks it without Box2D."""
+    config = load_config(os.path.join(CONFIGS_DIR, "lunarlander_dqn.yaml"))
+    agent = config["agent"]["config"]
+    assert config["agent"]["type"] == "dqn" and agent["optimizer"] == "adam"
+    assert (agent["learning_rate"], agent["gamma"], agent["max_grad_norm"]) == pytest.approx(
+        (6.3e-4, 0.99, 10.0)
+    )
+    assert (agent["hidden_dim"], agent["batch_size"], agent["buffer_capacity"]) == (
+        256,
+        128,
+        50_000,
+    )
+    assert (agent["min_buffer_size"], agent["target_update_frequency"]) == (128, 250)
+    assert (agent["exploration_steps"], agent["updates_per_step"]) == (12_000, 1.0)
+    assert agent["epsilon_end"] == pytest.approx(0.1)
+    limits = (
+        agent["max_updates_per_call"],
+        config["training"]["max_steps_per_episode"],
+        config["environment"]["max_episode_steps"],
+    )
+    assert limits == (1000, 1000, 1000)
     assert config["training"]["total_steps"] == 300_000
 
 

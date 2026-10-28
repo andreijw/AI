@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from benchmark import BenchmarkSettings, run_benchmark
-from rl_core.agents import ContinuousRandomAgent, RandomAgent
+from rl_core.agents import ContinuousRandomAgent, DQNAgent, RandomAgent
 from rl_core.challenges import discover_challenges, select_challenge
 from rl_lunarlander.benchmark import LunarLanderChallenge, LunarLanderContinuousChallenge
 from rl_lunarlander.environments import (
@@ -40,8 +40,13 @@ FACTORIES = {
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("key", sorted(CHALLENGES))
-def test_lunarlander_challenges_are_discovered_and_selected_by_their_environment(key):
+@pytest.mark.parametrize(
+    ("key", "expected_agents"),
+    [("lunarlander", ["dqn", "random"]), ("lunarlander_continuous", ["random"])],
+)
+def test_lunarlander_challenges_are_discovered_and_selected_by_their_environment(
+    key, expected_agents
+):
     challenge_cls, environment_id = CHALLENGES[key]
     assert discover_challenges()[key] is challenge_cls
     assert select_challenge(environment_id, None) is challenge_cls
@@ -49,7 +54,7 @@ def test_lunarlander_challenges_are_discovered_and_selected_by_their_environment
     assert (challenge.key, challenge.name) == (key, environment_id)
     assert challenge.solve_threshold == 200.0, "Gymnasium's reward_threshold"
     assert challenge.default_episodes == 500
-    assert challenge.supported_agents == ["random"]
+    assert challenge.supported_agents == expected_agents
 
 
 @pytest.mark.parametrize("key", sorted(FACTORIES))
@@ -137,11 +142,17 @@ def test_observation_noise_is_applied(key):
 
 @needs_box2d
 @pytest.mark.parametrize(
-    ("key", "agent_cls", "action_dim"),
-    [("lunarlander", RandomAgent, 4), ("lunarlander_continuous", ContinuousRandomAgent, 2)],
+    ("key", "agent_type", "agent_cls", "action_dim"),
+    [
+        ("lunarlander", "random", RandomAgent, 4),
+        ("lunarlander", "dqn", DQNAgent, 4),
+        ("lunarlander_continuous", "random", ContinuousRandomAgent, 2),
+    ],
 )
-def test_setup_run_builds_the_random_agent_from_its_committed_config(key, agent_cls, action_dim):
-    env, agent, training = CHALLENGES[key][0]().setup_run("random", 1, episodes=2)
+def test_setup_run_builds_each_agent_from_its_committed_config(
+    key, agent_type, agent_cls, action_dim
+):
+    env, agent, training = CHALLENGES[key][0]().setup_run(agent_type, 1, episodes=2)
     try:
         assert type(agent) is agent_cls
         assert (agent.observation_dim, agent.action_dim) == (8, action_dim)

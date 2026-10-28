@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from rl_core.agents import BaseAgent, ContinuousRandomAgent, RandomAgent
+from rl_core.agents import BaseAgent, ContinuousRandomAgent, DQNAgent, RandomAgent
 from rl_core.challenges import (
     BenchmarkChallenge,
     ChallengeEnv,
@@ -20,8 +20,14 @@ from rl_lunarlander.environments.lunarlander_env import LunarLanderEnv
 class LunarLanderChallenge(BenchmarkChallenge):
     """LunarLander-v3: land between the flags with four discrete engine actions (needs Box2D)."""
 
-    AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {"random": RandomAgent}
-    CONFIG_MAP: ClassVar[dict[str, str]] = {"random": "lunarlander_default.yaml"}
+    AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {
+        "random": RandomAgent,
+        "dqn": DQNAgent,
+    }
+    CONFIG_MAP: ClassVar[dict[str, str]] = {
+        "random": "lunarlander_default.yaml",
+        "dqn": "lunarlander_dqn.yaml",
+    }
 
     @property
     def name(self) -> str:
