@@ -23,7 +23,7 @@ from rl_lunarlander.environments import (
     make_continuous_env_from_config,
     make_env_from_config,
 )
-from tests.helpers import minimal_config, needs_box2d, run_main
+from tests.helpers import minimal_config, needs_box2d, needs_torch, run_main
 
 CHALLENGES = {
     "lunarlander": (LunarLanderChallenge, "LunarLander-v3"),
@@ -42,7 +42,7 @@ FACTORIES = {
 
 @pytest.mark.parametrize(
     ("key", "expected_agents"),
-    [("lunarlander", ["dqn", "random"]), ("lunarlander_continuous", ["random"])],
+    [("lunarlander", ["dqn", "random"]), ("lunarlander_continuous", ["random", "td3"])],
 )
 def test_lunarlander_challenges_are_discovered_and_selected_by_their_environment(
     key, expected_agents
@@ -140,21 +140,29 @@ def test_observation_noise_is_applied(key):
 # ---------------------------------------------------------------------------
 
 
+def _torch_td3_agent() -> type:
+    from rl_core.agents.torch_td3_agent import TorchTD3Agent  # here, not above: torch is optional
+
+    return TorchTD3Agent
+
+
 @needs_box2d
 @pytest.mark.parametrize(
-    ("key", "agent_type", "agent_cls", "action_dim"),
+    ("key", "agent_type", "expected_class", "action_dim"),
     [
-        ("lunarlander", "random", RandomAgent, 4),
-        ("lunarlander", "dqn", DQNAgent, 4),
-        ("lunarlander_continuous", "random", ContinuousRandomAgent, 2),
+        ("lunarlander", "random", lambda: RandomAgent, 4),
+        ("lunarlander", "dqn", lambda: DQNAgent, 4),
+        ("lunarlander_continuous", "random", lambda: ContinuousRandomAgent, 2),
+        pytest.param("lunarlander_continuous", "td3", _torch_td3_agent, 2, marks=needs_torch),
     ],
+    ids=["lunarlander-random", "lunarlander-dqn", "continuous-random", "continuous-td3"],
 )
 def test_setup_run_builds_each_agent_from_its_committed_config(
-    key, agent_type, agent_cls, action_dim
+    key, agent_type, expected_class, action_dim
 ):
     env, agent, training = CHALLENGES[key][0]().setup_run(agent_type, 1, episodes=2)
     try:
-        assert type(agent) is agent_cls
+        assert type(agent) is expected_class(), f"{agent_type} should build its committed class"
         assert (agent.observation_dim, agent.action_dim) == (8, action_dim)
         assert training["num_episodes"] == 2, "the episode override should apply"
         action = agent.select_action(env.reset()[0], training=True)
@@ -164,15 +172,18 @@ def test_setup_run_builds_each_agent_from_its_committed_config(
 
 
 @needs_box2d
-def test_the_continuous_agent_gets_the_environments_bounds_without_changing_the_callers_dict():
-    """Through agent_config, since the random agent's default bounds are already [-1, 1] and could
-    not show a challenge that drops them; a learning agent's might not be."""
+@pytest.mark.parametrize("agent_type", ["random", "td3"])
+def test_the_continuous_agent_gets_the_environments_bounds_without_changing_the_callers_dict(
+    agent_type,
+):
+    """Through agent_config too, since the random agent's default bounds are already [-1, 1] and
+    could not show a challenge that drops them. TD3 here is the NumPy agent (no backend key)."""
     challenge = LunarLanderContinuousChallenge()
     env = challenge.make_env({"seed": 0}, render_mode=None)
     agent_config = {"seed": 0}
     try:
         built = challenge.agent_config(agent_config, env)
-        agent = challenge.make_agent("random", agent_config, env)
+        agent = challenge.make_agent(agent_type, agent_config, env)
     finally:
         env.close()
     np.testing.assert_allclose(built["action_low"], [-1.0, -1.0])
