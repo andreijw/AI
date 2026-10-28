@@ -13,7 +13,8 @@
 
 Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥1.0**
 · **NumPy** agents, with an optional **PyTorch** backend for DDPG and TD3 only (`backend: torch`; see CONTRIBUTING.md
-"Framework Independence") · **pytest** · **Ruff** (line length 100) · **mypy**.
+"Framework Independence") · optional **Box2D** for LunarLander (`box2d` extra) · **pytest** · **Ruff** (line length
+100) · **mypy**.
 
 - **Coding standards** → **[CONTRIBUTING.md](CONTRIBUTING.md)** §1–3.
 - **Feature/bug workflow** → **[CONTRIBUTING.md §4](CONTRIBUTING.md#4-feature--bug-workflow)**. Follow it in order for
@@ -88,11 +89,13 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
   `.venv/Scripts/python -m mypy src`. Never use bare `python` — on this machine it is the Microsoft Store stub.
   On Linux and macOS the interpreter is `.venv/bin/python`; the skills write `python` and mean whichever applies.
 - If `.venv` is missing, ask the user to run `.\setup.ps1`; do not `pip install` into a global interpreter.
-- Linux and macOS: `./setup.sh --profile cpu|gpu`. **`cpu`** (the default) builds `.venv` with `.[dev,video]`: no
-  PyTorch, like CI, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with `.[dev,video,torch]` from
-  PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests (`tests/test_torch_ddpg_agent.py`,
-  skipped elsewhere) and for `train.py` runs with `backend: torch`. CI never installs PyTorch (maintainer's decision,
-  2026-10-25).
+- Linux and macOS: `./setup.sh --profile cpu|gpu`. **`cpu`** (the default) builds `.venv` with
+  `.[dev,video,box2d]`: no PyTorch, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with
+  `.[dev,video,torch,box2d]` from PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests
+  (`tests/test_torch_ddpg_agent.py`, skipped elsewhere) and for `train.py` runs with `backend: torch`. Both build Box2D
+  (`box2d-py` from source with `swig`) before the extras. CI installs neither PyTorch nor Box2D, and their tests skip
+  there (`needs_torch`, `needs_box2d`/`env_marks` in `tests/helpers.py`; maintainer's decisions, 2026-10-25 and
+  2026-10-27).
 
 ## Tool Mapping (GEMINI.md → Claude Code)
 
@@ -159,5 +162,8 @@ Treat the repository as the source of truth when docs disagree:
   2026-10-18). Continuous Actor-Critic beats the random agent in evaluation since 2026-10-18 but does not solve
   under the 100-episode rule (CHANGELOG.md, 2026-10-18). CartPole PPO does solve CartPole-v1: 5 of 5 seeds within
   200,000 steps, holding on all 5 (TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
+- The `box2d` extra names `box2d-py==2.3.5`, not the `box2d==2.3.10` Gymnasium 1.4's own `box2d` extra pins: that
+  has no aarch64 build, and `box2d-py` builds on the Jetson with `swig` and `--no-build-isolation` (README,
+  LunarLander). Rendering uses `pygame-ce`, as Gymnasium does; never install plain `pygame` beside it.
 - CONTRIBUTING.md §5 and TESTING.md `CKPT-*` describe `.npz` checkpoints; `Trainer` names them
   `agent_episode_<n>.pt` (NumPy archive content, resolved by `BaseAgent._resolve_save_path`).

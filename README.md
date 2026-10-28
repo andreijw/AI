@@ -15,7 +15,7 @@ The architecture is designed to support:
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO with
   Gaussian policies, and DDPG and TD3 with deterministic policies, for Pendulum; random, PPO and DQN for Acrobot;
   random and DQN for MountainCar; random, DDPG and TD3 with Ornstein-Uhlenbeck exploration noise for
-  MountainCarContinuous)
+  MountainCarContinuous; random for LunarLander, discrete and continuous, so far)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -69,6 +69,9 @@ AI/
 │   ├── rl_mountaincar/          # MountainCar-v0 and MountainCarContinuous-v0 exploration challenges
 │   │   ├── environments/        # Mountain car wrapper (observation noise) and a factory for each id
 │   │   └── benchmark.py         # Both MountainCar benchmark challenge implementations
+│   ├── rl_lunarlander/          # LunarLander-v3 and LunarLanderContinuous-v3 (Box2D) challenges
+│   │   ├── environments/        # Lunar lander wrapper (observation noise) and a factory for each id
+│   │   └── benchmark.py         # Both LunarLander benchmark challenge implementations
 │   └── benchmark.py             # Benchmark runner & CLI (finds challenges through rl_core)
 ├── tests/                       # Unit & integration test suites
 ├── configs/                     # YAML hyperparameter configurations
@@ -76,7 +79,8 @@ AI/
 │   ├── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG, TD3)
 │   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
 │   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
-│   └── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
+│   ├── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
+│   └── lunarlander_*.yaml       # LunarLander configs (random baselines, discrete and continuous)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── setup.ps1                   # Windows developer setup
@@ -111,11 +115,28 @@ If script execution is disabled, run it once with `powershell -ExecutionPolicy B
 ### Linux and macOS Setup
 
 ```bash
-./setup.sh                  # .venv, the CPU profile: .[dev,video], no PyTorch (as CI)
+./setup.sh                  # .venv, the CPU profile: .[dev,video,box2d], no PyTorch
 ./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG and TD3 backend (backend: torch); about 5 GiB
 ```
 
 Each creates its environment if missing, upgrades its packages and runs the CI checks (`--skip-checks` to skip).
+Both build Box2D for LunarLander first (see below); CI installs neither PyTorch nor Box2D and skips their tests.
+
+### LunarLander (Box2D)
+
+LunarLander needs Box2D. Gymnasium's own extra (`pip install "gymnasium[box2d]"`) pins `box2d==2.3.10`, which has
+no build for the Jetson's aarch64, so this project's `box2d` extra names `box2d-py`, which builds from source with
+`swig` (about 90 seconds; it needs a C++ compiler and the Python headers, on Debian and Ubuntu
+`sudo apt install build-essential python3.12-dev`). `./setup.sh` does it; by hand, inside the virtual environment:
+
+```bash
+pip install swig==4.5.1 "setuptools<85" "wheel<0.49"   # the versions it was verified with
+PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.5
+pip install -e ".[dev,video,box2d]"
+```
+
+`setup.ps1` does not install it on Windows. Without Box2D the LunarLander challenges are still listed, and building
+their environment fails at once with these steps.
 
 ### Manual Setup (any OS)
 
@@ -231,6 +252,10 @@ python train.py --config configs/mountaincar_continuous_ddpg.yaml
 
 # MountainCarContinuous TD3 at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu)
 .venv-gpu/bin/python train.py --config configs/mountaincar_continuous_td3.yaml
+
+# LunarLander random baselines, discrete and continuous (need Box2D: see LunarLander above)
+python train.py --config configs/lunarlander_default.yaml
+python train.py --config configs/lunarlander_continuous_default.yaml
 ```
 
 ### Which agents solve which challenge
@@ -310,9 +335,10 @@ python train.py --config configs/cartpole_default.yaml --agent-type dqn --num-ep
 ```
 
 The challenge comes from the config's `environment.name`, which must be a registered challenge's environment id
-exactly (`Acrobot-v1`, `CartPole-v1`, `MountainCar-v0`, `MountainCarContinuous-v0` or `Pendulum-v1`); any other name
-is an error that lists the options. `--challenge acrobot`, `cartpole`, `mountaincar`, `mountaincar_continuous` or
-`pendulum` must agree with that name, and is required for a config that has no `environment.name`.
+exactly (`Acrobot-v1`, `CartPole-v1`, `LunarLander-v3`, `LunarLanderContinuous-v3`, `MountainCar-v0`,
+`MountainCarContinuous-v0` or `Pendulum-v1`); any other name is an error that lists the options. `--challenge acrobot`,
+`cartpole`, `lunarlander`, `lunarlander_continuous`, `mountaincar`, `mountaincar_continuous` or `pendulum` must agree
+with that name, and is required for a config that has no `environment.name`.
 An agent the challenge does not support (for example `--agent-type dqn` on Pendulum) is rejected before training.
 
 ### Visualization and video recording
@@ -668,7 +694,7 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 
 1. **More Continuous Off-Policy Learning**: SAC (Soft Actor-Critic) on the replay buffer, networks and target updates
    DDPG and TD3 already use.
-2. **Advanced Environments**: LunarLander and BipedalWalker (the Phase 7 challenge ladder).
+2. **Advanced Environments**: learning agents for LunarLander, then BipedalWalker (the Phase 7 challenge ladder).
 3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 
 ## Future Enhancements

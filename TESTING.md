@@ -19,6 +19,7 @@ This document outlines manual verification and testing procedures for the RL fra
 | ENV-3 | **Action Noise** | Observe demo 3 console output. | Actions flip stochastically based on specified probability without throwing errors. |
 | ENV-4 | **Domain Randomization** | Observe demo 4 console output. | Physical parameters (`gravity`, `masscart`, `masspole`, `length`) resample per episode. |
 | ENV-5 | **Vectorized Execution** | Observe demo 5 console output. | Runs 4 parallel vectorized environments; step returns batched arrays with shape `(4, 4)`. |
+| ENV-6 | **Box2D for LunarLander** | `./setup.sh` (or the manual steps in README, LunarLander), then `.venv/bin/python -c "import gymnasium as gym; gym.make('LunarLander-v3').reset(seed=0)"` | setup.sh builds `box2d-py` 2.3.5 (about 90 seconds), prints `Box2D 2.3.5`, and the LunarLander tests run instead of skipping. Without it, building a LunarLander environment raises an `ImportError` naming `./setup.sh` and the manual steps. |
 
 ---
 
@@ -76,6 +77,7 @@ This document outlines manual verification and testing procedures for the RL fra
 | BM-7 | **MountainCar Benchmark** | `python src/benchmark.py --challenge mountaincar --agents random dqn --seeds 1 --output-dir bm7 --report bm7/report.md --no-plot` (about 5 minutes) | Runs each agent on its own config budget (`40000 steps` random, `200000 steps` DQN); the report names the -110 threshold, random scores -200 and DQN's final training average lands near -132 (seed 1, 2026-10-25) without solving. Delete `bm7/` afterwards. |
 | BM-8 | **MountainCarContinuous Benchmark** | `python src/benchmark.py --challenge mountaincar_continuous --agents random ddpg --seeds 1 --output-dir bm8 --report bm8/report.md --no-plot` (DDPG took 100 minutes with ten runs sharing six cores; not timed alone) | Runs each agent on its own config budget (`200000 steps` random, `300000 steps` DDPG); the report names the 90 threshold, random scores about -33, and on seed 1 DDPG solved at 24,977 steps (episode 120), ended at 91.0 and evaluated 93.7 on 2026-10-23. Delete `bm8/` afterwards. |
 | BM-9 | **Invalid Window Rejected Before Training** | `python src/benchmark.py --challenge cartpole --agents random --episodes 1 --seeds 1 --window 0 --output-dir bm9 --no-plot --report bm9/report.md` | Stops at once with `ValueError: window must be >= 1, got 0`: nothing trains and no `bm9/` folder is created. `--eval-episodes 0` stops the same way. |
+| BM-10 | **LunarLander Random Baselines** | `python src/benchmark.py --challenge lunarlander --agents random --seeds 1 2 3 4 5 --output-dir bm10 --report bm10/report.md --no-plot`, then the same with `--challenge lunarlander_continuous` (about 40 and 60 seconds) | Each run trains for `50000 steps` (about 530 discrete or 460 continuous episodes); the report names the 200 threshold and nothing solves. Measured 2026-10-27: final 100-episode training averages -178 to -194 (discrete) and -214 to -228 (continuous), greedy evaluation -233 ± 31 and -230 ± 26. Delete `bm10/` afterwards. |
 
 ### Evaluation & Checkpoint Verification
 

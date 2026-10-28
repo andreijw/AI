@@ -121,12 +121,23 @@ when picked.
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 
-- [ ] **LunarLander-v3, Discrete and Continuous (Tier 2), with TD3 or SAC**
-  - **Description**: 8-D state, contact dynamics, longer horizons; threshold 200. Needs the `box2d` dependency
-    (a swig build, not checked on the Jetson's aarch64) and a stronger off-policy continuous agent. The POMDP
-    variant of CartPole is Tier 2 too, through the Phase 6 frame-stacking item.
+- [~] **LunarLander-v3, Discrete and Continuous (Tier 2)**
+  - **Description**: Gymnasium's LunarLander-v3 and LunarLanderContinuous-v3: 8-D state, contact dynamics, shaped
+    reward, 1,000-step limit, threshold 200. Three pull requests: the challenges (random agents), then discrete DQN,
+    then continuous TD3 on the PyTorch backend. The POMDP variant of CartPole is Tier 2 too, through the Phase 6
+    frame-stacking item.
+  - **Decided (maintainer, 2026-10-27)**: `box2d` is an optional extra naming `box2d-py==2.3.5`, which `./setup.sh`
+    builds from source with `swig` (Gymnasium 1.4's own extra pins `box2d==2.3.10`, which has no aarch64 build); CI
+    does not install it, and the LunarLander tests skip there.
+  - **Acceptance criteria (proposed, for the maintainer to confirm before PR 2)**: PR 2, a DQN config from rl-zoo's
+    LunarLander entry solving 200 on at least 4 of 5 seeds; PR 3, a TD3 config from rl-zoo's LunarLanderContinuous
+    entry on the PyTorch backend, the same. Each against the random floor and with a 5-seed run.
+  - **Progress**: the first pull request (`feature/lunarlander-challenge`) adds `rl_lunarlander` with both
+    challenges and their random configs, the `box2d` extra and its setup.sh build, and one shared factory for the
+    observation-noise-only wrappers (CHANGELOG.md, 2026-10-27).
   - **Agent**: TD3, in NumPy and on the PyTorch backend (CHANGELOG.md, 2026-10-27); SAC is the next candidate
     and the trigger for a shared off-policy base class. n-step returns stay out of scope.
+  - **Out of scope**: Gymnasium's wind, gravity and turbulence options; Box2D on Windows and in CI.
 
 - [ ] **BipedalWalker-v3 and MuJoCo Tasks (Tier 3)**
   - **Description**: High-dimensional continuous control over millions of steps (BipedalWalker threshold 300;

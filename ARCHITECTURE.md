@@ -20,6 +20,8 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │  rl_acrobot      AcrobotEnv      AcrobotChallenge      discrete swing-up    │
 │  rl_mountaincar  MountainCarEnv  MountainCarChallenge  discrete, exploration│
 │                                  MountainCarContinuousChallenge  continuous │
+│  rl_lunarlander  LunarLanderEnv  LunarLanderChallenge  discrete; Box2D      │
+│                                  LunarLanderContinuousChallenge  continuous │
 │                                                                             │
 │  Each holds a BaseEnvWrapper subclass, ENV_DEFAULTS + make_env_from_config, │
 │  and a BenchmarkChallenge subclass with AGENT_CLASSES and CONFIG_MAP        │
@@ -51,7 +53,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 
 1. **Core Decoupling**: Algorithms and trainers in `rl_core` have zero coupling to specific Gymnasium environments.
 2. **Challenge Isolation**: Challenge-specific environments, physics domain randomizations, and configs reside in
-   independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`, `rl_mountaincar`).
+   independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`, `rl_mountaincar`, `rl_lunarlander`).
 3. **Discrete & Continuous Symmetry**: Shared base interfaces support discrete action selection and continuous
    bounded control (Gaussian policies).
 4. **Structured Artifact Scoping**: Generated logs, checkpoints, plots, and videos are partitioned deterministically
@@ -105,6 +107,7 @@ flowchart TD
         Pendulum["rl_pendulum: PendulumEnv (Continuous)"]
         Acrobot["rl_acrobot: AcrobotEnv (Discrete)"]
         MountainCar["rl_mountaincar: MountainCarEnv (Discrete and Continuous)"]
+        LunarLander["rl_lunarlander: LunarLanderEnv (Discrete and Continuous, Box2D)"]
     end
 
     subgraph Core ["rl_core Framework"]
@@ -413,7 +416,9 @@ plots/
    - `environments/make_env.py`: `make_env`, an `ENV_DEFAULTS` dict naming each environment setting the challenge
      supports with its default, and `make_env_from_config`, which reads them with
      `rl_core.utils.config.read_env_settings`: null takes the default, and any other setting given a value is
-     rejected rather than ignored. A vectorized factory only if something uses it (`rl_acrobot` has none).
+     rejected rather than ignored. A wrapper with observation noise only builds through
+     `rl_core.environments.env_from_config(wrapper, config, ENV_DEFAULTS)` (Acrobot, MountainCar, LunarLander). A
+     vectorized factory only if something uses it (`rl_acrobot` has none).
    - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`. It
      implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and lists its agents
      in the class variable `AGENT_CLASSES` (agent type to class). The base class's `supported_agents` and `make_agent`
@@ -425,7 +430,7 @@ plots/
      config's `environment.name` exactly (`select_challenge`), or the one `--challenge` names, and build through it, so
      no script needs an edit. Two challenges may share an environment id; the config then needs `--challenge`.
      One package may hold several challenges sharing a wrapper, each with its own `ENV_DEFAULTS`-style table and
-     factory (`rl_mountaincar`: `make_env_from_config` and `make_continuous_env_from_config`).
+     factory (`rl_mountaincar` and `rl_lunarlander`: `make_env_from_config` and `make_continuous_env_from_config`).
      `discover_challenges()` imports every `src/rl_*/benchmark.py`, so the runner needs no edit; a package that fails to
      import is reported with a warning, in `run_benchmark`'s unknown-challenge error and at the end of `src/benchmark.py
      --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the base class provides

@@ -1,11 +1,14 @@
 """Choosing a challenge from a run config, and building its environment and agent through it."""
 
+from typing import Any
+
 import gymnasium as gym
 import numpy as np
 import pytest
 
 import rl_acrobot.environments.acrobot_env as acrobot_env_module
 import rl_cartpole.environments.cartpole_env as cartpole_env_module
+import rl_lunarlander.environments.lunarlander_env as lunarlander_env_module
 import rl_mountaincar.environments.mountaincar_env as mountaincar_env_module
 import rl_pendulum.environments.pendulum_env as pendulum_env_module
 from rl_cartpole.environments import (
@@ -27,6 +30,7 @@ from rl_core.challenges import CHALLENGES, discover_challenges, select_challenge
 from rl_pendulum.environments import (
     make_vec_env_from_config as pendulum_make_vec_env_from_config,
 )
+from tests.helpers import env_marks
 
 discover_challenges()
 
@@ -52,6 +56,8 @@ EXPECTED_AGENTS = {
         "ddpg": DDPGAgent,
         "td3": TD3Agent,
     },
+    "lunarlander": {"random": RandomAgent},
+    "lunarlander_continuous": {"random": ContinuousRandomAgent},
 }
 
 ENV_CLASSES = {
@@ -60,7 +66,15 @@ ENV_CLASSES = {
     "mountaincar_continuous": mountaincar_env_module.MountainCarEnv,
     "cartpole": cartpole_env_module.CartPoleEnv,
     "pendulum": pendulum_env_module.PendulumEnv,
+    "lunarlander": lunarlander_env_module.LunarLanderEnv,
+    "lunarlander_continuous": lunarlander_env_module.LunarLanderEnv,
 }
+
+
+def _building(key: str, *values: str) -> Any:
+    """A parameter for a test that builds ``key``'s environment, with the marks it needs."""
+    return pytest.param(key, *values, marks=env_marks(CHALLENGES[key]().name))
+
 
 # ---------------------------------------------------------------------------
 # select_challenge
@@ -197,7 +211,7 @@ def test_make_env_treats_null_values_as_missing(monkeypatch, key, expected):
     assert captured["seed"] is None
 
 
-@pytest.mark.parametrize("key", sorted(ENV_CLASSES))
+@pytest.mark.parametrize("key", [_building(key) for key in sorted(ENV_CLASSES)])
 def test_make_env_builds_a_wrapper_the_scripts_can_wrap(key):
     env = CHALLENGES[key]().make_env({"seed": 3, "max_episode_steps": 5}, render_mode=None)
     try:
@@ -219,7 +233,11 @@ def test_supported_agents_are_exactly_the_agents_the_challenge_builds(key):
 
 @pytest.mark.parametrize(
     ("key", "agent_type"),
-    [(key, agent) for key, agents in sorted(EXPECTED_AGENTS.items()) for agent in sorted(agents)],
+    [
+        _building(key, agent)
+        for key, agents in sorted(EXPECTED_AGENTS.items())
+        for agent in sorted(agents)
+    ],
 )
 def test_make_agent_builds_the_agent_sized_for_the_environment(key, agent_type):
     challenge = CHALLENGES[key]()

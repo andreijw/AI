@@ -1,0 +1,32 @@
+# LunarLander-v3 Random Baseline Configuration
+# LunarLander-v3: 8 observations (position, velocity, angle, angular velocity, two leg contacts), four actions
+# (no engine, left, main, right), a shaped reward for moving towards the pad and landing (+100 to +140), -100
+# for a crash, a fuel cost per firing, 1,000-step limit. Solved at a 100-episode training average of 200
+# (Gymnasium's reward_threshold). Needs Box2D: ./setup.sh builds it (README, LunarLander).
+
+# Environment settings
+environment:
+  name: "LunarLander-v3"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 1000
+  seed: 42
+
+# Agent settings
+agent:
+  type: "random"  # Options: "random"
+  config:
+    seed: 42  # Makes the random actions reproducible
+
+# Training settings
+training:
+  total_steps: 50000  # Environment steps (random baseline: about 500 episodes of about 100 steps)
+  max_steps_per_episode: 1000
+  eval_frequency: 50  # Evaluate every N episodes
+  save_frequency: 100  # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true

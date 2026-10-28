@@ -212,6 +212,8 @@ function Initialize-Venv([string]$Python) {
         return $false
     }
     Write-Host "[+] Dependencies installed." -ForegroundColor Green
+    Write-Host "[!] Box2D (LunarLander) is not installed on Windows: box2d-py needs swig and a C++ build;" -ForegroundColor Yellow
+    Write-Host "    the LunarLander tests are skipped (README, LunarLander)." -ForegroundColor Yellow
 
     if ($InstallHooks) {
         Write-Host "[*] Installing pre-commit hooks..." -ForegroundColor Cyan

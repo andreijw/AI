@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rl_core.utils.config import read_env_settings
+from rl_core.environments import env_from_config
 
 from .mountaincar_env import MountainCarEnv
 
@@ -59,7 +59,7 @@ def make_env_from_config(config: dict[str, Any]) -> MountainCarEnv:
     Raises:
         ValueError: If the config sets a setting MountainCar does not support (see ENV_DEFAULTS).
     """
-    return _make_env_from_settings(config, ENV_DEFAULTS)
+    return env_from_config(make_env, config, ENV_DEFAULTS)
 
 
 def make_continuous_env_from_config(config: dict[str, Any]) -> MountainCarEnv:
@@ -70,15 +70,4 @@ def make_continuous_env_from_config(config: dict[str, Any]) -> MountainCarEnv:
         ValueError: If the config sets a setting it does not support (see
             CONTINUOUS_ENV_DEFAULTS).
     """
-    return _make_env_from_settings(config, CONTINUOUS_ENV_DEFAULTS)
-
-
-def _make_env_from_settings(config: dict[str, Any], defaults: dict[str, Any]) -> MountainCarEnv:
-    """The wrapper for ``config``, reading the settings ``defaults`` lists, with its defaults."""
-    settings = read_env_settings(config, defaults, defaults["name"])
-    return make_env(
-        env_name=settings.pop("name"),
-        render_mode=config.get("render_mode"),
-        seed=config.get("seed"),
-        **settings,
-    )
+    return env_from_config(make_env, config, CONTINUOUS_ENV_DEFAULTS)
