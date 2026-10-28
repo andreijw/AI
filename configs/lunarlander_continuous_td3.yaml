@@ -1,0 +1,51 @@
+# LunarLanderContinuous-v3 TD3 Training Configuration
+# rl-baselines3-zoo's TD3 settings for LunarLanderContinuous-v3 (hyperparams/td3.yml) at its 400x300 networks, SB3's
+# TD3 defaults for the rest, on the PyTorch backend (backend: torch), as configs/mountaincar_continuous_td3.yaml. It
+# needs PyTorch and Box2D (./setup.sh --profile gpu, then .venv-gpu/bin/python train.py ...); CI and .venv do not
+# build it. Its checkpoints are TD3Agent's NumPy format.
+# Differences from rl-zoo: the trainer updates after each episode, so the policy is fixed within an episode and its
+# steps are trained together after it (SB3 updates every step); training starts at the end of the episode that
+# crosses the 10,000 warm-up actions; and solving here means a 100-episode training average of 200, exploration
+# noise included, where rl-zoo reports a greedy evaluation. A cut at the 1000-step limit is stored as non-terminal.
+# Screened 2026-10-28 on seeds 1 to 5 at 500,000 steps: 4 of 5 reached 200 by 400,000 (3 of 5 by rl-zoo's 300,000)
+# and 3 of 5 held it; seed 2 peaked at 199.6. The maintainer chose 400,000 steps. On held-out seeds 11 to 15 at
+# 400,000 it reached 200 on 5 of 5 (at 162,000 to 330,000 steps) and held it on 4 of 5 (final averages 177 to 241);
+# greedy evaluation 87 to 269 across seeds (CHANGELOG.md, 2026-10-28).
+
+environment:
+  name: "LunarLanderContinuous-v3"
+  render_mode: null
+  max_episode_steps: 1000
+  seed: 42
+
+agent:
+  type: "td3"
+  config:
+    backend: torch                   # Gradient steps in PyTorch, as CUDA graphs on the GPU (device: auto)
+    hidden_sizes: [400, 300]         # Actor and both critics' hidden layers (rl-zoo)
+    learning_rate: 0.001             # Adam step size for actor and critics (rl-zoo)
+    gamma: 0.98                      # Discount factor (rl-zoo)
+    tau: 0.005                       # Polyak rate per actor step (every policy_delay gradient steps; SB3 default)
+    batch_size: 256                  # Mini-batch size (SB3 default)
+    buffer_capacity: 200000          # Replay buffer size (rl-zoo)
+    learning_starts: 10000           # Uniform random actions in the bounds before learning (rl-zoo)
+    noise_type: gaussian             # Exploration noise (rl-zoo: normal)
+    noise_std: 0.1                   # Std in the [-1, 1] action space (rl-zoo)
+    updates_per_step: 1.0            # Gradient steps per transition (rl-zoo train_freq 1, gradient_steps 1); no cap
+    policy_delay: 2                  # Gradient steps per actor and target update (SB3 default)
+    target_policy_noise: 0.2         # Std of the target-action smoothing noise, [-1, 1] space (SB3 default)
+    target_noise_clip: 0.5           # Bound on that noise (SB3 default)
+    optimizer: adam
+    seed: 42
+
+training:
+  total_steps: 400000  # Environment steps (rl-zoo: 300,000); the maintainer's choice from the screen
+  max_steps_per_episode: 1000  # Must match the environment's limit: the Trainer's default is 500
+  eval_frequency: 25
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

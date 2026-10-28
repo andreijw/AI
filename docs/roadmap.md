@@ -15,7 +15,18 @@ No open items.
 
 ### Training
 
-No open items.
+- [ ] **Off-Policy Updates During the Episode**
+  - **Description**: The trainer calls `agent.update` once, after each episode, so a DQN, DDPG or TD3 policy stays
+    fixed for up to the whole episode (1,000 steps on LunarLander) and that episode's gradient steps all run after
+    it; SB3, whose rl-zoo settings these configs translate, updates after every step. LunarLanderContinuous TD3 at
+    rl-zoo's settings needed 400,000 steps rather than 300,000 and held 200 on only 3 of 5 screen seeds
+    (CHANGELOG.md, 2026-10-28). Whether updating during the episode is the cause is not verified: the same scheme
+    solved MountainCarContinuous TD3 on 5 of 5 seeds. The continuous Actor-Critic idea under Code Health needs the
+    same trainer hook.
+  - **Acceptance criteria**: first a scratch experiment (a driver that updates every N steps inside the episode,
+    seeds 1 to 5 against the 2026-10-28 screen) shows whether it helps; only then a trainer option, off by default
+    so every committed config and golden test is unchanged.
+  - **Out of scope**: on-policy agents (PPO, REINFORCE, Actor-Critic), which train on whole rollouts.
 
 ### Code Health
 
@@ -121,31 +132,12 @@ when picked.
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 
-- [~] **LunarLander-v3, Discrete and Continuous (Tier 2)**
-  - **Description**: Gymnasium's LunarLander-v3 and LunarLanderContinuous-v3: 8-D state, contact dynamics, shaped
-    reward, 1,000-step limit, threshold 200. Three pull requests: the challenges (random agents), then discrete DQN,
-    then continuous TD3 on the PyTorch backend. The POMDP variant of CartPole is Tier 2 too, through the Phase 6
-    frame-stacking item.
-  - **Decided (maintainer, 2026-10-27)**: `box2d` is an optional extra naming `box2d-py==2.3.5`, which `./setup.sh`
-    builds from source with `swig` (Gymnasium 1.4's own extra pins `box2d==2.3.10`, which has no aarch64 build); CI
-    does not install it, and the LunarLander tests skip there.
-  - **Acceptance criteria (confirmed by the maintainer, 2026-10-27)**: PR 2, a DQN config from rl-zoo's
-    LunarLander entry solving 200 on at least 4 of 5 seeds, judged on held-out seeds 11 to 15; PR 3, a TD3 config
-    from rl-zoo's LunarLanderContinuous entry on the PyTorch backend, the same. Each against the random floor and with
-    a 5-seed run.
-  - **Progress**: the first pull request (`feature/lunarlander-challenge`) adds `rl_lunarlander` with both
-    challenges and their random configs, the `box2d` extra and its setup.sh build, and one shared factory for the
-    observation-noise-only wrappers (CHANGELOG.md, 2026-10-27). The second (`feature/lunarlander-dqn`) adds
-    `configs/lunarlander_dqn.yaml`: rl-zoo's DQN reaches 200 on 5 of 5 held-out seeds and holds it on 4 of 5
-    (CHANGELOG.md, 2026-10-27). Open: PR 3, TD3 on the PyTorch backend for LunarLanderContinuous-v3.
-  - **Agent**: TD3, in NumPy and on the PyTorch backend (CHANGELOG.md, 2026-10-27); SAC is the next candidate
-    and the trigger for a shared off-policy base class. n-step returns stay out of scope.
-  - **Out of scope**: Gymnasium's wind, gravity and turbulence options; Box2D on Windows and in CI.
-
 - [ ] **BipedalWalker-v3 and MuJoCo Tasks (Tier 3)**
   - **Description**: High-dimensional continuous control over millions of steps (BipedalWalker threshold 300;
-    MuJoCo Hopper, HalfCheetah). Needs `box2d` or `mujoco` and larger networks, so it waits on the optional
-    PyTorch/GPU backend in the Code Health ideas.
+    MuJoCo Hopper, HalfCheetah). BipedalWalker can use the `box2d` extra and the PyTorch backend that LunarLander
+    used (CHANGELOG.md, 2026-10-27 and 2026-10-28); MuJoCo needs `mujoco`.
+  - **Agent**: TD3, in NumPy and on the PyTorch backend (CHANGELOG.md, 2026-10-27); SAC is the next candidate
+    and the trigger for a shared off-policy base class. n-step returns stay out of scope.
 
 - [ ] **Learning from Pixels (Tier 4)**
   - **Description**: CarRacing or Atari. Needs convolutional networks and a GPU; not practical in pure NumPy.

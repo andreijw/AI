@@ -12,6 +12,24 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-10-28
+
+### Added
+
+- **LunarLanderContinuous TD3 on the GPU** (`feature/lunarlander-td3`, the last pull request of the LunarLander roadmap
+  item, which is now complete): `configs/lunarlander_continuous_td3.yaml` takes rl-zoo's LunarLanderContinuous-v3 TD3
+  entry (400×300 networks, learning rate 1e-3, gamma 0.98, Gaussian noise 0.1, 200,000-transition buffer, 10,000
+  warm-up actions; SB3's TD3 defaults for the rest) with `backend: torch`, and `td3` is registered for the
+  `lunarlander_continuous` challenge. It needs PyTorch and Box2D (`.venv-gpu`); CI checks its settings from the YAML.
+  The budget is 400,000 steps (rl-zoo: 300,000), the maintainer's choice from a screen of seeds 1 to 5 at 500,000
+  steps, which reached 200 on 3 of 5 by 300,000 and on 4 of 5 by 400,000, held on 3 of 5 at each (one seed peaked at
+  199.6). On held-out seeds 11 to 15 at 400,000 it reached 200 on 5 of 5 at 162,000 to 330,000 steps and held it on 4 of
+  5 (final 100-episode training averages 177 to 241); greedy evaluation varied from 87 to 269 across seeds. A seed took
+  46 to 47 minutes with two sharing the Jetson's GPU, 28 alone. Seed 42 through `train.py` (TR-20) reaches 200 at
+  about episode 510 and ends at about 272, greedy evaluation 262 ± 16; its recording (VID-10) scores 249 ± 17. The
+  random agent ends at -214 to -228. The trainer updates once per episode where SB3 updates every step; whether that
+  is why rl-zoo's 300,000 steps were not enough is a new roadmap item (Training).
+
 ## 2026-10-27
 
 ### Added

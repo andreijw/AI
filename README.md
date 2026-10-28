@@ -15,7 +15,7 @@ The architecture is designed to support:
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO with
   Gaussian policies, and DDPG and TD3 with deterministic policies, for Pendulum; random, PPO and DQN for Acrobot;
   random and DQN for MountainCar; random, DDPG and TD3 with Ornstein-Uhlenbeck exploration noise for
-  MountainCarContinuous; random and DQN for LunarLander; random for LunarLanderContinuous, so far)
+  MountainCarContinuous; random and DQN for LunarLander; random and TD3 for LunarLanderContinuous)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -80,7 +80,7 @@ AI/
 │   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
 │   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
 │   ├── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
-│   └── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN)
+│   └── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 on PyTorch)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── setup.ps1                   # Windows developer setup
@@ -259,17 +259,20 @@ python train.py --config configs/lunarlander_continuous_default.yaml
 
 # LunarLander DQN (rl-zoo settings; solves 200)
 python train.py --config configs/lunarlander_dqn.yaml
+
+# LunarLanderContinuous TD3 at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu; solves 200)
+.venv-gpu/bin/python train.py --config configs/lunarlander_continuous_td3.yaml
 ```
 
 ### Which agents solve which challenge
 
 A run solves the challenge when its average training reward over 100 episodes reaches the threshold: 475 for
-CartPole-v1, -200 for Pendulum-v1, -100 for Acrobot-v1, -110 for MountainCar-v0, 90 for MountainCarContinuous-v0. It
-**holds** when the average over its
-last 100 episodes is still at or above the threshold. Each agent trains for a budget of environment steps set against
-its rl-baselines3-zoo reference (see the config comments). Measured with the committed configs on seeds 1 to 5 on
-2026-10-18 (CartPole PPO on 2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment
-and named random streams ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
+CartPole-v1, -200 for Pendulum-v1, -100 for Acrobot-v1, -110 for MountainCar-v0, 90 for MountainCarContinuous-v0, 200
+for LunarLander-v3 and LunarLanderContinuous-v3. It **holds** when the average over its last 100 episodes is still at or
+above the threshold. Each agent trains for a budget of environment steps set against its rl-baselines3-zoo reference
+(see the config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18 (CartPole PPO on
+2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment and named random streams
+([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md)). `train.py` uses seed 42, which was not
 measured, so a single `train.py` run may land on the unlucky side of these numbers:
 
@@ -289,6 +292,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | MountainCarContinuous-v0 | DDPG | `mountaincar_continuous_ddpg.yaml` (rl-zoo settings, OU noise, 64×64 networks) | 300,000 | 5 of 5 | 25k to 69k | 5 of 5 |
 | MountainCarContinuous-v0 | TD3 | `mountaincar_continuous_td3.yaml` (rl-zoo settings, OU noise, 400×300 networks, PyTorch backend); CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 37k to 70k | 5 of 5 |
 | LunarLander-v3 | DQN | `lunarlander_dqn.yaml` (rl-zoo settings, one hidden layer of 256, epsilon floor 0.1); seeds 1 to 5, which chose the floor; held-out seeds 11 to 15: 5 of 5 reach (166k to 297k), 4 of 5 hold; CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 152k to 228k | 5 of 5 |
+| LunarLanderContinuous-v3 | TD3 | `lunarlander_continuous_td3.yaml` (rl-zoo settings, 400×300 networks, PyTorch backend); seeds 1 to 5, which chose the budget; held-out seeds 11 to 15: 5 of 5 reach (162k to 330k), 4 of 5 hold; CHANGELOG.md, 2026-10-28 | 400,000 | 4 of 5 | 248k to 344k | 3 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
@@ -320,6 +324,13 @@ LunarLander DQN uses rl-zoo's settings with one hidden layer of 256 and a square
 0.02. On held-out seeds 11 to 15 it reached 200 on 5 of 5 (one at 297,000 steps, near the end of the budget) and held it
 on 4 of 5, greedy evaluation 238 ± 25; seed 42 reaches 200 at about episode 450 and ends at 237 (CHANGELOG.md,
 2026-10-27). The random agent's final averages are -178 to -194.
+LunarLanderContinuous TD3 trains rl-zoo's 400×300 networks on the PyTorch backend, so it needs `.venv-gpu`, for
+400,000 steps against rl-zoo's 300,000: by 300,000 only 3 of 5 seeds had reached 200. It is the least settled result in
+the table. On seeds 1 to 5 one seed peaked at 199.6 and never reached 200, and only 3 of 5 held it. On held-out seeds 11
+to 15 all 5 reached 200 and 4 of 5 held it, but greedy evaluation ranged from 87 to 269. A seed takes 46 to 47 minutes
+with two sharing the Jetson's GPU (CHANGELOG.md, 2026-10-28). The trainer updates after each episode, while rl-zoo
+updates after every step; whether that slows it is open (docs/roadmap.md, Training). The random agent's final
+averages are -214 to -228.
 
 ### Run any agent from one base config (quick overrides)
 
@@ -703,7 +714,7 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 
 1. **More Continuous Off-Policy Learning**: SAC (Soft Actor-Critic) on the replay buffer, networks and target updates
    DDPG and TD3 already use.
-2. **Advanced Environments**: learning agents for LunarLander, then BipedalWalker (the Phase 7 challenge ladder).
+2. **Advanced Environments**: BipedalWalker, then MuJoCo tasks (the Phase 7 challenge ladder).
 3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 
 ## Future Enhancements
