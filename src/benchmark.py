@@ -32,7 +32,6 @@ from rl_core.seeding import eval_seed_for
 from rl_core.training.budget import apply_budget_override, budget_of
 from rl_core.training.trainer import Trainer
 from rl_core.utils.smoothing import rolling_average
-from rl_core.utils.visualization import plot_benchmark_comparison
 
 # ---------------------------------------------------------------------------
 # General Benchmark Metrics & Runner
@@ -439,6 +438,9 @@ class BenchmarkRunner:
         settings: _ResolvedSettings,
     ) -> str | None:
         """Plot every agent's learning curves into the output folder; return the image path."""
+        # Imported here: matplotlib adds about 0.8 s to every start-up, plotted or not.
+        from rl_core.utils.visualization import plot_benchmark_comparison
+
         curve_data = {
             agent: [run.rewards for run in agent_runs] for agent, agent_runs in runs.items()
         }

@@ -187,10 +187,12 @@ def test_plot_against_steps_keeps_runs_with_different_episode_counts(tmp_path, m
 
 def test_runner_plots_against_steps_only_when_every_budget_is_in_steps(tmp_path, monkeypatch):
     import benchmark
+    import rl_core.utils.visualization
 
     seen = []
+    # Patched where _save_plot imports it from, when it plots.
     monkeypatch.setattr(
-        benchmark,
+        rl_core.utils.visualization,
         "plot_benchmark_comparison",
         lambda *a, **k: seen.append(k.get("episode_lengths")),
     )

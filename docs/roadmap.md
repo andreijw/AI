@@ -30,24 +30,26 @@ No open items.
 
 ### Code Health
 
-The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical, 4 Warnings. The first Warning,
-each challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22); so are the
-second and third, the benchmark's solve numbers and report, and the fourth, trainer tests calling private methods
-(CHANGELOG.md, 2026-10-25). What follows are unscheduled ideas.
+The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical, 4 Warnings. The first Warning, each
+challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22); so are the second and
+third, the benchmark's solve numbers and report, and the fourth, trainer tests calling private methods (CHANGELOG.md,
+2026-10-25). The maintainer picked five of the ideas below on 2026-10-28, one pull request each, in this order:
+matplotlib only when plotting (CHANGELOG.md, 2026-10-28); the discrete Actor-Critic overfit collapse; double DQN;
+dueling DQN; the Pendulum PPO and CartPole DQN experiments. A learning change is committed only if, on seeds 1 to 5
+against the committed config, more seeds hold the threshold or the mean final average is better on at least 4 of 5
+paired seeds with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
+
+What follows are unscheduled ideas.
 
 - [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
     - The continuous Actor-Critic's greedy policy matches rl-zoo's A2C, but its 100-episode training average stays
       at about -300 (CHANGELOG.md, 2026-10-18). True A2C updates every n steps, which needs the
       trainer to call `update` mid-episode for every agent; gSDE exploration is the other untried difference.
-    - Larger networks and pixel-based tasks on the Jetson's GPU: the optional PyTorch backend item above holds the
-      measured case (CHANGELOG.md, 2026-10-25).
     - Not tried, though the bars were met without them: Pendulum PPO with gSDE exploration, separate tanh actor and
       critic networks, or observation normalisation; CartPole DQN with more than `max_updates_per_call: 64` (about
       0.13 gradient steps per transition against rl-zoo's 0.5).
     - Candidates once wanted: double, dueling or prioritised-replay DQN.
-    - `src/benchmark.py` still imports matplotlib at module level, so `--no-plot` loads it too; importing
-      `plot_benchmark_comparison` inside `_save_plot` would end that (review suggestion, 2026-10-25).
     - Found 2026-10-18 and not yet investigated: on the one-state overfit batch of
       `tests/test_policy_gradient_maths.py`, the discrete Actor-Critic (SGD, learning rate 0.05) reaches probability
       1.0 and can then collapse to the other action (seeds 6 and 7; 9 of 30 seeds under the old seeding) once the

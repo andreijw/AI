@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -30,6 +32,25 @@ def test_trainer_and_challenges_do_not_import_matplotlib():
         "Importing rl_core.training, rl_core.utils and the challenges (with discovery) should not "
         f"load matplotlib; loaded {result.stdout.strip()}, so something on that path imports "
         "rl_core.utils.visualization."
+    )
+
+
+@pytest.mark.parametrize("module", ["train", "record", "benchmark"])
+def test_entry_points_do_not_import_matplotlib(module):
+    """train.py, record.py and src/benchmark.py load matplotlib only when they plot: pyplot costs
+    about 0.8 s of start-up on the Jetson. A fresh process, as users get the modules."""
+    code = (
+        "import sys; sys.path.insert(0, 'src'); "
+        f"import {module}; "
+        "print(sorted(m for m in sys.modules if m.split('.')[0] == 'matplotlib')[:5])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", (
+        f"Importing {module} loaded {result.stdout.strip()}: import rl_core.utils.visualization "
+        "inside the plotting function, not at module level."
     )
 
 
