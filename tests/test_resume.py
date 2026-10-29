@@ -14,7 +14,7 @@ from rl_core.environments import ResumableEnv
 from rl_core.training import Trainer
 from rl_mountaincar.environments import MountainCarEnv
 from rl_pendulum.environments import PendulumEnv
-from tests.test_agent_harness import ALL_AGENTS, CONTINUOUS_AGENTS
+from tests.test_agent_harness import ALL_AGENTS, CONTINUOUS_AGENTS, agent_id
 
 EPISODE_STEPS = 15
 
@@ -34,7 +34,7 @@ def _pendulum(seed=3):
                        action_noise_std=0.1)  # fmt: skip
 
 
-AGENTS = [pytest.param(c, cfg, _cartpole, 4, 2, id=c.__name__) for c, cfg in ALL_AGENTS] + [
+AGENTS = [pytest.param(c, cfg, _cartpole, 4, 2, id=agent_id(c, cfg)) for c, cfg in ALL_AGENTS] + [
     pytest.param(c, cfg, _pendulum, 3, 1, id=c.__name__) for c, cfg in CONTINUOUS_AGENTS
 ]
 

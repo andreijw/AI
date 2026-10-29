@@ -9,7 +9,7 @@ import numpy.typing as npt
 from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, derive_rng
 
 from .base_agent import BaseAgent
-from .config_values import positive_int
+from .config_values import flag, positive_int
 from .optim import Adam, anneal_fraction, anneal_steps_from_config, optimizer_from_config
 from .replay_buffer import ReplayBuffer
 
@@ -34,6 +34,10 @@ class DQNAgent(BaseAgent):
 
     Features:
     * Separate online and target Q-networks for stable gradient updates.
+    * Optional double DQN targets (``double_q``; van Hasselt, Guez & Silver 2016): the online
+      network chooses the next action and the target network values it,
+      ``Q_target(s', argmax_a' Q_online(s', a'))``, against the upward bias of a max over noisy
+      estimates. Off by default.
     * Epsilon-greedy action selection, decayed once per update call (``epsilon_decay``) or
       linearly per training action (``exploration_steps``).
     * Bootstrapping through time-limit cuts: only a true termination ends the Bellman target.
@@ -74,6 +78,7 @@ class DQNAgent(BaseAgent):
         self.epsilon_decay: float = float(config.get("epsilon_decay", 0.995))
         self.target_update_frequency: int = positive_int(config, "target_update_frequency", 100)
         self.tau: float | None = _optional_real(config, "tau")
+        self.double_q: bool = flag(config, "double_q", False)
         self.grad_clip_value: float = float(config.get("grad_clip_value", 10.0))
         self.exploration_steps: int | None = self._read_exploration_steps(config)
         self.updates_per_step: float | None = _optional_real(config, "updates_per_step")
@@ -253,6 +258,8 @@ class DQNAgent(BaseAgent):
         """
         Compute Bellman temporal-difference target values:
             y = r + (1 - done) * γ * max_a' Q_target(s', a')
+        or, with ``double_q``, the online network choosing the action the target network values:
+            y = r + (1 - done) * γ * Q_target(s', argmax_a' Q_online(s', a'))
 
         Args:
             rewards: Batch of scalar rewards.
@@ -263,9 +270,14 @@ class DQNAgent(BaseAgent):
             Array of target values of shape (batch_size,).
         """
         next_q, _ = self._forward_q(next_obs, target=True)
-        max_next_q = np.max(next_q, axis=-1)
+        if self.double_q:
+            online_next_q, _ = self._forward_q(next_obs, target=False)
+            choice = np.argmax(online_next_q, axis=-1)
+            next_value = np.take_along_axis(next_q, choice[..., np.newaxis], axis=-1)[..., 0]
+        else:
+            next_value = np.max(next_q, axis=-1)
         not_done = 1.0 - dones.astype(np.float64)
-        return rewards + not_done * self.gamma * max_next_q
+        return rewards + not_done * self.gamma * next_value
 
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """

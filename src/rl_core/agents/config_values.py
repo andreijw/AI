@@ -22,6 +22,17 @@ def non_negative_int(config: Mapping[str, Any], key: str, default: int) -> int:
     return _checked_int(key, config.get(key, default), minimum=0)
 
 
+def flag(config: Mapping[str, Any], key: str, default: bool) -> bool:
+    """``config[key]`` (or ``default``) as a bool, rejecting anything but a Python or NumPy boolean.
+
+    A quoted ``"false"`` from a hand-written YAML file would otherwise be truthy.
+    """
+    value = config.get(key, default)
+    if not isinstance(value, bool | np.bool_):
+        raise ValueError(f"{key} must be true or false, got {value!r}")
+    return bool(value)
+
+
 def check_positive_int(name: str, value: Any) -> int:
     """One value (such as a list entry) as an int, checked as :func:`positive_int` does under ``name``."""
     return _checked_int(name, value, minimum=1)

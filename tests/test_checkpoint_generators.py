@@ -9,11 +9,11 @@ import pytest
 from rl_core.agents import BaseAgent, ContinuousRandomAgent, RandomAgent
 from rl_core.seeding import generator_state, restore_generator
 from tests.helpers import assert_same_checkpoint
-from tests.test_agent_harness import ALL_AGENTS, CONTINUOUS_AGENTS
+from tests.test_agent_harness import ALL_AGENTS, CONTINUOUS_AGENTS, agent_id
 
-AGENTS = [pytest.param(cls, config, 4, 2, id=cls.__name__) for cls, config in ALL_AGENTS] + [
-    pytest.param(cls, config, 3, 1, id=cls.__name__) for cls, config in CONTINUOUS_AGENTS
-]
+AGENTS = [
+    pytest.param(cls, config, 4, 2, id=agent_id(cls, config)) for cls, config in ALL_AGENTS
+] + [pytest.param(cls, config, 3, 1, id=cls.__name__) for cls, config in CONTINUOUS_AGENTS]
 
 
 def _run(agent: BaseAgent, episodes: int, seed: int, obs_dim: int) -> list[np.ndarray]:

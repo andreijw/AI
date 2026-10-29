@@ -14,6 +14,29 @@ Acrobot-v1) and
 
 ## 2026-10-29
 
+### Added
+
+- **Double DQN, opt-in** (`feature/double-dqn`, the third of the five Code Health pull requests): `double_q: true` in
+  a DQN config lets the online network choose the next action and the target network value it,
+  `y = r + (1 - terminated)·γ·Q_target(s', argmax_a' Q_online(s', a'))` (van Hasselt, Guez & Silver 2016), against
+  the upward bias of a max over noisy estimates. Off by default, and a run without it is bit-for-bit unchanged
+  (`DQN_GOLDEN_EXACT=1 pytest tests/test_dqn_golden.py`). `rl_core.agents.config_values.flag` reads it and rejects
+  anything but true or false, so a quoted `"false"` cannot switch it on. SB3's DQN, and so rl-zoo, has no double
+  option. Through the benchmark on seeds 1 to 5, against each committed config run alongside, it won on none of the
+  four and no config changes:
+
+  | Config | Held (committed → double) | Mean final 100-episode average | Seeds clearly worse |
+  | :--- | :--- | :--- | :--- |
+  | CartPole | 5 → 3 | 497.5 → 479.7 | 2 (by 25 and 46) |
+  | Acrobot | 5 → 5 | -92.6 → -92.0 (better on 3 of 5) | 0 |
+  | MountainCar | 2 → 1 | -117.8 → -120.9 | 2 (by 19 and 21) |
+  | LunarLander | 5 → 4 | 235.3 → 221.9 | 1 (by 68) |
+
+  "Clearly worse" was set beforehand at 25, 10, 10 and 20 points. On seed 1 of CartPole, Acrobot and MountainCar,
+  double DQN's logged mean Q ended 0.5 to 1.6 lower, but the committed configs barely overestimate: mean Q sat within
+  about 4 of the discounted return of the policy's own episodes in every case. Double DQN also ran on MountainCar on
+  2026-10-23, on an older config, with the same verdict (mean -141 against -133).
+
 ### Fixed
 
 - **Discrete Actor-Critic "overfit collapse" was the test's** (`fix/actor-critic-overfit-collapse`, the second of

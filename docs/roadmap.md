@@ -34,14 +34,15 @@ The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical,
 challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22); so are the second and
 third, the benchmark's solve numbers and report, and the fourth, trainer tests calling private methods (CHANGELOG.md,
 2026-10-25). The maintainer picked five of the ideas below on 2026-10-28, one pull request each, in this order:
-matplotlib only when plotting (CHANGELOG.md, 2026-10-28); the discrete Actor-Critic overfit collapse (CHANGELOG.md,
-2026-10-29); double DQN; dueling DQN; the Pendulum PPO and CartPole DQN experiments. A learning change is committed only
-if, on seeds 1 to 5 against the committed config, more seeds hold the threshold or the mean final average is better on
-at least 4 of 5 paired seeds with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
+matplotlib only when plotting (done; CHANGELOG.md, 2026-10-28); the discrete Actor-Critic overfit collapse (done;
+CHANGELOG.md, 2026-10-29); double DQN (done, left opt-in; CHANGELOG.md, 2026-10-29); dueling DQN; the Pendulum PPO and
+CartPole DQN experiments. A learning change is committed only if, on seeds 1 to 5 against the committed config, more
+seeds hold the threshold or the mean final average is better on at least 4 of 5 paired seeds with no seed clearly worse;
+otherwise it stays opt-in and is recorded as tried.
 
 What follows are unscheduled ideas.
 
-- [ ] **Ideas: Close the Actor-Critic Gap; Larger Networks on a GPU**
+- [ ] **Ideas: Close the Actor-Critic Gap, and Smaller Fixes**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
     - The continuous Actor-Critic's greedy policy matches rl-zoo's A2C, but its 100-episode training average stays
       at about -300 (CHANGELOG.md, 2026-10-18). True A2C updates every n steps, which needs the
@@ -49,7 +50,10 @@ What follows are unscheduled ideas.
     - Not tried, though the bars were met without them: Pendulum PPO with gSDE exploration, separate tanh actor and
       critic networks, or observation normalisation; CartPole DQN with more than `max_updates_per_call: 64` (about
       0.13 gradient steps per transition against rl-zoo's 0.5).
-    - Candidates once wanted: double, dueling or prioritised-replay DQN.
+    - Candidates once wanted: dueling or prioritised-replay DQN. Double DQN was tried on all four DQN configs and
+      stays opt-in (`double_q`; CHANGELOG.md, 2026-10-29).
+    - Read the continuous Actor-Critic's `bounded_mean` and `normalize_advantages` with the strict `flag` reader
+      (found 2026-10-29): `bool(config.get(...))` turns a quoted `"false"` in a YAML file into true.
     - Allow `max_grad_norm` with SGD (found 2026-10-29). With plain SGD the discrete actor-critics' critic step grows
       with the squared norm of the hidden activations (‖h‖²), which a growing trunk inflates, and the gradient clip that
       would bound it only works with `optimizer: adam`. Never seen in a real run: the committed Actor-Critic configs use
@@ -130,6 +134,10 @@ when picked.
     mid-run losses of a greedy policy at -110 or better and smaller late swings, did not hold (losses 1 and 3 against
     1; swing 13.3 and 12.2 against 11.1). Untried: keeping the best greedy policy (which does not change the training
     average the rule judges).
+  - **Double DQN, re-checked 2026-10-29** (first probed 2026-10-23 on an older config, mean -141 against -133): through
+    the benchmark, seeds 1 to 5, it held 1 of 5 against the committed config's 2 (mean final -120.9 against -117.8;
+    +17 on two seeds, -19 and -21 on two others). There was little overestimation to remove: on seed 1 the logged mean
+    Q sat within about 1 of the discounted return in both arms (CHANGELOG.md, 2026-10-29).
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 

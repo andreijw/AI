@@ -5,6 +5,7 @@ import pytest
 
 from rl_core.agents.config_values import (
     check_positive_int,
+    flag,
     non_negative_int,
     optional_positive_int,
     positive_int,
@@ -70,3 +71,20 @@ def test_check_positive_int_checks_one_value_under_the_given_name():
     assert check_positive_int("hidden_sizes[0]", np.int32(64)) == 64
     with pytest.raises(ValueError, match=r"hidden_sizes\[1\] must be a positive integer, got 2.5"):
         check_positive_int("hidden_sizes[1]", 2.5)
+
+
+@pytest.mark.parametrize("value", [True, False, np.bool_(True), np.bool_(False)])
+def test_flag_accepts_a_boolean(value):
+    assert flag({"double_q": value}, "double_q", not value) is bool(value)
+
+
+@pytest.mark.parametrize("default", [True, False])
+def test_flag_falls_back_to_the_default(default):
+    assert flag({}, "double_q", default) is default
+
+
+@pytest.mark.parametrize("value", ["false", "true", 0, 1, None, np.int64(1)])
+def test_flag_rejects_everything_else_naming_the_key(value):
+    """A quoted "false" in a YAML file would otherwise be truthy and switch the setting on."""
+    with pytest.raises(ValueError, match="double_q must be true or false"):
+        flag({"double_q": value}, "double_q", False)

@@ -32,6 +32,12 @@ def test_integer_settings_must_be_positive_integers(key, bad):
         _agent(**{key: bad})
 
 
+@pytest.mark.parametrize("bad", ["false", 1, None])
+def test_double_q_must_be_a_boolean(bad):
+    with pytest.raises(ValueError, match="double_q must be true or false"):
+        _agent(double_q=bad)
+
+
 @pytest.mark.parametrize("bad", [0.0, -0.1, 1.5, True, float("nan"), "abc"])
 def test_tau_must_lie_in_zero_one(bad):
     with pytest.raises(ValueError, match="tau"):
