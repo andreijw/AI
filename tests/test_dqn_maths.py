@@ -26,6 +26,7 @@ from tests.agent_internals import (
     assert_same_weights,
     bellman_targets,
     counters,
+    dqn_online_weights,
     gradient_check_parameters,
     live_weights,
     loss_and_grads,
@@ -244,6 +245,18 @@ def test_apply_gradients_clips_each_element_then_descends():
 # ---------------------------------------------------------------------------
 
 
+def _q_by_hand(w: dict[str, np.ndarray], obs: np.ndarray, prefix: str = "") -> np.ndarray:
+    """Q-values from the weights with plain arithmetic: the advantage stream alone, or with a value
+    stream ``V + A - mean(A)`` when the weights hold one. ``prefix`` "target_" reads the target."""
+    hidden = np.maximum(0.0, obs @ w[f"{prefix}W1"] + w[f"{prefix}b1"])
+    q = hidden @ w[f"{prefix}W2"] + w[f"{prefix}b2"]
+    if f"{prefix}W1_value" in w:
+        hidden_v = np.maximum(0.0, obs @ w[f"{prefix}W1_value"] + w[f"{prefix}b1_value"])
+        value = hidden_v @ w[f"{prefix}W2_value"] + w[f"{prefix}b2_value"]
+        q = value + q - q.mean(axis=-1, keepdims=True)
+    return q
+
+
 def _replay(reference: DQNAgent, batch: dict[str, np.ndarray], updates: int) -> dict[str, float]:
     """Do what update() should do, written out with plain arithmetic on a copy of the agent.
 
@@ -263,12 +276,10 @@ def _replay(reference: DQNAgent, batch: dict[str, np.ndarray], updates: int) -> 
     for _ in range(updates):
         sample = reference.replay_buffer.sample(reference.batch_size)
         w = weights(reference)
-        hidden = np.maximum(0.0, sample["next_observations"] @ w["target_W1"] + w["target_b1"])
-        next_q = hidden @ w["target_W2"] + w["target_b2"]
+        next_q = _q_by_hand(w, sample["next_observations"], "target_")
         if reference.double_q:
             # The online network, before this step, chooses; the target network values.
-            online_hidden = np.maximum(0.0, sample["next_observations"] @ w["W1"] + w["b1"])
-            choice = (online_hidden @ w["W2"] + w["b2"]).argmax(axis=-1)
+            choice = _q_by_hand(w, sample["next_observations"]).argmax(axis=-1)
             next_value = next_q[np.arange(len(choice)), choice]
         else:
             next_value = next_q.max(axis=-1)
@@ -281,13 +292,14 @@ def _replay(reference: DQNAgent, batch: dict[str, np.ndarray], updates: int) -> 
         losses.append(components["loss"])
         mean_qs.append(components["mean_q"])
         limit = reference.grad_clip_value
-        for name in DQN_ONLINE_WEIGHTS:
+        names = dqn_online_weights(reference)
+        for name in names:
             any_clipped |= bool((np.abs(grads[name]) > limit).any())
             any_unclipped |= bool((np.abs(grads[name]) <= limit).any())
             w[name] = w[name] - reference.learning_rate * np.clip(grads[name], -limit, limit)
 
         counter += 1
-        for name in DQN_ONLINE_WEIGHTS:
+        for name in names:
             target = f"target_{name}"
             if reference.tau is not None:
                 w[target] = reference.tau * w[name] + (1.0 - reference.tau) * w[target]
@@ -328,6 +340,19 @@ BASE = {"batch_size": 4, "min_buffer_size": 5, "learning_rate": 0.05, "gamma": 0
         # Double DQN targets, with a hard sync after the 2nd of 3 steps, so the online network
         # that chooses has moved away from the target network that values.
         ({"updates_per_step": 0.5, "target_update_frequency": 2, "double_q": True}, 3),
+        # A dueling network, with a hard sync after the 2nd of 3 steps and with Polyak averaging.
+        ({"updates_per_step": 0.5, "target_update_frequency": 2, "dueling": True}, 3),
+        ({"updates_per_step": 1.0, "max_updates_per_call": 2, "tau": 0.3, "dueling": True}, 2),
+        # Both: the dueling online network chooses, the dueling target network values.
+        (
+            {
+                "updates_per_step": 0.5,
+                "target_update_frequency": 2,
+                "dueling": True,
+                "double_q": True,
+            },
+            3,
+        ),
     ],
 )
 def test_update_replays_as_sample_target_step_sync(config, expected_updates):
@@ -354,9 +379,10 @@ def test_update_replays_as_sample_target_step_sync(config, expected_updates):
         assert expected["any_clipped"] and expected["any_unclipped"], "The clip must bite partly."
 
 
-def test_hard_sync_copies_the_online_network_and_then_leaves_it_alone():
+@pytest.mark.parametrize("dueling", [False, True])
+def test_hard_sync_copies_the_online_network_and_then_leaves_it_alone(dueling):
     """Right after a sync the target equals the online network but shares no memory with it."""
-    config = {"updates_per_step": 0.5, "target_update_frequency": 3}
+    config = {"updates_per_step": 0.5, "target_update_frequency": 3, "dueling": dueling}
     agent = _agent(**BASE, **config)
     set_weights(agent, target_b2=np.array([-0.1, 0.4, 0.2]))
 
@@ -364,7 +390,7 @@ def test_hard_sync_copies_the_online_network_and_then_leaves_it_alone():
 
     assert counters(agent)["update_counter"] == 3
     arrays = live_weights(agent)
-    for name in DQN_ONLINE_WEIGHTS:
+    for name in dqn_online_weights(agent):
         online, target = arrays[name], arrays[f"target_{name}"]
         np.testing.assert_array_equal(target, online, err_msg=f"{name} was not synced.")
         assert not np.shares_memory(target, online), f"Target {name} aliases the online array."
@@ -397,3 +423,130 @@ def test_epsilon_decays_once_per_update_call_down_to_its_floor():
 
     assert counters(agent)["update_counter"] == 9, "Three calls of three gradient steps each."
     assert seen == pytest.approx([0.5, 0.25, 0.2], rel=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# Dueling network: Q = V + A - mean(A), a value stream beside the advantage stream
+# ---------------------------------------------------------------------------
+
+
+def _zero_trunks(agent: DQNAgent, value, advantage, target_value, target_advantage) -> DQNAgent:
+    """Zero both streams' hidden layers in both networks, so V is the value bias and A the
+    advantage bias for every state."""
+    current = weights(agent)
+    hidden = ("W1", "b1", "W1_value", "b1_value")
+    set_weights(
+        agent,
+        **{name: np.zeros_like(current[name]) for name in hidden},
+        **{f"target_{name}": np.zeros_like(current[f"target_{name}"]) for name in hidden},
+        b2_value=np.array(value),
+        b2=np.array(advantage),
+        target_b2_value=np.array(target_value),
+        target_b2=np.array(target_advantage),
+    )
+    return agent
+
+
+def test_dueling_gradients_match_finite_differences():
+    agent = _agent(dueling=True)
+    set_weights(
+        agent,
+        b1=np.linspace(-0.05, 0.05, HIDDEN_DIM),
+        b2=np.array([0.3, -0.2, 0.1]),
+        b1_value=np.linspace(0.04, -0.04, HIDDEN_DIM),
+        b2_value=np.array([0.25]),
+    )
+    batch = _batch()
+    observations, actions = batch["observations"], batch["actions"]
+    targets = np.array([1.5, -0.5, 2.0, 0.0, 1.0, -1.0])  # held constant
+    current = weights(agent)
+    margin = 100 * EPS * max(1.0, float(np.abs(observations).max()))
+    for weight, bias in (("W1", "b1"), ("W1_value", "b1_value")):
+        pre_activation = observations @ current[weight] + current[bias]
+        assert np.abs(pre_activation).min() > margin, f"A {weight} unit sits on the ReLU kink."
+        active = pre_activation > 0
+        assert active.any() and not active.all(), f"{weight} needs active and inactive units."
+
+    _, grads = loss_and_grads(agent, observations, actions, targets)
+
+    assert set(grads) == set(dqn_online_weights(agent)), "Every parameter needs a gradient."
+    assert_gradients_match(
+        lambda: loss_and_grads(agent, observations, actions, targets)[0]["loss"],
+        gradient_check_parameters(agent)[0],
+        grads,
+    )
+
+
+def test_dueling_loss_and_head_gradients_match_hand_computation():
+    agent = _zero_trunks(
+        _agent(dueling=True),
+        [2.0],
+        [1.0, 3.0, -1.0],
+        target_value=[0.0],
+        target_advantage=[0, 0, 0],
+    )
+    observations = _batch()["observations"][:3]
+    actions = np.array([0, 1, 2])
+    targets = np.array([2.0, 2.5, 4.0])
+
+    components, grads = loss_and_grads(agent, observations, actions, targets)
+
+    # Q = V + A - mean(A) = 2 + [1, 3, -1] - 1 = [2, 4, 0] (without the mean: [3, 5, 1]).
+    # Q(s, a) = [2, 4, 0]; TD errors = [0, 1.5, -4]; loss = mean(0.5 * [0, 2.25, 16]) = 18.25 / 6
+    assert components["loss"] == pytest.approx(18.25 / 6.0, rel=1e-12)
+    assert components["mean_q"] == pytest.approx(2.0, rel=1e-12)
+    # dV per sample is its TD error: mean([0, 1.5, -4]) = -2.5 / 3.
+    # dA per sample is the TD error at the action minus a third of it at every action:
+    #   [0, 0, 0], [-0.5, 1, -0.5], [4/3, 4/3, -8/3]; their mean over the batch:
+    np.testing.assert_allclose(grads["b2_value"], [-2.5 / 3.0], rtol=1e-12)
+    np.testing.assert_allclose(grads["b2"], [2.5 / 9.0, 7.0 / 9.0, -9.5 / 9.0], rtol=1e-12)
+    assert grads["b2_value"].shape == (1,), "The value bias's gradient must have its shape."
+    # Adding a constant to every advantage leaves Q unchanged, so the bias gradient sums to zero.
+    assert grads["b2"].sum() == pytest.approx(0.0, abs=1e-12)
+
+
+def test_dueling_q_does_not_change_when_every_advantage_shifts():
+    agent = _agent(dueling=True)
+    observations = _batch()["observations"]
+    before = q_values(agent, observations)
+    set_weights(agent, b2=weights(agent)["b2"] + 5.0)
+    np.testing.assert_allclose(q_values(agent, observations), before, rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "double_q,expected",
+    [
+        # Target Q = 1 + [1, 3, 2] - 2 = [0, 2, 1]; its max 2:  y = [1 + 1, 0 + 1, 2 + 0]. The max of
+        # the advantages (3) would give [2.5, 1.5, 2]; the online value stream (100) far more.
+        (False, [2.0, 1.0, 2.0]),
+        # The online Q (100 + [10, 20, 30] - 20) chooses action 2; the target Q values it at 1:
+        #   y = [1 + 0.5, 0 + 0.5, 2 + 0].
+        (True, [1.5, 0.5, 2.0]),
+    ],
+)
+def test_dueling_targets_come_from_the_target_networks_q(double_q, expected):
+    agent = _zero_trunks(
+        _agent(gamma=0.5, dueling=True, double_q=double_q),
+        value=[100.0],
+        advantage=[10.0, 20.0, 30.0],
+        target_value=[1.0],
+        target_advantage=[1.0, 3.0, 2.0],
+    )
+    next_observations = _batch()["next_observations"][:3]
+
+    targets = bellman_targets(
+        agent, np.array([1.0, 0.0, 2.0]), next_observations, np.array([False, False, True])
+    )
+
+    np.testing.assert_allclose(targets, expected, rtol=1e-12)
+
+
+def test_dueling_with_adam_steps_every_online_parameter():
+    agent = _agent(**BASE, dueling=True, optimizer="adam")
+    before = weights(agent)
+
+    agent.update(_batch())
+
+    after = weights(agent)
+    for name in dqn_online_weights(agent):
+        assert not np.array_equal(after[name], before[name]), f"Adam did not step {name}."

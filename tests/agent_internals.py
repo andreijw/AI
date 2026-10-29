@@ -10,7 +10,8 @@ that (CHANGELOG.md, 2026-10-20).
 Weights are keyed by the names the agent's checkpoint uses (``W1``, ``b1``, ``W2`` … for REINFORCE;
 ``W1``, ``b1``, ``W_pi``, ``b_pi``, ``W_v``, ``b_v`` for the discrete actor-critic agents; ``W1``, ``b1``,
 ``W_mu``, ``b_mu``, ``log_std``, ``W_v``, ``b_v`` for the Gaussian ones; ``W1`` … ``b2`` and
-``target_W1`` … ``target_b2`` for DQN; ``actor_W0``, ``critic_b1``, ``target_actor_W0`` … for DDPG).
+``target_W1`` … ``target_b2`` for DQN, plus ``W1_value`` … ``b2_value`` and their targets for a
+dueling DQN; ``actor_W0``, ``critic_b1``, ``target_actor_W0`` … for DDPG).
 """
 
 from __future__ import annotations
@@ -50,8 +51,13 @@ REINFORCE_WEIGHTS = ("W1", "b1", "W2", "b2")
 ACTOR_CRITIC_WEIGHTS = ("W1", "b1", "W_pi", "b_pi", "W_v", "b_v")
 GAUSSIAN_WEIGHTS = ("W1", "b1", "W_mu", "b_mu", "log_std", "W_v", "b_v")
 DQN_ONLINE_WEIGHTS = ("W1", "b1", "W2", "b2")
-DQN_WEIGHTS = (*DQN_ONLINE_WEIGHTS, *(f"target_{name}" for name in DQN_ONLINE_WEIGHTS))
+DQN_VALUE_STREAM = ("W1_value", "b1_value", "W2_value", "b2_value")  # with ``dueling`` only
 _FLOAT_WEIGHTS = {"b_v"}  # stored as a Python float, not an array
+
+
+def dqn_online_weights(agent: DQNAgent) -> tuple[str, ...]:
+    """DQN's online-network weight names: the value stream's too when ``dueling`` is on."""
+    return (*DQN_ONLINE_WEIGHTS, *DQN_VALUE_STREAM) if agent.dueling else DQN_ONLINE_WEIGHTS
 
 
 def weight_names(agent: LearningAgent) -> tuple[str, ...]:
@@ -61,7 +67,8 @@ def weight_names(agent: LearningAgent) -> tuple[str, ...]:
     if isinstance(agent, ContinuousActorCriticBase):
         return GAUSSIAN_WEIGHTS
     if isinstance(agent, DQNAgent):
-        return DQN_WEIGHTS
+        online = dqn_online_weights(agent)
+        return (*online, *(f"target_{name}" for name in online))
     if isinstance(agent, DDPGAgent):
         return tuple(
             f"{net}_{name}" for net, params in ddpg_networks(agent).items() for name in params
@@ -170,7 +177,7 @@ def gradient_check_parameters(
     The loss closure calls ``sync()`` first to copy that array back onto the agent. DDPG's
     networks are already dicts of live arrays: see :func:`ddpg_networks`.
     """
-    names = DQN_ONLINE_WEIGHTS if isinstance(agent, DQNAgent) else weight_names(agent)
+    names = dqn_online_weights(agent) if isinstance(agent, DQNAgent) else weight_names(agent)
     boxed = {name: np.array([getattr(agent, f"_{name}")]) for name in _FLOAT_WEIGHTS & set(names)}
     params = {name: boxed.get(name, getattr(agent, f"_{name}")) for name in names}
 

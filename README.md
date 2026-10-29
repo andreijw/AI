@@ -673,7 +673,8 @@ Implemented agents (in `src/rl_core/agents/`):
   - `ReinforceAgent`: Monte Carlo policy-gradient agent
   - `ActorCriticAgent`: Advantage Actor-Critic (A2C) policy + value network agent
   - `PPOAgent`: Clipped-policy Proximal Policy Optimization agent
-  - `DQNAgent`: Deep Q-Network with replay buffer and target network; double DQN targets are opt-in (`double_q: true`)
+  - `DQNAgent`: Deep Q-Network with replay buffer and target network; double DQN targets (`double_q: true`) and a
+    dueling network (`dueling: true`) are opt-in
 - **Continuous Control Agents**:
   - `ContinuousRandomAgent`: Uniform random continuous torque baseline policy
   - `ContinuousActorCriticAgent`: Continuous Gaussian policy A2C with state-value critic
