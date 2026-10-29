@@ -138,13 +138,15 @@ an aliased target only shows on the update after a sync.
 ## Rules that keep tests honest
 
 - **Ask what break would make each check fail.** "The weights changed after `update`" passes for a gradient
-  with the wrong sign, the wrong scale or the wrong layer. It shows the code ran. Replace it with a check
-  that could fail: the loss on a fixed batch falls over several updates, or the gradient matches the
-  numerical one. Two real cases from this suite: a test that "returns decrease over time with γ < 1", on
-  five rewards of 1, still passed with the discount removed, because 5, 4, 3, 2, 1 also decreases; only
-  the test asserting exact values noticed. And a softmax stability test that scaled the weights by 1e4
-  could not fail, because that seed's logits were negative and never overflow; setting the head's bias to
-  ±1000 can.
+  with the wrong sign, the wrong scale or the wrong layer. It shows the code ran. Replace it with a check that
+  could fail: the loss on a fixed batch falls over several updates, or the gradient matches the numerical one.
+  For an on-policy policy gradient, sample each update's batch from the current policy and assert the rewarded
+  action's probability: replaying a fixed batch keeps an action the policy has dropped, whose -A·log π term
+  has no lower bound, and that is what collapsed the discrete Actor-Critic in `test_policy_gradient_maths.py`
+  (CHANGELOG.md, 2026-10-29). Two real cases from this suite: a test that "returns decrease over time with
+  γ < 1", on five rewards of 1, still passed with the discount removed, because 5, 4, 3, 2, 1 also decreases; only
+  the test asserting exact values noticed. And a softmax stability test that scaled the weights by 1e4 could
+  not fail, because that seed's logits were negative and never overflow; setting the head's bias to ±1000 can.
 - **Every file goes under `tmp_path`.** Never `checkpoints/`, `logs/`, `videos/` or `plots/`: those hold
   the maintainer's training runs, and `train.py` overwrites an agent's earlier files.
 - **Pin every seed.** Agent config, `ReplayBuffer`, `env.reset(seed=...)`. An unseeded test is a flaky test

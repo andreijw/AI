@@ -34,10 +34,10 @@ The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical,
 challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22); so are the second and
 third, the benchmark's solve numbers and report, and the fourth, trainer tests calling private methods (CHANGELOG.md,
 2026-10-25). The maintainer picked five of the ideas below on 2026-10-28, one pull request each, in this order:
-matplotlib only when plotting (CHANGELOG.md, 2026-10-28); the discrete Actor-Critic overfit collapse; double DQN;
-dueling DQN; the Pendulum PPO and CartPole DQN experiments. A learning change is committed only if, on seeds 1 to 5
-against the committed config, more seeds hold the threshold or the mean final average is better on at least 4 of 5
-paired seeds with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
+matplotlib only when plotting (CHANGELOG.md, 2026-10-28); the discrete Actor-Critic overfit collapse (CHANGELOG.md,
+2026-10-29); double DQN; dueling DQN; the Pendulum PPO and CartPole DQN experiments. A learning change is committed only
+if, on seeds 1 to 5 against the committed config, more seeds hold the threshold or the mean final average is better on
+at least 4 of 5 paired seeds with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
 
 What follows are unscheduled ideas.
 
@@ -50,11 +50,10 @@ What follows are unscheduled ideas.
       critic networks, or observation normalisation; CartPole DQN with more than `max_updates_per_call: 64` (about
       0.13 gradient steps per transition against rl-zoo's 0.5).
     - Candidates once wanted: double, dueling or prioritised-replay DQN.
-    - Found 2026-10-18 and not yet investigated: on the one-state overfit batch of
-      `tests/test_policy_gradient_maths.py`, the discrete Actor-Critic (SGD, learning rate 0.05) reaches probability
-      1.0 and can then collapse to the other action (seeds 6 and 7; 9 of 30 seeds under the old seeding) once the
-      rejected action's log-probability runs away. The test only requires the batch to be fitted within 1,000
-      updates.
+    - Allow `max_grad_norm` with SGD (found 2026-10-29). With plain SGD the discrete actor-critics' critic step grows
+      with the squared norm of the hidden activations (‖h‖²), which a growing trunk inflates, and the gradient clip that
+      would bound it only works with `optimizer: adam`. Never seen in a real run: the committed Actor-Critic configs use
+      Adam.
 
 ### Phase 6 — Advanced RL & Robotics Extensions
 

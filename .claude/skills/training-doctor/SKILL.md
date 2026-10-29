@@ -72,7 +72,10 @@ because the one that fails is the regression test for the fix.
 - **Direction check.** Build a batch in which one action was followed by a high return. After one update
   the probability (or Q-value) of that action must rise. If it falls, a sign is wrong.
 - **Overfit a fixed batch.** Call `update` on the same small batch many times. The loss must fall towards
-  zero. If it cannot fit thirty transitions, it will not fit an environment.
+  zero. If it cannot fit thirty transitions, it will not fit an environment. This holds for a value or Q
+  loss. For an on-policy policy gradient, sample each update's batch from the current policy instead and
+  assert the rewarded action's probability, not the loss: a replayed action the policy has stopped
+  choosing makes -A·log π unbounded, and it collapsed the discrete Actor-Critic (CHANGELOG.md, 2026-10-29).
 - **Shapes.** Print the shape of every intermediate array once. `(n,)` against `(n, 1)` broadcasts to
   `(n, n)` without complaint and turns a loss into noise.
 
