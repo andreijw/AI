@@ -420,20 +420,29 @@ def test_sgd_checkpoint_loads_into_an_adam_agent_with_fresh_optimizer_state(agen
 
 
 # ---------------------------------------------------------------------------
-# Direction and overfit checks (the training-doctor ladder, rung 2)
+# Direction and learning checks (the training-doctor ladder, rung 2)
 # ---------------------------------------------------------------------------
-# One state seen at every step. Action 0 is always followed by reward 1 and action 1 by 0, and a
+# One state seen at every step. Action 0 is always followed by reward 1 and the others by 0, and a
 # tiny gamma keeps each return close to its own reward, so action 0 has the higher advantage.
+#
+# The direction check takes one update on a fixed batch of alternating actions. The learning check
+# samples every update's batch from the agent's current policy, as a rollout would. Replaying a
+# fixed batch is not a fair test of an on-policy policy gradient: it keeps an action the policy has
+# stopped choosing, whose -A * log pi term with A < 0 has no lower bound, and through the shared
+# ReLU trunk that drove the discrete Actor-Critic's critic to diverge and kill every hidden unit
+# (CHANGELOG.md, 2026-10-29).
 
 
-def _one_state_batch() -> dict[str, np.ndarray]:
-    state = np.random.default_rng(5).standard_normal(OBS_DIM)
-    actions = np.array([0, 1] * (N_STEPS // 2))
+ONE_STATE = np.random.default_rng(5).standard_normal(OBS_DIM)
+
+
+def _one_state_batch(actions: np.ndarray) -> dict[str, np.ndarray]:
+    """One episode of N_STEPS in ONE_STATE taking `actions`, reward 1 after action 0."""
     return {
-        "observations": np.tile(state, (N_STEPS, 1)),
+        "observations": np.tile(ONE_STATE, (N_STEPS, 1)),
         "actions": actions,
         "rewards": (actions == 0).astype(np.float64),
-        "next_observations": np.tile(state, (N_STEPS, 1)),
+        "next_observations": np.tile(ONE_STATE, (N_STEPS, 1)),
         "dones": np.array([False] * (N_STEPS - 1) + [True]),
     }
 
@@ -441,39 +450,36 @@ def _one_state_batch() -> dict[str, np.ndarray]:
 @pytest.mark.parametrize("agent_cls", DISCRETE_AGENTS)
 def test_one_update_raises_the_probability_of_the_better_action(agent_cls):
     agent = _agent(agent_cls, gamma=0.01, learning_rate=0.05, entropy_coef=0.0)
-    batch = _one_state_batch()
-    state = batch["observations"][0]
-    before = probabilities(agent, state)
+    before = probabilities(agent, ONE_STATE)
 
-    agent.update(batch)
+    agent.update(_one_state_batch(np.array([0, 1] * (N_STEPS // 2))))
 
-    after = probabilities(agent, state)
+    after = probabilities(agent, ONE_STATE)
     assert after[0] > before[0], "The action followed by reward must become more likely."
     assert after[1] < before[1], "The action followed by nothing must become less likely."
 
 
 @pytest.mark.parametrize("agent_cls", DISCRETE_AGENTS)
-def test_repeated_updates_on_one_batch_fit_it(agent_cls):
-    """Updating on the same small batch must fit it; an agent that cannot will not fit CartPole."""
+def test_on_policy_updates_in_one_state_learn_the_rewarded_action(agent_cls):
+    """An agent that cannot learn a one-state bandit from its own samples will not learn CartPole.
+
+    Over seeds 0-29 every agent passes 0.9 within 251 updates and ends at 0.98 or above, and both
+    critics end within 0.013 of the target, so the margins below are wide.
+    """
     agent = _agent(agent_cls, gamma=0.01, learning_rate=0.05, entropy_coef=0.0)
-    batch = _one_state_batch()
-    state = batch["observations"][0]
+    rng = np.random.default_rng(11)
 
-    best = 0.0
     for _ in range(1000):
-        last = agent.update(batch)
-        best = max(best, float(probabilities(agent, state)[0]))
+        actions = rng.choice(ACTION_DIM, size=N_STEPS, p=probabilities(agent, ONE_STATE))
+        metrics = agent.update(_one_state_batch(actions))
 
-    if agent_cls is ActorCriticAgent:
-        # The discrete Actor-Critic fits this batch and can then collapse to the other action (roadmap:
-        # "Ideas", not yet investigated), so it is held to fitting it at some point.
-        assert best > 0.9, "the agent must come to prefer the rewarded action"
-    else:
-        assert probabilities(agent, state)[0] > 0.9, (
-            "the agent must prefer the rewarded action at the end"
+    assert probabilities(agent, ONE_STATE)[0] > 0.9, (
+        "The agent must come to prefer the rewarded action."
+    )
+    if "value_loss" in metrics:
+        # Once the policy always picks action 0, the critic's target is the mean return of an
+        # episode of six rewards of 1 at gamma 0.01: (1 + 1.01 + 1.0101 + ...) / 6 = 1.0084.
+        target = discounted_returns(np.ones(N_STEPS), 0.01).mean()
+        assert abs(float(state_value(agent, ONE_STATE)) - target) < 0.05, (
+            "The critic must learn the return of the action the policy takes."
         )
-    if "value_loss" in last:
-        # One state with alternating returns: no critic can beat predicting their mean, so the loss
-        # cannot fall below half their variance. It must reach that floor.
-        floor = 0.5 * np.var(discounted_returns(batch["rewards"], 0.01))
-        assert last["value_loss"] < 1.01 * floor, "The critic must fit the returns."

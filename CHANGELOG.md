@@ -12,6 +12,23 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-10-29
+
+### Fixed
+
+- **Discrete Actor-Critic "overfit collapse" was the test's** (`fix/actor-critic-overfit-collapse`, the second of
+  the five Code Health pull requests): `test_policy_gradient_maths.py` replayed one fixed batch of alternating
+  actions 1,000 times, and the discrete Actor-Critic could fit it and then flip to another action. The batch keeps
+  an action the policy has stopped choosing, with an advantage of about -0.5, so its -A·log π term has no lower
+  bound. Through the shared ReLU trunk the policy head and hidden layer grew each other until the SGD critic
+  diverged and the next step killed every hidden unit: on all 30 seeds tried, including the 25 that looked fitted.
+  Dropping actions below probability 1e-3 from the batch, as sampling would, removed every collapse. No agent code
+  changed. The test is now `test_on_policy_updates_in_one_state_learn_the_rewarded_action`: each update samples its
+  batch from the agent's own policy, and REINFORCE, Actor-Critic and PPO must all end above 0.9 for the rewarded
+  action, with the critics within 0.05 of the true return. Over seeds 0 to 29 every agent ends at 0.98 or above and
+  both critics within 0.013. The `test-crafter`, `training-doctor` and `algorithm-crafter` skills now keep fixed
+  batches for value and Q losses. Allowing `max_grad_norm` with SGD is recorded as a Code Health idea.
+
 ## 2026-10-28
 
 ### Changed

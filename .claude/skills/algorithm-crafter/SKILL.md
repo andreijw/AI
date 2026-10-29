@@ -95,7 +95,9 @@ Each step is cheap and rules out a class of error before the next (details in th
 1. Contract: add the agent to `ALL_AGENTS` in `tests/test_agent_harness.py`.
 2. Gradient check with `assert_gradients_match` from `tests/helpers.py`, on a tiny network.
 3. Values worked out by hand for returns, targets and advantages.
-4. Direction and overfitting: a favoured action becomes more likely; the loss on a fixed batch falls.
+4. Direction and learning: a favoured action becomes more likely; a value or Q loss on a fixed batch
+   falls; an on-policy policy learns a one-state bandit from batches sampled from itself (a fixed batch
+   makes its objective unbounded; `test-crafter`).
 5. Edges and stability: one-step episode, empty batch, extreme logits, zero spread.
 6. Determinism and save/load.
 
