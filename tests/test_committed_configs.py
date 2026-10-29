@@ -34,6 +34,7 @@ STEP_BUDGETS = {
     ("lunarlander", "dqn"): 300_000,
     ("lunarlander", "random"): 50_000,
     ("lunarlander_continuous", "random"): 50_000,
+    ("lunarlander_continuous", "td3"): 400_000,
     ("cartpole", "reinforce"): 500_000,
     ("cartpole", "actor_critic"): 500_000,
     ("cartpole", "ppo"): 200_000,
@@ -193,6 +194,36 @@ def test_lunarlander_dqn_translates_rl_zoo_for_a_trainer_that_updates_after_each
     )
     assert limits == (1000, 1000, 1000)
     assert config["training"]["total_steps"] == 300_000
+
+
+def test_lunarlander_continuous_td3_uses_rl_zoo_settings_on_the_torch_backend():
+    """rl-zoo's TD3 for LunarLanderContinuous-v3 at its 400x300, with SB3's TD3 defaults: one gradient
+    step per transition after 10,000 uniform warm-up actions, Gaussian noise 0.1 in the [-1, 1]
+    action space. The trainer's episode cut matches the 1000-step limit (its default is 500), and the
+    budget is the maintainer's 400,000 steps, where 4 of 5 screen seeds reached 200. Read from the file,
+    so CI checks it without PyTorch or Box2D, which the config needs."""
+    config = load_config(os.path.join(CONFIGS_DIR, "lunarlander_continuous_td3.yaml"))
+    agent = config["agent"]["config"]
+    assert config["agent"]["type"] == "td3" and agent["backend"] == "torch"
+    assert agent["hidden_sizes"] == [400, 300]
+    assert (agent["learning_rate"], agent["gamma"], agent["tau"]) == pytest.approx(
+        (0.001, 0.98, 0.005)
+    )
+    assert (agent["batch_size"], agent["learning_starts"], agent["buffer_capacity"]) == (
+        256,
+        10_000,
+        200_000,
+    )
+    assert (agent["noise_type"], agent["noise_std"]) == ("gaussian", pytest.approx(0.1))
+    assert agent["updates_per_step"] == 1.0 and "max_updates_per_call" not in agent
+    assert agent["policy_delay"] == 2
+    assert (agent["target_policy_noise"], agent["target_noise_clip"]) == pytest.approx((0.2, 0.5))
+    limits = (
+        config["training"]["max_steps_per_episode"],
+        config["environment"]["max_episode_steps"],
+    )
+    assert limits == (1000, 1000)
+    assert config["training"]["total_steps"] == 400_000
 
 
 def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
