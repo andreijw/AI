@@ -36,7 +36,7 @@ To optimize token usage and context window limits:
     `TD3Agent`),
     `ReplayBuffer`, and the shared `mlp.py` (multi-layer networks), `bounds.py` (action bounds), `softmax.py`
     (the discrete policies' numerically stable softmax), `exploration_noise.py` (DDPG's Gaussian and
-    Ornstein-Uhlenbeck noise) and `config_values.py` (strict readers for integer settings).
+    Ornstein-Uhlenbeck noise) and `config_values.py` (strict readers for integer and boolean settings).
   * `src/rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
     observation noise, episode statistics, `wrap_env`), and `checked_range` for domain randomization ranges.
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).

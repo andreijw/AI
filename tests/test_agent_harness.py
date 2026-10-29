@@ -32,10 +32,28 @@ ALL_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
         DQNAgent,
         {"seed": 42, "learning_rate": 0.001, "batch_size": 2, "min_buffer_size": 2},
     ),
+    (
+        DQNAgent,
+        {
+            "seed": 42,
+            "learning_rate": 0.001,
+            "batch_size": 2,
+            "min_buffer_size": 2,
+            "double_q": True,
+        },
+    ),
 ]
 
 
-@pytest.mark.parametrize("agent_cls,config", ALL_AGENTS)
+def agent_id(agent_cls: type[BaseAgent], config: dict[str, object]) -> str:
+    """A test id naming the agent, and the option when one class is listed twice."""
+    return agent_cls.__name__ + ("-double_q" if config.get("double_q") else "")
+
+
+ALL_AGENT_IDS = [agent_id(cls, config) for cls, config in ALL_AGENTS]
+
+
+@pytest.mark.parametrize("agent_cls,config", ALL_AGENTS, ids=ALL_AGENT_IDS)
 def test_agent_select_action_contract(
     agent_cls: type[BaseAgent], config: dict[str, object]
 ) -> None:
@@ -49,7 +67,7 @@ def test_agent_select_action_contract(
         assert 0 <= action < 2
 
 
-@pytest.mark.parametrize("agent_cls,config", ALL_AGENTS)
+@pytest.mark.parametrize("agent_cls,config", ALL_AGENTS, ids=ALL_AGENT_IDS)
 def test_agent_update_batch_contract(agent_cls: type[BaseAgent], config: dict[str, object]) -> None:
     """Verify update accepts the unified batch with next_observations and dones."""
     agent = agent_cls(observation_dim=4, action_dim=2, config=config)
@@ -69,7 +87,7 @@ def test_agent_update_batch_contract(agent_cls: type[BaseAgent], config: dict[st
         assert isinstance(v, (float, int, np.floating, np.integer))
 
 
-@pytest.mark.parametrize("agent_cls,config", ALL_AGENTS)
+@pytest.mark.parametrize("agent_cls,config", ALL_AGENTS, ids=ALL_AGENT_IDS)
 def test_agent_save_load_roundtrip_contract(
     agent_cls: type[BaseAgent], config: dict[str, object], tmp_path
 ) -> None:
@@ -89,7 +107,7 @@ def test_agent_save_load_roundtrip_contract(
     assert orig_action == restored_action
 
 
-@pytest.mark.parametrize("agent_cls,config", ALL_AGENTS)
+@pytest.mark.parametrize("agent_cls,config", ALL_AGENTS, ids=ALL_AGENT_IDS)
 def test_agent_dimension_validation(agent_cls: type[BaseAgent], config: dict[str, object]) -> None:
     """Verify non-positive observation_dim or action_dim is rejected."""
     if agent_cls is RandomAgent:

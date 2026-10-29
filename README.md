@@ -40,7 +40,7 @@ AI/
 │   │   │   ├── base_agent.py
 │   │   │   ├── actor_critic_agent.py
 │   │   │   ├── actor_critic_base.py
-│   │   │   ├── config_values.py # Strict readers for integer agent settings
+│   │   │   ├── config_values.py # Strict readers for integer and boolean agent settings
 │   │   │   ├── continuous_actor_critic.py
 │   │   │   ├── continuous_ppo.py
 │   │   │   ├── continuous_random_agent.py
@@ -673,7 +673,7 @@ Implemented agents (in `src/rl_core/agents/`):
   - `ReinforceAgent`: Monte Carlo policy-gradient agent
   - `ActorCriticAgent`: Advantage Actor-Critic (A2C) policy + value network agent
   - `PPOAgent`: Clipped-policy Proximal Policy Optimization agent
-  - `DQNAgent`: Deep Q-Network with replay buffer and target network
+  - `DQNAgent`: Deep Q-Network with replay buffer and target network; double DQN targets are opt-in (`double_q: true`)
 - **Continuous Control Agents**:
   - `ContinuousRandomAgent`: Uniform random continuous torque baseline policy
   - `ContinuousActorCriticAgent`: Continuous Gaussian policy A2C with state-value critic

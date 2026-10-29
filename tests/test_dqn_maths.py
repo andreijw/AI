@@ -29,6 +29,7 @@ from tests.agent_internals import (
     gradient_check_parameters,
     live_weights,
     loss_and_grads,
+    q_values,
     replay_generator,
     set_counters,
     set_weights,
@@ -152,6 +153,44 @@ def test_bellman_targets_match_hand_computation_and_use_the_target_network():
     np.testing.assert_allclose(targets, [2.5, 1.5, 2.0], rtol=1e-12)
 
 
+def test_double_q_targets_let_the_online_network_choose_and_the_target_network_value():
+    agent = _zero_trunk(
+        _agent(gamma=0.5, double_q=True),
+        online_bias=[10.0, 20.0, 30.0],
+        target_bias=[1.0, 3.0, 2.0],
+    )
+    next_observations = _batch()["next_observations"][:3]
+    rewards = np.array([1.0, 0.0, 2.0])
+    dones = np.array([False, False, True])
+
+    targets = bellman_targets(agent, rewards, next_observations, dones)
+
+    # The online network chooses action 2 (30); the target network values it at 2:
+    #   y = r + (1 - done) * 0.5 * 2 = [1 + 1, 0 + 1, 2 + 0]
+    # The target network's own max (3) would give [2.5, 1.5, 2]; valuing with the online network
+    # (30) would give [16, 15, 2].
+    np.testing.assert_allclose(targets, [2.0, 1.0, 2.0], rtol=1e-12)
+
+
+def test_double_q_chooses_the_next_action_row_by_row():
+    agent = _agent(gamma=0.9, double_q=True)
+    set_weights(agent, b2=np.array([0.3, -0.2, 0.1]), target_b2=np.array([-0.1, 0.4, 0.2]))
+    batch = _batch()
+    next_observations = batch["next_observations"]
+    online_choice = q_values(agent, next_observations).argmax(axis=-1)
+    target_q = q_values(agent, next_observations, target=True)
+    disagree = online_choice != target_q.argmax(axis=-1)
+    assert disagree.any() and not disagree.all(), (
+        "The networks must disagree on some rows and agree on others, or the two rules look alike."
+    )
+
+    targets = bellman_targets(agent, batch["rewards"], next_observations, batch["dones"])
+
+    not_done = 1.0 - batch["dones"].astype(np.float64)
+    chosen = target_q[np.arange(N_STEPS), online_choice]
+    np.testing.assert_allclose(targets, batch["rewards"] + not_done * 0.9 * chosen, rtol=1e-12)
+
+
 # ---------------------------------------------------------------------------
 # Computing a loss changes nothing; the apply step clips and descends
 # ---------------------------------------------------------------------------
@@ -226,8 +265,15 @@ def _replay(reference: DQNAgent, batch: dict[str, np.ndarray], updates: int) -> 
         w = weights(reference)
         hidden = np.maximum(0.0, sample["next_observations"] @ w["target_W1"] + w["target_b1"])
         next_q = hidden @ w["target_W2"] + w["target_b2"]
+        if reference.double_q:
+            # The online network, before this step, chooses; the target network values.
+            online_hidden = np.maximum(0.0, sample["next_observations"] @ w["W1"] + w["b1"])
+            choice = (online_hidden @ w["W2"] + w["b2"]).argmax(axis=-1)
+            next_value = next_q[np.arange(len(choice)), choice]
+        else:
+            next_value = next_q.max(axis=-1)
         not_done = 1.0 - sample["dones"].astype(np.float64)
-        targets = sample["rewards"] + not_done * reference.gamma * next_q.max(axis=-1)
+        targets = sample["rewards"] + not_done * reference.gamma * next_value
 
         components, grads = loss_and_grads(
             reference, sample["observations"], sample["actions"], targets
@@ -279,6 +325,9 @@ BASE = {"batch_size": 4, "min_buffer_size": 5, "learning_rate": 0.05, "gamma": 0
         # tau of exactly 1.0 copies the online network after every one of the 3 steps; the
         # frequency (5) is unused, so a fallback to hard sync would leave the target unmoved.
         ({"updates_per_step": 0.5, "tau": 1.0, "target_update_frequency": 5}, 3),
+        # Double DQN targets, with a hard sync after the 2nd of 3 steps, so the online network
+        # that chooses has moved away from the target network that values.
+        ({"updates_per_step": 0.5, "target_update_frequency": 2, "double_q": True}, 3),
     ],
 )
 def test_update_replays_as_sample_target_step_sync(config, expected_updates):
