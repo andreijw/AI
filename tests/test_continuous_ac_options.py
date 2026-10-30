@@ -90,6 +90,19 @@ def test_a_bounded_mean_needs_finite_bounds_with_room(bad):
         _ac(bounded_mean=True, **bad)
 
 
+@pytest.mark.parametrize("agent_cls", [ContinuousActorCriticAgent, ContinuousPPOAgent])
+@pytest.mark.parametrize("quoted", ["false", "true", 0, None])
+def test_bounded_mean_must_be_true_or_false(agent_cls, quoted):
+    with pytest.raises(ValueError, match="bounded_mean must be true or false"):
+        agent_cls(3, 1, config={"seed": 1, "bounded_mean": quoted, **BOUNDS})
+
+
+@pytest.mark.parametrize("quoted", ["false", "true", 1, None])
+def test_normalize_advantages_must_be_true_or_false(quoted):
+    with pytest.raises(ValueError, match="normalize_advantages must be true or false"):
+        _ac(normalize_advantages=quoted)
+
+
 def test_a_checkpoint_keeps_its_bounded_mean_setting(tmp_path):
     path = str(tmp_path / "ac.pt")
     _ac(bounded_mean=True).save(path)
