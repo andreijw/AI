@@ -112,6 +112,11 @@ Acrobot-v1) and
   action, with the critics within 0.05 of the true return. Over seeds 0 to 29 every agent ends at 0.98 or above and
   both critics within 0.013. The `test-crafter`, `training-doctor` and `algorithm-crafter` skills now keep fixed
   batches for value and Q losses. Allowing `max_grad_norm` with SGD is recorded as a Code Health idea.
+- **Continuous Actor-Critic and PPO read `bounded_mean` and `normalize_advantages` strictly**
+  (`fix/actor-critic-strict-flags`): both were read with `bool(config.get(...))`, so a quoted `"false"` in a YAML
+  file switched them on. They now go through `rl_core.agents.config_values.flag`, as `double_q` and `dueling` do,
+  and anything but true or false is rejected. A config with real booleans, as every committed one has, runs
+  unchanged.
 
 ## 2026-10-28
 

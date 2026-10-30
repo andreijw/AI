@@ -16,7 +16,7 @@ from rl_core.seeding import (
 
 from .base_agent import BaseAgent
 from .bounds import action_bounds
-from .config_values import non_negative_int, positive_int
+from .config_values import flag, non_negative_int, positive_int
 from .optim import Adam, anneal_fraction, anneal_steps_from_config
 from .returns import discounted_returns, gae
 
@@ -98,7 +98,7 @@ class ContinuousActorCriticBase(BaseAgent):
 
         # bounded_mean: mu = bias + scale * tanh(z) keeps the policy mean inside the bounds. Without it
         # the mean is the linear head and can drift past a bound, where every executed action is the same.
-        self.bounded_mean: bool = bool(config.get("bounded_mean", False))
+        self.bounded_mean: bool = flag(config, "bounded_mean", False)
         self.action_low, self.action_high = action_bounds(
             config, action_dim, require_finite=self.bounded_mean
         )
@@ -369,7 +369,7 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         self.gae_lambda: float = float(config.get("gae_lambda", 1.0))
         if not 0.0 <= self.gae_lambda <= 1.0:
             raise ValueError(f"gae_lambda must be in [0, 1], got {self.gae_lambda!r}")
-        self.normalize_advantages: bool = bool(config.get("normalize_advantages", True))
+        self.normalize_advantages: bool = flag(config, "normalize_advantages", True)
         self.anneal_steps: int | None = anneal_steps_from_config(config)
         self._steps_trained = 0
 
