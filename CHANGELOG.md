@@ -61,6 +61,43 @@ Acrobot-v1) and
   dueling run takes about 1.6 times as long (1.9 on CartPole). With twice the hidden units, any gain could come from
   capacity; the paper's comparison, dueling with double against double alone, was not run.
 
+### Changed
+
+- **Pendulum PPO and CartPole DQN experiments, nothing adopted** (`feature/ppo-dqn-experiments`, the last of the five
+  Code Health pull requests; no code or config change). Each idea ran through the benchmark on seeds 1 to 5 against
+  the committed config, with its other settings as committed. The PPO ideas ran as scratch subclasses of
+  `ContinuousPPOAgent`. Each first passed a finite-difference gradient check and a direction check, and a control
+  with every option off reproduced the agent to 1e-12. The code and results are in `~/rl-experiments/item5/` on the
+  development machine, outside the repository.
+
+  | Pendulum PPO | Held | Mean final 100-episode average | Better on | Seeds clearly worse (by > 25) |
+  | :--- | :--- | :--- | :--- | :--- |
+  | Committed: one shared 128-unit ReLU layer | 4 of 5 | -186.5 | | |
+  | Separate actor and critic, two 64-unit tanh layers each (SB3's default) | 4 of 5 | -183.3 | 3 of 5 | 0 |
+  | gSDE on the shared layer | 4 of 5 | -186.8 | 3 of 5 | 1 (by 31) |
+  | gSDE with separate tanh networks (rl-zoo's recipe) | 5 of 5 | -180.1 | 3 of 5 | 0 |
+  | Observation normalisation | 0 of 5 | -544.8 | 0 of 5 | 5 |
+
+  - gSDE follows SB3: a full standard-deviation matrix, the latent detached, and noise redrawn every 4 actions and at
+    each rollout. Its initial log standard deviation was calibrated per seed so that the initial action spread on
+    reset states matches the committed 0.61.
+  - rl-zoo's recipe passed on seeds 1 to 5 (one more seed held) and failed on held-out seeds 11 to 15. There it held
+    on 3 against 4, the mean final average fell from -186.7 to -191.4, and seed 12 ended 64 lower. It reached -200
+    sooner on 9 of the 10 seeds (46,400 to 127,200 steps against 72,400 to 193,000).
+  - Observation normalisation collapsed on three seeds, which never solved; its statistics were frozen while a
+    rollout was collected and updated after its epochs. The cause was not diagnosed. rl-zoo does not normalise
+    Pendulum.
+
+  | CartPole DQN `max_updates_per_call` | Held | Mean final 100-episode average | Seeds clearly worse (by > 25) | Steps to solve |
+  | :--- | :--- | :--- | :--- | :--- |
+  | 64, committed (0.13 gradient steps per transition in a 500-step episode) | 5 of 5 | 497.5 | | 144,000–183,000 |
+  | 128 | 2 of 5 | 420.3 | 3 | sooner on all 5 |
+  | 256 (rl-zoo's 0.5 per transition) | 3 of 5 | 462.6 | 2 | sooner on 3 (87,000–103,000), later on 1 |
+
+  The committed runs end at 500, 500, 494, 497 and 496, so no CartPole change could pass the win rule, and these ran
+  as information. A higher cap also syncs the target network more often per episode; that effect was not separated
+  out.
+
 ### Fixed
 
 - **Discrete Actor-Critic "overfit collapse" was the test's** (`fix/actor-critic-overfit-collapse`, the second of
