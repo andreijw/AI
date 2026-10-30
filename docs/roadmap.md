@@ -36,9 +36,10 @@ third, the benchmark's solve numbers and report, and the fourth, trainer tests c
 2026-10-25). The maintainer picked five of the ideas below on 2026-10-28, one pull request each, in this order:
 matplotlib only when plotting (done; CHANGELOG.md, 2026-10-28); the discrete Actor-Critic overfit collapse (done;
 CHANGELOG.md, 2026-10-29); double DQN (done, left opt-in; CHANGELOG.md, 2026-10-29); dueling DQN (done, left opt-in;
-CHANGELOG.md, 2026-10-29); the Pendulum PPO and CartPole DQN experiments. A learning change is committed only if, on
-seeds 1 to 5 against the committed config, more seeds hold the threshold or the mean final average is better on at least
-4 of 5 paired seeds with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
+CHANGELOG.md, 2026-10-29); the Pendulum PPO and CartPole DQN experiments (done, nothing adopted; CHANGELOG.md,
+2026-10-29). A learning change is committed only if, on seeds 1 to 5 against the committed config, more seeds hold the
+threshold or the mean final average is better on at least 4 of 5 paired seeds with no seed clearly worse; otherwise it
+stays opt-in and is recorded as tried.
 
 What follows are unscheduled ideas.
 
@@ -46,10 +47,13 @@ What follows are unscheduled ideas.
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
     - The continuous Actor-Critic's greedy policy matches rl-zoo's A2C, but its 100-episode training average stays
       at about -300 (CHANGELOG.md, 2026-10-18). True A2C updates every n steps, which needs the
-      trainer to call `update` mid-episode for every agent; gSDE exploration is the other untried difference.
-    - Not tried, though the bars were met without them: Pendulum PPO with gSDE exploration, separate tanh actor and
-      critic networks, or observation normalisation; CartPole DQN with more than `max_updates_per_call: 64` (about
-      0.13 gradient steps per transition against rl-zoo's 0.5).
+      trainer to call `update` mid-episode for every agent; gSDE exploration is the other untried difference
+      (a PPO version was tried on Pendulum, CHANGELOG.md, 2026-10-29; its code is in `~/rl-experiments/item5/` on the
+      development machine).
+    - Pendulum PPO with gSDE and separate 64-64 tanh actor and critic, rl-zoo's recipe (found 2026-10-29): it reached
+      -200 sooner on 9 of seeds 1 to 5 and 11 to 15 (46,400 to 127,200 steps against 72,400 to 193,000) but held on
+      8 of 10, as the committed config, and failed the win rule on 11 to 15 (CHANGELOG.md, 2026-10-29). Untested:
+      whether a shorter budget with it holds -200 as often.
     - Candidates once wanted: prioritised-replay DQN (parked; MountainCar item). Double and dueling DQN were tried
       on all four DQN configs and stay opt-in (`double_q`, `dueling`; CHANGELOG.md, 2026-10-29).
     - LunarLander DQN with `dueling: true` (found 2026-10-29): it reached 200 sooner on all of seeds 1 to 5 (100,000 to
