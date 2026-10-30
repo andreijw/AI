@@ -206,6 +206,7 @@ classDiagram
         +ReplayBuffer replay_buffer
         +int anneal_steps
         +bool double_q
+        +bool dueling
         +select_action(obs, training) int
         +update(batch) dict
     }

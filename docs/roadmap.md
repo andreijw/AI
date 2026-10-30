@@ -35,10 +35,10 @@ challenge copying its agent construction and config reading, is fixed (CHANGELOG
 third, the benchmark's solve numbers and report, and the fourth, trainer tests calling private methods (CHANGELOG.md,
 2026-10-25). The maintainer picked five of the ideas below on 2026-10-28, one pull request each, in this order:
 matplotlib only when plotting (done; CHANGELOG.md, 2026-10-28); the discrete Actor-Critic overfit collapse (done;
-CHANGELOG.md, 2026-10-29); double DQN (done, left opt-in; CHANGELOG.md, 2026-10-29); dueling DQN; the Pendulum PPO and
-CartPole DQN experiments. A learning change is committed only if, on seeds 1 to 5 against the committed config, more
-seeds hold the threshold or the mean final average is better on at least 4 of 5 paired seeds with no seed clearly worse;
-otherwise it stays opt-in and is recorded as tried.
+CHANGELOG.md, 2026-10-29); double DQN (done, left opt-in; CHANGELOG.md, 2026-10-29); dueling DQN (done, left opt-in;
+CHANGELOG.md, 2026-10-29); the Pendulum PPO and CartPole DQN experiments. A learning change is committed only if, on
+seeds 1 to 5 against the committed config, more seeds hold the threshold or the mean final average is better on at least
+4 of 5 paired seeds with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
 
 What follows are unscheduled ideas.
 
@@ -50,8 +50,12 @@ What follows are unscheduled ideas.
     - Not tried, though the bars were met without them: Pendulum PPO with gSDE exploration, separate tanh actor and
       critic networks, or observation normalisation; CartPole DQN with more than `max_updates_per_call: 64` (about
       0.13 gradient steps per transition against rl-zoo's 0.5).
-    - Candidates once wanted: dueling or prioritised-replay DQN. Double DQN was tried on all four DQN configs and
-      stays opt-in (`double_q`; CHANGELOG.md, 2026-10-29).
+    - Candidates once wanted: prioritised-replay DQN (parked; MountainCar item). Double and dueling DQN were tried
+      on all four DQN configs and stay opt-in (`double_q`, `dueling`; CHANGELOG.md, 2026-10-29).
+    - LunarLander DQN with `dueling: true` (found 2026-10-29): it reached 200 sooner on all of seeds 1 to 5 (100,000 to
+      148,000 steps against 152,000 to 228,000) with the same final average (234.8 against 235.3; one seed 34
+      lower). The win rule judges the final average only. Untested: held-out seeds, and whether a shorter budget
+      with `dueling` holds 200 as often.
     - Read the continuous Actor-Critic's `bounded_mean` and `normalize_advantages` with the strict `flag` reader
       (found 2026-10-29): `bool(config.get(...))` turns a quoted `"false"` in a YAML file into true.
     - Allow `max_grad_norm` with SGD (found 2026-10-29). With plain SGD the discrete actor-critics' critic step grows
@@ -138,6 +142,8 @@ when picked.
     the benchmark, seeds 1 to 5, it held 1 of 5 against the committed config's 2 (mean final -120.9 against -117.8;
     +17 on two seeds, -19 and -21 on two others). There was little overestimation to remove: on seed 1 the logged mean
     Q sat within about 1 of the discounted return in both arms (CHANGELOG.md, 2026-10-29).
+  - **Dueling DQN, 2026-10-29**: held 0 of 5 against the committed config's 2 (mean final -125.0 against -117.8; 18
+    and 19 worse on seeds 3 and 5) (CHANGELOG.md, 2026-10-29).
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 

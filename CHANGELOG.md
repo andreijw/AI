@@ -37,6 +37,30 @@ Acrobot-v1) and
   about 4 of the discounted return of the policy's own episodes in every case. Double DQN also ran on MountainCar on
   2026-10-23, on an older config, with the same verdict (mean -141 against -133).
 
+- **Dueling DQN, opt-in** (`feature/dueling-dqn`, the fourth of the five Code Health pull requests): `dueling: true`
+  adds a value stream beside the Q-network, which then gives the advantages, and `Q = V + A - mean_a A` (Wang et al.
+  2016, mean aggregation). As in the paper the streams share only their input: the value stream is a second
+  `hidden_dim`-unit ReLU layer and a one-output head on the observation, so the network keeps plain DQN's depth and
+  has twice its hidden units. It combines with `double_q`. Off by default, and a plain run is bit-for-bit unchanged.
+  The **checkpoint format changes** for a dueling agent (`W1_value` … `b2_value` and their targets); a checkpoint
+  loads only into an agent with the same setting, and a mismatch is rejected before anything is restored (a dueling
+  checkpoint used to be able to load into a plain agent with its advantages read as Q). The target sync, Polyak
+  average, SGD step and checkpoint now all read one parameter list. Through the benchmark on seeds 1 to 5, against
+  the committed configs (item 3's runs, reused after Acrobot seed 1 reproduced exactly):
+
+  | Config | Held (committed → dueling) | Mean final 100-episode average | Better on | Seeds clearly worse |
+  | :--- | :--- | :--- | :--- | :--- |
+  | CartPole | 5 → 4 | 497.5 → 474.6 | 1 of 5 | 1 (by 118) |
+  | Acrobot | 5 → 5 | -92.6 → -90.5 | 4 of 5 | 0 |
+  | MountainCar | 2 → 0 | -117.8 → -125.0 | 2 of 5 | 2 (by 18 and 19) |
+  | LunarLander | 5 → 5 | 235.3 → 234.8 | 4 of 5 | 1 (by 34) |
+
+  Acrobot met the rule on seeds 1 to 5 but not on held-out seeds 11 to 15, both arms run fresh (5 of 5 hold in each;
+  mean -92.1 → -91.5, better on 3 of 5: +1.3, -5.2, +0.4, -4.5, +11.3), so no config changes. Not part of the rule: on
+  LunarLander dueling reached 200 sooner on all five seeds (100,000 to 148,000 steps against 152,000 to 228,000). A
+  dueling run takes about 1.6 times as long (1.9 on CartPole). With twice the hidden units, any gain could come from
+  capacity; the paper's comparison, dueling with double against double alone, was not run.
+
 ### Fixed
 
 - **Discrete Actor-Critic "overfit collapse" was the test's** (`fix/actor-critic-overfit-collapse`, the second of

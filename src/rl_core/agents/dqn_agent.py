@@ -24,6 +24,9 @@ def _optional_real(config: dict[str, Any], key: str) -> float | None:
     return float(value)
 
 
+_VALUE_STREAM = ("W1_value", "b1_value", "W2_value", "b2_value")
+
+
 class DQNAgent(BaseAgent):
     """
     Deep Q-Network (DQN) agent with experience replay and target network.
@@ -38,6 +41,13 @@ class DQNAgent(BaseAgent):
       network chooses the next action and the target network values it,
       ``Q_target(s', argmax_a' Q_online(s', a'))``, against the upward bias of a max over noisy
       estimates. Off by default.
+    * Optional dueling network (``dueling``; Wang et al. 2016, mean aggregation): beside the
+      network above, which then gives the advantages A(s, a), a value stream of the same shape
+      (``W1_value`` … ``b2_value``, ``hidden_dim`` units) gives V(s), and
+      ``Q = V + A − mean_a A``. As in the paper, the streams share their input (here the
+      observation; there the convolutional features) and nothing else. With one action, Q = V.
+      Greedy actions equal those of A alone; the targets do not. Off by default; a checkpoint
+      only loads into an agent with the same setting.
     * Epsilon-greedy action selection, decayed once per update call (``epsilon_decay``) or
       linearly per training action (``exploration_steps``).
     * Bootstrapping through time-limit cuts: only a true termination ends the Bellman target.
@@ -79,6 +89,7 @@ class DQNAgent(BaseAgent):
         self.target_update_frequency: int = positive_int(config, "target_update_frequency", 100)
         self.tau: float | None = _optional_real(config, "tau")
         self.double_q: bool = flag(config, "double_q", False)
+        self.dueling: bool = flag(config, "dueling", False)
         self.grad_clip_value: float = float(config.get("grad_clip_value", 10.0))
         self.exploration_steps: int | None = self._read_exploration_steps(config)
         self.updates_per_step: float | None = _optional_real(config, "updates_per_step")
@@ -95,6 +106,11 @@ class DQNAgent(BaseAgent):
         self._explore_rng: np.random.Generator = derive_rng(
             config.get("seed"), AGENT_EXPLORATION_STREAM
         )
+        # The target network is set by name in _sync_target; declared here for the type checker.
+        self._target_W1: npt.NDArray[np.float64]
+        self._target_b1: npt.NDArray[np.float64]
+        self._target_W2: npt.NDArray[np.float64]
+        self._target_b2: npt.NDArray[np.float64]
         self._init_q_networks(derive_rng(config.get("seed"), AGENT_WEIGHTS_STREAM))
         self.replay_buffer: ReplayBuffer = ReplayBuffer(
             capacity=self.buffer_capacity,
@@ -167,14 +183,21 @@ class DQNAgent(BaseAgent):
             (self.hidden_dim, self.action_dim)
         ) * np.sqrt(2.0 / self.hidden_dim)
         self._b2: npt.NDArray[np.float64] = np.zeros(self.action_dim)
+        if self.dueling:  # drawn after the advantage stream, so a plain agent's draws are unchanged
+            self._W1_value: npt.NDArray[np.float64] = weights_rng.standard_normal(
+                (self.observation_dim, self.hidden_dim)
+            ) * np.sqrt(2.0 / self.observation_dim)
+            self._b1_value: npt.NDArray[np.float64] = np.zeros(self.hidden_dim)
+            self._W2_value: npt.NDArray[np.float64] = weights_rng.standard_normal(
+                (self.hidden_dim, 1)
+            ) * np.sqrt(2.0 / self.hidden_dim)
+            self._b2_value: npt.NDArray[np.float64] = np.zeros(1)
         self._sync_target()
 
     def _sync_target(self) -> None:
         """Hard sync: the target network becomes a copy (sharing no memory) of the online one."""
-        self._target_W1: npt.NDArray[np.float64] = np.copy(self._W1)
-        self._target_b1: npt.NDArray[np.float64] = np.copy(self._b1)
-        self._target_W2: npt.NDArray[np.float64] = np.copy(self._W2)
-        self._target_b2: npt.NDArray[np.float64] = np.copy(self._b2)
+        for name, parameter in self._parameters().items():
+            setattr(self, f"_target_{name}", np.copy(parameter))
 
     @staticmethod
     def _read_exploration_steps(config: dict[str, Any]) -> int | None:
@@ -194,9 +217,20 @@ class DQNAgent(BaseAgent):
             )
         return value
 
+    def _parameter_names(self) -> tuple[str, ...]:
+        """The online network's parameter names; each is stored as ``_<name>``, its target copy as
+        ``_target_<name>``."""
+        stream = ("W1", "b1", "W2", "b2")
+        return (*stream, *_VALUE_STREAM) if self.dueling else stream
+
     def _parameters(self) -> dict[str, npt.NDArray[np.float64]]:
-        """The online network's parameters by gradient name."""
-        return {"W1": self._W1, "b1": self._b1, "W2": self._W2, "b2": self._b2}
+        """The online network's parameters by gradient name. Built on every call, never cached:
+        loading a checkpoint rebinds the arrays."""
+        return {name: getattr(self, f"_{name}") for name in self._parameter_names()}
+
+    def _target_parameters(self) -> dict[str, npt.NDArray[np.float64]]:
+        """The target network's parameters, under the online network's names."""
+        return {name: getattr(self, f"_target_{name}") for name in self._parameter_names()}
 
     def _scheduled_epsilon(self) -> float:
         """Epsilon after ``_exploration_step`` training actions on the linear schedule."""
@@ -212,8 +246,26 @@ class DQNAgent(BaseAgent):
             target: If True, uses the target network parameters; otherwise online network.
 
         Returns:
-            Tuple of (q_values, hidden_activations).
+            Tuple of (q_values, hidden_activations); the hidden activations are the advantage
+            stream's when ``dueling`` is on.
         """
+        q, h, _ = self._q_and_hidden(obs, target)
+        return q, h
+
+    def _q_and_hidden(
+        self, obs: np.ndarray, target: bool
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+        """Q-values, the advantage stream's hidden activations, and the value stream's (None
+        without ``dueling``): the one place the streams are combined, ``V + A − mean_a A``."""
+        q, h = self._advantage_stream(obs, target)
+        if not self.dueling:
+            return q, h, None
+        value, h_v = self._value_stream(obs, target)
+        return value + q - np.mean(q, axis=-1, keepdims=True), h, h_v
+
+    def _advantage_stream(self, obs: np.ndarray, target: bool) -> tuple[np.ndarray, np.ndarray]:
+        """The network of ``W1`` … ``b2``: Q itself, or the advantages with ``dueling``; and its
+        hidden activations."""
         w1 = self._target_W1 if target else self._W1
         b1 = self._target_b1 if target else self._b1
         w2 = self._target_W2 if target else self._W2
@@ -222,6 +274,13 @@ class DQNAgent(BaseAgent):
         h = np.maximum(0.0, obs @ w1 + b1)
         q = h @ w2 + b2
         return q, h
+
+    def _value_stream(self, obs: np.ndarray, target: bool) -> tuple[np.ndarray, np.ndarray]:
+        """The dueling network's V(s), shape (..., 1), and its hidden activations."""
+        prefix = "_target_" if target else "_"
+        w1, b1, w2, b2 = (getattr(self, f"{prefix}{name}") for name in _VALUE_STREAM)
+        h_v = np.maximum(0.0, obs @ w1 + b1)
+        return h_v @ w2 + b2, h_v
 
     def select_action(self, observation: np.ndarray, training: bool = True) -> int:
         """
@@ -341,10 +400,10 @@ class DQNAgent(BaseAgent):
             # 4. Target network synchronization
             self._update_counter += 1
             if self.tau is not None:
-                self._target_W1 = self.tau * self._W1 + (1.0 - self.tau) * self._target_W1
-                self._target_b1 = self.tau * self._b1 + (1.0 - self.tau) * self._target_b1
-                self._target_W2 = self.tau * self._W2 + (1.0 - self.tau) * self._target_W2
-                self._target_b2 = self.tau * self._b2 + (1.0 - self.tau) * self._target_b2
+                target_parameters = self._target_parameters()
+                for name, parameter in self._parameters().items():
+                    averaged = self.tau * parameter + (1.0 - self.tau) * target_parameters[name]
+                    setattr(self, f"_target_{name}", averaged)
             elif self._update_counter % self.target_update_frequency == 0:
                 self._sync_target()
 
@@ -381,13 +440,14 @@ class DQNAgent(BaseAgent):
 
         Returns:
             Tuple of (components, gradients). Components holds ``loss`` and ``mean_q``, the
-            mean of the predicted Q-values. Gradients are those of ``loss``, keyed ``W1``,
-            ``b1``, ``W2``, ``b2``, and are not clipped; :meth:`_apply_gradients` clips them.
+            mean of the predicted Q-values. Gradients are those of ``loss``, keyed like
+            :meth:`_parameters` (``W1``, ``b1``, ``W2``, ``b2``, and ``W1_value`` … ``b2_value``
+            with ``dueling``), and are not clipped; :meth:`_apply_gradients` clips them.
         """
         b_size = len(actions)
 
         # Forward pass online network
-        q_vals, h = self._forward_q(obs, target=False)
+        q_vals, h, h_v = self._q_and_hidden(obs, target=False)
         pred_q = q_vals[np.arange(b_size), actions]
 
         # TD error and MSE loss: 0.5 * (pred_q - targets)^2
@@ -397,6 +457,18 @@ class DQNAgent(BaseAgent):
         # Backward pass
         d_q = np.zeros_like(q_vals)
         d_q[np.arange(b_size), actions] = td_error
+        value_grads = {}
+        if h_v is not None:
+            # Q_j = V + A_j - mean(A): dV sums d_q over the actions, dA_k = d_q_k - mean(d_q).
+            d_v = d_q.sum(axis=1, keepdims=True)
+            d_pre_h_v = (d_v @ self._W2_value.T) * (h_v > 0.0)
+            value_grads = {
+                "W1_value": (obs.T @ d_pre_h_v) / b_size,
+                "b1_value": np.mean(d_pre_h_v, axis=0),
+                "W2_value": (h_v.T @ d_v) / b_size,
+                "b2_value": np.mean(d_v, axis=0),
+            }
+            d_q = d_q - np.mean(d_q, axis=1, keepdims=True)  # the advantages' gradient
 
         grad_w2 = (h.T @ d_q) / b_size
         grad_b2 = np.mean(d_q, axis=0)
@@ -408,7 +480,8 @@ class DQNAgent(BaseAgent):
         grad_b1 = np.mean(d_pre_h, axis=0)
 
         components = {"loss": loss, "mean_q": float(np.mean(pred_q))}
-        return components, {"W1": grad_w1, "b1": grad_b1, "W2": grad_w2, "b2": grad_b2}
+        grads = {"W1": grad_w1, "b1": grad_b1, "W2": grad_w2, "b2": grad_b2, **value_grads}
+        return components, grads
 
     def _apply_gradients(
         self, grads: dict[str, np.ndarray], learning_rate: float | None = None
@@ -423,7 +496,7 @@ class DQNAgent(BaseAgent):
         modified.
 
         Args:
-            grads: Gradients keyed ``W1``, ``b1``, ``W2``, ``b2``, as returned by
+            grads: Gradients keyed like :meth:`_parameters`, as returned by
                    :meth:`_loss_and_grads`.
             learning_rate: Step size of this step (the decayed rate when annealing).
         """
@@ -434,10 +507,8 @@ class DQNAgent(BaseAgent):
                 parameter -= steps[name]  # in place: the attribute holds this same array
             return
         limit = self.grad_clip_value
-        self._W1 -= lr * np.clip(grads["W1"], -limit, limit)
-        self._b1 -= lr * np.clip(grads["b1"], -limit, limit)
-        self._W2 -= lr * np.clip(grads["W2"], -limit, limit)
-        self._b2 -= lr * np.clip(grads["b2"], -limit, limit)
+        for name, parameter in self._parameters().items():
+            parameter -= lr * np.clip(grads[name], -limit, limit)  # in place, as for Adam
 
     def _checkpoint_arrays(self) -> dict[str, Any]:
         """
@@ -446,14 +517,8 @@ class DQNAgent(BaseAgent):
         replay buffer.
         """
         arrays: dict[str, Any] = {
-            "W1": self._W1,
-            "b1": self._b1,
-            "W2": self._W2,
-            "b2": self._b2,
-            "target_W1": self._target_W1,
-            "target_b1": self._target_b1,
-            "target_W2": self._target_W2,
-            "target_b2": self._target_b2,
+            **self._parameters(),
+            **{f"target_{name}": array for name, array in self._target_parameters().items()},
             "epsilon": np.array(self.epsilon),
             "exploration_step": np.array(self._exploration_step),
             "update_counter": np.array(self._update_counter),
@@ -473,16 +538,20 @@ class DQNAgent(BaseAgent):
         ``exploration_steps`` the exploration step is rebuilt from the saved epsilon so that
         exploration does not restart. Without the transitions-trained counter the learning-rate
         decay starts again from the full rate.
+
+        Raises:
+            ValueError: If the checkpoint's network is dueling and this agent's is not, or the
+                reverse; checked before anything is restored.
         """
+        if ("W1_value" in data) != self.dueling:
+            saved, setting = ("a dueling", "true") if "W1_value" in data else ("a plain", "false")
+            raise ValueError(
+                f"The checkpoint holds {saved} Q-network; set dueling: {setting} to load it"
+            )
         self.replay_buffer.restore(data)
-        self._W1 = data["W1"]
-        self._b1 = data["b1"]
-        self._W2 = data["W2"]
-        self._b2 = data["b2"]
-        self._target_W1 = data["target_W1"]
-        self._target_b1 = data["target_b1"]
-        self._target_W2 = data["target_W2"]
-        self._target_b2 = data["target_b2"]
+        for name in self._parameter_names():
+            setattr(self, f"_{name}", data[name])
+            setattr(self, f"_target_{name}", data[f"target_{name}"])
         if "epsilon" in data:
             self.epsilon = float(data["epsilon"])
         if "update_counter" in data:

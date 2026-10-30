@@ -42,12 +42,37 @@ ALL_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
             "double_q": True,
         },
     ),
+    (
+        DQNAgent,
+        {
+            "seed": 42,
+            "learning_rate": 0.001,
+            "batch_size": 2,
+            "min_buffer_size": 2,
+            "dueling": True,
+        },
+    ),
+    (
+        DQNAgent,
+        {
+            "seed": 42,
+            "learning_rate": 0.001,
+            "batch_size": 2,
+            "min_buffer_size": 2,
+            "dueling": True,
+            "double_q": True,
+        },
+    ),
 ]
+
+_FLAGS = ("dueling", "double_q")
+# Settings that shape the network, so a checkpoint loads only into an agent built with them.
+_ARCHITECTURE_KEYS = ("dueling",)
 
 
 def agent_id(agent_cls: type[BaseAgent], config: dict[str, object]) -> str:
-    """A test id naming the agent, and the option when one class is listed twice."""
-    return agent_cls.__name__ + ("-double_q" if config.get("double_q") else "")
+    """A test id naming the agent, and the options switched on when one class is listed twice."""
+    return "-".join([agent_cls.__name__, *(flag for flag in _FLAGS if config.get(flag))])
 
 
 ALL_AGENT_IDS = [agent_id(cls, config) for cls, config in ALL_AGENTS]
@@ -98,7 +123,8 @@ def test_agent_save_load_roundtrip_contract(
     checkpoint_path = str(tmp_path / f"{agent_cls.__name__}.pt")
     agent.save(checkpoint_path)
 
-    restored = agent_cls(observation_dim=4, action_dim=2, config={})
+    architecture = {key: config[key] for key in _ARCHITECTURE_KEYS if key in config}
+    restored = agent_cls(observation_dim=4, action_dim=2, config=architecture)
     restored.load(checkpoint_path)
 
     # Deterministic evaluation check

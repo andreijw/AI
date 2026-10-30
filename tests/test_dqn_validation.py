@@ -5,8 +5,8 @@ import pytest
 
 from rl_core.agents import DQNAgent
 from tests.agent_internals import (
-    DQN_ONLINE_WEIGHTS,
     assert_weights_unchanged,
+    dqn_online_weights,
     live_weights,
     weights,
 )
@@ -32,10 +32,11 @@ def test_integer_settings_must_be_positive_integers(key, bad):
         _agent(**{key: bad})
 
 
+@pytest.mark.parametrize("key", ["double_q", "dueling"])
 @pytest.mark.parametrize("bad", ["false", 1, None])
-def test_double_q_must_be_a_boolean(bad):
-    with pytest.raises(ValueError, match="double_q must be true or false"):
-        _agent(double_q=bad)
+def test_boolean_settings_must_be_booleans(key, bad):
+    with pytest.raises(ValueError, match=f"{key} must be true or false"):
+        _agent(**{key: bad})
 
 
 @pytest.mark.parametrize("bad", [0.0, -0.1, 1.5, True, float("nan"), "abc"])
@@ -96,13 +97,19 @@ def _batch(n: int = 6) -> dict[str, np.ndarray]:
     }
 
 
-def test_tau_one_copies_the_online_network_after_every_gradient_step():
+@pytest.mark.parametrize("dueling", [False, True])
+def test_tau_one_copies_the_online_network_after_every_gradient_step(dueling):
     agent = _agent(
-        tau=1.0, target_update_frequency=1000, batch_size=4, min_buffer_size=4, updates_per_step=0.5
+        tau=1.0,
+        target_update_frequency=1000,
+        batch_size=4,
+        min_buffer_size=4,
+        updates_per_step=0.5,
+        dueling=dueling,
     )
     agent.update(_batch())
     arrays = live_weights(agent)
-    for name in DQN_ONLINE_WEIGHTS:
+    for name in dqn_online_weights(agent):
         online, target = arrays[name], arrays[f"target_{name}"]
         np.testing.assert_array_equal(target, online)
         assert not np.shares_memory(target, online), f"target_{name} aliases {name}."
@@ -191,3 +198,28 @@ def test_a_batch_that_stores_no_transition_runs_no_gradient_step(unstored):
     assert metrics == {"epsilon": epsilon}, "nothing was trained, so no loss or Q-value to report"
     assert agent.epsilon == epsilon, "epsilon decays once per update that trained, not per call"
     assert_weights_unchanged(agent, before, "after a batch that stored no transition")
+
+
+# ---------------------------------------------------------------------------
+# A checkpoint must match the network it is loaded into
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("saved_dueling", [True, False])
+def test_a_checkpoint_from_the_other_network_is_rejected_and_changes_nothing(
+    saved_dueling, tmp_path
+):
+    """Read as plain Q, a dueling checkpoint's advantage head would bootstrap wrong targets."""
+    source = _agent(dueling=saved_dueling, batch_size=4, min_buffer_size=4)
+    source.update(_batch())
+    path = str(tmp_path / "agent.npz")
+    source.save(path)
+    target = _agent(dueling=not saved_dueling, seed=8, batch_size=4, min_buffer_size=4)
+    target.update(_batch(5))
+    before, buffered = weights(target), len(target.replay_buffer)
+
+    with pytest.raises(ValueError, match="dueling"):
+        target.load(path)
+
+    assert_weights_unchanged(target, before, "after a rejected load")
+    assert len(target.replay_buffer) == buffered, "A rejected load must leave the buffer alone."
