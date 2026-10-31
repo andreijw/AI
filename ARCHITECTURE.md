@@ -68,8 +68,14 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    config sets `rollout_steps`, `minibatch_size` and `gae_lambda`: it buffers whole episodes until it holds
    `rollout_steps` transitions, computes GAE over them (`rl_core/agents/returns.py`, shared with continuous PPO)
    and takes `ppo_epochs` passes of shuffled `minibatch_size` steps. Without those keys it trains on each episode
-   alone, full batch, with return-minus-value advantages. The Trainer still calls `update` once per episode; PPO
-   returns no metrics on the episodes it only stores. Both PPO agents keep those episodes in one `EpisodeRollout`
+   alone, full batch, with return-minus-value advantages. The Trainer calls `update` once per episode by default; PPO
+   returns no metrics on the episodes it only stores. With `training.update_every: N` it calls `update` every N
+   steps inside the episode instead, with the steps since the last call, and the rest with the step that ends the
+   episode. Only an agent that learns from a replay buffer accepts that (`enable_mid_episode_updates`, which
+   `BaseAgent` refuses): DQN and DDPG take `MidEpisodeUpdates` from `rl_core/agents/mid_episode.py`, which counts
+   gradient steps over every transition trained on, so `updates_per_step: 0.5` still means one step per two
+   transitions with one transition per call. The PyTorch backends copy only the actor back to NumPy after an
+   update and the rest before a checkpoint. Both PPO agents keep those episodes in one `EpisodeRollout`
    (`rl_core/agents/rollout.py`), which saves them in checkpoints and restores them on load; a rollout still partly
    filled when training ends is not trained on. Each episode ends its GAE trace, and an episode cut by the time limit
    (or by `max_steps_per_episode`) adds γ·V(next state) to its last reward, so CartPole's 500-step limit is not a

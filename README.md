@@ -329,8 +329,9 @@ LunarLanderContinuous TD3 trains rl-zoo's 400×300 networks on the PyTorch backe
 the table. On seeds 1 to 5 one seed peaked at 199.6 and never reached 200, and only 3 of 5 held it. On held-out seeds 11
 to 15 all 5 reached 200 and 4 of 5 held it, but greedy evaluation ranged from 87 to 269. A seed takes 46 to 47 minutes
 with two sharing the Jetson's GPU (CHANGELOG.md, 2026-10-28). The trainer updates after each episode, while rl-zoo
-updates after every step; whether that slows it is open (docs/roadmap.md, Training). The random agent's final
-averages are -214 to -228.
+updates after every step. `training.update_every: 1` does the same here: at 400,000 steps it held 200 on 5 of 5 seeds
+in both sets (against 3 and 4 of 5), with one seed in each clearly worse, at about 1.5 to 2 times the time; the
+committed config does not use it yet (CHANGELOG.md, 2026-10-30). The random agent's final averages are -214 to -228.
 
 ### Run any agent from one base config (quick overrides)
 
@@ -526,6 +527,7 @@ agent:
 training:
   num_episodes: 1000
   # total_steps: 100000  # optional: train for this many environment steps instead (num_episodes is then ignored)
+  # update_every: 1      # optional, DQN, DDPG and TD3 only: update every N steps inside the episode, not after it
   max_steps_per_episode: 500
   eval_frequency: 100
   save_frequency: 100

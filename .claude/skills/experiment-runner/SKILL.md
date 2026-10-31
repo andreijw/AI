@@ -70,7 +70,12 @@ Time a short run first (one seed, a twentieth of the episodes) and scale up. Epi
 CartPole agent improves, so expect the full run to cost more than the linear estimate.
 
 - Up to a couple of minutes: run it in the foreground.
-- Longer: run it in the background and carry on with work that does not depend on it.
+- Longer: run it in the background and carry on with work that does not depend on it. Anything longer than
+  an hour writes its driver, per-seed curves and results under `~/rl-experiments/<item>/`, not the session
+  scratch directory under `/tmp`: a reboot on 2026-10-30 wiped `/tmp`, taking a night's runs and the
+  baseline curves they were to be compared with. Run it from a frozen worktree
+  (`git worktree add --detach ~/rl-experiments/<item>/repo HEAD`) when you will edit `src/` meanwhile: each
+  seed imports the code when it starts, so later seeds would otherwise train on half-written changes.
 - More than about half an hour in total, or anything that would occupy the machine while the maintainer is
   using it: say what you want to run and why, and ask.
 

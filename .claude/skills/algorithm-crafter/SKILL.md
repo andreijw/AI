@@ -117,8 +117,9 @@ line:
 ## 7. Choose starting hyperparameters
 
 Start from the source's published values for the same or a similar task, then walk the numbers for this
-trainer: it updates once per episode with that episode's transitions, which is not what most references
-assume. Record where each value came from as a comment in the YAML. The committed values are the
+trainer: by default it updates once per episode with that episode's transitions, which is not what most
+references assume (`training.update_every: 1` updates after every step, as SB3 does, for an agent that learns from
+a replay buffer). Record where each value came from as a comment in the YAML. The committed values are the
 maintainer's to approve.
 
 ## 8. Show that it learns

@@ -10,6 +10,7 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 
 from .base_agent import BaseAgent
 from .config_values import flag, positive_int
+from .mid_episode import MidEpisodeUpdates
 from .optim import Adam, anneal_fraction, anneal_steps_from_config, optimizer_from_config
 from .replay_buffer import ReplayBuffer
 
@@ -27,7 +28,7 @@ def _optional_real(config: dict[str, Any], key: str) -> float | None:
 _VALUE_STREAM = ("W1_value", "b1_value", "W2_value", "b2_value")
 
 
-class DQNAgent(BaseAgent):
+class DQNAgent(MidEpisodeUpdates, BaseAgent):
     """
     Deep Q-Network (DQN) agent with experience replay and target network.
 
@@ -338,6 +339,24 @@ class DQNAgent(BaseAgent):
         not_done = 1.0 - dones.astype(np.float64)
         return rewards + not_done * self.gamma * next_value
 
+    def enable_mid_episode_updates(self) -> None:
+        """
+        Accept part of an episode per :meth:`update`, counting gradient steps over the transitions.
+
+        Raises:
+            ValueError: Without ``updates_per_step`` (one step per call) or with ``epsilon_decay``
+                in use (one decay per call): both count calls, which chunks would multiply.
+        """
+        if self.updates_per_step is None:
+            raise ValueError(
+                "update_every needs updates_per_step: without it DQN takes one step per call"
+            )
+        if self.exploration_steps is None:
+            raise ValueError(
+                "update_every needs exploration_steps: epsilon_decay decays once per call"
+            )
+        super().enable_mid_episode_updates()
+
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         Update the Q-network using collected transitions.
@@ -356,7 +375,8 @@ class DQNAgent(BaseAgent):
         Returns:
             Dictionary with training metrics: 'loss', 'epsilon', 'mean_q'; only 'epsilon' when no
             update happened: during warm-up (the buffer below ``min_buffer_size``), or when the
-            batch stored no transition (empty, or without ``next_observations`` or either flag).
+            batch stored no transition (empty, or without ``next_observations`` or either flag),
+            or, updating mid-episode, when the transitions counted so far earn no step yet.
             With ``anneal_steps`` set, 'anneal_fraction' too: the share of ``learning_rate`` this
             call's steps used.
         """
@@ -371,10 +391,12 @@ class DQNAgent(BaseAgent):
 
         if self.updates_per_step is not None:
             num_updates = min(
-                self.max_updates_per_call, max(1, int(n_stored * self.updates_per_step))
+                self.max_updates_per_call, self._updates_for(n_stored, self.updates_per_step)
             )
         else:
             num_updates = 1
+        if num_updates == 0:
+            return {"epsilon": self.epsilon, **annealing}
 
         total_loss = 0.0
         total_q = 0.0
@@ -523,6 +545,7 @@ class DQNAgent(BaseAgent):
             "exploration_step": np.array(self._exploration_step),
             "update_counter": np.array(self._update_counter),
             "steps_trained": np.array(self._steps_trained),
+            **self._mid_episode_checkpoint_arrays(),
             **self.replay_buffer.checkpoint_state(),
         }
         if self._optimizer is not None:
@@ -560,6 +583,7 @@ class DQNAgent(BaseAgent):
             self._exploration_step = int(data["exploration_step"])
         else:
             self._exploration_step = self._exploration_step_for(self.epsilon)
+        self._load_mid_episode_count(data)
         self._steps_trained = int(data["steps_trained"]) if "steps_trained" in data else 0
         if self._optimizer is not None:
             self._optimizer.load_state(data)

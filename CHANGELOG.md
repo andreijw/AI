@@ -12,6 +12,37 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-10-30
+
+### Added
+
+- **Off-policy updates during the episode, opt-in** (`feature/off-policy-mid-episode-updates`): `training.update_every:
+  N` makes the trainer call `agent.update` every N steps inside an episode, then once more on what is left at its end,
+  as SB3 does with `train_freq`; without it the trainer updates once per episode as before, and every committed config
+  and golden test is unchanged. Only DQN, DDPG and TD3 accept it (`enable_mid_episode_updates`; the random agents
+  accept it and learn nothing); REINFORCE, Actor-Critic and PPO train on whole episodes and refuse it. With it, DQN,
+  DDPG and TD3 count gradient steps over every transition trained on (`MidEpisodeUpdates`, carried in the checkpoint
+  as `update_transitions`), so a fractional `updates_per_step` gives the same steps however the episode is cut up;
+  DQN also needs `updates_per_step` and `exploration_steps`. The PyTorch backend now copies only the actor back to
+  NumPy after an update and the rest before a checkpoint, which took a per-step-updating seed from 5.7 times slower
+  to about 1.5 times. Metrics are averaged per update call, so with `update_every: 1` the logged losses are means of
+  per-step values. LunarLanderContinuous TD3 with `update_every: 1`, 400,000 steps, against the committed config
+  (which updates per episode), on the screen seeds and on held-out seeds:
+
+  | Seeds | Held (committed → every step) | Mean final 100-episode average | Better / clearly worse (by over 20) | Reached 200 by 300,000 |
+  | :--- | :--- | :--- | :--- | :--- |
+  | 1 to 5 | 3 → 5 | 202.8 → 225.9 | 3 / 1 (seed 1, by 27) | 3 → 5 |
+  | 11 to 15 | 4 → 5 | 214.1 → 242.8 | 4 / 1 (seed 14, by 26) | 4 → 4 |
+
+  Both sets meet the project's win rule through more seeds holding, and neither through the paired averages, each
+  having one seed clearly worse. Greedy evaluation on seeds 11 to 15 went from 87 to 269 (mean 191) to 191 to 259
+  (mean 235); on seeds 1 to 5 it was 58 to 251 with the option. A seed took 54 to 78 minutes with two sharing the
+  Jetson's GPU, against 36 to 47 updating per episode. The seed 1 to 5 baseline is the 2026-10-28 screen; the held-out
+  baseline was run fresh and reproduces 2026-10-28's figures. The runs used a driver that patched the same chunking
+  into the trainer, which matches `update_every: 1` exactly over 12,000 steps of seed 1. Adopting it in
+  `configs/lunarlander_continuous_td3.yaml`, and whether 300,000 steps would then do, is the maintainer's decision
+  (docs/roadmap.md, Training).
+
 ## 2026-10-29
 
 ### Added

@@ -23,6 +23,7 @@ from .config_values import (
     positive_int,
 )
 from .exploration_noise import make_exploration_noise
+from .mid_episode import MidEpisodeUpdates
 from .mlp import Params, init_mlp, mlp_backward, mlp_forward
 from .optim import Adam
 from .replay_buffer import ReplayBuffer
@@ -35,7 +36,7 @@ def _global_norm(grads: Params) -> float:
     return float(np.sqrt(sum(float(np.sum(g**2)) for g in grads.values())))
 
 
-class DDPGAgent(BaseAgent):
+class DDPGAgent(MidEpisodeUpdates, BaseAgent):
     """
     DDPG (Lillicrap et al., 2016) as Stable-Baselines3 implements it and rl-baselines3-zoo
     configures it for Pendulum-v1.
@@ -266,7 +267,9 @@ class DDPGAgent(BaseAgent):
         Store the episode's transitions, then train once warm-up is over.
 
         Runs ``updates_per_step`` gradient steps per transition (at least one, at most
-        ``max_updates_per_call``), each: critic step, actor step, Polyak.
+        ``max_updates_per_call``), each: critic step, actor step, Polyak. Updating mid-episode
+        (:meth:`enable_mid_episode_updates`), the steps follow the running count of transitions
+        instead, so a call may take none.
 
         Returns:
             Means over the gradient steps of ``critic_loss``, ``actor_loss``, ``mean_q``,
@@ -282,7 +285,9 @@ class DDPGAgent(BaseAgent):
         ):
             return {}
 
-        num_updates = max(1, int(n * self.updates_per_step))
+        num_updates = self._updates_for(n, self.updates_per_step)
+        if num_updates == 0:
+            return {}
         if self.max_updates_per_call is not None:
             num_updates = min(num_updates, self.max_updates_per_call)
         return self._train_steps(num_updates)
@@ -341,6 +346,7 @@ class DDPGAgent(BaseAgent):
             arrays.update(optimizer.state(prefix=f"{net}_adam_"))
         arrays["training_actions"] = np.array(self._training_actions)
         arrays["gradient_steps"] = np.array(self._gradient_steps)
+        arrays.update(self._mid_episode_checkpoint_arrays())
         arrays.update(self.replay_buffer.checkpoint_state())
         return arrays
 
@@ -368,3 +374,4 @@ class DDPGAgent(BaseAgent):
             optimizer.load_state(data, prefix=f"{net}_adam_")
         self._training_actions = int(data["training_actions"])
         self._gradient_steps = int(data["gradient_steps"])
+        self._load_mid_episode_count(data)
