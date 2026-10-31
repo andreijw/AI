@@ -72,6 +72,9 @@ class ContinuousRandomAgent(BaseAgent):
         rng = self._rng if training else self._eval_rng
         return rng.uniform(self.action_low, self.action_high).astype(np.float32)
 
+    def enable_mid_episode_updates(self) -> None:
+        """Accepted: it learns nothing, so a benchmark floor can share a config with update_every."""
+
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         No-op update for random agent.

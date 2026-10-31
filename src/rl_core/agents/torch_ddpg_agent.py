@@ -157,6 +157,9 @@ class TorchDDPGAgent(DDPGAgent):
             for key, tensor in self._inputs.items()
         }
         self._chunk_copied: torch.cuda.Event | None = None
+        # True when an update has left the NumPy critics, targets and Adam states behind the
+        # device: only the actor, which select_action reads, is copied after each update.
+        self._numpy_stale = False
         self._metric_sums = torch.zeros(
             len(self.STEP_METRICS), dtype=self.dtype, device=self.device
         )
@@ -296,7 +299,7 @@ class TorchDDPGAgent(DDPGAgent):
             done += count
         self._gradient_steps += num_updates
         metrics = self._reduce_metrics(self._metric_sums, kinds)
-        self._mirror_to_numpy()
+        self._mirror_actor()
         return metrics
 
     def _stage(self, count: int) -> None:
@@ -360,13 +363,36 @@ class TorchDDPGAgent(DDPGAgent):
             arrays[f"v_{name}"] = state["exp_avg_sq"].detach().cpu().numpy().astype(np.float64)
         return arrays
 
+    def _mirror_actor(self) -> None:
+        """Copy the actor, the one network :meth:`select_action` reads, from the device; the rest
+        waits for :meth:`_sync_numpy`. With ``update_every: 1`` a full copy after every step made
+        training several times slower."""
+        self._copy_from_device("actor")
+        self._numpy_stale = True
+
+    def _sync_numpy(self) -> None:
+        """Bring every NumPy network and Adam state up to date with the device, if an update left
+        them behind."""
+        if self._numpy_stale:
+            self._mirror_to_numpy()
+            self._numpy_stale = False
+
+    def _checkpoint_arrays(self) -> dict[str, Any]:
+        self._sync_numpy()
+        return super()._checkpoint_arrays()
+
     def _mirror_to_numpy(self) -> None:
         """Copy every network and Adam state from the device into the NumPy agent's arrays."""
-        for net, params in self._networks().items():
-            for name, tensor in self._nets[net].items():
-                params[name] = tensor.detach().cpu().numpy().astype(np.float64)
+        for net in self._networks():
+            self._copy_from_device(net)
         for net, numpy_adam in self._optimizers_by_net().items():
             numpy_adam.load_state(self._adam_arrays(net), prefix="")
+
+    def _copy_from_device(self, net: str) -> None:
+        """Copy network ``net`` from the device into the NumPy agent's arrays, as float64."""
+        params = self._networks()[net]
+        for name, tensor in self._nets[net].items():
+            params[name] = tensor.detach().cpu().numpy().astype(np.float64)
 
     def _push_to_device(self) -> None:
         """Copy the NumPy agent's networks and Adam states into the device tensors, in place."""
@@ -385,6 +411,7 @@ class TorchDDPGAgent(DDPGAgent):
     def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
         super()._load_checkpoint_arrays(data)
         self._push_to_device()
+        self._numpy_stale = False
 
     # DDPGAgent's NumPy training maths would train the mirror, which the device then overwrites.
 

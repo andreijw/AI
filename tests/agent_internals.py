@@ -413,7 +413,12 @@ def apply_gradients(agent: DQNAgent, grads: dict[str, np.ndarray]) -> None:
 
 def ddpg_networks(agent: DDPGAgent) -> dict[str, dict[str, np.ndarray]]:
     """DDPG's four networks as live parameter dicts: ``actor``, ``critic``, ``target_actor``,
-    ``target_critic``. A gradient check perturbs them in place; a test may write a layer."""
+    ``target_critic``. A gradient check perturbs them in place; a test may write a layer. A
+    PyTorch-backend agent first copies everything from its device (it copies only the actor after
+    an update)."""
+    sync = getattr(agent, "_sync_numpy", None)
+    if sync is not None:
+        sync()
     return agent._networks()
 
 
@@ -421,7 +426,8 @@ def actor_forward(
     agent: DDPGAgent, observations: np.ndarray, params: dict[str, np.ndarray] | None = None
 ) -> tuple[np.ndarray, np.ndarray, Any]:
     """``(mu, tanh output, cache)`` of the actor, or of ``params`` laid out like it."""
-    return agent._actor_forward(observations, agent._actor if params is None else params)
+    actor = ddpg_networks(agent)["actor"] if params is None else params
+    return agent._actor_forward(observations, actor)
 
 
 def critic_forward(
@@ -431,7 +437,8 @@ def critic_forward(
     params: dict[str, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, Any]:
     """``(Q, cache)`` of the critic, or of ``params`` laid out like it."""
-    return agent._critic_forward(observations, actions, agent._critic if params is None else params)
+    critic = ddpg_networks(agent)["critic"] if params is None else params
+    return agent._critic_forward(observations, actions, critic)
 
 
 def critic_loss_and_grads(

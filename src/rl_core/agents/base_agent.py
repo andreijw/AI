@@ -278,6 +278,20 @@ class BaseAgent(ABC):
         """
         return None  # nothing to reset by default
 
+    def enable_mid_episode_updates(self) -> None:
+        """
+        Called by the Trainer when ``training.update_every`` is set, before training: from then on
+        :meth:`update` may get part of an episode, and :meth:`end_episode` still follows its last
+        part. An agent that learns from a replay buffer accepts (see ``mid_episode``).
+
+        Raises:
+            ValueError: By default: this agent trains on whole episodes or rollouts.
+        """
+        raise ValueError(
+            f"{type(self).__name__} trains on whole episodes: update_every needs an agent that "
+            "learns from a replay buffer (DQN, DDPG, TD3)"
+        )
+
     @abstractmethod
     def update(self, batch: Any) -> dict[str, float]:
         """

@@ -15,18 +15,13 @@ No open items.
 
 ### Training
 
-- [ ] **Off-Policy Updates During the Episode**
-  - **Description**: The trainer calls `agent.update` once, after each episode, so a DQN, DDPG or TD3 policy stays
-    fixed for up to the whole episode (1,000 steps on LunarLander) and that episode's gradient steps all run after
-    it; SB3, whose rl-zoo settings these configs translate, updates after every step. LunarLanderContinuous TD3 at
-    rl-zoo's settings needed 400,000 steps rather than 300,000 and held 200 on only 3 of 5 screen seeds
-    (CHANGELOG.md, 2026-10-28). Whether updating during the episode is the cause is not verified: the same scheme
-    solved MountainCarContinuous TD3 on 5 of 5 seeds. The continuous Actor-Critic idea under Code Health needs the
-    same trainer hook.
-  - **Acceptance criteria**: first a scratch experiment (a driver that updates every N steps inside the episode,
-    seeds 1 to 5 against the 2026-10-28 screen) shows whether it helps; only then a trainer option, off by default
-    so every committed config and golden test is unchanged.
-  - **Out of scope**: on-policy agents (PPO, REINFORCE, Actor-Critic), which train on whole rollouts.
+- [ ] **Adopt Updates During the Episode for LunarLanderContinuous TD3** (needs the maintainer's decision)
+  - **Description**: `training.update_every: 1` held 200 on 5 of 5 seeds against 3 of 5 (seeds 1 to 5) and 4 of 5
+    (held-out 11 to 15), with one seed clearly worse in each set and about 1.5 to 2 times the time per seed
+    (CHANGELOG.md, 2026-10-30). Not yet in `configs/lunarlander_continuous_td3.yaml`.
+  - **Acceptance criteria**: the maintainer decides whether to set it, and whether to go back to rl-zoo's 300,000
+    steps (by 300,000 it had reached 200 on 5 of 5 and 4 of 5); then republish `docs/benchmarks/` for that config.
+    Other off-policy configs (DQN, DDPG, MountainCarContinuous TD3) were not run with it.
 
 ### Code Health
 
@@ -46,8 +41,9 @@ What follows are unscheduled ideas.
 - [ ] **Ideas: Close the Actor-Critic Gap, and Smaller Fixes**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
     - The continuous Actor-Critic's greedy policy matches rl-zoo's A2C, but its 100-episode training average stays
-      at about -300 (CHANGELOG.md, 2026-10-18). True A2C updates every n steps, which needs the
-      trainer to call `update` mid-episode for every agent; gSDE exploration is the other untried difference
+      at about -300 (CHANGELOG.md, 2026-10-18). True A2C updates every n steps: the trainer can now call
+      `update` mid-episode (`training.update_every`), but the Actor-Critic refuses it until it bootstraps a cut
+      episode from the value of the last state; gSDE exploration is the other untried difference
       (a PPO version was tried on Pendulum, CHANGELOG.md, 2026-10-29; its code is in `~/rl-experiments/item5/` on the
       development machine).
     - Pendulum PPO with gSDE and separate 64-64 tanh actor and critic, rl-zoo's recipe (found 2026-10-29): it reached

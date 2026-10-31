@@ -11,6 +11,7 @@ import gymnasium as gym
 import numpy as np
 
 from ..agents.base_agent import BaseAgent
+from ..agents.config_values import optional_positive_int
 from ..environments import ResumableEnv
 from ..utils.logger import json_safe
 from .checkpoints import (
@@ -99,6 +100,11 @@ class Trainer:
                     stacklevel=2,
                 )
         self.total_steps_trained = 0
+        # Off-policy agents only: hand the agent the episode so far every update_every steps
+        # instead of the whole episode at its end (None).
+        self.update_every: int | None = optional_positive_int(config, "update_every")
+        if self.update_every is not None:
+            agent.enable_mid_episode_updates()
 
         if self.num_episodes <= 0:
             raise ValueError(f"num_episodes must be a positive integer, got {self.num_episodes!r}")
@@ -375,49 +381,47 @@ class Trainer:
         episode_reward = 0.0
         episode_length = 0
 
-        # Collect trajectory transitions
-        observations = []
-        actions = []
-        rewards = []
-        next_observations = []
-        dones = []
-        terminateds = []
+        # Transitions not yet handed to the agent: the whole episode, or with update_every the
+        # steps since the last update.
+        transitions: list[tuple[Any, Any, Any, Any, bool, bool]] = []
+        update_every = self.update_every if training else None
 
         done = False
         while not done and episode_length < self.max_steps_per_episode:
-            # Select action
             action = self.agent.select_action(obs, training=training)
-
-            # Take step
             next_obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
-
-            # Store trajectory transitions
-            observations.append(obs)
-            actions.append(action)
-            rewards.append(reward)
-            next_observations.append(next_obs)
-            dones.append(done)
-            terminateds.append(bool(terminated))
+            transitions.append((obs, action, reward, next_obs, done, bool(terminated)))
 
             episode_reward += float(reward)
             episode_length += 1
             obs = next_obs
+            # The step that ends the episode goes with the final update below.
+            last = done or episode_length >= self.max_steps_per_episode
+            if update_every is not None and episode_length % update_every == 0 and not last:
+                self._update_agent(transitions)
+                transitions = []
 
-        # Agent update
         if training:
-            batch = {
-                "observations": np.array(observations),
-                "actions": np.array(actions),
-                "rewards": np.array(rewards),
-                "next_observations": np.array(next_observations),
-                "dones": np.array(dones),
-                "terminated": np.array(terminateds, dtype=bool),
-            }
-            self._record_update_metrics(self.agent.update(batch))
+            self._update_agent(transitions)
             self.agent.end_episode()
 
         return episode_reward, episode_length
+
+    def _update_agent(self, transitions: list[tuple[Any, Any, Any, Any, bool, bool]]) -> None:
+        """Hand the agent these transitions, in order, as one batch, and keep its metrics."""
+        observations, actions, rewards, next_observations, dones, terminateds = zip(
+            *transitions, strict=True
+        )
+        batch = {
+            "observations": np.array(observations),
+            "actions": np.array(actions),
+            "rewards": np.array(rewards),
+            "next_observations": np.array(next_observations),
+            "dones": np.array(dones),
+            "terminated": np.array(terminateds, dtype=bool),
+        }
+        self._record_update_metrics(self.agent.update(batch))
 
     def evaluate(self, num_episodes: int = 10) -> dict[str, float]:
         """
