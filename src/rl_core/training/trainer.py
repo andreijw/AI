@@ -100,11 +100,11 @@ class Trainer:
                     stacklevel=2,
                 )
         self.total_steps_trained = 0
-        # Off-policy agents only: hand the agent the episode so far every update_every steps
-        # instead of the whole episode at its end (None).
+        # Hand the agent the episode so far every update_every steps instead of the whole episode
+        # at its end (None). Validated here, before the agent, which may refuse it, is told.
         self.update_every: int | None = optional_positive_int(config, "update_every")
         if self.update_every is not None:
-            agent.enable_mid_episode_updates()
+            agent.enable_mid_episode_updates(self.update_every)
 
         if self.num_episodes <= 0:
             raise ValueError(f"num_episodes must be a positive integer, got {self.num_episodes!r}")

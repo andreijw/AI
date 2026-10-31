@@ -346,8 +346,10 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
     may be shorter). Each chunk takes GAE targets (``gamma``, ``gae_lambda``) from the current critic,
     bootstrapped from the value of the chunk's next state unless the episode truly terminated there
     (the batch's ``terminated`` flag, so a time-limit cut bootstraps), and makes one optimizer step.
-    The chunks of one episode were all collected before its first step, so later chunks are slightly
-    off-policy; true A2C would need the trainer to call ``update`` every ``n_steps``.
+    Replaying a finished episode, its chunks were all collected before its first step, so later
+    chunks are slightly off-policy. With ``training.update_every`` equal to ``n_steps`` the trainer
+    hands over each chunk as it is collected instead, and the next is sampled by the updated policy:
+    true A2C (:meth:`enable_mid_episode_updates`).
 
     Config keys, beyond those of :class:`ContinuousActorCriticBase` (all optional):
         n_steps (int): Steps per update within an episode; 0 for one Monte Carlo update per
@@ -373,13 +375,36 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         self.anneal_steps: int | None = anneal_steps_from_config(config)
         self._steps_trained = 0
 
+    def enable_mid_episode_updates(self, update_every: int) -> None:
+        """
+        Accept each chunk of an episode as it is collected, which makes this agent true A2C. Each
+        call is then one chunk, trained as a chunk of a whole episode would be; the trainer marks
+        only a true termination ``terminated``, so every other chunk bootstraps.
+
+        Raises:
+            ValueError: If ``n_steps`` is 0 (Monte Carlo returns need the whole episode), or is not
+                ``update_every``: shorter calls would ignore ``n_steps``, longer ones replay their
+                later chunks off-policy again.
+        """
+        if self.n_steps == 0:
+            raise ValueError(
+                "update_every needs n_steps: with n_steps 0 the Actor-Critic learns from Monte "
+                "Carlo returns, which need the whole episode"
+            )
+        if update_every != self.n_steps:
+            raise ValueError(
+                f"training.update_every ({update_every}) must equal n_steps ({self.n_steps}): "
+                "each call is then exactly one chunk"
+            )
+
     def update(self, trajectory: Any) -> dict[str, float]:
         """
-        Update policy and value networks on one episode.
+        Update policy and value networks on one episode, or with ``training.update_every`` on one
+        chunk of it.
 
-        Whether the episode truly ended (no bootstrap after its last step) is read from its final
-        ``terminated`` flag, or, when the batch has none, from its final ``done``: a batch with
-        only ``dones`` treats a time-limit cut as terminal, as before.
+        Whether the batch's last step truly ended the episode (no bootstrap after it) is read from
+        its final ``terminated`` flag, or, when the batch has none, from its final ``done``: a batch
+        with only ``dones`` treats a time-limit cut as terminal, as before.
 
         Args:
             trajectory: Batch dictionary ("observations", "actions", "rewards", optionally
@@ -390,7 +415,7 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
             Means over the updates of ``loss``, ``policy_loss``, ``value_loss`` and ``entropy``;
             with ``bounded_mean`` also ``saturation``, the share of steps whose mean was at a
             bound (|tanh| > 0.99) before training; with ``anneal_steps`` also
-            ``anneal_fraction``, the share of the learning rate used at the episode's first update.
+            ``anneal_fraction``, the share of the learning rate used at this call's first update.
         """
         parsed = self._parse_episode(trajectory)
         if parsed is None:

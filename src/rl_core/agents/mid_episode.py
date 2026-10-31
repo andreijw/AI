@@ -39,9 +39,9 @@ class MidEpisodeUpdates:
     _mid_episode: bool = False
     _update_transitions: int = 0
 
-    def enable_mid_episode_updates(self) -> None:
+    def enable_mid_episode_updates(self, update_every: int) -> None:
         """Count gradient steps over every transition trained on from now on (the trainer calls
-        this when ``training.update_every`` is set)."""
+        this when ``training.update_every`` is set; the count does not depend on its value)."""
         self._mid_episode = True
 
     def _updates_for(self, transitions: int, per_transition: float) -> int:

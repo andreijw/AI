@@ -527,7 +527,8 @@ agent:
 training:
   num_episodes: 1000
   # total_steps: 100000  # optional: train for this many environment steps instead (num_episodes is then ignored)
-  # update_every: 1      # optional, DQN, DDPG and TD3 only: update every N steps inside the episode, not after it
+  # update_every: 1      # optional: update every N steps inside the episode, not after it (DQN, DDPG, TD3;
+  #                      #   the continuous Actor-Critic with n_steps equal to it, as A2C)
   max_steps_per_episode: 500
   eval_frequency: 100
   save_frequency: 100

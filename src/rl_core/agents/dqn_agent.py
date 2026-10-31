@@ -339,7 +339,7 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
         not_done = 1.0 - dones.astype(np.float64)
         return rewards + not_done * self.gamma * next_value
 
-    def enable_mid_episode_updates(self) -> None:
+    def enable_mid_episode_updates(self, update_every: int) -> None:
         """
         Accept part of an episode per :meth:`update`, counting gradient steps over the transitions.
 
@@ -355,7 +355,7 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
             raise ValueError(
                 "update_every needs exploration_steps: epsilon_decay decays once per call"
             )
-        super().enable_mid_episode_updates()
+        super().enable_mid_episode_updates(update_every)
 
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
