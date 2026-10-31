@@ -9,59 +9,74 @@ an item that is done moves there, condensed, in the hand-off commit that complet
 
 ## Upcoming Milestones
 
+Order (the maintainer's decision, 2026-10-31): finish Training and Code Health first, the TD3 decision and then
+gradient clipping with SGD, then Phase 6 starting with frame stacking. The parked ideas under Code Health do not block
+Phase 6.
+
 ### Workflow Tooling
 
 No open items.
 
 ### Training
 
-- [ ] **Adopt Updates During the Episode for LunarLanderContinuous TD3** (needs the maintainer's decision)
-  - **Description**: `training.update_every: 1` held 200 on 5 of 5 seeds against 3 of 5 (seeds 1 to 5) and 4 of 5
-    (held-out 11 to 15), with one seed clearly worse in each set and about 1.5 to 2 times the time per seed
-    (CHANGELOG.md, 2026-10-30). Not yet in `configs/lunarlander_continuous_td3.yaml`.
-  - **Acceptance criteria**: the maintainer decides whether to set it, and whether to go back to rl-zoo's 300,000
-    steps (by 300,000 it had reached 200 on 5 of 5 and 4 of 5); then republish `docs/benchmarks/` for that config.
-    Other off-policy configs (DQN, DDPG, MountainCarContinuous TD3) were not run with it.
+- [ ] **Adopt Updates During the Episode for LunarLanderContinuous TD3** (evidence complete; needs the maintainer's
+  decision)
+  - **Description**: `training.update_every: 1` against the committed config, which updates once per episode, from the
+    per-episode curves of the 400,000-step runs (CHANGELOG.md, 2026-10-30). The 300,000-step column cuts the same
+    curves at 300,000 steps. That is exact, because the budget only decides when training stops: no agent or schedule
+    reads it. The greedy evaluation at 300,000 steps was not recorded.
+
+    | | Committed, 400,000 steps | Every step, 300,000 steps | Every step, 400,000 steps |
+    | :--- | :--- | :--- | :--- |
+    | Seeds 1 to 5: held 200 (mean final) | 3 of 5 (202.8) | 3 of 5 (210.8) | 5 of 5 (225.9) |
+    | Seeds 11 to 15: held 200 (mean final) | 4 of 5 (214.1) | 4 of 5 (188.2; seed 14 at 52) | 5 of 5 (242.8) |
+    | Time per seed | 36 to 47 minutes | about 40 to 58 minutes (scaled by gradient steps; not measured) | 54 to 78 minutes |
+
+  - **Acceptance criteria**: the maintainer chooses between keeping the committed config, `update_every: 1` at
+    400,000 steps (5 of 5 held on both seed sets, one seed more than 20 worse in each, 1.5 to 2 times the time), and
+    `update_every: 1` at 300,000 steps (as many seeds held as today, in more time). A change goes into
+    `configs/lunarlander_continuous_td3.yaml` with a republished `docs/benchmarks/` for that config, in one PR.
+  - **Out of scope**: the other off-policy configs (DQN, DDPG, MountainCarContinuous TD3), which were not run with it.
 
 ### Code Health
 
-The last health dashboard (brooks-health, 2026-10-22) scored 94/100: 0 Critical, 4 Warnings. The first Warning, each
-challenge copying its agent construction and config reading, is fixed (CHANGELOG.md, 2026-10-22); so are the second and
-third, the benchmark's solve numbers and report, and the fourth, trainer tests calling private methods (CHANGELOG.md,
-2026-10-25). The maintainer picked five of the ideas below on 2026-10-28, one pull request each, in this order:
-matplotlib only when plotting (done; CHANGELOG.md, 2026-10-28); the discrete Actor-Critic overfit collapse (done;
-CHANGELOG.md, 2026-10-29); double DQN (done, left opt-in; CHANGELOG.md, 2026-10-29); dueling DQN (done, left opt-in;
-CHANGELOG.md, 2026-10-29); the Pendulum PPO and CartPole DQN experiments (done, nothing adopted; CHANGELOG.md,
-2026-10-29). A learning change is committed only if, on seeds 1 to 5 against the committed config, more seeds hold the
-threshold or the mean final average is better on at least 4 of 5 paired seeds with no seed clearly worse; otherwise it
-stays opt-in and is recorded as tried.
+The last health dashboard (brooks-health, 2026-10-22) scored 94/100 with 0 Critical findings; its four Warnings are
+fixed (CHANGELOG.md, 2026-10-22 and 2026-10-25). The five ideas the maintainer picked on 2026-10-28 are done
+(CHANGELOG.md, 2026-10-28 and 2026-10-29). A learning change is committed only if, on seeds 1 to 5 against the
+committed config, more seeds hold the threshold or the mean final average is better on at least 4 of 5 paired seeds
+with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
 
-What follows are unscheduled ideas.
+- [ ] **Clip Gradients with SGD** (next, picked 2026-10-31)
+  - **Description**: `max_grad_norm` is refused unless `optimizer: adam` (`rl_core/agents/optim.py`). With plain SGD
+    the discrete actor-critics' critic step grows with the squared norm of the hidden activations (‖h‖²), which a
+    growing trunk inflates, and nothing bounds it. Never seen in a real run: the committed Actor-Critic configs use
+    Adam.
+  - **Acceptance criteria**: `max_grad_norm` clips the global gradient norm with `optimizer: sgd` as it does with
+    Adam, in every agent that accepts both optimizers; a non-positive value is still refused. Every committed config
+    and golden test is unchanged, since none combines SGD with a clip.
+  - **Out of scope**: changing which optimizer or clip any committed config uses.
 
-- [ ] **Ideas: Close the Actor-Critic Gap, and Smaller Fixes**
-  - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
-    - The continuous Actor-Critic's greedy policy matches rl-zoo's A2C, but its 100-episode training average stays
-      at about -300 (CHANGELOG.md, 2026-10-18). True A2C updates every n steps: the trainer can now call
-      `update` mid-episode (`training.update_every`), but the Actor-Critic refuses it until it bootstraps a cut
-      episode from the value of the last state; gSDE exploration is the other untried difference
-      (a PPO version was tried on Pendulum, CHANGELOG.md, 2026-10-29; its code is in `~/rl-experiments/item5/` on the
-      development machine).
-    - Pendulum PPO with gSDE and separate 64-64 tanh actor and critic, rl-zoo's recipe (found 2026-10-29): it reached
-      -200 sooner on 9 of seeds 1 to 5 and 11 to 15 (46,400 to 127,200 steps against 72,400 to 193,000) but held on
-      8 of 10, as the committed config, and failed the win rule on 11 to 15 (CHANGELOG.md, 2026-10-29). Untested:
-      whether a shorter budget with it holds -200 as often.
-    - Candidates once wanted: prioritised-replay DQN (parked; MountainCar item). Double and dueling DQN were tried
-      on all four DQN configs and stay opt-in (`double_q`, `dueling`; CHANGELOG.md, 2026-10-29).
-    - LunarLander DQN with `dueling: true` (found 2026-10-29): it reached 200 sooner on all of seeds 1 to 5 (100,000 to
-      148,000 steps against 152,000 to 228,000) with the same final average (234.8 against 235.3; one seed 34
-      lower). The win rule judges the final average only. Untested: held-out seeds, and whether a shorter budget
-      with `dueling` holds 200 as often.
-    - Read `async_envs` strictly in the CartPole and Pendulum `make_env` (found 2026-10-29): `config.get("async_envs",
-      True)` turns a quoted `"false"` into true. Null is meaningful there (synchronous), so `flag` does not fit as is.
-    - Allow `max_grad_norm` with SGD (found 2026-10-29). With plain SGD the discrete actor-critics' critic step grows
-      with the squared norm of the hidden activations (‖h‖²), which a growing trunk inflates, and the gradient clip that
-      would bound it only works with `optimizer: adam`. Never seen in a real run: the committed Actor-Critic configs use
-      Adam.
+Parked ideas, not scheduled. Each needs the maintainer's pick, and some a decision on the win rule, before it becomes
+an item.
+
+- [ ] **The continuous Actor-Critic's training average**: its greedy policy matches rl-zoo's A2C, but its 100-episode
+  training average stays at about -300 on Pendulum (CHANGELOG.md, 2026-10-18). True A2C, each chunk trained on as it
+  is collected (`update_every: 8`), did not close it: mean final -295.0 against -298.5, better on 3 of 5 seeds
+  (CHANGELOG.md, 2026-10-30; PR #153). Untried: rl-zoo's 8 parallel environments (64 transitions per update, against
+  8 here), and gSDE exploration (a PPO version was tried on Pendulum, CHANGELOG.md, 2026-10-29; its code is in
+  `~/rl-experiments/item5/` on the development machine).
+- [ ] **Faster to the threshold, same final average**: these two reached the threshold sooner on most seeds but did not
+  end higher, and the win rule judges the final average only. Adopting either needs a shorter-budget run showing it
+  holds as often, or a win rule that also counts steps to the threshold, which is the maintainer's to set.
+  - Pendulum PPO with gSDE and separate 64-64 tanh actor and critic, rl-zoo's recipe: it reached -200 sooner on 9 of
+    seeds 1 to 5 and 11 to 15 (46,400 to 127,200 steps against 72,400 to 193,000) but held on 8 of 10, as the
+    committed config does, and failed the win rule on 11 to 15 (CHANGELOG.md, 2026-10-29).
+  - LunarLander DQN with `dueling: true`: it reached 200 sooner on all of seeds 1 to 5 (100,000 to 148,000 steps
+    against 152,000 to 228,000) with the same final average (234.8 against 235.3; one seed 34 lower). Held-out seeds
+    were not run.
+- [ ] **Prioritised-replay DQN**: parked, tested but not merged, on `feature/dqn-prioritized-replay`; it did not help
+  MountainCar (MountainCar item, Phase 7). Double and dueling DQN stay opt-in (`double_q`, `dueling`; CHANGELOG.md,
+  2026-10-29).
 
 ### Phase 6 — Advanced RL & Robotics Extensions
 
@@ -77,7 +92,7 @@ What follows are unscheduled ideas.
   - **Known edge cases**: Catastrophic forgetting across difficulty stages; oscillation near threshold boundaries.
   - **Out of scope**: Adversarial environment generation; automatic domain randomization (ADR) meta-policies.
 
-- [ ] **Observation Preprocessing & Frame Stacking**
+- [ ] **Observation Preprocessing & Frame Stacking** (first in Phase 6)
   - **Description**: Support temporal history and partial observability via frame stacking and custom feature
     transformations.
   - **Acceptance criteria**:
