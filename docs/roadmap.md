@@ -56,8 +56,6 @@ What follows are unscheduled ideas.
       148,000 steps against 152,000 to 228,000) with the same final average (234.8 against 235.3; one seed 34
       lower). The win rule judges the final average only. Untested: held-out seeds, and whether a shorter budget
       with `dueling` holds 200 as often.
-    - Read `async_envs` strictly in the CartPole and Pendulum `make_env` (found 2026-10-29): `config.get("async_envs",
-      True)` turns a quoted `"false"` into true. Null is meaningful there (synchronous), so `flag` does not fit as is.
     - Allow `max_grad_norm` with SGD (found 2026-10-29). With plain SGD the discrete actor-critics' critic step grows
       with the squared norm of the hidden activations (‖h‖²), which a growing trunk inflates, and the gradient clip that
       would bound it only works with `optimizer: adam`. Never seen in a real run: the committed Actor-Critic configs use
