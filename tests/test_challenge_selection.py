@@ -403,20 +403,60 @@ def test_vectorized_factories_reject_a_setting_the_challenge_does_not_support(ke
         factory({foreign: 0.1}, num_envs=1)
 
 
+_ASYNC_ENVS_CASES = [
+    ({}, gym.vector.AsyncVectorEnv),
+    ({"async_envs": True}, gym.vector.AsyncVectorEnv),
+    ({"async_envs": None}, gym.vector.SyncVectorEnv),
+    ({"async_envs": False}, gym.vector.SyncVectorEnv),
+    ({"async_envs": np.bool_(False)}, gym.vector.SyncVectorEnv),
+]
+
+
 @pytest.mark.parametrize(
-    ("key", "async_envs"), [(k, v) for k in sorted(VEC_FACTORIES) for v in (None, False)]
+    ("key", "config", "expected"),
+    [
+        (k, config, expected)
+        for k in sorted(VEC_FACTORIES)
+        for config, expected in _ASYNC_ENVS_CASES
+    ],
 )
-def test_vectorized_factories_run_synchronously_when_async_envs_is_off(key, async_envs):
-    """null keeps meaning synchronous, as before the shared settings reader."""
-    vec_env = VEC_FACTORIES[key][0]({"async_envs": async_envs}, num_envs=1)
+def test_vectorized_factories_choose_processes_by_async_envs(key, config, expected):
+    """Unset or true runs each environment in its own process; null keeps meaning synchronous."""
+    vec_env = VEC_FACTORIES[key][0](config, num_envs=1)
     try:
-        assert isinstance(vec_env, gym.vector.SyncVectorEnv)
+        assert isinstance(vec_env, expected), f"{config} should build a {expected.__name__}"
     finally:
         vec_env.close()
 
 
-@pytest.mark.parametrize("key", sorted(VEC_FACTORIES))
-def test_one_environment_accepts_the_vectorized_setting(key):
-    """An environment section shared by both factories may carry async_envs."""
-    env = CHALLENGES[key]().make_env({"async_envs": True}, render_mode=None)
+def build_vectorized(key: str) -> Any:
+    return lambda config: VEC_FACTORIES[key][0](config, num_envs=1)
+
+
+def build_one(key: str) -> Any:
+    return lambda config: CHALLENGES[key]().make_env(config, render_mode=None)
+
+
+@pytest.mark.parametrize(
+    ("key", "build", "async_envs"),
+    [
+        pytest.param(k, builder(k), v, id=f"{k}-{builder.__name__.removeprefix('build_')}-{v!r}")
+        for k in sorted(VEC_FACTORIES)
+        for builder in (build_vectorized, build_one)
+        for v in ("false", "no", 0, 1, "true")
+    ],
+)
+def test_both_factories_reject_an_async_envs_that_is_not_a_boolean(key, build, async_envs):
+    """A quoted "false" must not start parallel processes, nor pass unread in one environment."""
+    with pytest.raises(ValueError, match="async_envs must be true, false or null"):
+        build({"async_envs": async_envs}).close()
+
+
+@pytest.mark.parametrize(
+    ("key", "async_envs"),
+    [(k, v) for k in sorted(VEC_FACTORIES) for v in (True, False, None, np.bool_(False))],
+)
+def test_one_environment_accepts_the_vectorized_setting(key, async_envs):
+    """An environment section shared by both factories may carry any valid async_envs."""
+    env = CHALLENGES[key]().make_env({"async_envs": async_envs}, render_mode=None)
     env.close()

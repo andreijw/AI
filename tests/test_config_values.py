@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from rl_core.agents.config_values import (
+    async_envs_setting,
     check_positive_int,
     flag,
     non_negative_int,
@@ -88,3 +89,24 @@ def test_flag_rejects_everything_else_naming_the_key(value):
     """A quoted "false" in a YAML file would otherwise be truthy and switch the setting on."""
     with pytest.raises(ValueError, match="double_q must be true or false"):
         flag({"double_q": value}, "double_q", False)
+
+
+@pytest.mark.parametrize("default", [True, False])
+def test_async_envs_setting_falls_back_to_the_default_when_unset(default):
+    assert async_envs_setting({}, default) is default
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(None, False), (True, True), (False, False), (np.bool_(True), True), (np.bool_(False), False)],
+)
+def test_async_envs_setting_reads_null_as_synchronous(value, expected):
+    """null meant synchronous before the strict reader, and still does."""
+    assert async_envs_setting({"async_envs": value}, True) is expected
+
+
+@pytest.mark.parametrize("value", ["false", "no", "true", 0, 1])
+def test_async_envs_setting_rejects_everything_else_naming_the_key(value):
+    """A quoted "false" would otherwise be truthy and start one process per environment."""
+    with pytest.raises(ValueError, match=f"async_envs must be true, false or null, got {value!r}"):
+        async_envs_setting({"async_envs": value}, True)

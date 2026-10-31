@@ -12,6 +12,16 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-10-31
+
+### Fixed
+
+- **`async_envs` read strictly** (`fix/strict-async-envs`): the CartPole and Pendulum environment factories turned a
+  quoted `"false"` or `"no"` into parallel processes. `async_envs` now takes true, false or null (null still means
+  synchronous, unset still asynchronous), and anything else, `0` and `1` included, is refused by both the vectorized
+  and the single-environment factory with a message naming the key. The check is `async_envs_setting` in
+  `rl_core.agents.config_values`, which shares its boolean test with `flag`. No committed config sets the key.
+
 ## 2026-10-30
 
 ### Added

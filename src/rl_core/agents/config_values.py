@@ -1,4 +1,7 @@
-"""Strict readers for agent config values, so a mistyped setting fails at construction."""
+"""Strict readers for config values, so a mistyped setting fails at construction.
+
+The agents read their settings here; the challenges' environment factories read ``async_envs``.
+"""
 
 from collections.abc import Mapping
 from typing import Any
@@ -27,15 +30,28 @@ def flag(config: Mapping[str, Any], key: str, default: bool) -> bool:
 
     A quoted ``"false"`` from a hand-written YAML file would otherwise be truthy.
     """
-    value = config.get(key, default)
-    if not isinstance(value, bool | np.bool_):
-        raise ValueError(f"{key} must be true or false, got {value!r}")
-    return bool(value)
+    return _checked_bool(key, config.get(key, default), "true or false")
+
+
+def async_envs_setting(config: Mapping[str, Any], default: bool) -> bool:
+    """An environment section's ``async_envs`` (or ``default`` if unset), with null meaning false.
+
+    Null has always meant synchronous environments. Anything but null or a boolean is rejected:
+    a quoted ``"false"`` would otherwise start one process per environment.
+    """
+    value = config.get("async_envs", default)
+    return False if value is None else _checked_bool("async_envs", value, "true, false or null")
 
 
 def check_positive_int(name: str, value: Any) -> int:
     """One value (such as a list entry) as an int, checked as :func:`positive_int` does under ``name``."""
     return _checked_int(name, value, minimum=1)
+
+
+def _checked_bool(name: str, value: Any, allowed: str) -> bool:
+    if not isinstance(value, bool | np.bool_):
+        raise ValueError(f"{name} must be {allowed}, got {value!r}")
+    return bool(value)
 
 
 _KIND_BY_MINIMUM = {0: "non-negative", 1: "positive"}

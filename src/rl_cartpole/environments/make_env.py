@@ -13,6 +13,7 @@ from typing import Any
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
+from rl_core.agents.config_values import async_envs_setting
 from rl_core.utils.config import read_env_settings
 
 from .cartpole_env import CartPoleEnv
@@ -204,7 +205,8 @@ def make_env_from_config(config: dict) -> CartPoleEnv:
 
     Raises:
         ValueError: If domain_randomization ranges are malformed, or the config sets a setting
-            CartPole does not support (see ACCEPTED_SETTINGS).
+            CartPole does not support (see ACCEPTED_SETTINGS), or async_envs is not true, false
+            or null.
 
     Example:
         >>> config = {
@@ -222,6 +224,8 @@ def make_env_from_config(config: dict) -> CartPoleEnv:
         >>> env = make_env_from_config(config)
     """
     settings = read_env_settings(config, ACCEPTED_SETTINGS, "CartPole-v1")
+    # Checked although unused here: one environment section may serve both factories.
+    async_envs_setting(config, ACCEPTED_SETTINGS["async_envs"])
     del settings["async_envs"]
     settings["domain_randomization"] = _validate_domain_randomization(
         settings["domain_randomization"]
@@ -247,7 +251,8 @@ def make_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.Vect
 
     Raises:
         ValueError: If domain_randomization ranges are malformed, or the config sets a setting
-            CartPole does not support (see ACCEPTED_SETTINGS).
+            CartPole does not support (see ACCEPTED_SETTINGS), or async_envs is not true, false
+            or null.
 
     Example:
         >>> config = {
@@ -262,7 +267,7 @@ def make_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.Vect
     settings["domain_randomization"] = _validate_domain_randomization(
         settings["domain_randomization"]
     )
-    settings["async_envs"] = config.get("async_envs", True)  # null means synchronous, as before
+    settings["async_envs"] = async_envs_setting(config, ACCEPTED_SETTINGS["async_envs"])
     return make_vec_env(
         num_envs=num_envs,
         env_name=settings.pop("name"),
