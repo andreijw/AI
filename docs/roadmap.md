@@ -41,9 +41,10 @@ What follows are unscheduled ideas.
 - [ ] **Ideas: Close the Actor-Critic Gap, and Smaller Fixes**
   - **Description**: Lower-priority ideas recorded 2026-10-18, to be turned into items when picked.
     - The continuous Actor-Critic's greedy policy matches rl-zoo's A2C, but its 100-episode training average stays
-      at about -300 (CHANGELOG.md, 2026-10-18). True A2C updates every n steps: the trainer can now call
-      `update` mid-episode (`training.update_every`), but the Actor-Critic refuses it until it bootstraps a cut
-      episode from the value of the last state; gSDE exploration is the other untried difference
+      at about -300 (CHANGELOG.md, 2026-10-18). True A2C, each chunk trained on as it is collected
+      (`update_every: 8`), did not close it: mean final -295.0 against -298.5, better on 3 of 5 seeds
+      (CHANGELOG.md, 2026-10-30). Untried differences: rl-zoo's 8 parallel environments (64 transitions per update,
+      against 8 here), and gSDE exploration
       (a PPO version was tried on Pendulum, CHANGELOG.md, 2026-10-29; its code is in `~/rl-experiments/item5/` on the
       development machine).
     - Pendulum PPO with gSDE and separate 64-64 tanh actor and critic, rl-zoo's recipe (found 2026-10-29): it reached

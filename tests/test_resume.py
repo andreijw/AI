@@ -9,7 +9,7 @@ import pytest
 
 from rl_acrobot.environments import AcrobotEnv
 from rl_cartpole.environments import CartPoleEnv
-from rl_core.agents import RandomAgent
+from rl_core.agents import ContinuousActorCriticAgent, RandomAgent
 from rl_core.environments import ResumableEnv
 from rl_core.training import Trainer
 from rl_mountaincar.environments import MountainCarEnv
@@ -100,6 +100,22 @@ def test_a_resumed_run_ends_exactly_like_one_that_never_stopped(
     assert first.logger.records + resumed.logger.records == full.logger.records
     for name in ("agent_episode_10.pt", "trainer_episode_10.npz"):
         _assert_same_file(tmp_path / "full" / name, tmp_path / "split" / name)
+
+
+def test_a_resumed_a2c_run_updating_mid_episode_ends_like_one_that_never_stopped(tmp_path):
+    """The continuous Actor-Critic with ``update_every`` equal to ``n_steps`` (true A2C): 15-step
+    episodes in chunks of 4, 4, 4, 3, stopped at checkpoint 5."""
+    config = {"seed": 2, "hidden_dim": 8, "n_steps": 4, "action_low": -2.0, "action_high": 2.0}
+    args = (ContinuousActorCriticAgent, config, _pendulum, (3, 1))
+    full = _trainer(*args, tmp_path / "full", num_episodes=10, update_every=4)
+    full_stats = full.train()
+    _trainer(*args, tmp_path / "split", num_episodes=5, update_every=4).train()
+    resumed = _trainer(*args, tmp_path / "split", num_episodes=10, update_every=4)
+    resumed.resume(str(tmp_path / "split" / "agent_episode_5.pt"))
+    assert resumed.train() == full_stats
+    assert resumed.episode_rewards == full.episode_rewards
+    _assert_same_file(tmp_path / "full" / "agent_episode_10.pt",
+                      tmp_path / "split" / "agent_episode_10.pt")  # fmt: skip
 
 
 def test_a_step_budget_counts_the_steps_trained_before_the_stop(tmp_path):
