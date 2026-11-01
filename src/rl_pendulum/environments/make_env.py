@@ -8,6 +8,7 @@ from typing import Any
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
+from rl_core.agents.config_values import async_envs_setting
 from rl_core.utils.config import read_env_settings
 
 from .pendulum_env import PendulumEnv
@@ -113,9 +114,12 @@ def make_env_from_config(config: dict[str, Any]) -> PendulumEnv:
     """Create a Pendulum environment from a configuration dictionary.
 
     Raises:
-        ValueError: If the config sets a setting Pendulum does not support (see ACCEPTED_SETTINGS).
+        ValueError: If the config sets a setting Pendulum does not support (see ACCEPTED_SETTINGS),
+            or async_envs is not true, false or null.
     """
     settings = read_env_settings(config, ACCEPTED_SETTINGS, "Pendulum-v1")
+    # Checked although unused here: one environment section may serve both factories.
+    async_envs_setting(config, ACCEPTED_SETTINGS["async_envs"])
     del settings["async_envs"]
     return make_env(
         env_name=settings.pop("name"),
@@ -129,10 +133,11 @@ def make_vec_env_from_config(config: dict[str, Any], num_envs: int = 4) -> gym.v
     """Create vectorized Pendulum environments from a configuration dictionary.
 
     Raises:
-        ValueError: If the config sets a setting Pendulum does not support (see ACCEPTED_SETTINGS).
+        ValueError: If the config sets a setting Pendulum does not support (see ACCEPTED_SETTINGS),
+            or async_envs is not true, false or null.
     """
     settings = read_env_settings(config, ACCEPTED_SETTINGS, "Pendulum-v1")
-    settings["async_envs"] = config.get("async_envs", True)  # null means synchronous, as before
+    settings["async_envs"] = async_envs_setting(config, ACCEPTED_SETTINGS["async_envs"])
     return make_vec_env(
         num_envs=num_envs,
         env_name=settings.pop("name"),

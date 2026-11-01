@@ -12,9 +12,33 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-10-31
+
+### Fixed
+
+- **`async_envs` read strictly** (`fix/strict-async-envs`): the CartPole and Pendulum environment factories turned a
+  quoted `"false"` or `"no"` into parallel processes. `async_envs` now takes true, false or null (null still means
+  synchronous, unset still asynchronous), and anything else, `0` and `1` included, is refused by both the vectorized
+  and the single-environment factory with a message naming the key. The check is `async_envs_setting` in
+  `rl_core.agents.config_values`, which shares its boolean test with `flag`. No committed config sets the key.
+
 ## 2026-10-30
 
 ### Added
+
+- **True A2C for the continuous Actor-Critic, opt-in** (`feature/a2c-n-step-actor-critic`): with
+  `training.update_every` equal to its `n_steps`, the trainer hands it each chunk as it is collected, so the next
+  chunk is sampled by the updated policy, instead of replaying the finished episode in chunks sampled by a policy up
+  to 24 updates old. The chunk maths is unchanged (GAE from the current critic, bootstrapped from the chunk's next
+  state unless the episode truly terminated, so a time-limit cut bootstraps). Any other `update_every`, or `n_steps` 0,
+  is refused at construction; for that the trainer now passes its value to
+  `enable_mid_episode_updates(update_every)`. Without `update_every` nothing on the update path changed, the baseline
+  below reproduces 2026-10-19's figures, and checkpoints keep their keys. Pendulum-v1,
+  `configs/pendulum_actor_critic.yaml` plus `update_every: 8`, 1,000,000 steps, seeds 1 to 5, through the benchmark,
+  paired against the committed config: no seed solves either way; mean final 100-episode average -295.0 against
+  -298.5, better on 3 of 5 (+2.5, +9.0, +13.7; -7.0 and -0.8 on seeds 2 and 3); greedy evaluation -168 ± 23 against
+  -172 ± 27; about 20% slower (319 s against 269 s a seed). It fails the project's win rule and the config is
+  unchanged: the stale chunks were not what keeps the training average near -300.
 
 - **Off-policy updates during the episode, opt-in** (`feature/off-policy-mid-episode-updates`): `training.update_every:
   N` makes the trainer call `agent.update` every N steps inside an episode, then once more on what is left at its end,

@@ -197,6 +197,9 @@ Creates vectorized environments from configuration dictionary.
 
 - `config`: Dictionary with environment parameters
 - `num_envs`: Number of parallel environments (default: 4)
+- `config["async_envs"]`: `true` (the default when unset) runs each environment in its own process; `false` or `null`
+  runs them in this one. Anything else, such as a quoted `"false"`, raises `ValueError`, and so does
+  `make_env_from_config`, since one environment section may serve both
 
 **Returns**: `gym.vector.VectorEnv` instance
 

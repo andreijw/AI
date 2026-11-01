@@ -58,39 +58,40 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    bounded control (Gaussian policies).
 4. **Structured Artifact Scoping**: Generated logs, checkpoints, plots, and videos are partitioned deterministically
    by challenge and algorithm: `<artifact_root>/<challenge>/<agent>/`.
-5. **Pure NumPy Neural Foundations**: Neural network architectures and gradient optimizations (Adam, He-init,
-   clipped PPO, GAE) are implemented natively in NumPy without heavyweight external frameworks. One `Adam` in
-   `rl_core/agents/optim.py` serves the continuous agents and, with `optimizer: adam` in the agent config,
-   REINFORCE, Actor-Critic, PPO and DQN, which otherwise use plain SGD (DQN's SGD clips each gradient element at
-   `grad_clip_value`). DDPG's two-hidden-layer actor and critic use the shared `rl_core/agents/mlp.py`
-   (stateless forward and backward passes over named weights), and every continuous agent reads its bounds through
-   `rl_core/agents/bounds.py`. Discrete PPO takes the standard form when its
-   config sets `rollout_steps`, `minibatch_size` and `gae_lambda`: it buffers whole episodes until it holds
-   `rollout_steps` transitions, computes GAE over them (`rl_core/agents/returns.py`, shared with continuous PPO)
-   and takes `ppo_epochs` passes of shuffled `minibatch_size` steps. Without those keys it trains on each episode
-   alone, full batch, with return-minus-value advantages. The Trainer calls `update` once per episode by default; PPO
-   returns no metrics on the episodes it only stores. With `training.update_every: N` it calls `update` every N
-   steps inside the episode instead, with the steps since the last call, and the rest with the step that ends the
-   episode. Only an agent that learns from a replay buffer accepts that (`enable_mid_episode_updates`, which
-   `BaseAgent` refuses): DQN and DDPG take `MidEpisodeUpdates` from `rl_core/agents/mid_episode.py`, which counts
-   gradient steps over every transition trained on, so `updates_per_step: 0.5` still means one step per two
-   transitions with one transition per call. The PyTorch backends copy only the actor back to NumPy after an
-   update and the rest before a checkpoint. Both PPO agents keep those episodes in one `EpisodeRollout`
-   (`rl_core/agents/rollout.py`), which saves them in checkpoints and restores them on load; a rollout still partly
-   filled when training ends is not trained on. Each episode ends its GAE trace, and an episode cut by the time limit
-   (or by `max_steps_per_episode`) adds γ·V(next state) to its last reward, so CartPole's 500-step limit is not a
-   terminal state. Continuous PPO buffers whole episodes the same way with its own `rollout_steps` and
-   applies the same rule; both read it from `episode_end` in `rl_core/agents/returns.py`. DQN and DDPG
-   store the trainer's `terminated` flag, so they bootstrap through time limits too. The continuous Actor-Critic
-   replays each episode in `n_steps` chunks, each with GAE targets bootstrapped from the chunk's next state unless
-   the episode truly terminated. Both continuous Gaussian agents can bound their policy mean inside the action
-   bounds (`bounded_mean`: bias + scale·tanh(z)); without it the linear mean head can drift past a bound, where every
-   executed action is the same. DDPG explores with Gaussian noise or, with `noise_type: ornstein_uhlenbeck`, with
-   the temporally correlated noise of `rl_core/agents/exploration_noise.py`, and resets that noise in `end_episode`,
-   which the Trainer calls after every training episode's `update` and before any checkpoint save
-   (`BaseAgent.end_episode`, a no-op by default). `update` itself no longer resets it, so an agent updated
-   mid-episode keeps its noise process running. TD3 (`TD3Agent`, a `DDPGAgent` subclass) adds a second critic and
-   target critic (taking the smaller target), target-policy smoothing noise drawn from its own seed stream, and
+5. **Pure NumPy Neural Foundations**: Neural network architectures and gradient optimizations (Adam, He-init, clipped
+   PPO, GAE) are implemented natively in NumPy without heavyweight external frameworks. One `Adam` in
+   `rl_core/agents/optim.py` serves the continuous agents and, with `optimizer: adam` in the agent config, REINFORCE,
+   Actor-Critic, PPO and DQN, which otherwise use plain SGD (DQN's SGD clips each gradient element at
+   `grad_clip_value`). DDPG's two-hidden-layer actor and critic use the shared `rl_core/agents/mlp.py` (stateless
+   forward and backward passes over named weights), and every continuous agent reads its bounds through
+   `rl_core/agents/bounds.py`. Discrete PPO takes the standard form when its config sets `rollout_steps`,
+   `minibatch_size` and `gae_lambda`: it buffers whole episodes until it holds `rollout_steps` transitions, computes
+   GAE over them (`rl_core/agents/returns.py`, shared with continuous PPO) and takes `ppo_epochs` passes of shuffled
+   `minibatch_size` steps. Without those keys it trains on each episode alone, full batch, with return-minus-value
+   advantages. The Trainer calls `update` once per episode by default; PPO returns no metrics on the episodes it only
+   stores. With `training.update_every: N` it calls `update` every N steps inside the episode instead, with the steps
+   since the last call, and the rest with the step that ends the episode. Only an agent that learns from a replay
+   buffer, or the continuous Actor-Critic with `n_steps` equal to N, accepts that
+   (`enable_mid_episode_updates(update_every)`, which `BaseAgent` refuses): DQN and DDPG take `MidEpisodeUpdates` from
+   `rl_core/agents/mid_episode.py`, which counts gradient steps over every transition trained on, so
+   `updates_per_step: 0.5` still means one step per two transitions with one transition per call. The PyTorch backends
+   copy only the actor back to NumPy after an update and the rest before a checkpoint. Both PPO agents keep those
+   episodes in one `EpisodeRollout` (`rl_core/agents/rollout.py`), which saves them in checkpoints and restores them
+   on load; a rollout still partly filled when training ends is not trained on. Each episode ends its GAE trace, and
+   an episode cut by the time limit (or by `max_steps_per_episode`) adds γ·V(next state) to its last reward, so
+   CartPole's 500-step limit is not a terminal state. Continuous PPO buffers whole episodes the same way with its own
+   `rollout_steps` and applies the same rule; both read it from `episode_end` in `rl_core/agents/returns.py`. DQN and
+   DDPG store the trainer's `terminated` flag, so they bootstrap through time limits too. The continuous Actor-Critic
+   replays each episode in `n_steps` chunks, each with GAE targets bootstrapped from the chunk's next state unless the
+   episode truly terminated; with `training.update_every` equal to `n_steps` it trains each chunk as the Trainer hands
+   it over instead, so the next is sampled by the updated policy (true A2C). Both continuous Gaussian agents can bound
+   their policy mean inside the action bounds (`bounded_mean`: bias + scale·tanh(z)); without it the linear mean head
+   can drift past a bound, where every executed action is the same. DDPG explores with Gaussian noise or, with
+   `noise_type: ornstein_uhlenbeck`, with the temporally correlated noise of `rl_core/agents/exploration_noise.py`,
+   and resets that noise in `end_episode`, which the Trainer calls after every training episode's `update` and before
+   any checkpoint save (`BaseAgent.end_episode`, a no-op by default). `update` itself no longer resets it, so an agent
+   updated mid-episode keeps its noise process running. TD3 (`TD3Agent`, a `DDPGAgent` subclass) adds a second critic
+   and target critic (taking the smaller target), target-policy smoothing noise drawn from its own seed stream, and
    actor and target updates on every `policy_delay`-th gradient step.
 
 ---
