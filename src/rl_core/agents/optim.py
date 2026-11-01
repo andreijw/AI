@@ -1,20 +1,32 @@
 """Optimisers shared by the NumPy agents.
 
 Agents keep their parameters as named arrays (and the odd Python float). An optimiser here holds
-only its own state; :meth:`Adam.step` returns the amount to subtract from each parameter and the
-agent applies it, so each agent stays in charge of its own weights.
+only its own state; its ``step`` returns the amount to subtract from each parameter and the agent
+applies it, so each agent stays in charge of its own weights.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
 from .config_values import optional_positive_int
 
 OPTIMIZERS = ("sgd", "adam")
+
+
+class Optimizer(Protocol):
+    """What an agent needs of an optimiser: a step, and its state for a checkpoint."""
+
+    max_grad_norm: float | None
+
+    def step(self, grads: Mapping[str, Any], lr: float) -> dict[str, Any]: ...
+
+    def state(self, prefix: str = "adam_") -> dict[str, np.ndarray]: ...
+
+    def load_state(self, data: Mapping[str, Any], prefix: str = "adam_") -> None: ...
 
 
 class Adam:
@@ -60,14 +72,7 @@ class Adam:
         self.t += 1
         beta1, beta2 = self.BETA1, self.BETA2
 
-        clip_coef = 1.0
-        if self.max_grad_norm is not None:
-            total_norm_sq = 0.0
-            for g in grads.values():
-                total_norm_sq += np.sum(np.square(g))
-            total_norm = np.sqrt(total_norm_sq)
-            clip_coef = min(1.0, self.max_grad_norm / (total_norm + 1e-6))
-
+        clip_coef = _clip_coefficient(grads, self.max_grad_norm)
         steps: dict[str, Any] = {}
         for k, grad in grads.items():
             g_clipped = grad * clip_coef
@@ -121,33 +126,70 @@ class Adam:
                 self.v[name] = _zeros_like(self.v[name])
 
 
-def optimizer_from_config(config: Mapping[str, Any], params: Mapping[str, Any]) -> Adam | None:
+class ClippedSGD:
+    """
+    Plain SGD with the global gradient-norm clip :class:`Adam` uses.
+
+    Only a config that sets ``max_grad_norm`` with plain SGD gets one; without a clip the agents
+    take their own SGD step. It keeps no state, so a checkpoint holds nothing for it.
+    """
+
+    def __init__(self, max_grad_norm: float) -> None:
+        self.max_grad_norm: float | None = max_grad_norm
+
+    def step(self, grads: Mapping[str, Any], lr: float) -> dict[str, Any]:
+        """``lr`` times each gradient, all scaled together so their joint L2 norm is at most
+        ``max_grad_norm``. ``grads`` is not modified."""
+        scale = lr * _clip_coefficient(grads, self.max_grad_norm)
+        return {name: scale * grad for name, grad in grads.items()}
+
+    def state(self, prefix: str = "adam_") -> dict[str, np.ndarray]:
+        """Nothing: plain SGD has no state to resume."""
+        return {}
+
+    def load_state(self, data: Mapping[str, Any], prefix: str = "adam_") -> None:
+        """Nothing to restore; an Adam checkpoint's moments are ignored."""
+
+
+def optimizer_from_config(config: Mapping[str, Any], params: Mapping[str, Any]) -> Optimizer | None:
     """
     Build the optimiser an agent's config asks for.
 
     Args:
         config: Agent config. ``optimizer`` is ``"sgd"`` (default) or ``"adam"``;
-            ``max_grad_norm`` (optional, positive) clips the global gradient norm for Adam.
+            ``max_grad_norm`` (optional, positive) clips the global norm of the gradient the
+            agent steps with, for either.
         params: The agent's parameters by name.
 
     Returns:
-        An :class:`Adam`, or None for plain SGD, which the agent applies itself.
+        An :class:`Adam`; a :class:`ClippedSGD` for plain SGD with ``max_grad_norm``; or None for
+        plain SGD without one, which the agent applies itself.
 
     Raises:
-        ValueError: For an unknown optimizer, a non-positive ``max_grad_norm``, or a
-            ``max_grad_norm`` with plain SGD.
+        ValueError: For an unknown optimizer or a non-positive ``max_grad_norm``.
     """
     name = str(config.get("optimizer", "sgd")).lower()
     if name not in OPTIMIZERS:
         raise ValueError(f"optimizer must be one of {OPTIMIZERS}, got {config['optimizer']!r}")
-    max_grad_norm = config.get("max_grad_norm")
+    raw_clip = config.get("max_grad_norm")
+    max_grad_norm = None if raw_clip is None else float(raw_clip)
+    if max_grad_norm is not None and not max_grad_norm > 0.0:  # refuses NaN too
+        raise ValueError(f"max_grad_norm must be positive, got {raw_clip!r}")
     if name == "sgd":
-        if max_grad_norm is not None:
-            raise ValueError('max_grad_norm requires optimizer "adam"; plain SGD does not clip')
-        return None
-    if max_grad_norm is not None and float(max_grad_norm) <= 0.0:
-        raise ValueError(f"max_grad_norm must be positive, got {max_grad_norm!r}")
-    return Adam(params, None if max_grad_norm is None else float(max_grad_norm))
+        return None if max_grad_norm is None else ClippedSGD(max_grad_norm)
+    return Adam(params, max_grad_norm)
+
+
+def _clip_coefficient(grads: Mapping[str, Any], max_grad_norm: float | None) -> float:
+    """The factor that scales ``grads`` to a joint L2 norm of at most ``max_grad_norm`` (1 if
+    unset)."""
+    if max_grad_norm is None:
+        return 1.0
+    total_norm_sq = 0.0
+    for g in grads.values():
+        total_norm_sq += np.sum(np.square(g))
+    total_norm = np.sqrt(total_norm_sq)
+    return min(1.0, max_grad_norm / (total_norm + 1e-6))
 
 
 def _zeros_like(value: np.ndarray | float) -> Any:

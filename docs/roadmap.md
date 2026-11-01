@@ -9,9 +9,9 @@ an item that is done moves there, condensed, in the hand-off commit that complet
 
 ## Upcoming Milestones
 
-Order (the maintainer's decision, 2026-10-31): finish Training and Code Health first, the TD3 decision and then
-gradient clipping with SGD, then Phase 6 starting with frame stacking. The parked ideas under Code Health do not block
-Phase 6.
+Order (the maintainer's decision, 2026-10-31): finish Training and Code Health first (the TD3 decision is left;
+gradient clipping with SGD is done, CHANGELOG.md, 2026-11-01), then Phase 6 starting with frame stacking. The parked
+ideas under Code Health do not block Phase 6.
 
 ### Workflow Tooling
 
@@ -45,16 +45,6 @@ fixed (CHANGELOG.md, 2026-10-22 and 2026-10-25). The five ideas the maintainer p
 (CHANGELOG.md, 2026-10-28 and 2026-10-29). A learning change is committed only if, on seeds 1 to 5 against the
 committed config, more seeds hold the threshold or the mean final average is better on at least 4 of 5 paired seeds
 with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
-
-- [ ] **Clip Gradients with SGD** (next, picked 2026-10-31)
-  - **Description**: `max_grad_norm` is refused unless `optimizer: adam` (`rl_core/agents/optim.py`). With plain SGD
-    the discrete actor-critics' critic step grows with the squared norm of the hidden activations (‖h‖²), which a
-    growing trunk inflates, and nothing bounds it. Never seen in a real run: the committed Actor-Critic configs use
-    Adam.
-  - **Acceptance criteria**: `max_grad_norm` clips the global gradient norm with `optimizer: sgd` as it does with
-    Adam, in every agent that accepts both optimizers; a non-positive value is still refused. Every committed config
-    and golden test is unchanged, since none combines SGD with a clip.
-  - **Out of scope**: changing which optimizer or clip any committed config uses.
 
 Parked ideas, not scheduled. Each needs the maintainer's pick, and some a decision on the win rule, before it becomes
 an item.

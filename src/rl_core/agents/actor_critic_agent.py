@@ -37,7 +37,7 @@ class ActorCriticAgent(ActorCriticBase):
     Config keys (all optional):
         learning_rate (float): Step size for the configured optimizer. Default: 1e-3.
         optimizer     (str):   "sgd" or "adam". Default: "sgd".
-        max_grad_norm (float): Global gradient-norm clip; requires optimizer "adam".
+        max_grad_norm (float): Global gradient-norm clip, with either optimizer.
                                Default: none.
         gamma         (float): Discount factor ∈ (0, 1]. Default: 0.99.
         hidden_dim    (int):   Shared hidden layer width. Default: 128.

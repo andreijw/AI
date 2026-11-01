@@ -12,6 +12,18 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-01
+
+### Added
+
+- **Gradient clipping with plain SGD** (`feature/sgd-gradient-clip`): `max_grad_norm` used to be refused unless
+  `optimizer: adam`. REINFORCE, the discrete Actor-Critic, discrete PPO and DQN now accept it with SGD too, and clip
+  the global norm of the mean gradient, as Adam does (`ClippedSGD` in `rl_core/agents/optim.py`, which shares Adam's
+  clip). With SGD, DQN's `max_grad_norm` replaces its element-wise `grad_clip_value`, and setting both is refused. A
+  NaN `max_grad_norm`, which silently turned the clip off, is now refused with Adam too. SGD without a clip keeps its
+  own step, so every committed config and golden test is unchanged; no committed config uses the new path, and no
+  learning run was made.
+
 ## 2026-10-31
 
 ### Fixed

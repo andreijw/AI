@@ -3,7 +3,7 @@
 * ``exploration_steps``: epsilon falls linearly per training action instead of once per update call;
 * bootstrapping through time-limit cuts: the trainer's ``terminated`` flag, not ``dones``, ends the
   bootstrap;
-* ``optimizer``: the shared SGD / Adam option, with ``max_grad_norm`` a global-norm clip for Adam and
+* ``optimizer``: the shared SGD / Adam option, with ``max_grad_norm`` a global-norm clip for either and
   ``grad_clip_value`` DQN's element-wise clip for plain SGD;
 * checkpoints that hold everything training needs to resume.
 """
@@ -200,15 +200,33 @@ def test_grad_clip_value_defaults_to_ten():
     assert _agent().grad_clip_value == 10.0
 
 
-def test_max_grad_norm_with_plain_sgd_is_an_error():
-    """As in every other agent: max_grad_norm is Adam's global-norm clip, not an SGD setting."""
-    with pytest.raises(ValueError, match="max_grad_norm"):
-        _agent(max_grad_norm=1.0)
+def test_max_grad_norm_with_grad_clip_value_is_an_error():
+    """With plain SGD the two are alternative clips, so asking for both is ambiguous."""
+    with pytest.raises(ValueError, match="grad_clip_value.*max_grad_norm"):
+        _agent(max_grad_norm=1.0, grad_clip_value=5.0)
 
 
-def test_grad_clip_value_with_adam_is_an_error():
-    with pytest.raises(ValueError, match="grad_clip_value"):
-        _agent(optimizer="adam", grad_clip_value=1.0)
+def test_max_grad_norm_null_leaves_the_element_wise_clip_in_place():
+    agent = _agent(max_grad_norm=None, grad_clip_value=5.0)
+    assert agent.grad_clip_value == 5.0
+
+
+def test_sgd_with_max_grad_norm_replaces_the_element_wise_clip():
+    """Elements of 50 pass unclipped when the global norm is under max_grad_norm, not cut to 10."""
+    agent = _agent(learning_rate=0.1, max_grad_norm=1e6)
+    before = weights(agent)
+    grads = {name: np.full(before[name].shape, 50.0) for name in DQN_ONLINE_WEIGHTS}
+    apply_gradients(agent, grads)
+    after = weights(agent)
+    for name in DQN_ONLINE_WEIGHTS:
+        np.testing.assert_allclose(after[name], before[name] - 5.0, rtol=1e-12, err_msg=name)
+
+
+@pytest.mark.parametrize("extra", [{}, {"max_grad_norm": 1.0}])
+def test_grad_clip_value_with_adam_is_an_error(extra):
+    """With Adam the message names Adam's clip, even when max_grad_norm is set too."""
+    with pytest.raises(ValueError, match="with Adam, clip the global norm"):
+        _agent(optimizer="adam", grad_clip_value=1.0, **extra)
 
 
 @pytest.mark.parametrize("value", [0.0, -1.0])

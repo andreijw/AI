@@ -9,7 +9,7 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 
 from .base_agent import BaseAgent
 from .config_values import positive_int
-from .optim import Adam, optimizer_from_config
+from .optim import Optimizer, optimizer_from_config
 from .returns import discounted_returns
 from .softmax import stable_softmax
 
@@ -37,7 +37,7 @@ class ReinforceAgent(BaseAgent):
         hidden_dim   (int):   Width of the single hidden layer. Default: 128.
         seed         (int):   RNG seed for weight initialisation. Default: None.
         optimizer    (str):   "sgd" or "adam" (see :mod:`rl_core.agents.optim`). Default: "sgd".
-        max_grad_norm (float): Global gradient-norm clip; requires optimizer "adam". Default: none.
+        max_grad_norm (float): Global gradient-norm clip, with either optimizer. Default: none.
     """
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
@@ -74,7 +74,7 @@ class ReinforceAgent(BaseAgent):
         self._W2: np.ndarray = rng.standard_normal((self.hidden_dim, action_dim)) * scale2
         self._b2: np.ndarray = np.zeros(action_dim)
 
-        self._optimizer: Adam | None = optimizer_from_config(
+        self._optimizer: Optimizer | None = optimizer_from_config(
             config, {"W1": self._W1, "b1": self._b1, "W2": self._W2, "b2": self._b2}
         )
 
