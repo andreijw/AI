@@ -24,6 +24,18 @@ Acrobot-v1) and
   own step, so every committed config and golden test is unchanged; no committed config uses the new path, and no
   learning run was made.
 
+### Changed
+
+- **LunarLanderContinuous TD3 updates after every step** (`feature/td3-update-every`): the maintainer chose
+  `training.update_every: 1` at 400,000 steps for `configs/lunarlander_continuous_td3.yaml`, as rl-zoo does
+  (`train_freq: 1`), over the earlier per-episode updates (evidence: CHANGELOG.md, 2026-10-30). Republished through the
+  benchmark on seeds 1 to 5 in the first `docs/benchmarks/lunarlander_continuous_results.md`: every seed reaches 200 (at
+  174,000 to 294,000 steps) and holds it, with final 100-episode training averages 202 to 248 (mean 225.9), against 3
+  of 5 holding before. This reproduces the 2026-10-30 run on the same seeds. Greedy evaluation is 182 ± 69 (58 to 251;
+  2 of 5 at 200 or more). A seed took 53 to 54 minutes alone on the Jetson's GPU, against 28 before. Held-out seeds 11
+  to 15 were not rerun (5 of 5 held, 2026-10-30), nor was seed 42 through `train.py`. The random agent ends at -214 to
+  -228.
+
 ## 2026-10-31
 
 ### Fixed
