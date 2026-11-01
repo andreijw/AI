@@ -37,7 +37,7 @@ class PPOAgent(ActorCriticBase):
     Config keys (all optional):
         learning_rate (float): Step size for the configured optimizer. Default: 3e-4.
         optimizer (str): "sgd" or "adam"; one step per mini-batch. Default: "sgd".
-        max_grad_norm (float): Global gradient-norm clip; requires optimizer "adam". Default: none.
+        max_grad_norm (float): Global gradient-norm clip, with either optimizer. Default: none.
         gamma (float): Discount factor ∈ (0, 1]. Default: 0.99.
         gae_lambda (float): GAE λ ∈ [0, 1]; 1 gives the episode return minus V(s). Default: 1.0.
         rollout_steps (int): Transitions to collect before training; 1 trains on every episode.

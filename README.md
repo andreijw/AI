@@ -45,7 +45,7 @@ AI/
 │   │   │   ├── continuous_ppo.py
 │   │   │   ├── continuous_random_agent.py
 │   │   │   ├── dqn_agent.py
-│   │   │   ├── optim.py         # Adam, shared by the continuous agents and the `optimizer` option
+│   │   │   ├── optim.py         # Adam and clipped SGD, for the continuous agents and the `optimizer` option
 │   │   │   ├── ppo_agent.py
 │   │   │   ├── random_agent.py
 │   │   │   ├── reinforce_agent.py

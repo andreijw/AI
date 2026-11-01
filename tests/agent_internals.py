@@ -34,7 +34,7 @@ from rl_core.agents import (
 )
 from rl_core.agents.actor_critic_base import ActorCriticBase
 from rl_core.agents.continuous_actor_critic import ContinuousActorCriticBase
-from rl_core.agents.optim import Adam
+from rl_core.agents.optim import Optimizer
 
 # ---------------------------------------------------------------------------
 # Policy-gradient family: ReinforceAgent, ActorCriticAgent, PPOAgent (softmax policies) and
@@ -339,8 +339,8 @@ def ppo_rollout_episode(
     return agent._rollout_episode(batch)
 
 
-def optimizer(agent: PolicyAgent | DQNAgent) -> Adam | None:
-    """The agent's Adam, or None with plain SGD."""
+def optimizer(agent: PolicyAgent | DQNAgent) -> Optimizer | None:
+    """The agent's optimizer, or None with plain SGD and no clip."""
     return agent._optimizer
 
 

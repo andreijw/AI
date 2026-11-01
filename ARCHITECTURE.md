@@ -61,17 +61,18 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 5. **Pure NumPy Neural Foundations**: Neural network architectures and gradient optimizations (Adam, He-init, clipped
    PPO, GAE) are implemented natively in NumPy without heavyweight external frameworks. One `Adam` in
    `rl_core/agents/optim.py` serves the continuous agents and, with `optimizer: adam` in the agent config, REINFORCE,
-   Actor-Critic, PPO and DQN, which otherwise use plain SGD (DQN's SGD clips each gradient element at
-   `grad_clip_value`). DDPG's two-hidden-layer actor and critic use the shared `rl_core/agents/mlp.py` (stateless
-   forward and backward passes over named weights), and every continuous agent reads its bounds through
-   `rl_core/agents/bounds.py`. Discrete PPO takes the standard form when its config sets `rollout_steps`,
-   `minibatch_size` and `gae_lambda`: it buffers whole episodes until it holds `rollout_steps` transitions, computes
-   GAE over them (`rl_core/agents/returns.py`, shared with continuous PPO) and takes `ppo_epochs` passes of shuffled
-   `minibatch_size` steps. Without those keys it trains on each episode alone, full batch, with return-minus-value
-   advantages. The Trainer calls `update` once per episode by default; PPO returns no metrics on the episodes it only
-   stores. With `training.update_every: N` it calls `update` every N steps inside the episode instead, with the steps
-   since the last call, and the rest with the step that ends the episode. Only an agent that learns from a replay
-   buffer, or the continuous Actor-Critic with `n_steps` equal to N, accepts that
+   Actor-Critic, PPO and DQN, which otherwise use plain SGD. With SGD, `max_grad_norm` clips the global norm of the
+   mean gradient through `ClippedSGD`, as Adam's does; without it DQN's SGD clips each gradient element at
+   `grad_clip_value`, and the others do not clip. DDPG's two-hidden-layer actor and critic use the shared
+   `rl_core/agents/mlp.py` (stateless forward and backward passes over named weights), and every continuous agent
+   reads its bounds through `rl_core/agents/bounds.py`. Discrete PPO takes the standard form when its config sets
+   `rollout_steps`, `minibatch_size` and `gae_lambda`: it buffers whole episodes until it holds `rollout_steps`
+   transitions, computes GAE over them (`rl_core/agents/returns.py`, shared with continuous PPO) and takes
+   `ppo_epochs` passes of shuffled `minibatch_size` steps. Without those keys it trains on each episode alone, full
+   batch, with return-minus-value advantages. The Trainer calls `update` once per episode by default; PPO returns no
+   metrics on the episodes it only stores. With `training.update_every: N` it calls `update` every N steps inside the
+   episode instead, with the steps since the last call, and the rest with the step that ends the episode. Only an
+   agent that learns from a replay buffer, or the continuous Actor-Critic with `n_steps` equal to N, accepts that
    (`enable_mid_episode_updates(update_every)`, which `BaseAgent` refuses): DQN and DDPG take `MidEpisodeUpdates` from
    `rl_core/agents/mid_episode.py`, which counts gradient steps over every transition trained on, so
    `updates_per_step: 0.5` still means one step per two transitions with one transition per call. The PyTorch backends

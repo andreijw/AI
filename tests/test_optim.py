@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from rl_core.agents.optim import Adam, optimizer_from_config
+from rl_core.agents.optim import Adam, ClippedSGD, optimizer_from_config
 from tests.helpers import ReferenceAdam
 
 SHAPES = {"W": (3, 2), "b": (2,), "s": ()}
@@ -110,16 +110,59 @@ def test_optimizer_from_config_rejects_an_unknown_optimizer():
         optimizer_from_config({"optimizer": "rmsprop"}, _zeros())
 
 
-@pytest.mark.parametrize("bad", [0.0, -1.0])
+@pytest.mark.parametrize("bad", [0.0, -1.0, float("nan")])
 def test_optimizer_from_config_rejects_a_non_positive_clip(bad):
     with pytest.raises(ValueError, match="max_grad_norm must be positive"):
         optimizer_from_config({"optimizer": "adam", "max_grad_norm": bad}, _zeros())
 
 
-def test_optimizer_from_config_rejects_a_clip_without_adam():
-    """A clip with plain SGD would be silently ignored, so it is an error instead."""
-    with pytest.raises(ValueError, match='max_grad_norm requires optimizer "adam"'):
-        optimizer_from_config({"max_grad_norm": 0.5}, _zeros())
+def test_optimizer_from_config_clips_plain_sgd_only_when_asked():
+    """Plain SGD without a clip stays None, so the agents keep their own unchanged step."""
+    assert optimizer_from_config({}, _zeros()) is None
+    clipped = optimizer_from_config({"optimizer": "sgd", "max_grad_norm": 0.5}, _zeros())
+    assert isinstance(clipped, ClippedSGD)
+    assert clipped.max_grad_norm == 0.5
+
+
+@pytest.mark.parametrize("bad", [0.0, -1.0, float("nan")])
+def test_optimizer_from_config_rejects_a_non_positive_clip_with_sgd(bad):
+    with pytest.raises(ValueError, match="max_grad_norm must be positive"):
+        optimizer_from_config({"optimizer": "sgd", "max_grad_norm": bad}, _zeros())
+
+
+def test_clipped_sgd_scales_a_gradient_above_the_clip_to_its_norm():
+    # Global norm sqrt(3² + 0² + 4²) = 5, clipped to 1: coefficient 1 / (5 + 1e-6).
+    steps = ClippedSGD(max_grad_norm=1.0).step({"a": np.array([3.0, 0.0]), "s": 4.0}, 0.1)
+    coef = 1.0 / (5.0 + 1e-6)
+    np.testing.assert_allclose(steps["a"], [0.1 * coef * 3.0, 0.0], rtol=1e-15)
+    assert steps["s"] == pytest.approx(0.1 * coef * 4.0, rel=1e-15)
+
+
+def test_clipped_sgd_leaves_a_gradient_under_the_clip_as_it_is():
+    steps = ClippedSGD(max_grad_norm=10.0).step({"a": np.array([3.0, 0.0]), "s": 4.0}, 0.1)
+    np.testing.assert_allclose(steps["a"], [0.3, 0.0], rtol=1e-15)
+    assert steps["s"] == pytest.approx(0.4, rel=1e-15)
+
+
+def test_clipped_sgd_and_adam_clip_by_the_same_coefficient():
+    """Both scale the gradient by max_grad_norm / (norm + 1e-6) before using it."""
+    grads = _grads(np.random.default_rng(1), 50.0)
+    sgd = ClippedSGD(max_grad_norm=0.5).step(grads, 1.0)  # lr 1: the clipped gradient itself
+    reference = ReferenceAdam(learning_rate=1.0, max_grad_norm=0.5)
+    reference.step(grads)
+    one_minus_beta1 = (
+        1.0 - 0.9
+    )  # after one step from zero, m is (1 - beta1) times the clipped gradient
+    for name in grads:
+        np.testing.assert_allclose(
+            reference.m[name] / one_minus_beta1, sgd[name], rtol=1e-12, err_msg=name
+        )
+
+
+def test_clipped_sgd_has_no_state_to_save():
+    sgd = ClippedSGD(max_grad_norm=1.0)
+    assert sgd.state() == {}
+    sgd.load_state({"adam_t": np.array(3)})  # an Adam checkpoint's keys are ignored
 
 
 def test_adam_state_with_only_a_step_count_keeps_it():

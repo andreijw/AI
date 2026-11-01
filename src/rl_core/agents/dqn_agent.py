@@ -11,7 +11,7 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 from .base_agent import BaseAgent
 from .config_values import flag, positive_int
 from .mid_episode import MidEpisodeUpdates
-from .optim import Adam, anneal_fraction, anneal_steps_from_config, optimizer_from_config
+from .optim import Optimizer, anneal_fraction, anneal_steps_from_config, optimizer_from_config
 from .replay_buffer import ReplayBuffer
 
 
@@ -52,8 +52,8 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
     * Epsilon-greedy action selection, decayed once per update call (``epsilon_decay``) or
       linearly per training action (``exploration_steps``).
     * Bootstrapping through time-limit cuts: only a true termination ends the Bellman target.
-    * Plain SGD with an element-wise clip (``grad_clip_value``), or Adam with an optional
-      global-norm clip (``optimizer: adam``, ``max_grad_norm``).
+    * Plain SGD with an element-wise clip (``grad_clip_value``) or a global-norm clip
+      (``max_grad_norm``), or Adam with an optional global-norm clip (``optimizer: adam``).
     * An optional linear learning-rate decay to zero over ``anneal_steps`` transitions, as PPO's:
       each update's step size is ``learning_rate`` times ``anneal_fraction`` of the transitions
       given to ``update`` before it, warm-up included. Only the step is scaled; Adam's moments see
@@ -118,7 +118,7 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
             observation_dim=self.observation_dim,
             seed=config.get("seed"),
         )
-        self._optimizer: Adam | None = optimizer_from_config(config, self._parameters())
+        self._optimizer: Optimizer | None = optimizer_from_config(config, self._parameters())
 
     def _validate_rates(self) -> None:
         """
@@ -172,6 +172,11 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
             raise ValueError(
                 "grad_clip_value is the element-wise clip of plain SGD; "
                 "with Adam, clip the global norm with max_grad_norm"
+            )
+        if "grad_clip_value" in config and config.get("max_grad_norm") is not None:
+            raise ValueError(
+                "grad_clip_value and max_grad_norm are alternative clips for plain SGD "
+                "(element-wise and global-norm); set one"
             )
 
     def _init_q_networks(self, weights_rng: np.random.Generator) -> None:
@@ -512,10 +517,10 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
         Take one optimizer step on the online network, of size ``learning_rate`` (the configured
         ``learning_rate`` when None).
 
-        With Adam, the step comes from the shared optimizer (global-norm clip ``max_grad_norm``
-        if set). With plain SGD, each gradient element is clipped to
-        ``[-grad_clip_value, grad_clip_value]`` before the step. The arrays in ``grads`` are not
-        modified.
+        With Adam, or plain SGD with ``max_grad_norm``, the step comes from the shared optimizer,
+        which clips the global norm when ``max_grad_norm`` is set. With plain SGD alone, each
+        gradient element is clipped to ``[-grad_clip_value, grad_clip_value]`` before the step.
+        The arrays in ``grads`` are not modified.
 
         Args:
             grads: Gradients keyed like :meth:`_parameters`, as returned by

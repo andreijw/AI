@@ -10,7 +10,7 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 
 from .base_agent import BaseAgent
 from .config_values import positive_int
-from .optim import Adam, optimizer_from_config
+from .optim import Optimizer, optimizer_from_config
 from .softmax import stable_softmax
 
 
@@ -32,7 +32,7 @@ class ActorCriticBase(BaseAgent):
         entropy_coef (float): Entropy-bonus weight. Default: 0.01.
         seed         (int):   RNG seed for weight initialisation. Default: None.
         optimizer    (str):   "sgd" or "adam" (see :mod:`rl_core.agents.optim`). Default: "sgd".
-        max_grad_norm (float): Global gradient-norm clip; requires optimizer "adam". Default: none.
+        max_grad_norm (float): Global gradient-norm clip, with either optimizer. Default: none.
     """
 
     learning_rate: float
@@ -72,7 +72,7 @@ class ActorCriticBase(BaseAgent):
         self._W_v: np.ndarray = rng.standard_normal(self.hidden_dim) * scale_head
         self._b_v: float = 0.0
 
-        self._optimizer: Adam | None = optimizer_from_config(config, self._parameters())
+        self._optimizer: Optimizer | None = optimizer_from_config(config, self._parameters())
 
     def _parameters(self) -> dict[str, Any]:
         """The network parameters by name, keyed as in :meth:`_zero_ac_gradients`."""
