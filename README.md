@@ -273,8 +273,10 @@ above the threshold. Each agent trains for a budget of environment steps set aga
 (see the config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18 (CartPole PPO on
 2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment and named random streams
 ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
-[`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md)). `train.py` uses seed 42, which was not
-measured, so a single `train.py` run may land on the unlucky side of these numbers:
+[`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md); LunarLanderContinuous TD3 on 2026-11-01 in
+[`docs/benchmarks/lunarlander_continuous_results.md`](docs/benchmarks/lunarlander_continuous_results.md)).
+`train.py` uses seed 42, which was not measured, so a single `train.py` run may land on the unlucky side of these
+numbers:
 
 | Challenge | Agent | Config | Budget (steps) | Seeds solved | Steps to solve | Held |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -292,7 +294,7 @@ measured, so a single `train.py` run may land on the unlucky side of these numbe
 | MountainCarContinuous-v0 | DDPG | `mountaincar_continuous_ddpg.yaml` (rl-zoo settings, OU noise, 64×64 networks) | 300,000 | 5 of 5 | 25k to 69k | 5 of 5 |
 | MountainCarContinuous-v0 | TD3 | `mountaincar_continuous_td3.yaml` (rl-zoo settings, OU noise, 400×300 networks, PyTorch backend); CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 37k to 70k | 5 of 5 |
 | LunarLander-v3 | DQN | `lunarlander_dqn.yaml` (rl-zoo settings, one hidden layer of 256, epsilon floor 0.1); seeds 1 to 5, which chose the floor; held-out seeds 11 to 15: 5 of 5 reach (166k to 297k), 4 of 5 hold; CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 152k to 228k | 5 of 5 |
-| LunarLanderContinuous-v3 | TD3 | `lunarlander_continuous_td3.yaml` (rl-zoo settings, 400×300 networks, PyTorch backend); seeds 1 to 5, which chose the budget; held-out seeds 11 to 15: 5 of 5 reach (162k to 330k), 4 of 5 hold; CHANGELOG.md, 2026-10-28 | 400,000 | 4 of 5 | 248k to 344k | 3 of 5 |
+| LunarLanderContinuous-v3 | TD3 | `lunarlander_continuous_td3.yaml` (rl-zoo settings, 400×300 networks, updates after every step, PyTorch backend); CHANGELOG.md, 2026-11-01; held-out seeds 11 to 15: 5 of 5 reach and hold, CHANGELOG.md, 2026-10-30 | 400,000 | 5 of 5 | 174k to 294k | 5 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
@@ -325,13 +327,13 @@ LunarLander DQN uses rl-zoo's settings with one hidden layer of 256 and a square
 on 4 of 5, greedy evaluation 238 ± 25; seed 42 reaches 200 at about episode 450 and ends at 237 (CHANGELOG.md,
 2026-10-27). The random agent's final averages are -178 to -194.
 LunarLanderContinuous TD3 trains rl-zoo's 400×300 networks on the PyTorch backend, so it needs `.venv-gpu`, for
-400,000 steps against rl-zoo's 300,000: by 300,000 only 3 of 5 seeds had reached 200. It is the least settled result in
-the table. On seeds 1 to 5 one seed peaked at 199.6 and never reached 200, and only 3 of 5 held it. On held-out seeds 11
-to 15 all 5 reached 200 and 4 of 5 held it, but greedy evaluation ranged from 87 to 269. A seed takes 46 to 47 minutes
-with two sharing the Jetson's GPU (CHANGELOG.md, 2026-10-28). The trainer updates after each episode, while rl-zoo
-updates after every step. `training.update_every: 1` does the same here: at 400,000 steps it held 200 on 5 of 5 seeds
-in both sets (against 3 and 4 of 5), with one seed in each clearly worse, at about 1.5 to 2 times the time; the
-committed config does not use it yet (CHANGELOG.md, 2026-10-30). The random agent's final averages are -214 to -228.
+400,000 steps against rl-zoo's 300,000, and updates after every environment step as rl-zoo does
+(`training.update_every: 1`). Every seed in both sets reaches 200 and holds it: final 100-episode averages 202 to 248
+on seeds 1 to 5 (CHANGELOG.md, 2026-11-01), and a mean of 242.8 on held-out seeds 11 to 15 (CHANGELOG.md, 2026-10-30).
+Greedy evaluation still varies by seed: 58 to 251 on seeds 1 to 5 (mean 182 ± 69), with only 2 of 5 at 200 or more. A
+seed takes about 54 minutes alone on the Jetson's GPU (CHANGELOG.md, 2026-11-01). Before that change the config
+updated after each episode, and held 200 on 3 and 4 of 5 seeds (CHANGELOG.md, 2026-10-28 and 2026-10-30). The random
+agent's final averages are -214 to -228.
 
 ### Run any agent from one base config (quick overrides)
 

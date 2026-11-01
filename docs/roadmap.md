@@ -9,9 +9,9 @@ an item that is done moves there, condensed, in the hand-off commit that complet
 
 ## Upcoming Milestones
 
-Order (the maintainer's decision, 2026-10-31): finish Training and Code Health first (the TD3 decision is left;
-gradient clipping with SGD is done, CHANGELOG.md, 2026-11-01), then Phase 6 starting with frame stacking. The parked
-ideas under Code Health do not block Phase 6.
+Order (the maintainer's decision, 2026-10-31): finish Training and Code Health first, then Phase 6 starting with frame
+stacking. The TD3 decision and gradient clipping with SGD are done (CHANGELOG.md, 2026-11-01), so Phase 6 is next. The
+parked ideas under Code Health do not block Phase 6.
 
 ### Workflow Tooling
 
@@ -19,24 +19,7 @@ No open items.
 
 ### Training
 
-- [ ] **Adopt Updates During the Episode for LunarLanderContinuous TD3** (evidence complete; needs the maintainer's
-  decision)
-  - **Description**: `training.update_every: 1` against the committed config, which updates once per episode, from the
-    per-episode curves of the 400,000-step runs (CHANGELOG.md, 2026-10-30). The 300,000-step column cuts the same
-    curves at 300,000 steps. That is exact, because the budget only decides when training stops: no agent or schedule
-    reads it. The greedy evaluation at 300,000 steps was not recorded.
-
-    | | Committed, 400,000 steps | Every step, 300,000 steps | Every step, 400,000 steps |
-    | :--- | :--- | :--- | :--- |
-    | Seeds 1 to 5: held 200 (mean final) | 3 of 5 (202.8) | 3 of 5 (210.8) | 5 of 5 (225.9) |
-    | Seeds 11 to 15: held 200 (mean final) | 4 of 5 (214.1) | 4 of 5 (188.2; seed 14 at 52) | 5 of 5 (242.8) |
-    | Time per seed | 36 to 47 minutes | about 40 to 58 minutes (scaled by gradient steps; not measured) | 54 to 78 minutes |
-
-  - **Acceptance criteria**: the maintainer chooses between keeping the committed config, `update_every: 1` at
-    400,000 steps (5 of 5 held on both seed sets, one seed more than 20 worse in each, 1.5 to 2 times the time), and
-    `update_every: 1` at 300,000 steps (as many seeds held as today, in more time). A change goes into
-    `configs/lunarlander_continuous_td3.yaml` with a republished `docs/benchmarks/` for that config, in one PR.
-  - **Out of scope**: the other off-policy configs (DQN, DDPG, MountainCarContinuous TD3), which were not run with it.
+No open items.
 
 ### Code Health
 

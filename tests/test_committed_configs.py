@@ -199,9 +199,10 @@ def test_lunarlander_dqn_translates_rl_zoo_for_a_trainer_that_updates_after_each
 def test_lunarlander_continuous_td3_uses_rl_zoo_settings_on_the_torch_backend():
     """rl-zoo's TD3 for LunarLanderContinuous-v3 at its 400x300, with SB3's TD3 defaults: one gradient
     step per transition after 10,000 uniform warm-up actions, Gaussian noise 0.1 in the [-1, 1]
-    action space. The trainer's episode cut matches the 1000-step limit (its default is 500), and the
-    budget is the maintainer's 400,000 steps, where 4 of 5 screen seeds reached 200. Read from the file,
-    so CI checks it without PyTorch or Box2D, which the config needs."""
+    action space. The trainer's episode cut matches the 1000-step limit (its default is 500), the
+    agent updates after every environment step as rl-zoo does (the maintainer's choice, 2026-11-01, where
+    5 of 5 seeds held 200), and the budget is the maintainer's 400,000 steps. Read from the file, so CI
+    checks it without PyTorch or Box2D, which the config needs."""
     config = load_config(os.path.join(CONFIGS_DIR, "lunarlander_continuous_td3.yaml"))
     agent = config["agent"]["config"]
     assert config["agent"]["type"] == "td3" and agent["backend"] == "torch"
@@ -224,6 +225,9 @@ def test_lunarlander_continuous_td3_uses_rl_zoo_settings_on_the_torch_backend():
     )
     assert limits == (1000, 1000)
     assert config["training"]["total_steps"] == 400_000
+    assert config["training"].get("update_every") == 1, (
+        "the published LunarLanderContinuous TD3 results update after every step"
+    )
 
 
 def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
