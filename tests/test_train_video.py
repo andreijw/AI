@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import rl_cartpole.benchmark
 from rl_cartpole.environments import CartPoleEnv
+from rl_core.environments import OBSERVATION_DEFAULTS
 from tests.helpers import minimal_config, run_main
 
 # ---------------------------------------------------------------------------
@@ -124,7 +125,7 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
     assert captured["trainer_num_episodes"] == 1
     assert captured["agent_observation_dim"] == 4
     assert captured["agent_action_dim"] == 2
-    assert captured["observation_settings"] == {"frame_stack": 1, "mask_velocity": False}
+    assert captured["observation_settings"] == OBSERVATION_DEFAULTS
 
 
 def test_record_video_missing_moviepy_raises_import_error(tmp_path, monkeypatch):

@@ -1,4 +1,4 @@
-"""Checkpoints record the observation settings (``frame_stack``, ``mask_velocity``) an agent was
+"""Checkpoints record the observation settings (``OBSERVATION_DEFAULTS``'s keys) an agent was
 built for, and ``load`` refuses a checkpoint saved with other settings before changing anything."""
 
 import numpy as np
@@ -79,7 +79,9 @@ def test_make_agent_records_the_environments_observation_settings(settings):
     env = CartPoleEnv(seed=0, **settings)
     try:
         agent = CartPoleChallenge().make_agent("reinforce", {"seed": 1}, env)
-        assert dict(agent.observation_settings) == settings, "make_agent recorded other settings"
+        assert dict(agent.observation_settings) == {**OBSERVATION_DEFAULTS, **settings}, (
+            "make_agent recorded other settings"
+        )
     finally:
         env.close()
 
@@ -87,7 +89,7 @@ def test_make_agent_records_the_environments_observation_settings(settings):
 def test_the_environment_reports_every_observation_setting():
     env = CartPoleEnv(seed=0, frame_stack=3)
     try:
-        assert env.observation_settings() == {"frame_stack": 3, "mask_velocity": False}
+        assert env.observation_settings() == {**OBSERVATION_DEFAULTS, "frame_stack": 3}
         assert set(env.observation_settings()) == set(OBSERVATION_DEFAULTS)
     finally:
         env.close()
@@ -289,3 +291,28 @@ def test_record_refuses_a_checkpoint_trained_with_other_settings(tmp_path, monke
             monkeypatch,
             module="record",
         )
+
+
+def test_a_checkpoint_with_frame_deltas_is_refused_without_them_and_an_older_one_loads(tmp_path):
+    """frame_deltas joined the record after 2026-11-02's checkpoints, which lack it: they read as
+    false, so they still load; a checkpoint trained with it loads only with it."""
+
+    def built(**settings):
+        env = CartPoleEnv(seed=0, frame_stack=4, mask_velocity=True, **settings)
+        try:
+            return CartPoleChallenge().make_agent("reinforce", {"seed": 1}, env)
+        finally:
+            env.close()
+
+    path = str(tmp_path / "deltas.pt")
+    built(frame_deltas=True).save(path)
+    with pytest.raises(ValueError, match=r"frame_deltas=true.*frame_deltas=false"):
+        built().load(path)
+    built(frame_deltas=True).load(path)
+
+    older = str(tmp_path / "older.npz")
+    built().save(older)
+    _rewrite(older, lambda e: e.pop(f"{OBSERVATION_KEY_PREFIX}frame_deltas"))
+    built().load(older)
+    with pytest.raises(ValueError, match="frame_deltas"):
+        built(frame_deltas=True).load(older)

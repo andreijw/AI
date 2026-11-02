@@ -54,23 +54,28 @@ project, including observation noise, action noise, domain randomization, and ve
 env = make_env(obs_noise_std=0.1)
 ```
 
-### Velocity Masking and Frame Stacking
+### Velocity Masking, Frame Stacking and Frame Differences
 
 **Purpose**: Make the task partially observable, then give the agent a short history to recover what was hidden.
 
 **Implementation** (`rl_core.environments.observation`, applied by `BaseEnvWrapper` for every challenge):
 
-- Parameters: `mask_velocity` (bool, default false) and `frame_stack` (positive integer, default 1, which is off)
-- Order: observation noise, then the mask, then the stack, so a frame keeps the noise it was observed with and a
-  masked entry is exactly zero
-- A reset fills every slot of the stack with the first observation
+- Parameters: `mask_velocity` (bool, default false), `frame_stack` (positive integer, default 1, which is off) and
+  `frame_deltas` (bool, default false; needs `frame_stack` of 2 or more)
+- Order: observation noise, then the mask, then the stack, then the differences, so a frame keeps the noise it was
+  observed with and a masked entry is exactly zero
+- A reset fills every slot of the stack with the first observation, so its differences are zero
+- The stack is oldest frame first; with `frame_deltas` it becomes the newest frame, then the differences between
+  consecutive frames, newest first (an invertible re-expression of the same entries)
 - Measured on CartPole PPO: masking alone drops greedy evaluation from 500 to 42; `frame_stack: 4` brings it back
-  to 337 but solves on 0 of 5 seeds (CHANGELOG.md, 2026-11-01)
+  to 337 but solves on 0 of 5 seeds (CHANGELOG.md, 2026-11-01); with `frame_deltas: true` and the agent's
+  `normalize_observations: true` it solves and holds on 5 of 5 (CHANGELOG.md, 2026-11-02)
 
 **Example**:
 
 ```python
 env = make_env(mask_velocity=True, frame_stack=4)  # CartPole: 16 entries, velocities zero
+env = make_env(mask_velocity=True, frame_stack=4, frame_deltas=True)  # newest frame, 3 differences
 ```
 
 ### 2. Action Noise
@@ -181,6 +186,7 @@ Creates a single environment with noise injection and domain randomization featu
 - `obs_noise_std`: Observation noise standard deviation (default: 0.0)
 - `mask_velocity`: Zero the velocity entries (default: False)
 - `frame_stack`: Observations stacked into one, oldest first (default: 1, off)
+- `frame_deltas`: The stack as its newest frame and the differences between frames, newest first (default: False)
 - `action_noise_prob`: Action flip probability (default: 0.0)
 - `domain_randomization`: Dict of parameter ranges (default: None)
 

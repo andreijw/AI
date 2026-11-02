@@ -42,7 +42,7 @@ def make_env(
         max_episode_steps: Maximum steps per episode (default: 200).
         seed: Random seed for reproducibility.
         obs_noise_std: Standard deviation of Gaussian observation noise.
-        observation: ``frame_stack`` and ``mask_velocity`` (see ``BaseEnvWrapper``).
+        observation: The observation settings (``ObservationOptions``; see ``BaseEnvWrapper``).
 
     Returns:
         MountainCarEnv instance.

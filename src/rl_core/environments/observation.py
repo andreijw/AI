@@ -1,7 +1,8 @@
-"""Frame stacking and velocity masking of a flat observation vector.
+"""Frame stacking, frame differences and velocity masking of a flat observation vector.
 
-:class:`BaseEnvWrapper` applies them after observation noise: the mask, then the stack, so a frame
-keeps the noise it was observed with and a masked entry is exactly zero.
+:class:`BaseEnvWrapper` applies them after observation noise: the mask, then the stack, then the
+differences, so a frame keeps the noise it was observed with and a masked entry is exactly zero. A
+stack is oldest frame first; its differences (``frame_deltas``) are newest first.
 """
 
 from __future__ import annotations
@@ -21,10 +22,15 @@ class ObservationOptions(TypedDict, total=False):
 
     frame_stack: int
     mask_velocity: bool
+    frame_deltas: bool
 
 
-# Their config defaults, which every challenge's environment settings include: both off.
-OBSERVATION_DEFAULTS: dict[str, Any] = {"frame_stack": 1, "mask_velocity": False}
+# Their config defaults, which every challenge's environment settings include: all off.
+OBSERVATION_DEFAULTS: dict[str, Any] = {
+    "frame_stack": 1,
+    "mask_velocity": False,
+    "frame_deltas": False,
+}
 
 
 class FrameStack:
@@ -110,3 +116,45 @@ def mask_entries(obs: np.ndarray, indices: Sequence[int]) -> np.ndarray:
     masked = np.array(obs, copy=True)
     masked[list(indices)] = 0
     return masked
+
+
+def _check_delta_size(size: Any) -> None:
+    if isinstance(size, bool) or not isinstance(size, int | np.integer) or size < 2:
+        raise ValueError(f"frame_deltas needs a frame_stack of 2 or more, got {size!r}")
+
+
+def frame_differences(stack: np.ndarray, size: int) -> np.ndarray:
+    """
+    A stack of ``size`` frames f_1 (oldest) … f_K (newest), as :class:`FrameStack` returns it,
+    re-expressed newest first: ``[f_K, f_K - f_{K-1}, …, f_2 - f_1]``.
+
+    The same number of entries, and an invertible map of the stack. A velocity hidden in the stack
+    as the small change between frames becomes an entry of its own; a padded stack (after a reset)
+    has zero differences, and an entry that is zero in every frame stays zero.
+
+    Raises:
+        ValueError: If ``size`` is not an integer of 2 or more, or ``stack`` does not split into
+            ``size`` frames.
+    """
+    _check_delta_size(size)
+    stack = np.asarray(stack)
+    if stack.ndim != 1 or stack.shape[0] % size:
+        raise ValueError(f"A stack of {stack.shape} entries does not split into {size} frames")
+    frames = stack.reshape(size, -1)
+    return np.concatenate([frames[-1], (frames[1:] - frames[:-1])[::-1].reshape(-1)])
+
+
+def differenced_space(space: gym.Space[Any], size: int) -> gym.spaces.Box:
+    """
+    The space of :func:`frame_differences` of a ``size``-frame stack of one-frame ``space``: the
+    frame's own bounds for the newest frame, then ``[low - high, high - low]`` for each difference.
+    It takes the space of one frame (after masking), in place of :func:`stacked_space`.
+    """
+    box = _flat_box(space)
+    _check_delta_size(size)
+    spread_low, spread_high = box.low - box.high, box.high - box.low  # infinite stays infinite
+    return gym.spaces.Box(
+        low=np.concatenate([box.low, np.tile(spread_low, size - 1)]),
+        high=np.concatenate([box.high, np.tile(spread_high, size - 1)]),
+        dtype=box.dtype,
+    )

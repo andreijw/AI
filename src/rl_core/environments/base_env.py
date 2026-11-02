@@ -20,6 +20,8 @@ from rl_core.seeding import (
 from .observation import (
     OBSERVATION_DEFAULTS,
     FrameStack,
+    differenced_space,
+    frame_differences,
     mask_entries,
     masked_space,
     stacked_space,
@@ -84,6 +86,7 @@ class BaseEnvWrapper:
         *,
         frame_stack: int = 1,
         mask_velocity: bool = False,
+        frame_deltas: bool = False,
     ) -> None:
         """
         Args:
@@ -93,11 +96,14 @@ class BaseEnvWrapper:
             seed: Seed applied on the first reset; later resets continue the sequence.
             obs_noise_std: Standard deviation of the Gaussian noise added to observations.
             frame_stack: How many observations, oldest first, make one (1, the default, is off).
+            frame_deltas: Give the stack as its newest frame, then the differences between
+                consecutive frames, newest first (needs ``frame_stack`` of 2 or more).
             mask_velocity: Zero the velocity entries, making the task partially observable.
 
         Raises:
             ValueError: If the seed is invalid, ``obs_noise_std`` is negative or not finite,
-                ``frame_stack`` is not a positive integer, ``mask_velocity`` is not a boolean, or
+                ``frame_stack`` is not a positive integer, ``mask_velocity`` or ``frame_deltas`` is
+                not a boolean, ``frame_deltas`` is set without a ``frame_stack`` of 2 or more, or
                 ``mask_velocity`` is set for an environment id :attr:`VELOCITY_INDICES` does not
                 list.
         """
@@ -129,6 +135,8 @@ class BaseEnvWrapper:
                 )
             self._velocity_indices = self.VELOCITY_INDICES[env_name]
         self._frames = FrameStack(self.frame_stack) if self.frame_stack > 1 else None
+        # A frame_stack below 2 is refused when the space is built (differenced_space).
+        self.frame_deltas = check_bool("frame_deltas", frame_deltas)
 
         self._episode_steps = 0
         self._episode_reward = 0.0
@@ -199,7 +207,9 @@ class BaseEnvWrapper:
                 self.observation_space = masked_space(
                     self.observation_space, self._velocity_indices
                 )
-            if self._frames is not None:
+            if self.frame_deltas:
+                self.observation_space = differenced_space(self.observation_space, self.frame_stack)
+            elif self._frames is not None:
                 self.observation_space = stacked_space(self.observation_space, self.frame_stack)
         except ValueError:
             self.env.close()
@@ -229,12 +239,15 @@ class BaseEnvWrapper:
 
     def _observe(self, obs: np.ndarray, first: bool) -> np.ndarray:
         """The agent's observation for the environment's ``obs``: noise, then the velocity mask,
-        then the frame stack, which ``first`` (the episode's first observation) restarts."""
+        then the frame stack, which ``first`` (the episode's first observation) restarts, then its
+        differences."""
         obs = self._add_observation_noise(obs)
         if self._velocity_indices:
             obs = mask_entries(obs, self._velocity_indices)
         if self._frames is not None:
             obs = self._frames.reset(obs) if first else self._frames.push(obs)
+        if self.frame_deltas:
+            obs = frame_differences(obs, self.frame_stack)
         return obs
 
     def reset(
