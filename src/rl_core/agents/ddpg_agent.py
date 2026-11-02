@@ -60,6 +60,8 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
     """
 
     BACKENDS: ClassVar[dict[str, str]] = {"torch": "rl_core.agents.torch_ddpg_agent:TorchDDPGAgent"}
+    # Replay holds observations from earlier in the run (BaseAgent); TD3 and the torch backends inherit it.
+    SUPPORTS_OBSERVATION_NORMALIZATION: ClassVar[bool] = False
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """

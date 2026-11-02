@@ -328,7 +328,11 @@ holds every generator the agent draws from and, for DQN and DDPG, the replay buf
 exactly as the saved one would have. An agent built by a challenge's `make_agent` also records its environment's
 observation settings (`BaseEnvWrapper.observation_settings()`: `frame_stack`, `mask_velocity`) with
 `BaseAgent.record_observation_settings`; `save` stores them as `observation_setting_<name>` and `load` refuses,
-before changing anything, a checkpoint saved with other values. Beside it the trainer writes
+before changing anything, a checkpoint saved with other values. An agent with `normalize_observations: true` keeps
+a running mean and variance of its inputs (`rl_core.agents.observation_normalizer.RunningMeanStd`, as SB3's
+`VecNormalize`); `Trainer` passes every observation through `BaseAgent.normalize_observation` once, updating the
+statistics in training and only reading them in evaluation, and the checkpoint holds them as `obs_norm_*`. The
+replay-buffer agents (DQN, DDPG, TD3) refuse the setting. Beside it the trainer writes
 `trainer_episode_<n>.npz` (episode and step counts, reward and length histories, the update-metric window, the
 evaluation seed and, for an environment that
 implements `rl_core.environments.ResumableEnv`, its generators) as a `TrainerState` that also records the agent
