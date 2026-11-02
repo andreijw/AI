@@ -169,16 +169,13 @@ def test_a_resumed_decay_trains_exactly_as_an_uninterrupted_one(tmp_path):
 def test_train_py_logs_the_decay_fraction(tmp_path, monkeypatch):
     import json
 
-    import yaml
-
     from tests.helpers import minimal_config, run_main
 
-    path = minimal_config(tmp_path, training={"num_episodes": 10})
-    with open(path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-    config["agent"] = {"type": "dqn", "config": {"seed": 1, "anneal_steps": 1000}}
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(config, f)
+    path = minimal_config(
+        tmp_path,
+        training={"num_episodes": 10},
+        agent={"type": "dqn", "config": {"seed": 1, "anneal_steps": 1000}},
+    )
 
     run_main(["--config", path], monkeypatch)
 

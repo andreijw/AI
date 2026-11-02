@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Unpack
 
-from rl_core.environments import env_from_config
+from rl_core.environments import OBSERVATION_DEFAULTS, ObservationOptions, env_from_config
 
 from .mountaincar_env import MountainCarEnv
 
@@ -13,6 +13,7 @@ ENV_DEFAULTS: dict[str, Any] = {
     "name": "MountainCar-v0",
     "max_episode_steps": 200,
     "obs_noise_std": 0.0,
+    **OBSERVATION_DEFAULTS,
 }
 
 # The same for MountainCarContinuous-v0, which shares the wrapper.
@@ -20,6 +21,7 @@ CONTINUOUS_ENV_DEFAULTS: dict[str, Any] = {
     "name": "MountainCarContinuous-v0",
     "max_episode_steps": 999,
     "obs_noise_std": 0.0,
+    **OBSERVATION_DEFAULTS,
 }
 
 
@@ -29,6 +31,7 @@ def make_env(
     max_episode_steps: int = 200,
     seed: int | None = None,
     obs_noise_std: float = 0.0,
+    **observation: Unpack[ObservationOptions],
 ) -> MountainCarEnv:
     """
     Create a mountain car environment with optional observation noise.
@@ -39,6 +42,7 @@ def make_env(
         max_episode_steps: Maximum steps per episode (default: 200).
         seed: Random seed for reproducibility.
         obs_noise_std: Standard deviation of Gaussian observation noise.
+        observation: ``frame_stack`` and ``mask_velocity`` (see ``BaseEnvWrapper``).
 
     Returns:
         MountainCarEnv instance.
@@ -49,6 +53,7 @@ def make_env(
         max_episode_steps=max_episode_steps,
         seed=seed,
         obs_noise_std=obs_noise_std,
+        **observation,
     )
 
 

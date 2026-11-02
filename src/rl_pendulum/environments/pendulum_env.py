@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from types import MappingProxyType
+from typing import Unpack
 
 import numpy as np
 
-from rl_core.environments import BaseEnvWrapper, checked_range
+from rl_core.environments import BaseEnvWrapper, ObservationOptions, checked_range
 
 
 class PendulumEnv(BaseEnvWrapper):
@@ -24,6 +26,8 @@ class PendulumEnv(BaseEnvWrapper):
     - **Domain randomization**: Physical parameter randomization on reset for gravity ('g'),
       mass ('m'), and length ('l').
     """
+
+    VELOCITY_INDICES = MappingProxyType({"Pendulum-v1": (2,)})
 
     SUPPORTED_DR_PARAMS: dict[str, str] = {
         "g": "g",
@@ -43,6 +47,7 @@ class PendulumEnv(BaseEnvWrapper):
         obs_noise_std: float = 0.0,
         action_noise_std: float = 0.0,
         domain_randomization: Mapping[str, Sequence[float] | tuple[float, float]] | None = None,
+        **observation: Unpack[ObservationOptions],
     ) -> None:
         """
         Initialize the Pendulum environment wrapper.
@@ -54,12 +59,16 @@ class PendulumEnv(BaseEnvWrapper):
             seed: Random seed. Applied on the first reset; later resets continue the sequence,
                 so runs are reproducible and episodes differ from one another.
             obs_noise_std: Standard deviation of Gaussian noise added to observations.
+            observation: ``frame_stack`` and ``mask_velocity``; see
+                :class:`rl_core.environments.BaseEnvWrapper`.
             action_noise_std: Standard deviation of Gaussian noise added to continuous actions.
             domain_randomization: Dictionary with parameter ranges for physical randomization.
                 Supported keys: 'g' / 'gravity', 'm' / 'mass', 'l' / 'length'.
                 Values should be 2-element tuples/lists [min, max].
         """
-        super().__init__(env_name, render_mode, max_episode_steps, seed, obs_noise_std)
+        super().__init__(
+            env_name, render_mode, max_episode_steps, seed, obs_noise_std, **observation
+        )
 
         if not np.isfinite(action_noise_std) or action_noise_std < 0.0:
             raise ValueError(

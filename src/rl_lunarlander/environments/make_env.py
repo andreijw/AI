@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rl_core.environments import env_from_config
+from rl_core.environments import OBSERVATION_DEFAULTS, env_from_config
 
 from .lunarlander_env import LunarLanderEnv
 
@@ -13,6 +13,7 @@ ENV_DEFAULTS: dict[str, Any] = {
     "name": "LunarLander-v3",
     "max_episode_steps": 1000,
     "obs_noise_std": 0.0,
+    **OBSERVATION_DEFAULTS,
 }
 
 # The same for LunarLanderContinuous-v3, which shares the wrapper.

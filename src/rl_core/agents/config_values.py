@@ -48,6 +48,11 @@ def check_positive_int(name: str, value: Any) -> int:
     return _checked_int(name, value, minimum=1)
 
 
+def check_bool(name: str, value: Any) -> bool:
+    """One value as a bool, checked as :func:`flag` does under ``name``."""
+    return _checked_bool(name, value, "true or false")
+
+
 def _checked_bool(name: str, value: Any, allowed: str) -> bool:
     if not isinstance(value, bool | np.bool_):
         raise ValueError(f"{name} must be {allowed}, got {value!r}")

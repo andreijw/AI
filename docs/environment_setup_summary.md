@@ -54,6 +54,23 @@ project, including observation noise, action noise, domain randomization, and ve
 env = make_env(obs_noise_std=0.1)
 ```
 
+### Velocity Masking and Frame Stacking
+
+**Purpose**: Make the task partially observable, then give the agent a short history to recover what was hidden.
+
+**Implementation** (`rl_core.environments.observation`, applied by `BaseEnvWrapper` for every challenge):
+
+- Parameters: `mask_velocity` (bool, default false) and `frame_stack` (positive integer, default 1, which is off)
+- Order: observation noise, then the mask, then the stack, so a frame keeps the noise it was observed with and a
+  masked entry is exactly zero
+- A reset fills every slot of the stack with the first observation
+
+**Example**:
+
+```python
+env = make_env(mask_velocity=True, frame_stack=4)  # CartPole: 16 entries, velocities zero
+```
+
 ### 2. Action Noise
 
 **Purpose**: Randomly flip actions to test robustness
@@ -160,6 +177,8 @@ Creates a single environment with noise injection and domain randomization featu
 - `max_episode_steps`: Maximum steps per episode (default: 500)
 - `seed`: Random seed for reproducibility
 - `obs_noise_std`: Observation noise standard deviation (default: 0.0)
+- `mask_velocity`: Zero the velocity entries (default: False)
+- `frame_stack`: Observations stacked into one, oldest first (default: 1, off)
 - `action_noise_prob`: Action flip probability (default: 0.0)
 - `domain_randomization`: Dict of parameter ranges (default: None)
 

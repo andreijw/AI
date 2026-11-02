@@ -2,11 +2,13 @@
 statistics around a Gymnasium environment."""
 
 from collections.abc import Mapping
-from typing import Any, Protocol, runtime_checkable
+from types import MappingProxyType
+from typing import Any, ClassVar, Protocol, runtime_checkable
 
 import gymnasium as gym
 import numpy as np
 
+from rl_core.agents.config_values import check_bool, check_positive_int
 from rl_core.seeding import (
     WRAPPER_STREAM,
     check_generator_state,
@@ -14,6 +16,8 @@ from rl_core.seeding import (
     generator_state,
     restore_generator,
 )
+
+from .observation import FrameStack, mask_entries, masked_space, stacked_space
 
 # Checkpoint keys of an environment's generators: the wrapper's noise stream and Gymnasium's
 # start-state generator.
@@ -44,12 +48,20 @@ class BaseEnvWrapper:
     - one generator for the wrapper's own noise, on its own stream so it never repeats the numbers
       the environment draws its start states from
     - Gaussian observation noise that keeps the observation's dtype
+    - velocity masking and frame stacking, applied after the noise in that order, so a frame keeps
+      the noise it was observed with and a masked entry is exactly zero
     - the episode's step count and reward, reported in ``info["episode"]`` when it ends
+
+    A subclass lists the velocity entries of each environment id it wraps in
+    :attr:`VELOCITY_INDICES`; ``mask_velocity`` is refused for an id it does not list.
 
     A subclass validates its own settings after ``super().__init__`` and then calls
     :meth:`_make_env`. It overrides :meth:`_prepare_action` for action noise and
     :meth:`_apply_domain_randomization` for per-episode physics; both default to doing nothing.
     """
+
+    # Velocity entries of the observation, by environment id, in Gymnasium's layout.
+    VELOCITY_INDICES: ClassVar[Mapping[str, tuple[int, ...]]] = MappingProxyType({})
 
     env: gym.Env[Any, Any]
     observation_space: gym.Space[Any]
@@ -63,6 +75,9 @@ class BaseEnvWrapper:
         max_episode_steps: int,
         seed: int | None,
         obs_noise_std: float,
+        *,
+        frame_stack: int = 1,
+        mask_velocity: bool = False,
     ) -> None:
         """
         Args:
@@ -71,9 +86,14 @@ class BaseEnvWrapper:
             max_episode_steps: Steps after which an episode is truncated.
             seed: Seed applied on the first reset; later resets continue the sequence.
             obs_noise_std: Standard deviation of the Gaussian noise added to observations.
+            frame_stack: How many observations, oldest first, make one (1, the default, is off).
+            mask_velocity: Zero the velocity entries, making the task partially observable.
 
         Raises:
-            ValueError: If the seed is invalid, or ``obs_noise_std`` is negative or not finite.
+            ValueError: If the seed is invalid, ``obs_noise_std`` is negative or not finite,
+                ``frame_stack`` is not a positive integer, ``mask_velocity`` is not a boolean, or
+                ``mask_velocity`` is set for an environment id :attr:`VELOCITY_INDICES` does not
+                list.
         """
         self.env_name = env_name
         self.max_episode_steps = max_episode_steps
@@ -90,6 +110,19 @@ class BaseEnvWrapper:
                 f"obs_noise_std must be a finite, non-negative number, got {obs_noise_std!r}"
             )
         self.obs_noise_std = float(obs_noise_std)
+
+        self.frame_stack = check_positive_int("frame_stack", frame_stack)
+        self.mask_velocity = check_bool("mask_velocity", mask_velocity)
+        self._velocity_indices: tuple[int, ...] = ()
+        if self.mask_velocity:
+            if env_name not in self.VELOCITY_INDICES:
+                known = ", ".join(sorted(self.VELOCITY_INDICES)) or "none"
+                raise ValueError(
+                    f"mask_velocity is not supported for {env_name}: {type(self).__name__} knows "
+                    f"the velocity entries of {known}"
+                )
+            self._velocity_indices = self.VELOCITY_INDICES[env_name]
+        self._frames = FrameStack(self.frame_stack) if self.frame_stack > 1 else None
 
         self._episode_steps = 0
         self._episode_reward = 0.0
@@ -155,6 +188,16 @@ class BaseEnvWrapper:
         self.action_space = self.env.action_space
         # The same dict, not a copy: required for VectorEnv compatibility, which writes into it.
         self.metadata = self.env.metadata
+        try:
+            if self._velocity_indices:
+                self.observation_space = masked_space(
+                    self.observation_space, self._velocity_indices
+                )
+            if self._frames is not None:
+                self.observation_space = stacked_space(self.observation_space, self.frame_stack)
+        except ValueError:
+            self.env.close()
+            raise
 
     def _prepare_action(self, action: Any) -> Any:
         """The action to send to the environment for the agent's ``action``; unchanged by default."""
@@ -176,6 +219,16 @@ class BaseEnvWrapper:
         if self.obs_noise_std > 0:
             noise = self._np_random.normal(0, self.obs_noise_std, obs.shape)
             return (obs + noise).astype(obs.dtype)
+        return obs
+
+    def _observe(self, obs: np.ndarray, first: bool) -> np.ndarray:
+        """The agent's observation for the environment's ``obs``: noise, then the velocity mask,
+        then the frame stack, which ``first`` (the episode's first observation) restarts."""
+        obs = self._add_observation_noise(obs)
+        if self._velocity_indices:
+            obs = mask_entries(obs, self._velocity_indices)
+        if self._frames is not None:
+            obs = self._frames.reset(obs) if first else self._frames.push(obs)
         return obs
 
     def reset(
@@ -207,9 +260,9 @@ class BaseEnvWrapper:
         if seed is not None:
             self._np_random = derive_rng(seed, WRAPPER_STREAM)
 
-        # Physics first, then the noisy observation of the new start state.
+        # Physics first, then the observation of the new start state.
         self._apply_domain_randomization()
-        obs = self._add_observation_noise(obs)
+        obs = self._observe(obs, first=True)
 
         return obs, info
 
@@ -228,7 +281,7 @@ class BaseEnvWrapper:
         self._episode_steps += 1
         self._episode_reward += float(reward)
 
-        obs = self._add_observation_noise(obs)
+        obs = self._observe(obs, first=False)
 
         if terminated or truncated:
             info["episode"] = {

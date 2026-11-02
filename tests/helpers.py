@@ -30,11 +30,12 @@ def load_script(name):
     return module
 
 
-def minimal_config(tmp_path, environment=None, training=None):
+def minimal_config(tmp_path, environment=None, training=None, agent=None):
     """
     Write a minimal YAML config to tmp_path and return its path.
 
-    ``environment`` and ``training`` update those sections' keys.
+    ``environment``, ``training`` and ``agent`` update those sections' keys; ``agent`` updates
+    the agent section shallowly, so a ``config`` given there replaces the whole agent config.
     """
     import yaml
 
@@ -61,6 +62,7 @@ def minimal_config(tmp_path, environment=None, training=None):
     }
     config["environment"].update(environment or {})
     config["training"].update(training or {})
+    config["agent"].update(agent or {})
     config_path = str(tmp_path / "config.yaml")
     with open(config_path, "w") as f:
         yaml.dump(config, f)
