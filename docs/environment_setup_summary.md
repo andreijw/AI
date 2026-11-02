@@ -64,6 +64,8 @@ env = make_env(obs_noise_std=0.1)
 - Order: observation noise, then the mask, then the stack, so a frame keeps the noise it was observed with and a
   masked entry is exactly zero
 - A reset fills every slot of the stack with the first observation
+- Measured on CartPole PPO: masking alone drops greedy evaluation from 500 to 42; `frame_stack: 4` brings it back
+  to 337 but solves on 0 of 5 seeds (CHANGELOG.md, 2026-11-01)
 
 **Example**:
 
