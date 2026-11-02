@@ -508,3 +508,18 @@ def device_arrays(agent: DDPGAgent) -> dict[str, np.ndarray]:
         adam = agent._adam_arrays(net)  # type: ignore[attr-defined]
         arrays.update({f"{net}_adam_{key}": value for key, value in adam.items()})
     return arrays
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint entries (tests/test_checkpoint_observation_settings.py)
+# ---------------------------------------------------------------------------
+
+
+def with_extra_checkpoint_entry(agent_cls: type, key: str) -> type:
+    """A subclass of ``agent_cls`` whose checkpoint holds one more entry, ``key``, beside its own."""
+
+    class _WithEntry(agent_cls):  # type: ignore[misc, valid-type]
+        def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
+            return {**super()._extra_checkpoint_state(), key: np.zeros(1)}
+
+    return _WithEntry

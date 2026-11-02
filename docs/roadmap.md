@@ -32,6 +32,10 @@ with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
 Parked ideas, not scheduled. Each needs the maintainer's pick, and some a decision on the win rule, before it becomes
 an item.
 
+- [ ] **Environments independent of the agents package**: `rl_core.environments` imports
+  `rl_core.agents.config_values` (`check_positive_int`, `check_bool`) since 2026-11-01; moving those readers to a
+  neutral module (for example `rl_core.utils`) would remove the edge.
+
 - [ ] **The continuous Actor-Critic's training average**: its greedy policy matches rl-zoo's A2C, but its 100-episode
   training average stays at about -300 on Pendulum (CHANGELOG.md, 2026-10-18). True A2C, each chunk trained on as it
   is collected (`update_every: 8`), did not close it: mean final -295.0 against -298.5, better on 3 of 5 seeds
@@ -73,20 +77,9 @@ an item.
   - **Acceptance criteria**: a diagnosis backed by logged metrics; if it leads to a change, a scratch config that
     reaches 475 on at least 4 of 5 seeds (1 to 5), with the maintainer deciding whether to commit it.
   - **Known edge cases**: the masked entries are constant zero in 8 of the 16 inputs; slower annealing made it
-    worse, which points at stability rather than time.
+    worse, which points at stability rather than time. If observation normalisation is tried: a masked entry's
+    running standard deviation is 0, and its `Box` bounds are 0 to 0, so a bounds-based scale would divide by zero.
   - **Out of scope**: recurrent policies; changing `configs/cartpole_ppo.yaml`.
-
-- [ ] **Observation settings in checkpoints**
-  - **Description**: checkpoints record neither `frame_stack` nor `mask_velocity`. A `frame_stack: 4` checkpoint
-    played back or resumed under `frame_stack: 1` fails with a shape error, at load for an agent that saves a
-    replay buffer (DQN) and at the first forward pass otherwise, and a `mask_velocity` mismatch runs without an
-    error on the wrong inputs.
-  - **Acceptance criteria**: a check of the saved input size against `observation_dim` at load, with a message
-    naming the environment keys.
-  - **Notes**: for observation normalisation, a masked entry is constant zero, so its running standard deviation
-    is 0, and its `Box` bounds are 0 to 0, so a bounds-based scale would divide by zero. `rl_core.environments`
-    imports `rl_core.agents.config_values`; moving those readers to a neutral module would keep the environments
-    independent of the agents package.
 
 - [ ] **Lightweight Embedded Inference Export (C Header & ONNX)**
   - **Description**: Export trained pure NumPy model parameters into zero-dependency standalone C header files

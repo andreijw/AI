@@ -11,6 +11,7 @@ from typing import Any, ClassVar, Protocol
 import gymnasium as gym
 
 from rl_core.agents.base_agent import BaseAgent
+from rl_core.environments import OBSERVATION_DEFAULTS
 from rl_core.training.budget import apply_budget_override
 from rl_core.utils.config import load_config
 
@@ -23,6 +24,8 @@ class ChallengeEnv(Protocol):
     action_space: gym.Space
 
     def wrap_env(self, wrapper: gym.Env) -> None: ...
+
+    def observation_settings(self) -> dict[str, bool | int]: ...
 
     def reset(self, seed: int | None = None) -> tuple[Any, dict[str, Any]]: ...
 
@@ -112,17 +115,24 @@ class BenchmarkChallenge(abc.ABC):
         key chooses (``BaseAgent.class_for_config``), its dimensions from the environment's
         flattened spaces and its config from :meth:`agent_config`.
 
+        The agent records the environment's observation settings (``frame_stack``,
+        ``mask_velocity``), so its checkpoints refuse to load into an agent built for other ones. A
+        challenge that overrides this method records nothing unless it calls
+        ``record_observation_settings`` too.
+
         Raises:
             ValueError: If ``agent_type`` is not in :attr:`supported_agents`.
         """
         if agent_type not in self.AGENT_CLASSES:
             raise self.unsupported_agent_error(agent_type)
         config = self.agent_config(agent_config, env)
-        return self.AGENT_CLASSES[agent_type].class_for_config(config)(
+        agent = self.AGENT_CLASSES[agent_type].class_for_config(config)(
             observation_dim=gym.spaces.flatdim(env.observation_space),
             action_dim=gym.spaces.flatdim(env.action_space),
             config=config,
         )
+        agent.record_observation_settings(env.observation_settings(), OBSERVATION_DEFAULTS)
+        return agent
 
     def check_agent_buildable(self, agent_type: str) -> None:
         """
