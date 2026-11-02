@@ -65,43 +65,28 @@ an item.
   - **Known edge cases**: Catastrophic forgetting across difficulty stages; oscillation near threshold boundaries.
   - **Out of scope**: Adversarial environment generation; automatic domain randomization (ADR) meta-policies.
 
-- [~] **Observation Preprocessing & Frame Stacking** (first in Phase 6; two PRs)
-  - **Description**: Support temporal history and partial observability via frame stacking and velocity masking,
-    set from a config's `environment` section for every challenge. PR 1 (`feature/frame-stacking`): the
-    observation pipeline and its config keys. PR 2: a learning run showing that stacking recovers what masking
-    takes away, on masked CartPole.
-  - **Acceptance criteria** (PR 1):
-    - `environment.frame_stack: K` (an integer of 1 or more; 1, the default, is off) concatenates the last $K$
-      observations, oldest first, into one flat vector of $K$ times the observation's length, so every agent sizes
-      itself from `observation_space` unchanged.
-    - `environment.mask_velocity: true` (default false) zeroes the observation's velocity entries, as rl-zoo's
-      `MaskVelocityWrapper` does, keeping its length: CartPole cart and pole velocity, Pendulum angular velocity,
-      Acrobot both joint velocities, MountainCar velocity, LunarLander linear and angular velocities.
-    - The order is the environment's observation, then observation noise, then the mask, then the stack, so a
-      frame keeps the noise it was observed with and masked entries are exactly zero.
-    - Works with `make_vec_env` (CartPole, Pendulum), including automatic resets, and with `train.py`,
-      `record.py` and the benchmark.
-    - A bad value (`frame_stack` 0, a float or a bool; a `mask_velocity` that is not true or false) is refused
-      with a message naming the key.
-    - With neither key set, observations, spaces, checkpoints and every golden test are unchanged.
-    - Unit tests in `tests/test_frame_stack.py`.
-  - **Known edge cases**: padding at reset (the first observation repeated, Gymnasium's
-    `FrameStackObservation` default, rather than zeros, which would be a state the environment never shows);
-    the stack must restart at every reset, including a vectorized auto-reset; masked entries' `Box` bounds;
-    memory and time for long stacks (a $(K, d)$ NumPy buffer shifted by one frame per step).
-  - **Out of scope**: convolutional networks for raw RGB pixels; recurrent policies (LSTM/GRU); other feature
-    transformations (normalisation is separate); changing any committed config.
-  - **Progress (2026-11-01)**: PR 1 built on `feature/frame-stacking` (`rl_core/environments/observation.py`,
-    applied by `BaseEnvWrapper`; the indices are listed by environment id in each wrapper's `VELOCITY_INDICES`).
-    PR 2, the learning run, is next.
-  - **Follow-up, not scheduled**: checkpoints record neither setting. A `frame_stack: 4` checkpoint played back or
-    resumed under `frame_stack: 1` fails with a shape error, at load for an agent that saves a replay buffer (DQN)
-    and at the first forward pass otherwise, and a `mask_velocity`
-    mismatch runs without an error on the wrong inputs. A check of the saved input size against
-    `observation_dim` at load would catch the first. Note for normalisation: a masked entry is constant zero, so
-    its running standard deviation is 0, and its `Box` bounds are 0 to 0, so a bounds-based scale would divide by
-    zero. `rl_core.environments` now imports `rl_core.agents.config_values`; moving those readers to a neutral
-    module would keep the environments independent of the agents package.
+- [ ] **Masked CartPole PPO with frame stacking does not solve**
+  - **Description**: With `mask_velocity: true` and `frame_stack: 4`, CartPole PPO on the committed config's other
+    settings reaches 0 of 5 solves at 200,000 steps and does worse at 400,000 (`total_steps` and `anneal_steps` both
+    doubled), so the budget is not the cause (CHANGELOG.md, 2026-11-01). Find out why with the `training-doctor`
+    skill before changing a hyperparameter: per-episode curves, losses, entropy, KL and clip fraction on one seed.
+  - **Acceptance criteria**: a diagnosis backed by logged metrics; if it leads to a change, a scratch config that
+    reaches 475 on at least 4 of 5 seeds (1 to 5), with the maintainer deciding whether to commit it.
+  - **Known edge cases**: the masked entries are constant zero in 8 of the 16 inputs; slower annealing made it
+    worse, which points at stability rather than time.
+  - **Out of scope**: recurrent policies; changing `configs/cartpole_ppo.yaml`.
+
+- [ ] **Observation settings in checkpoints**
+  - **Description**: checkpoints record neither `frame_stack` nor `mask_velocity`. A `frame_stack: 4` checkpoint
+    played back or resumed under `frame_stack: 1` fails with a shape error, at load for an agent that saves a
+    replay buffer (DQN) and at the first forward pass otherwise, and a `mask_velocity` mismatch runs without an
+    error on the wrong inputs.
+  - **Acceptance criteria**: a check of the saved input size against `observation_dim` at load, with a message
+    naming the environment keys.
+  - **Notes**: for observation normalisation, a masked entry is constant zero, so its running standard deviation
+    is 0, and its `Box` bounds are 0 to 0, so a bounds-based scale would divide by zero. `rl_core.environments`
+    imports `rl_core.agents.config_values`; moving those readers to a neutral module would keep the environments
+    independent of the agents package.
 
 - [ ] **Lightweight Embedded Inference Export (C Header & ONNX)**
   - **Description**: Export trained pure NumPy model parameters into zero-dependency standalone C header files

@@ -16,6 +16,18 @@ Acrobot-v1) and
 
 ### Added
 
+- **Velocity masking and frame stacking** (`feature/frame-stacking`, `feature/frame-stacking-learning-run`): every
+  challenge's `environment` section takes `mask_velocity` (default false), which zeroes the velocity entries as
+  rl-zoo's `MaskVelocityWrapper` does, and `frame_stack: K` (default 1, off), which joins the last K observations,
+  oldest first, into one vector. `BaseEnvWrapper` applies them after observation noise
+  (`rl_core/environments/observation.py`); with neither key set nothing changes. Measured through the benchmark on
+  CartPole PPO, `configs/cartpole_ppo.yaml` otherwise unchanged, 200,000 steps, seeds 1 to 5: unmasked solves and
+  holds 475 on 5 of 5 (greedy evaluation 500 ± 0); masked solves 0 of 5 (final 100-episode averages 45 to 50,
+  evaluation 42 ± 3); masked with `frame_stack: 4` solves 0 of 5 (final averages 192 to 328, evaluation 337 ± 74).
+  With `total_steps` and `anneal_steps` doubled to 400,000 it still solves 0 of 5 and ends lower (final averages 161
+  to 214, evaluation 233 ± 52), so the budget is not what holds it back; the cause is an open roadmap item. No
+  masked config was committed.
+
 - **Gradient clipping with plain SGD** (`feature/sgd-gradient-clip`): `max_grad_norm` used to be refused unless
   `optimizer: adam`. REINFORCE, the discrete Actor-Critic, discrete PPO and DQN now accept it with SGD too, and clip
   the global norm of the mean gradient, as Adam does (`ClippedSGD` in `rl_core/agents/optim.py`, which shares Adam's
