@@ -669,7 +669,8 @@ observation noise. `mask_velocity: true` zeroes the velocity entries and keeps t
 `MaskVelocityWrapper` does. `frame_stack: K` joins the last K observations, oldest first, into one vector; at a reset
 the first observation fills every slot. Agents size themselves from the stacked space, so a checkpoint trained with
 these keys must be played back (`record.py`) or resumed with the same `environment` section: checkpoints do not
-record them.
+record them. On masked CartPole, PPO with `frame_stack: 4` recovers much of what masking takes away but does
+not solve (CHANGELOG.md, 2026-11-01).
 
 ### Agent Framework
 
