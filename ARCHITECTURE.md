@@ -44,6 +44,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │                                                                             │
 │  environments/                                                              │
 │  - BaseEnvWrapper (seeding, observation noise, episode statistics)          │
+│  - observation.py (velocity masking and frame stacking, after the noise)    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -420,15 +421,17 @@ plots/
 1. Create a new package under `src/rl_<challenge>/`:
    - `environments/<challenge>_env.py`: the challenge's wrapper, a subclass of
      `rl_core.environments.BaseEnvWrapper`. The base already handles seeding (the constructor seed on the first
-     reset only), observation noise, episode statistics and `wrap_env`. The subclass validates its own settings,
-     calls `_make_env()`, and overrides `_prepare_action` (action noise) and `_apply_domain_randomization`
-     (per-episode physics); both default to doing nothing.
+     reset only), observation noise, `frame_stack` and `mask_velocity`, episode statistics and `wrap_env`. The
+     subclass takes `**observation: Unpack[ObservationOptions]` and passes it to `super().__init__`, lists its
+     velocity entries by environment id in `VELOCITY_INDICES` (`mask_velocity` is refused for an id it does not
+     list), validates its own settings, calls `_make_env()`, and overrides `_prepare_action` (action noise) and
+     `_apply_domain_randomization` (per-episode physics); both default to doing nothing.
    - `environments/make_env.py`: `make_env`, an `ENV_DEFAULTS` dict naming each environment setting the challenge
-     supports with its default, and `make_env_from_config`, which reads them with
-     `rl_core.utils.config.read_env_settings`: null takes the default, and any other setting given a value is
-     rejected rather than ignored. A wrapper with observation noise only builds through
-     `rl_core.environments.env_from_config(wrapper, config, ENV_DEFAULTS)` (Acrobot, MountainCar, LunarLander). A
-     vectorized factory only if something uses it (`rl_acrobot` has none).
+     supports with its default (spreading `rl_core.environments.OBSERVATION_DEFAULTS` into it), and
+     `make_env_from_config`, which reads them with `rl_core.utils.config.read_env_settings`: null takes the
+     default, and any other setting given a value is rejected rather than ignored. A wrapper with observation
+     settings only builds through `rl_core.environments.env_from_config(wrapper, config, ENV_DEFAULTS)` (Acrobot,
+     MountainCar, LunarLander). A vectorized factory only if something uses it (`rl_acrobot` has none).
    - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`. It
      implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and lists its agents
      in the class variable `AGENT_CLASSES` (agent type to class). The base class's `supported_agents` and `make_agent`

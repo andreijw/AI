@@ -52,7 +52,7 @@ AI/
 │   │   │   ├── replay_buffer.py
 │   │   │   ├── returns.py       # Discounted returns shared by the episodic agents
 │   │   │   └── softmax.py       # Numerically stable softmax shared by the discrete policies
-│   │   ├── environments/        # BaseEnvWrapper: seeding, observation noise, episode statistics
+│   │   ├── environments/        # BaseEnvWrapper: seeding, observation noise, velocity masking, frame stacking
 │   │   ├── training/            # Generic training pipeline (trainer.py)
 │   │   ├── utils/               # Config, logging, video recording, plotting & rolling averages
 │   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges
@@ -518,6 +518,8 @@ environment:
   render_mode: null
   max_episode_steps: 500
   seed: 42
+  # frame_stack: 4        # optional, every challenge: the last 4 observations, oldest first, as one vector
+  # mask_velocity: true   # optional, every challenge: zero the velocity entries (a partially observed task)
 
 # Agent settings
 agent:
@@ -661,6 +663,13 @@ both). All four subclass
 - Episode tracking and statistics
 - Standardized interface for training pipeline
 - Easy monitoring and logging integration
+
+Every challenge's `environment` section also takes `frame_stack` and `mask_velocity`, applied by the base after the
+observation noise. `mask_velocity: true` zeroes the velocity entries and keeps the observation's length, as rl-zoo's
+`MaskVelocityWrapper` does. `frame_stack: K` joins the last K observations, oldest first, into one vector; at a reset
+the first observation fills every slot. Agents size themselves from the stacked space, so a checkpoint trained with
+these keys must be played back (`record.py`) or resumed with the same `environment` section: checkpoints do not
+record them.
 
 ### Agent Framework
 

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from rl_core.environments import BaseEnvWrapper
+from types import MappingProxyType
+from typing import Unpack
+
+from rl_core.environments import BaseEnvWrapper, ObservationOptions
 
 
 class AcrobotEnv(BaseEnvWrapper):
@@ -16,6 +19,8 @@ class AcrobotEnv(BaseEnvWrapper):
     pass through unchanged. Action noise and domain randomization are not supported.
     """
 
+    VELOCITY_INDICES = MappingProxyType({"Acrobot-v1": (4, 5)})
+
     def __init__(
         self,
         env_name: str = "Acrobot-v1",
@@ -23,6 +28,7 @@ class AcrobotEnv(BaseEnvWrapper):
         max_episode_steps: int = 500,
         seed: int | None = None,
         obs_noise_std: float = 0.0,
+        **observation: Unpack[ObservationOptions],
     ) -> None:
         """
         Initialize the Acrobot environment wrapper.
@@ -34,6 +40,10 @@ class AcrobotEnv(BaseEnvWrapper):
             seed: Random seed. Applied on the first reset; later resets continue the sequence,
                 so runs are reproducible and episodes differ from one another.
             obs_noise_std: Standard deviation of Gaussian noise added to observations.
+            observation: ``frame_stack`` and ``mask_velocity``; see
+                :class:`rl_core.environments.BaseEnvWrapper`.
         """
-        super().__init__(env_name, render_mode, max_episode_steps, seed, obs_noise_std)
+        super().__init__(
+            env_name, render_mode, max_episode_steps, seed, obs_noise_std, **observation
+        )
         self._make_env()

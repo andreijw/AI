@@ -8,12 +8,13 @@ certain features are environment-specific:
 """
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Unpack
 
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
 from rl_core.agents.config_values import async_envs_setting
+from rl_core.environments import OBSERVATION_DEFAULTS, ObservationOptions
 from rl_core.utils.config import read_env_settings
 
 from .cartpole_env import CartPoleEnv
@@ -23,6 +24,7 @@ ENV_DEFAULTS: dict[str, Any] = {
     "name": "CartPole-v1",
     "max_episode_steps": 500,
     "obs_noise_std": 0.0,
+    **OBSERVATION_DEFAULTS,
     "action_noise_prob": 0.0,
     "domain_randomization": None,
 }
@@ -39,6 +41,7 @@ def make_env(
     obs_noise_std: float = 0.0,
     action_noise_prob: float = 0.0,
     domain_randomization: dict[str, tuple[float, float]] | None = None,
+    **observation: Unpack[ObservationOptions],
 ) -> CartPoleEnv:
     """
     Create a Gymnasium environment with optional noise and domain randomization.
@@ -49,6 +52,7 @@ def make_env(
         max_episode_steps: Maximum steps per episode
         seed: Random seed for reproducibility
         obs_noise_std: Standard deviation of Gaussian noise added to observations
+        observation: ``frame_stack`` and ``mask_velocity`` (see ``BaseEnvWrapper``).
         action_noise_prob: Probability of flipping the action (0.0 to 1.0)
                           Note: Only works with Discrete(2) action spaces
         domain_randomization: Dictionary with parameter ranges for randomization.
@@ -71,6 +75,7 @@ def make_env(
         obs_noise_std=obs_noise_std,
         action_noise_prob=action_noise_prob,
         domain_randomization=domain_randomization,
+        **observation,
     )
 
 
@@ -84,6 +89,7 @@ def make_vec_env(
     action_noise_prob: float = 0.0,
     domain_randomization: dict[str, tuple[float, float]] | None = None,
     async_envs: bool = True,
+    **observation: Unpack[ObservationOptions],
 ) -> gym.vector.VectorEnv:
     """
     Create vectorized CartPole environments for parallel training.
@@ -96,6 +102,7 @@ def make_vec_env(
         seed: Base random seed (each env gets seed + i and continues its own
               sequence across automatic resets)
         obs_noise_std: Standard deviation of Gaussian noise added to observations
+        observation: ``frame_stack`` and ``mask_velocity`` (see ``BaseEnvWrapper``).
         action_noise_prob: Probability of flipping the action (0.0 to 1.0)
         domain_randomization: Dictionary with parameter ranges for randomization
         async_envs: If True, use AsyncVectorEnv (parallel processes).
@@ -129,6 +136,7 @@ def make_vec_env(
                 obs_noise_std=obs_noise_std,
                 action_noise_prob=action_noise_prob,
                 domain_randomization=domain_randomization,
+                **observation,
             )
 
         return _init

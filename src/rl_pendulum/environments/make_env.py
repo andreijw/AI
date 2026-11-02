@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Unpack
 
 import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
 from rl_core.agents.config_values import async_envs_setting
+from rl_core.environments import OBSERVATION_DEFAULTS, ObservationOptions
 from rl_core.utils.config import read_env_settings
 
 from .pendulum_env import PendulumEnv
@@ -18,6 +19,7 @@ ENV_DEFAULTS: dict[str, Any] = {
     "name": "Pendulum-v1",
     "max_episode_steps": 200,
     "obs_noise_std": 0.0,
+    **OBSERVATION_DEFAULTS,
     "action_noise_std": 0.0,
     "domain_randomization": None,
 }
@@ -34,6 +36,7 @@ def make_env(
     obs_noise_std: float = 0.0,
     action_noise_std: float = 0.0,
     domain_randomization: dict[str, tuple[float, float]] | None = None,
+    **observation: Unpack[ObservationOptions],
 ) -> PendulumEnv:
     """
     Create a Pendulum environment with optional continuous noise and domain randomization.
@@ -44,6 +47,7 @@ def make_env(
         max_episode_steps: Maximum steps per episode (default: 200).
         seed: Random seed for reproducibility.
         obs_noise_std: Standard deviation of Gaussian observation noise.
+        observation: ``frame_stack`` and ``mask_velocity`` (see ``BaseEnvWrapper``).
         action_noise_std: Standard deviation of Gaussian action noise.
         domain_randomization: Physical parameter randomization ranges.
 
@@ -58,6 +62,7 @@ def make_env(
         obs_noise_std=obs_noise_std,
         action_noise_std=action_noise_std,
         domain_randomization=domain_randomization,
+        **observation,
     )
 
 
@@ -71,6 +76,7 @@ def make_vec_env(
     action_noise_std: float = 0.0,
     domain_randomization: dict[str, tuple[float, float]] | None = None,
     async_envs: bool = True,
+    **observation: Unpack[ObservationOptions],
 ) -> gym.vector.VectorEnv:
     """
     Create vectorized Pendulum environments for parallel rollouts.
@@ -82,6 +88,7 @@ def make_vec_env(
         max_episode_steps: Maximum steps per episode.
         seed: Base random seed.
         obs_noise_std: Gaussian observation noise std.
+        observation: ``frame_stack`` and ``mask_velocity`` (see ``BaseEnvWrapper``).
         action_noise_std: Gaussian action noise std.
         domain_randomization: Physical parameter ranges.
         async_envs: If True, use AsyncVectorEnv; if False, use SyncVectorEnv.
@@ -100,6 +107,7 @@ def make_vec_env(
                 obs_noise_std=obs_noise_std,
                 action_noise_std=action_noise_std,
                 domain_randomization=domain_randomization,
+                **observation,
             )
 
         return _init

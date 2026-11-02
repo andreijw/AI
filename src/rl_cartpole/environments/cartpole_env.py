@@ -1,10 +1,12 @@
 """CartPole environment wrapper for reinforcement learning."""
 
 from collections.abc import Mapping, Sequence
+from types import MappingProxyType
+from typing import Unpack
 
 import gymnasium as gym
 
-from rl_core.environments import BaseEnvWrapper, checked_range
+from rl_core.environments import BaseEnvWrapper, ObservationOptions, checked_range
 
 
 class CartPoleEnv(BaseEnvWrapper):
@@ -31,6 +33,8 @@ class CartPoleEnv(BaseEnvWrapper):
         ValueError: If action_noise_prob > 0 with non-Discrete(2) action spaces
     """
 
+    VELOCITY_INDICES = MappingProxyType({"CartPole-v1": (1, 3)})
+
     def __init__(
         self,
         env_name: str = "CartPole-v1",
@@ -40,6 +44,7 @@ class CartPoleEnv(BaseEnvWrapper):
         obs_noise_std: float = 0.0,
         action_noise_prob: float = 0.0,
         domain_randomization: Mapping[str, Sequence[float] | tuple[float, float]] | None = None,
+        **observation: Unpack[ObservationOptions],
     ):
         """
         Initialize the environment wrapper.
@@ -52,6 +57,8 @@ class CartPoleEnv(BaseEnvWrapper):
             seed: Random seed. Applied on the first reset; later resets continue the sequence,
                   so runs are reproducible and episodes differ from one another
             obs_noise_std: Standard deviation of Gaussian noise added to observations
+            observation: ``frame_stack`` and ``mask_velocity``; see
+                :class:`rl_core.environments.BaseEnvWrapper`.
             action_noise_prob: Probability of flipping the action (0.0 to 1.0)
                               Note: Only works with Discrete(2) action spaces
             domain_randomization: Dictionary with parameter ranges for randomization.
@@ -63,7 +70,9 @@ class CartPoleEnv(BaseEnvWrapper):
             ValueError: If domain_randomization is enabled with non-CartPole environment
             ValueError: If action_noise_prob > 0 with non-Discrete(2) action space
         """
-        super().__init__(env_name, render_mode, max_episode_steps, seed, obs_noise_std)
+        super().__init__(
+            env_name, render_mode, max_episode_steps, seed, obs_noise_std, **observation
+        )
 
         if not (0.0 <= action_noise_prob <= 1.0):
             raise ValueError(

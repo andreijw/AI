@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Unpack
 
-from rl_core.environments import env_from_config
+from rl_core.environments import OBSERVATION_DEFAULTS, ObservationOptions, env_from_config
 
 from .acrobot_env import AcrobotEnv
 
@@ -13,6 +13,7 @@ ENV_DEFAULTS: dict[str, Any] = {
     "name": "Acrobot-v1",
     "max_episode_steps": 500,
     "obs_noise_std": 0.0,
+    **OBSERVATION_DEFAULTS,
 }
 
 
@@ -22,6 +23,7 @@ def make_env(
     max_episode_steps: int = 500,
     seed: int | None = None,
     obs_noise_std: float = 0.0,
+    **observation: Unpack[ObservationOptions],
 ) -> AcrobotEnv:
     """
     Create an Acrobot environment with optional observation noise.
@@ -32,6 +34,7 @@ def make_env(
         max_episode_steps: Maximum steps per episode (default: 500).
         seed: Random seed for reproducibility.
         obs_noise_std: Standard deviation of Gaussian observation noise.
+        observation: ``frame_stack`` and ``mask_velocity`` (see ``BaseEnvWrapper``).
 
     Returns:
         AcrobotEnv instance.
@@ -42,6 +45,7 @@ def make_env(
         max_episode_steps=max_episode_steps,
         seed=seed,
         obs_noise_std=obs_noise_std,
+        **observation,
     )
 
 

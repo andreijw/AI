@@ -20,6 +20,7 @@ This document outlines manual verification and testing procedures for the RL fra
 | ENV-4 | **Domain Randomization** | Observe demo 4 console output. | Physical parameters (`gravity`, `masscart`, `masspole`, `length`) resample per episode. |
 | ENV-5 | **Vectorized Execution** | Observe demo 5 console output. | Runs 4 parallel vectorized environments; step returns batched arrays with shape `(4, 4)`. |
 | ENV-6 | **Box2D for LunarLander** | `./setup.sh` (or the manual steps in README, LunarLander), then `.venv/bin/python -c "import gymnasium as gym; gym.make('LunarLander-v3').reset(seed=0)"` | setup.sh builds `box2d-py` 2.3.5 (about 90 seconds), prints `Box2D 2.3.5`, and the LunarLander tests run instead of skipping. Without it, building a LunarLander environment raises an `ImportError` naming `./setup.sh` and the manual steps. |
+| ENV-7 | **Velocity Masking and Frame Stacking** | `python -c "from rl_cartpole.environments import make_env; e = make_env(seed=0, mask_velocity=True, frame_stack=4); o, _ = e.reset(); o, *_ = e.step(0); print(o.shape, o[1::2])"` | Prints `(16,)` and eight zeros: four stacked CartPole frames, each with its cart and pole velocities masked. The same keys in any config's `environment` section work for every challenge (`frame_stack: 4`, `mask_velocity: true`); an environment id the wrapper has no velocity layout for is refused naming `mask_velocity`. |
 
 ---
 

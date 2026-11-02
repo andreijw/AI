@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from rl_core.environments import BaseEnvWrapper
+from types import MappingProxyType
+from typing import Unpack
+
+from rl_core.environments import BaseEnvWrapper, ObservationOptions
 
 
 class MountainCarEnv(BaseEnvWrapper):
@@ -20,6 +23,8 @@ class MountainCarEnv(BaseEnvWrapper):
     unchanged. Action noise and domain randomization are not supported.
     """
 
+    VELOCITY_INDICES = MappingProxyType({"MountainCar-v0": (1,), "MountainCarContinuous-v0": (1,)})
+
     def __init__(
         self,
         env_name: str = "MountainCar-v0",
@@ -27,6 +32,7 @@ class MountainCarEnv(BaseEnvWrapper):
         max_episode_steps: int = 200,
         seed: int | None = None,
         obs_noise_std: float = 0.0,
+        **observation: Unpack[ObservationOptions],
     ) -> None:
         """
         Initialize the mountain car environment wrapper.
@@ -38,6 +44,10 @@ class MountainCarEnv(BaseEnvWrapper):
             seed: Random seed. Applied on the first reset; later resets continue the sequence,
                 so runs are reproducible and episodes differ from one another.
             obs_noise_std: Standard deviation of Gaussian noise added to observations.
+            observation: ``frame_stack`` and ``mask_velocity``; see
+                :class:`rl_core.environments.BaseEnvWrapper`.
         """
-        super().__init__(env_name, render_mode, max_episode_steps, seed, obs_noise_std)
+        super().__init__(
+            env_name, render_mode, max_episode_steps, seed, obs_noise_std, **observation
+        )
         self._make_env()
