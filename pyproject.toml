@@ -45,7 +45,7 @@ torch = [
 # box2d-py builds from source with swig, which pip's isolated build cannot find, so install it first
 # as ./setup.sh does (README, LunarLander). Rendering uses pygame-ce, as Gymnasium does.
 box2d = [
-    "box2d-py==2.3.5",
+    "box2d-py==2.3.8",
     "pygame-ce>=2.1.3",
 ]
 dev = [
