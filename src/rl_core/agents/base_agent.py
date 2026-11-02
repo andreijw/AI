@@ -9,6 +9,8 @@ from typing import Any, ClassVar, final
 
 import numpy as np
 
+from rl_core.agents.config_values import flag
+from rl_core.agents.observation_normalizer import RunningMeanStd
 from rl_core.seeding import check_generator_state, generator_state, restore_generator
 
 # What to tell someone whose config chooses a backend whose library is missing.
@@ -25,6 +27,13 @@ GENERATOR_KEY_PREFIX = "rng_"
 # Checkpoint key of an observation setting the agent was built for: "observation_setting_" and its
 # name. ("observation_" alone would take in the random agents' observation_dim.)
 OBSERVATION_KEY_PREFIX = "observation_setting_"
+# Checkpoint key of a running observation statistic (normalize_observations): "obs_norm_" and its name.
+OBS_NORM_KEY_PREFIX = "obs_norm_"
+# What each reserved checkpoint-key prefix holds; a subclass's own entries may not use them.
+_RESERVED_KEY_PREFIXES = {
+    OBSERVATION_KEY_PREFIX: "the recorded observation settings",
+    OBS_NORM_KEY_PREFIX: "the observation normalisation statistics",
+}
 
 
 def _setting_value(name: str, value: Any) -> bool | int:
@@ -75,6 +84,9 @@ class BaseAgent(ABC):
     # not inherit its parent's (a TD3Agent(DDPGAgent) is not built as TorchDDPGAgent).
     BACKENDS: ClassVar[dict[str, str]] = {}
     _observation_settings: Mapping[str, bool | int] | None = None
+    # Whether ``normalize_observations`` may be set. An agent that keeps transitions in a replay
+    # buffer would store inputs normalised by statistics that later change, so it says False.
+    SUPPORTS_OBSERVATION_NORMALIZATION: ClassVar[bool] = True
     _observation_defaults: Mapping[str, bool | int] = MappingProxyType({})
 
     @final
@@ -129,6 +141,38 @@ class BaseAgent(ABC):
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.config = config
+        self._obs_normalizer: RunningMeanStd | None = None
+        if flag(config, "normalize_observations", False):
+            if not self.SUPPORTS_OBSERVATION_NORMALIZATION:
+                raise ValueError(
+                    f"normalize_observations is not supported by {type(self).__name__}: its replay "
+                    "buffer would keep observations normalised by statistics that later change"
+                )
+            self._obs_normalizer = RunningMeanStd(observation_dim)
+
+    @property
+    def observation_normalizer(self) -> RunningMeanStd | None:
+        """The running statistics ``normalize_observations`` keeps, or None with it off."""
+        return self._obs_normalizer
+
+    @final
+    def normalize_observation(self, observation: np.ndarray, training: bool = True) -> np.ndarray:
+        """
+        The input the agent acts and learns on for an environment's ``observation``.
+
+        With ``normalize_observations`` off this is ``observation`` itself. With it on, a training
+        observation first updates the running statistics; the result is then a new float64 array,
+        ``(observation - mean) / sqrt(var + 1e-8)`` clipped to ±10. Evaluation
+        (``training=False``) only reads the statistics. ``Trainer`` calls this once for every
+        observation an environment returns; a caller that drives ``select_action`` itself (the
+        examples, the agent tests) must do the same for a normalising agent. Callers must not
+        change the returned array.
+        """
+        if self._obs_normalizer is None:
+            return observation
+        if training:
+            self._obs_normalizer.update(observation)
+        return self._obs_normalizer.normalize(observation)
 
     # ------------------------------------------------------------------
     # Shared utility helpers
@@ -216,6 +260,37 @@ class BaseAgent(ABC):
                 f"{path} was saved with {was_text}; this environment has {now}. Play it back or "
                 "resume it with the environment section it was trained with"
             )
+
+    def _saved_observation_statistics(
+        self, data: Mapping[str, Any], path: str
+    ) -> dict[str, Any] | None:
+        """
+        The checkpoint's observation statistics, checked, or None if it holds none.
+
+        Raises:
+            ValueError: If the checkpoint holds statistics and this agent does not normalise, or the
+                other way round, or the statistics are malformed (naming the entry).
+        """
+        names = ("mean", "var", "count")
+        held = [n for n in names if f"{OBS_NORM_KEY_PREFIX}{n}" in data]
+        on = self._obs_normalizer is not None
+        if bool(held) != on:
+            raise ValueError(
+                f"{path} was saved with agent.config.normalize_observations: "
+                f"{str(bool(held)).lower()}; this agent has normalize_observations: "
+                f"{str(on).lower()}. Load it into an agent built with the same setting"
+            )
+        if not on:
+            return None
+        missing = [f"{OBS_NORM_KEY_PREFIX}{n}" for n in names if n not in held]
+        if missing:
+            raise ValueError(f"{path} lacks {', '.join(missing)}")
+        statistics = {n: data[f"{OBS_NORM_KEY_PREFIX}{n}"] for n in names}
+        try:
+            RunningMeanStd.check_state(statistics, self.observation_dim)
+        except ValueError as error:
+            raise ValueError(f"{path}: {OBS_NORM_KEY_PREFIX}{error}") from None
+        return statistics
 
     def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
         """Arrays a subclass needs saved beyond the weights and optimizer state."""
@@ -417,14 +492,16 @@ class BaseAgent(ABC):
 
         Supported extensions are ``.pt`` and ``.npz``; without one, ``.npz`` is appended. Missing
         directories are created. An agent with recorded observation settings saves each as
-        ``observation_setting_<name>``.
+        ``observation_setting_<name>``; one that normalises observations saves its running
+        statistics as ``obs_norm_mean``, ``obs_norm_var`` and ``obs_norm_count``.
 
         Args:
             path: Destination file path.
 
         Raises:
             ValueError: If two parts of the checkpoint use one key, or a part uses a key under the
-                ``observation_setting_`` prefix, which holds the recorded settings.
+                ``observation_setting_`` or ``obs_norm_`` prefix, which hold the recorded settings
+                and the normalisation statistics.
         """
         save_path = self._resolve_save_path(path)
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
@@ -433,14 +510,17 @@ class BaseAgent(ABC):
             self._extra_checkpoint_state(),
             {key: generator_state(g) for key, g in self._generators().items()},
         )
-        reserved = sorted(k for part in parts for k in part if k.startswith(OBSERVATION_KEY_PREFIX))
-        if reserved:
-            raise ValueError(
-                f"Checkpoint keys {', '.join(reserved)} use the prefix {OBSERVATION_KEY_PREFIX!r}, "
-                "which holds the recorded observation settings"
-            )
+        for prefix, holds in _RESERVED_KEY_PREFIXES.items():
+            reserved = sorted(k for part in parts for k in part if k.startswith(prefix))
+            if reserved:
+                raise ValueError(
+                    f"Checkpoint keys {', '.join(reserved)} use the prefix {prefix!r}, which holds "
+                    f"{holds}"
+                )
+        statistics = {} if self._obs_normalizer is None else self._obs_normalizer.state()
+        own = {f"{OBS_NORM_KEY_PREFIX}{name}": value for name, value in statistics.items()}
         arrays: dict[str, Any] = {}
-        for part in (*parts, self._observation_entries()):
+        for part in (*parts, self._observation_entries(), own):
             clashing = sorted(arrays.keys() & part.keys())
             if clashing:
                 raise ValueError(f"Checkpoint keys saved twice: {', '.join(clashing)}")
@@ -461,6 +541,8 @@ class BaseAgent(ABC):
         Before anything else, the observation settings the checkpoint records are compared with the
         ones this agent records (:meth:`record_observation_settings`); a setting the checkpoint
         lacks counts as its default. A checkpoint or an agent without a record skips the check.
+        The checkpoint holds normalisation statistics exactly when this agent normalises
+        observations; they are checked with the rest and restored last.
 
         Args:
             path: Source file path.
@@ -468,14 +550,18 @@ class BaseAgent(ABC):
         Raises:
             ValueError: If the checkpoint was saved with other observation settings, naming each
                 one with its saved and current value, or a saved setting is not one boolean or
-                integer; nothing is loaded then.
+                integer; if it was saved with the other ``normalize_observations``, or its
+                statistics are incomplete or malformed (naming the entry). Nothing is loaded then.
         """
         load_path = self._resolve_load_path(path)
         with np.load(load_path) as data:
             self._check_observation_settings(data, load_path)
+            statistics = self._saved_observation_statistics(data, load_path)
             generator_states = self._saved_generator_states(data)  # checked before any change
             self._check_extra_checkpoint_state(data)
             self._load_checkpoint_arrays(data)
             self._load_extra_checkpoint_state(data)
+            if self._obs_normalizer is not None and statistics is not None:
+                self._obs_normalizer.load_state(statistics)
             for generator, source in generator_states.values():
                 restore_generator(generator, data[source])

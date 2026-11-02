@@ -526,6 +526,8 @@ agent:
   type: "random"  # Options: "random", "reinforce", "actor_critic", "ppo", "dqn"
   config:
     seed: 42
+    # normalize_observations: true  # optional: running mean and variance of the inputs, saved with the
+    #                               #   checkpoint (REINFORCE, Actor-Critic, PPO; not DQN, DDPG, TD3)
 
 # Training settings
 training:
@@ -671,7 +673,8 @@ the first observation fills every slot. Agents size themselves from the stacked 
 these keys must be played back (`record.py`) or resumed with the same `environment` section. Checkpoints record both
 keys, and loading one under other values stops with an error naming each key with its saved and current value;
 checkpoints saved before 2026-11-02 hold no record and load unchecked. On masked CartPole, PPO with `frame_stack: 4`
-recovers much of what masking takes away but does not solve (CHANGELOG.md, 2026-11-01).
+recovers much of what masking takes away but does not solve (CHANGELOG.md, 2026-11-01). With
+`normalize_observations: true` in the agent's config it solves on 4 of 5 seeds and holds on 2 (`TESTING.md` `TR-24`).
 
 ### Agent Framework
 

@@ -377,7 +377,10 @@ class Trainer:
             Tuple of (episode_reward, episode_length)
         """
         env = self.env if env is None else env
-        obs, _ = env.reset(seed=reset_seed) if reset_seed is not None else env.reset()
+        raw_obs, _ = env.reset(seed=reset_seed) if reset_seed is not None else env.reset()
+        # Each observation passes through the agent's normalisation once (identity when off), so
+        # the action, the stored transition and the next step's bootstrap share one input.
+        obs = self.agent.normalize_observation(raw_obs, training=training)
         episode_reward = 0.0
         episode_length = 0
 
@@ -389,7 +392,8 @@ class Trainer:
         done = False
         while not done and episode_length < self.max_steps_per_episode:
             action = self.agent.select_action(obs, training=training)
-            next_obs, reward, terminated, truncated, info = env.step(action)
+            raw_next, reward, terminated, truncated, info = env.step(action)
+            next_obs = self.agent.normalize_observation(raw_next, training=training)
             done = terminated or truncated
             transitions.append((obs, action, reward, next_obs, done, bool(terminated)))
 
