@@ -67,7 +67,7 @@ ALL_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
 
 _FLAGS = ("dueling", "double_q")
 # Settings that shape the network, so a checkpoint loads only into an agent built with them.
-_ARCHITECTURE_KEYS = ("dueling",)
+ARCHITECTURE_KEYS = ("dueling",)
 
 
 def agent_id(agent_cls: type[BaseAgent], config: dict[str, object]) -> str:
@@ -123,7 +123,7 @@ def test_agent_save_load_roundtrip_contract(
     checkpoint_path = str(tmp_path / f"{agent_cls.__name__}.pt")
     agent.save(checkpoint_path)
 
-    architecture = {key: config[key] for key in _ARCHITECTURE_KEYS if key in config}
+    architecture = {key: config[key] for key in ARCHITECTURE_KEYS if key in config}
     restored = agent_cls(observation_dim=4, action_dim=2, config=architecture)
     restored.load(checkpoint_path)
 

@@ -17,7 +17,13 @@ from rl_core.seeding import (
     restore_generator,
 )
 
-from .observation import FrameStack, mask_entries, masked_space, stacked_space
+from .observation import (
+    OBSERVATION_DEFAULTS,
+    FrameStack,
+    mask_entries,
+    masked_space,
+    stacked_space,
+)
 
 # Checkpoint keys of an environment's generators: the wrapper's noise stream and Gymnasium's
 # start-state generator.
@@ -290,6 +296,11 @@ class BaseEnvWrapper:
             }
 
         return obs, float(reward), terminated, truncated, info
+
+    def observation_settings(self) -> dict[str, bool | int]:
+        """Every observation setting (``OBSERVATION_DEFAULTS``'s keys) with this wrapper's value,
+        for an agent to record in its checkpoints."""
+        return {name: getattr(self, name) for name in OBSERVATION_DEFAULTS}
 
     def wrap_env(self, wrapper: Any) -> None:
         """Inject a Gymnasium wrapper around the inner environment.

@@ -4,6 +4,7 @@ import importlib
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any, ClassVar, final
 
 import numpy as np
@@ -21,6 +22,29 @@ BACKEND_INSTALL_HINTS = {
 
 # Checkpoint key of a generator attribute: "rng_" and its name without leading underscores.
 GENERATOR_KEY_PREFIX = "rng_"
+# Checkpoint key of an observation setting the agent was built for: "observation_setting_" and its
+# name. ("observation_" alone would take in the random agents' observation_dim.)
+OBSERVATION_KEY_PREFIX = "observation_setting_"
+
+
+def _setting_value(name: str, value: Any) -> bool | int:
+    """``value`` as a Python bool or int, keeping which of the two it is; ValueError otherwise."""
+    if isinstance(value, bool | np.bool_):
+        return bool(value)
+    if isinstance(value, int | np.integer):
+        return int(value)
+    raise ValueError(f"Observation setting {name} must be a boolean or an integer, got {value!r}")
+
+
+def _same_setting(a: bool | int | None, b: bool | int | None) -> bool:
+    """Equal and of the same kind: ``True`` and ``1`` are different settings."""
+    return a == b and isinstance(a, bool) == isinstance(b, bool)
+
+
+def _setting_text(name: str, value: bool | int | None) -> str:
+    if value is None:
+        return f"no {name}"
+    return f"{name}={str(value).lower() if isinstance(value, bool) else value}"
 
 
 class BaseAgent(ABC):
@@ -50,6 +74,8 @@ class BaseAgent(ABC):
     # it, so a backend's library is needed only then. Each class declares its own; a subclass does
     # not inherit its parent's (a TD3Agent(DDPGAgent) is not built as TorchDDPGAgent).
     BACKENDS: ClassVar[dict[str, str]] = {}
+    _observation_settings: Mapping[str, bool | int] | None = None
+    _observation_defaults: Mapping[str, bool | int] = MappingProxyType({})
 
     @final
     @classmethod
@@ -123,6 +149,73 @@ class BaseAgent(ABC):
         if training:
             return int(self._explore_rng.choice(self.action_dim, p=probs))
         return int(np.argmax(probs))
+
+    @property
+    def observation_settings(self) -> Mapping[str, bool | int] | None:
+        """The observation settings of the environment this agent was built for (``frame_stack``,
+        ``mask_velocity``), read-only, as :meth:`record_observation_settings` recorded them; None
+        for an agent built directly."""
+        return self._observation_settings
+
+    @final
+    def record_observation_settings(
+        self, settings: Mapping[str, Any], defaults: Mapping[str, Any]
+    ) -> None:
+        """
+        Record the observation settings of the environment this agent is built for, so
+        :meth:`save` stores them and :meth:`load` refuses a checkpoint saved with others.
+
+        Args:
+            settings: Each setting's value, by name (``{"frame_stack": 4, "mask_velocity": True}``).
+            defaults: Each setting's default, by name. :meth:`load` reads a setting a checkpoint
+                lacks (one added after it was saved) as its default.
+
+        Raises:
+            ValueError: If a name is not a string, a value or default is not a boolean or an
+                integer, or a setting has no default. Nothing is recorded then.
+        """
+        checked: dict[str, dict[str, bool | int]] = {"settings": {}, "defaults": {}}
+        for part, values in (("settings", settings), ("defaults", defaults)):
+            for name, value in values.items():
+                if not isinstance(name, str):
+                    raise ValueError(f"Observation setting names must be strings, got {name!r}")
+                checked[part][name] = _setting_value(name, value)
+        unknown = sorted(checked["settings"].keys() - checked["defaults"].keys())
+        if unknown:
+            raise ValueError(f"Observation setting(s) without a default: {', '.join(unknown)}")
+        self._observation_settings = MappingProxyType(checked["settings"])
+        self._observation_defaults = MappingProxyType(checked["defaults"])
+
+    def _observation_entries(self) -> dict[str, np.ndarray]:
+        """The recorded observation settings as checkpoint entries; none without a record."""
+        settings = self.observation_settings or {}
+        return {f"{OBSERVATION_KEY_PREFIX}{name}": np.array(v) for name, v in settings.items()}
+
+    def _check_observation_settings(self, data: Mapping[str, Any], path: str) -> None:
+        """
+        Raise ValueError if the checkpoint ``data`` was saved with other observation settings
+        than this agent records. Nothing is checked when either side has no record.
+        """
+        saved_keys = [key for key in data if key.startswith(OBSERVATION_KEY_PREFIX)]
+        if self.observation_settings is None or not saved_keys:
+            return
+        saved: dict[str, bool | int] = {}
+        for key in saved_keys:
+            value = np.asarray(data[key])
+            if value.ndim != 0:
+                raise ValueError(f"Checkpoint entry {key} must hold one value, got {value!r}")
+            saved[key[len(OBSERVATION_KEY_PREFIX) :]] = _setting_value(key, value.item())
+        current = dict(self.observation_settings)
+        # A setting the checkpoint lacks was added after it was saved: it was at its default.
+        was = {n: saved.get(n, self._observation_defaults.get(n)) for n in saved.keys() | current}
+        differing = [n for n in sorted(was) if not _same_setting(was[n], current.get(n))]
+        if differing:
+            was_text = ", ".join(_setting_text(n, was[n]) for n in differing)
+            now = ", ".join(_setting_text(n, current.get(n)) for n in differing)
+            raise ValueError(
+                f"{path} was saved with {was_text}; this environment has {now}. Play it back or "
+                "resume it with the environment section it was trained with"
+            )
 
     def _extra_checkpoint_state(self) -> dict[str, np.ndarray]:
         """Arrays a subclass needs saved beyond the weights and optimizer state."""
@@ -323,10 +416,15 @@ class BaseAgent(ABC):
         Save the agent to a compressed NumPy ``.npz`` checkpoint.
 
         Supported extensions are ``.pt`` and ``.npz``; without one, ``.npz`` is appended. Missing
-        directories are created.
+        directories are created. An agent with recorded observation settings saves each as
+        ``observation_setting_<name>``.
 
         Args:
             path: Destination file path.
+
+        Raises:
+            ValueError: If two parts of the checkpoint use one key, or a part uses a key under the
+                ``observation_setting_`` prefix, which holds the recorded settings.
         """
         save_path = self._resolve_save_path(path)
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
@@ -335,8 +433,14 @@ class BaseAgent(ABC):
             self._extra_checkpoint_state(),
             {key: generator_state(g) for key, g in self._generators().items()},
         )
+        reserved = sorted(k for part in parts for k in part if k.startswith(OBSERVATION_KEY_PREFIX))
+        if reserved:
+            raise ValueError(
+                f"Checkpoint keys {', '.join(reserved)} use the prefix {OBSERVATION_KEY_PREFIX!r}, "
+                "which holds the recorded observation settings"
+            )
         arrays: dict[str, Any] = {}
-        for part in parts:
+        for part in (*parts, self._observation_entries()):
             clashing = sorted(arrays.keys() & part.keys())
             if clashing:
                 raise ValueError(f"Checkpoint keys saved twice: {', '.join(clashing)}")
@@ -354,10 +458,21 @@ class BaseAgent(ABC):
         agent's own arrays are checked as its ``_load_checkpoint_arrays`` documents. A generator the
         checkpoint does not hold keeps its current state.
 
+        Before anything else, the observation settings the checkpoint records are compared with the
+        ones this agent records (:meth:`record_observation_settings`); a setting the checkpoint
+        lacks counts as its default. A checkpoint or an agent without a record skips the check.
+
         Args:
             path: Source file path.
+
+        Raises:
+            ValueError: If the checkpoint was saved with other observation settings, naming each
+                one with its saved and current value, or a saved setting is not one boolean or
+                integer; nothing is loaded then.
         """
-        with np.load(self._resolve_load_path(path)) as data:
+        load_path = self._resolve_load_path(path)
+        with np.load(load_path) as data:
+            self._check_observation_settings(data, load_path)
             generator_states = self._saved_generator_states(data)  # checked before any change
             self._check_extra_checkpoint_state(data)
             self._load_checkpoint_arrays(data)

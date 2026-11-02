@@ -171,6 +171,7 @@ classDiagram
         +update(batch)* dict
         +save(path)
         +load(path)
+        +record_observation_settings(settings, defaults)
         #_checkpoint_arrays()* dict
         #_load_checkpoint_arrays(data)*
     }
@@ -324,8 +325,12 @@ environment (built by the challenge's `make_env`, or `setup_eval_env` in the ben
 evaluation in a run plays the same start states and how often a run evaluates does not change its training episodes.
 The random agents draw their evaluation actions from a separate generator for the same reason. An agent checkpoint
 holds every generator the agent draws from and, for DQN and DDPG, the replay buffer, so a loaded agent continues
-exactly as the saved one would have. Beside it the trainer writes `trainer_episode_<n>.npz` (episode and step
-counts, reward and length histories, the update-metric window, the evaluation seed and, for an environment that
+exactly as the saved one would have. An agent built by a challenge's `make_agent` also records its environment's
+observation settings (`BaseEnvWrapper.observation_settings()`: `frame_stack`, `mask_velocity`) with
+`BaseAgent.record_observation_settings`; `save` stores them as `observation_setting_<name>` and `load` refuses,
+before changing anything, a checkpoint saved with other values. Beside it the trainer writes
+`trainer_episode_<n>.npz` (episode and step counts, reward and length histories, the update-metric window, the
+evaluation seed and, for an environment that
 implements `rl_core.environments.ResumableEnv`, its generators) as a `TrainerState` that also records the agent
 file's SHA-256, both files through
 `rl_core.training.checkpoints.write_atomically`; `Trainer.resume` (`train.py --resume`) reads both, so a resumed

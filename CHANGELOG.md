@@ -12,6 +12,21 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-02
+
+### Added
+
+- **Observation settings in checkpoints** (`feature/checkpoint-observation-settings`): an agent built by a
+  challenge's `make_agent` (as `train.py`, `record.py` and the benchmark build it) records its environment's
+  `frame_stack` and `mask_velocity`, and `BaseAgent.save` stores them as `observation_setting_<name>`. `load` refuses,
+  before changing anything, a checkpoint saved with other values, naming each differing key with its saved and current
+  value, so `record.py` playback and `train.py --resume` under a different `environment` section stop at once. Before,
+  a stack mismatch failed later with a shape error and a mask mismatch ran on the wrong inputs without one. A key a
+  checkpoint lacks counts as its default, so a setting added later does not refuse today's checkpoints; `True` and `1`
+  differ. Checkpoints saved before this change hold no record and load unchecked (a stack mismatch among them still
+  fails late), and an agent built directly records nothing, so golden checkpoints are unchanged. The maintainer chose
+  recording the settings over checking only the saved input size, which would not catch masking.
+
 ## 2026-11-01
 
 ### Added

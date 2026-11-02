@@ -100,6 +100,9 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
             captured["agent_action_dim"] = action_dim
             captured["agent_config"] = dict(config)
 
+        def record_observation_settings(self, settings, defaults):
+            captured["observation_settings"] = dict(settings)
+
     class _StubTrainer:
         def __init__(self, env, agent, config, logger=None, **_eval):
             captured["trainer_agent_type"] = type(agent).__name__
@@ -121,6 +124,7 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
     assert captured["trainer_num_episodes"] == 1
     assert captured["agent_observation_dim"] == 4
     assert captured["agent_action_dim"] == 2
+    assert captured["observation_settings"] == {"frame_stack": 1, "mask_velocity": False}
 
 
 def test_record_video_missing_moviepy_raises_import_error(tmp_path, monkeypatch):
