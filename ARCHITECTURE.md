@@ -326,7 +326,7 @@ evaluation in a run plays the same start states and how often a run evaluates do
 The random agents draw their evaluation actions from a separate generator for the same reason. An agent checkpoint
 holds every generator the agent draws from and, for DQN and DDPG, the replay buffer, so a loaded agent continues
 exactly as the saved one would have. An agent built by a challenge's `make_agent` also records its environment's
-observation settings (`BaseEnvWrapper.observation_settings()`: `frame_stack`, `mask_velocity`) with
+observation settings (`BaseEnvWrapper.observation_settings()`, the keys of `OBSERVATION_DEFAULTS`) with
 `BaseAgent.record_observation_settings`; `save` stores them as `observation_setting_<name>` and `load` refuses,
 before changing anything, a checkpoint saved with other values. An agent with `normalize_observations: true` keeps
 a running mean and variance of its inputs (`rl_core.agents.observation_normalizer.RunningMeanStd`, as SB3's
@@ -430,7 +430,8 @@ plots/
 1. Create a new package under `src/rl_<challenge>/`:
    - `environments/<challenge>_env.py`: the challenge's wrapper, a subclass of
      `rl_core.environments.BaseEnvWrapper`. The base already handles seeding (the constructor seed on the first
-     reset only), observation noise, `frame_stack` and `mask_velocity`, episode statistics and `wrap_env`. The
+     reset only), observation noise, the observation settings (`ObservationOptions`: `frame_stack`, `mask_velocity`,
+     `frame_deltas`), episode statistics and `wrap_env`. The
      subclass takes `**observation: Unpack[ObservationOptions]` and passes it to `super().__init__`, lists its
      velocity entries by environment id in `VELOCITY_INDICES` (`mask_velocity` is refused for an id it does not
      list), validates its own settings, calls `_make_env()`, and overrides `_prepare_action` (action noise) and

@@ -9,7 +9,14 @@ from rl_cartpole.environments import CartPoleEnv
 from rl_cartpole.environments import make_env_from_config as cartpole_from_config
 from rl_cartpole.environments import make_vec_env_from_config as cartpole_vec_from_config
 from rl_core.agents import ReinforceAgent
-from rl_core.environments.observation import FrameStack, mask_entries, masked_space, stacked_space
+from rl_core.environments.observation import (
+    FrameStack,
+    differenced_space,
+    frame_differences,
+    mask_entries,
+    masked_space,
+    stacked_space,
+)
 from rl_lunarlander.environments import (
     make_continuous_env_from_config as lunarlander_continuous_from_config,
 )
@@ -199,6 +206,69 @@ def test_spaces_refuse_a_space_that_is_not_a_flat_box():
         masked_space(gym.spaces.Box(low=0.0, high=1.0, shape=(2, 2)), (0,))
 
 
+# --- Frame differences (frame_deltas) -------------------------------------------------------------
+
+
+def test_frame_differences_put_the_newest_frame_first_then_the_differences_newest_first():
+    # Frames, oldest first: (1, 10), (4, 20), (9, 25).
+    stack = _obs(1.0, 10.0, 4.0, 20.0, 9.0, 25.0)
+    out = frame_differences(stack, 3)
+    # Newest frame (9, 25); then (9, 25) - (4, 20) = (5, 5); then (4, 20) - (1, 10) = (3, 10).
+    np.testing.assert_array_equal(out, _obs(9.0, 25.0, 5.0, 5.0, 3.0, 10.0))
+    assert out.dtype == stack.dtype, "the differences keep the stack's dtype"
+
+
+def test_frame_differences_of_a_padded_stack_are_zero():
+    stack = FrameStack(3).reset(_obs(0.5, -1.5))
+    np.testing.assert_array_equal(frame_differences(stack, 3), _obs(0.5, -1.5, 0.0, 0.0, 0.0, 0.0))
+
+
+def test_frame_differences_invert_back_to_the_stack():
+    rng = np.random.default_rng(1)
+    stack = rng.normal(size=12)
+    out = frame_differences(stack, 4).reshape(4, 3)
+    frames = [out[0]]
+    for diff in out[1:]:
+        frames.append(frames[-1] - diff)
+    np.testing.assert_allclose(np.concatenate(frames[::-1]), stack, rtol=1e-12)
+
+
+@pytest.mark.parametrize("size", [1, 0, 2.5])
+def test_frame_differences_need_a_stack_of_two_or_more(size):
+    with pytest.raises(ValueError, match="frame_deltas"):
+        frame_differences(_obs(1.0, 2.0, 3.0, 4.0), size)
+    with pytest.raises(ValueError, match="frame_deltas"):
+        differenced_space(_box(), size)
+
+
+def test_frame_differences_refuse_a_stack_that_does_not_split_into_frames():
+    with pytest.raises(ValueError, match="5"):
+        frame_differences(_obs(1.0, 2.0, 3.0, 4.0, 5.0), 2)
+
+
+def test_differenced_space_keeps_the_newest_frames_bounds_and_widens_the_differences():
+    one = gym.spaces.Box(
+        low=np.array([-1.0, -np.inf, 0.0], dtype=np.float32),
+        high=np.array([3.0, np.inf, 0.0], dtype=np.float32),
+        dtype=np.float32,
+    )
+    space = differenced_space(one, 3)
+    # Newest frame: the frame's own bounds; each difference: [low - high, high - low].
+    np.testing.assert_array_equal(space.low, _obs(-1, -np.inf, 0, -4, -np.inf, 0, -4, -np.inf, 0))
+    np.testing.assert_array_equal(space.high, _obs(3, np.inf, 0, 4, np.inf, 0, 4, np.inf, 0))
+    assert space.dtype == np.float32
+
+
+def test_differenced_space_holds_what_the_differences_return():
+    space = differenced_space(_box(), 3)
+    stack = FrameStack(3)
+    stack.reset(_obs(1.0, -2.0, 3.0))
+    stack.push(_obs(-1.0, 2.0, -3.0))
+    assert space.contains(frame_differences(stack.push(_obs(1.0, -2.0, 3.0)), 3)), (
+        "the differenced space must contain the extreme differences of in-bounds frames"
+    )
+
+
 # --- The environment wrappers -------------------------------------------------------------------
 
 # Each challenge's config factory, environment id and velocity entries in Gymnasium's layout.
@@ -367,6 +437,55 @@ def test_without_the_keys_the_spaces_are_the_environments_own(from_config, env_i
         raw.close()
 
 
+@pytest.mark.parametrize(("from_config", "env_id", "velocity"), WRAPPER_CASES)
+def test_frame_deltas_re_express_the_stack_of_every_challenge(from_config, env_id, velocity):
+    stacked = from_config({"name": env_id, "seed": 4, "frame_stack": 3, "mask_velocity": True})
+    deltas = from_config(
+        {"name": env_id, "seed": 4, "frame_stack": 3, "mask_velocity": True, "frame_deltas": True}
+    )
+    try:
+        d = stacked.observation_space.shape[0] // 3
+        assert deltas.observation_space.shape == stacked.observation_space.shape
+        for t, (stack, obs) in enumerate(
+            zip(_rollout(stacked, 4), _rollout(deltas, 4), strict=True)
+        ):
+            np.testing.assert_array_equal(
+                obs, frame_differences(stack, 3), err_msg=f"{env_id}: wrong differences at {t}"
+            )
+            for block in range(3):
+                np.testing.assert_array_equal(
+                    obs[[block * d + i for i in velocity]], 0.0, err_msg="a masked entry moved"
+                )
+            assert deltas.observation_space.contains(obs), f"{env_id}: left its space at {t}"
+        np.testing.assert_array_equal(
+            _rollout(deltas, 0)[0][d:], 0.0, err_msg="at a reset every difference is zero"
+        )
+    finally:
+        stacked.close()
+        deltas.close()
+
+
+@pytest.mark.parametrize("stack", [None, 1])
+def test_frame_deltas_without_a_stack_are_refused_naming_both_keys(stack, monkeypatch):
+    closed = []
+    original_close = gym.Wrapper.close  # gym.make returns the environment inside wrappers
+    monkeypatch.setattr(
+        gym.Wrapper, "close", lambda self: closed.append(self) or original_close(self)
+    )
+    config = (
+        {"frame_deltas": True} if stack is None else {"frame_deltas": True, "frame_stack": stack}
+    )
+    with pytest.raises(ValueError, match="frame_deltas.*frame_stack"):
+        cartpole_from_config(config)
+    assert closed, "a refused frame_deltas must close the environment it opened"
+
+
+@pytest.mark.parametrize("value", ["yes", "false", 1])
+def test_a_bad_frame_deltas_is_refused_naming_the_key(value):
+    with pytest.raises(ValueError, match="frame_deltas"):
+        cartpole_from_config({"frame_stack": 2, "frame_deltas": value})
+
+
 @pytest.mark.parametrize("value", [0, -2, 2.5, True, "4"])
 def test_a_bad_frame_stack_is_refused_naming_the_key(value):
     with pytest.raises(ValueError, match="frame_stack"):
@@ -433,17 +552,40 @@ def test_a_vectorized_auto_reset_restarts_the_stack():
         vec_env.close()
 
 
+def test_vector_envs_take_frame_deltas_and_an_auto_reset_zeroes_the_differences():
+    config = {"seed": 11, "frame_stack": 3, "mask_velocity": True, "frame_deltas": True}
+    vec_env = cartpole_vec_from_config({**config, "async_envs": False}, 2)
+    try:
+        obs, _ = vec_env.reset()
+        np.testing.assert_array_equal(obs[:, 4:], 0.0, err_msg="a reset's differences are zero")
+        vec_env.action_space.seed(11)
+        for _ in range(500):
+            _, _, terminated, truncated, _ = vec_env.step(vec_env.action_space.sample())
+            done = np.logical_or(terminated, truncated)
+            if done.any():
+                break
+        assert done.any(), "no sub-environment ended in 500 random steps"
+        obs, *_ = vec_env.step(vec_env.action_space.sample())  # the auto-reset step
+        np.testing.assert_array_equal(
+            obs[done][:, 4:], 0.0, err_msg="an auto-reset must start fresh differences"
+        )
+        np.testing.assert_array_equal(obs[:, [1, 3, 5, 7, 9, 11]], 0.0, err_msg="masked moved")
+    finally:
+        vec_env.close()
+
+
 # --- Through the scripts ------------------------------------------------------------------------
 
 
 @pytest.mark.usefixtures("clear_sdl")
-def test_train_and_record_run_with_a_stacked_masked_observation(tmp_path, monkeypatch):
+@pytest.mark.parametrize("deltas", [False, True], ids=["stack", "stack-deltas"])
+def test_train_and_record_run_with_a_stacked_masked_observation(deltas, tmp_path, monkeypatch):
     """train.py sizes the agent for the stack and checkpoints it; record.py plays that checkpoint
     back with the same environment section."""
     pytest.importorskip("moviepy")
     config_path = minimal_config(
         tmp_path,
-        environment={"frame_stack": 4, "mask_velocity": True},
+        environment={"frame_stack": 4, "mask_velocity": True, "frame_deltas": deltas},
         training={"save_frequency": 2},
         agent={"type": "reinforce", "config": {"seed": 1}},
     )

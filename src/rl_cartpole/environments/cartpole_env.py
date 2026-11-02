@@ -57,7 +57,7 @@ class CartPoleEnv(BaseEnvWrapper):
             seed: Random seed. Applied on the first reset; later resets continue the sequence,
                   so runs are reproducible and episodes differ from one another
             obs_noise_std: Standard deviation of Gaussian noise added to observations
-            observation: ``frame_stack`` and ``mask_velocity``; see
+            observation: The observation settings (``ObservationOptions``); see
                 :class:`rl_core.environments.BaseEnvWrapper`.
             action_noise_prob: Probability of flipping the action (0.0 to 1.0)
                               Note: Only works with Discrete(2) action spaces

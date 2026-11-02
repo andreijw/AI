@@ -16,6 +16,40 @@ Acrobot-v1) and
 
 ### Added
 
+- **Observation normalisation and frame differences** (`feature/observation-normalization`,
+  `feature/frame-deltas`): masked `frame_stack: 4` CartPole PPO solved 0 of 5 (CHANGELOG.md, 2026-11-01). The
+  `training-doctor` diagnosis: the policy kept its entropy (about 0.41) and nothing went non-finite, but the value loss
+  stayed at 1 to 10 all run (unmasked: about 0.0002). Velocity survives only as the change between consecutive frames,
+  about 50 times smaller than the velocity itself (cart: std 0.014 against 0.73), so the network has to learn large,
+  nearly cancelling weights along a direction its inputs barely vary in. The same 16 numbers re-expressed as the
+  newest frame and the differences divided by CartPole's 0.02 s time step solved 5 of 5, so the stack held the
+  information and lacked only its scale. Two opt-in settings came of it, neither changing a committed config:
+  - `agent.config.normalize_observations: true` (REINFORCE, Actor-Critic, PPO): a running mean and variance of the
+    inputs as SB3's `VecNormalize` keeps them (`rl_core/agents/observation_normalizer.py`), updated on every training
+    observation and frozen in evaluation; `Trainer` passes each observation through `BaseAgent.normalize_observation`
+    once, and the checkpoint holds the statistics as `obs_norm_*`. DQN, DDPG and TD3 refuse it: their replay buffers
+    would hold inputs normalised by statistics that later change. Unlike the Pendulum attempt (CHANGELOG.md,
+    2026-10-29), the statistics update on every observation.
+  - `environment.frame_deltas: true` (needs `frame_stack` of 2 or more): the stack becomes its newest frame followed by
+    the differences between consecutive frames, newest first, an invertible map of the same entries; every challenge
+    takes it and checkpoints record it.
+
+  Through the benchmark, masked `frame_stack: 4` CartPole PPO, the committed config otherwise, seeds 1 to 5, 200,000
+  steps:
+
+  | Inputs | Solved 475 | Held | Steps to 475 | Final 100-episode averages | Greedy evaluation |
+  | :--- | :--- | :--- | :--- | :--- | :--- |
+  | Raw stack | 0 of 5 | 0 of 5 | | 192 to 328 | 337 ± 74 |
+  | `normalize_observations` | 4 of 5 | 2 of 5 | 161,582 to 192,019 | 461.5 to 486.3 | 500 ± 0 |
+  | `normalize_observations` and `frame_deltas` | 5 of 5 | 5 of 5 | 62,890 to 78,077 | 500 on every seed | 500 ± 0 |
+
+  The last row solves as fast as unmasked CartPole PPO (72k to 90k steps). Scratch runs on the same seeds: frame
+  differences without normalisation solved 2 of 5 and held 1. The benchmark reproduced the scratch prototypes' outcomes;
+  the normalisation run matched it episode for episode, the frame-differences run solved at different episodes
+  (450, 431, 403, 403, 407 against 456, 431, 328, 620, 333) because the wrapper differences float32 frames in float32
+  where the prototype used float64 (inputs differ by at most 9.3e-10). Not run: other challenges, other agents, other
+  stack sizes, seeds beyond 1 to 5.
+
 - **Observation settings in checkpoints** (`feature/checkpoint-observation-settings`): an agent built by a
   challenge's `make_agent` (as `train.py`, `record.py` and the benchmark build it) records its environment's
   `frame_stack` and `mask_velocity`, and `BaseAgent.save` stores them as `observation_setting_<name>`. `load` refuses,

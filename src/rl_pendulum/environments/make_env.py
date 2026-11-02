@@ -47,7 +47,7 @@ def make_env(
         max_episode_steps: Maximum steps per episode (default: 200).
         seed: Random seed for reproducibility.
         obs_noise_std: Standard deviation of Gaussian observation noise.
-        observation: ``frame_stack`` and ``mask_velocity`` (see ``BaseEnvWrapper``).
+        observation: The observation settings (``ObservationOptions``; see ``BaseEnvWrapper``).
         action_noise_std: Standard deviation of Gaussian action noise.
         domain_randomization: Physical parameter randomization ranges.
 
@@ -88,7 +88,7 @@ def make_vec_env(
         max_episode_steps: Maximum steps per episode.
         seed: Base random seed.
         obs_noise_std: Gaussian observation noise std.
-        observation: ``frame_stack`` and ``mask_velocity`` (see ``BaseEnvWrapper``).
+        observation: The observation settings (``ObservationOptions``; see ``BaseEnvWrapper``).
         action_noise_std: Gaussian action noise std.
         domain_randomization: Physical parameter ranges.
         async_envs: If True, use AsyncVectorEnv; if False, use SyncVectorEnv.

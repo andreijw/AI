@@ -32,6 +32,10 @@ with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
 Parked ideas, not scheduled. Each needs the maintainer's pick, and some a decision on the win rule, before it becomes
 an item.
 
+- [ ] **Observation normalisation for the replay-buffer agents**: `normalize_observations` is refused for DQN, DDPG and
+  TD3, whose buffers would keep inputs normalised by statistics that later change; SB3 stores raw observations and
+  normalises at sample time. Not measured: whether Pendulum PPO or the continuous Actor-Critic learn better with it
+  (only smoke runs, CHANGELOG.md, 2026-11-02).
 - [ ] **Environments independent of the agents package**: `rl_core.environments` imports
   `rl_core.agents.config_values` (`check_positive_int`, `check_bool`) since 2026-11-01; moving those readers to a
   neutral module (for example `rl_core.utils`) would remove the edge.
@@ -68,50 +72,6 @@ an item.
     - Comprehensive unit tests in `tests/test_curriculum.py`.
   - **Known edge cases**: Catastrophic forgetting across difficulty stages; oscillation near threshold boundaries.
   - **Out of scope**: Adversarial environment generation; automatic domain randomization (ADR) meta-policies.
-
-- [~] **Observation normalisation and frame differences** (masked CartPole PPO; two PRs)
-  - **Description**: with `mask_velocity: true` and `frame_stack: 4`, CartPole PPO on the committed config's other
-    settings solves 0 of 5 seeds at 200,000 steps and does worse at 400,000 (CHANGELOG.md, 2026-11-01). Diagnosed
-    2026-11-02 with the `training-doctor` skill: the policy keeps its entropy (about 0.41) and nothing goes non-finite,
-    but the value loss stays at 1 to 10 all run (unmasked: about 0.0002). Velocity survives only as the difference
-    between consecutive frames, about 50 times smaller than the velocity itself (cart: std 0.014 against 0.73), so the
-    network must learn large, nearly cancelling weights along a direction its inputs barely vary in. Given the same 16
-    numbers re-expressed (newest frame plus differences), it learns. Scratch runs, seeds 1 to 5, 200,000 steps:
-
-    | Inputs | Solved 475 | Held | Greedy evaluation |
-    | :--- | :--- | :--- | :--- |
-    | Raw stack | 0 of 5 | 0 of 5 | 338 ± 89 |
-    | Raw stack, running normalisation | 4 of 5 | 2 of 5 | 499 ± 2 |
-    | Newest frame and differences | 2 of 5 | 1 of 5 | 496 ± 8 |
-    | Newest frame and differences, running normalisation | 5 of 5 | 5 of 5 | 500 ± 0 |
-    | Newest frame and differences / 0.02 s (CartPole's time step; diagnostic only) | 5 of 5 | 5 of 5 | 500 ± 0 |
-
-    PR 1 (`feature/observation-normalization`): opt-in running observation normalisation. PR 2: an opt-in
-    `frame_deltas` environment setting (newest frame plus differences), justified by more seeds holding with it.
-  - **Acceptance criteria** (PR 1):
-    - `agent.config.normalize_observations: true` (default false) gives the agent a running mean and variance of its
-      inputs, updated on every training observation and frozen in evaluation; the trainer passes each observation
-      through it once, so stored transitions, bootstrapped next observations and actions all see the same inputs.
-      Normalised values are `(x - mean) / sqrt(var + 1e-8)`, clipped to ±10, as rl-zoo's `VecNormalize` does; a
-      constant input (a masked entry) stays 0.
-    - The statistics are saved in the agent checkpoint and restored by `load`, so `record.py` and `train.py --resume`
-      see what training saw; a checkpoint with statistics loads only into an agent with normalisation on, and the
-      other way round, with a message naming the key.
-    - Refused for the replay-buffer agents (DQN, DDPG, TD3) for now, which would store inputs normalised by statistics
-      that later change; SB3 normalises at sample time instead.
-    - Off by default: every committed config, golden test and checkpoint is unchanged.
-    - A learning run: masked `frame_stack: 4` CartPole PPO with `normalize_observations: true` reaches 475 on at least 4
-      of 5 seeds (1 to 5) through the benchmark.
-  - **Progress (2026-11-02)**: PR 1 built on `feature/observation-normalization`
-    (`rl_core/agents/observation_normalizer.py`, `BaseAgent.normalize_observation`, applied by `Trainer`). Through the
-    benchmark, masked `frame_stack: 4` CartPole PPO with `normalize_observations: true`, seeds 1 to 5, 200,000 steps,
-    solves on 4 of 5 (episodes 655 to 830) and holds on 2, greedy evaluation 500 on every seed (`TESTING.md`
-    `TR-24`); this matches the scratch prototype run for run. PR 2, `frame_deltas`, is next. Unlike the Pendulum
-    PPO attempt (CHANGELOG.md, 2026-10-29), the statistics update on every observation, not after each rollout.
-  - **Known edge cases**: a masked entry's variance is 0; the first observations of a run, with count near 0; the
-    evaluation environment reading training statistics without changing them; resume continuing the statistics.
-  - **Out of scope**: reward normalisation; normalisation for the replay-buffer agents; changing any committed config
-    (the maintainer's decision); recurrent policies.
 
 - [ ] **Lightweight Embedded Inference Export (C Header & ONNX)**
   - **Description**: Export trained pure NumPy model parameters into zero-dependency standalone C header files

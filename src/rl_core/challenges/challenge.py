@@ -115,8 +115,8 @@ class BenchmarkChallenge(abc.ABC):
         key chooses (``BaseAgent.class_for_config``), its dimensions from the environment's
         flattened spaces and its config from :meth:`agent_config`.
 
-        The agent records the environment's observation settings (``frame_stack``,
-        ``mask_velocity``), so its checkpoints refuse to load into an agent built for other ones. A
+        The agent records the environment's observation settings (``OBSERVATION_DEFAULTS``'s
+        keys), so its checkpoints refuse to load into an agent built for other ones. A
         challenge that overrides this method records nothing unless it calls
         ``record_observation_settings`` too.
 

@@ -520,6 +520,7 @@ environment:
   seed: 42
   # frame_stack: 4        # optional, every challenge: the last 4 observations, oldest first, as one vector
   # mask_velocity: true   # optional, every challenge: zero the velocity entries (a partially observed task)
+  # frame_deltas: true    # optional, with frame_stack >= 2: the newest frame, then the differences between frames
 
 # Agent settings
 agent:
@@ -666,15 +667,18 @@ both). All four subclass
 - Standardized interface for training pipeline
 - Easy monitoring and logging integration
 
-Every challenge's `environment` section also takes `frame_stack` and `mask_velocity`, applied by the base after the
-observation noise. `mask_velocity: true` zeroes the velocity entries and keeps the observation's length, as rl-zoo's
-`MaskVelocityWrapper` does. `frame_stack: K` joins the last K observations, oldest first, into one vector; at a reset
-the first observation fills every slot. Agents size themselves from the stacked space, so a checkpoint trained with
-these keys must be played back (`record.py`) or resumed with the same `environment` section. Checkpoints record both
+Every challenge's `environment` section also takes `frame_stack`, `mask_velocity` and `frame_deltas`, applied by the
+base after the observation noise. `mask_velocity: true` zeroes the velocity entries and keeps the observation's length,
+as rl-zoo's `MaskVelocityWrapper` does. `frame_stack: K` joins the last K observations, oldest first, into one vector;
+at a reset the first observation fills every slot. `frame_deltas: true` gives that stack as its newest frame followed by
+the differences between consecutive frames, newest first: the same entries, but a velocity hidden in the small change
+between frames becomes an input of its own. Agents size themselves from the stacked space, so a checkpoint trained with
+these keys must be played back (`record.py`) or resumed with the same `environment` section. Checkpoints record the
 keys, and loading one under other values stops with an error naming each key with its saved and current value;
 checkpoints saved before 2026-11-02 hold no record and load unchecked. On masked CartPole, PPO with `frame_stack: 4`
-recovers much of what masking takes away but does not solve (CHANGELOG.md, 2026-11-01). With
-`normalize_observations: true` in the agent's config it solves on 4 of 5 seeds and holds on 2 (`TESTING.md` `TR-24`).
+recovers much of what masking takes away but does not solve (CHANGELOG.md, 2026-11-01). With `normalize_observations:
+true` in the agent's config it solves on 4 of 5 seeds and holds on 2, and with `frame_deltas: true` as well on 5 of 5,
+holding on all 5 (CHANGELOG.md, 2026-11-02).
 
 ### Agent Framework
 

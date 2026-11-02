@@ -196,9 +196,9 @@ class BaseAgent(ABC):
 
     @property
     def observation_settings(self) -> Mapping[str, bool | int] | None:
-        """The observation settings of the environment this agent was built for (``frame_stack``,
-        ``mask_velocity``), read-only, as :meth:`record_observation_settings` recorded them; None
-        for an agent built directly."""
+        """The observation settings of the environment this agent was built for (the keys of
+        ``rl_core.environments.OBSERVATION_DEFAULTS``), read-only, as
+        :meth:`record_observation_settings` recorded them; None for an agent built directly."""
         return self._observation_settings
 
     @final
