@@ -617,8 +617,10 @@ def test_export_refuses_a_negative_episode_count(tmp_path, monkeypatch):
     assert stop.value.code == 2
 
 
-def test_export_refuses_the_random_agent(tmp_path, monkeypatch):
-    checkpoint = _checkpoint(tmp_path, cls=RandomAgent)
+@pytest.mark.parametrize("saved_by", [RandomAgent, PPOAgent], ids=["random", "ppo"])
+def test_export_refuses_the_random_agent(tmp_path, monkeypatch, saved_by):
+    # Refused before the checkpoint is read, so another agent's checkpoint gives the same message.
+    checkpoint = _checkpoint(tmp_path, cls=saved_by)
     with pytest.raises(ValueError, match="RandomAgent has no network to export"):
         _export(tmp_path, monkeypatch, agent_type="random", checkpoint=checkpoint)
     assert not (tmp_path / "out").exists()

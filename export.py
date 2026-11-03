@@ -69,6 +69,7 @@ def main():
     env = run_challenge.make_env(config["environment"], render_mode=None)
     try:
         agent = run_challenge.make_agent(agent_type, agent_config, env)
+        agent.inference_policy()  # refuse an agent with no network before reading the checkpoint
         agent.load(args.checkpoint)
         policy = agent.inference_policy()
         header = c_header.render_c_header(policy, source=_source(args.checkpoint))
