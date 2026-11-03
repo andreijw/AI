@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
-from typing import Unpack
+from typing import Any, Unpack
 
 import numpy as np
 
-from rl_core.environments import BaseEnvWrapper, ObservationOptions, checked_range
+from rl_core.environments import (
+    BaseEnvWrapper,
+    ObservationOptions,
+    checked_range,
+    non_negative_setting,
+)
 
 
 class PendulumEnv(BaseEnvWrapper):
@@ -28,6 +33,7 @@ class PendulumEnv(BaseEnvWrapper):
     """
 
     VELOCITY_INDICES = MappingProxyType({"Pendulum-v1": (2,)})
+    SCHEDULABLE_SETTINGS = ("obs_noise_std", "action_noise_std", "domain_randomization")
 
     SUPPORTED_DR_PARAMS: dict[str, str] = {
         "g": "g",
@@ -70,19 +76,22 @@ class PendulumEnv(BaseEnvWrapper):
             env_name, render_mode, max_episode_steps, seed, obs_noise_std, **observation
         )
 
-        if not np.isfinite(action_noise_std) or action_noise_std < 0.0:
-            raise ValueError(
-                f"action_noise_std must be a finite, non-negative number, got {action_noise_std!r}"
-            )
-        self.action_noise_std = float(action_noise_std)
-
-        # Domain randomization validation
-        self.domain_randomization = self._validate_domain_randomization(domain_randomization)
+        self.action_noise_std = self.check_setting("action_noise_std", action_noise_std)
+        self.domain_randomization = self.check_setting("domain_randomization", domain_randomization)
 
         self._make_env()
 
+    @classmethod
+    def _checked_setting(cls, name: str, value: Any) -> Any:
+        if name == "action_noise_std":
+            return non_negative_setting(name, value)
+        if name == "domain_randomization":
+            return cls._validate_domain_randomization(value)
+        return super()._checked_setting(name, value)
+
+    @classmethod
     def _validate_domain_randomization(
-        self,
+        cls,
         domain_randomization: Mapping[str, Sequence[float] | tuple[float, float]] | None,
     ) -> dict[str, tuple[float, float]]:
         """Validate and normalize domain randomization configuration."""
@@ -94,14 +103,19 @@ class PendulumEnv(BaseEnvWrapper):
         validated: dict[str, tuple[float, float]] = {}
         for param, value in domain_randomization.items():
             param_lower = param.lower()
-            if param_lower not in self.SUPPORTED_DR_PARAMS:
-                supported = sorted(set(self.SUPPORTED_DR_PARAMS.keys()))
+            if param_lower not in cls.SUPPORTED_DR_PARAMS:
+                supported = sorted(set(cls.SUPPORTED_DR_PARAMS.keys()))
                 raise ValueError(
                     f"Unsupported domain randomization parameter '{param}'. "
                     f"Supported parameters: {supported}."
                 )
 
-            canon_key = self.SUPPORTED_DR_PARAMS[param_lower]
+            canon_key = cls.SUPPORTED_DR_PARAMS[param_lower]
+            if canon_key in validated:
+                raise ValueError(
+                    f"Domain randomization parameter '{canon_key}' is given twice "
+                    f"(as '{param}' and an earlier name)"
+                )
             if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
                 val_tuple = tuple(value)
             else:

@@ -14,6 +14,19 @@ Acrobot-v1) and
 
 ## 2026-11-03
 
+### Added
+
+- **Schedulable wrapper settings** (`feature/curriculum-wrapper-settings`), the first of three PRs for the curriculum
+  item: each challenge wrapper lists the settings a curriculum may change between episodes in
+  `SCHEDULABLE_SETTINGS` (observation noise everywhere; action noise and domain randomization on CartPole and
+  Pendulum), reports them with `scheduled_settings()` and changes them with `apply_settings()`, all or nothing,
+  checked as the constructor checks them, only for settings on at construction, and keeping a randomization's
+  parameters and order of draws. `SchedulableEnv` is the Protocol. Seeded episodes are unchanged:
+  `tests/test_env_golden.py` compares CartPole and Pendulum with noise and randomization against arrays recorded
+  before the change. Pendulum now refuses a randomization parameter given twice under two names (`g` and
+  `gravity`), which it used to collapse; CartPole's factories check randomization with the wrapper's rule, so an
+  unsupported parameter now fails before any environment or worker process starts.
+
 ### Changed
 
 - **Config readers moved to `rl_core.utils.config_values`** (`feature/neutral-config-readers`), from
