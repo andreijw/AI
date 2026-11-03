@@ -43,6 +43,22 @@ class ResumableEnv(Protocol):
     def set_rng_state(self, state: Mapping[str, Any]) -> None: ...
 
 
+@runtime_checkable
+class SchedulableEnv(Protocol):
+    """An environment whose noise and randomization settings can change between episodes."""
+
+    def scheduled_settings(self) -> dict[str, Any]: ...
+
+    def apply_settings(self, settings: Mapping[str, Any]) -> None: ...
+
+
+def non_negative_setting(name: str, value: Any) -> float:
+    """``value`` as a float, rejecting a negative or non-finite number (a noise level)."""
+    if not np.isfinite(value) or value < 0.0:
+        raise ValueError(f"{name} must be a finite, non-negative number, got {value!r}")
+    return float(value)
+
+
 class BaseEnvWrapper:
     """
     Base for a challenge's environment wrapper.
@@ -66,10 +82,17 @@ class BaseEnvWrapper:
     A subclass validates its own settings after ``super().__init__`` and then calls
     :meth:`_make_env`. It overrides :meth:`_prepare_action` for action noise and
     :meth:`_apply_domain_randomization` for per-episode physics; both default to doing nothing.
+
+    The settings in :attr:`SCHEDULABLE_SETTINGS` can change between episodes
+    (:meth:`apply_settings`), for a curriculum. A subclass that adds one lists it there and checks
+    its value in :meth:`_checked_setting`, which its constructor uses too.
     """
 
     # Velocity entries of the observation, by environment id, in Gymnasium's layout.
     VELOCITY_INDICES: ClassVar[Mapping[str, tuple[int, ...]]] = MappingProxyType({})
+
+    # The settings apply_settings may change, by constructor argument name.
+    SCHEDULABLE_SETTINGS: ClassVar[tuple[str, ...]] = ("obs_noise_std",)
 
     env: gym.Env[Any, Any]
     observation_space: gym.Space[Any]
@@ -117,11 +140,7 @@ class BaseEnvWrapper:
         # The constructor seed is applied on the first reset only; see reset().
         self._has_reset = False
 
-        if not np.isfinite(obs_noise_std) or obs_noise_std < 0.0:
-            raise ValueError(
-                f"obs_noise_std must be a finite, non-negative number, got {obs_noise_std!r}"
-            )
-        self.obs_noise_std = float(obs_noise_std)
+        self.obs_noise_std = self.check_setting("obs_noise_std", obs_noise_std)
 
         self.frame_stack = check_positive_int("frame_stack", frame_stack)
         self.mask_velocity = check_bool("mask_velocity", mask_velocity)
@@ -189,7 +208,11 @@ class BaseEnvWrapper:
         self._has_reset = bool(state["env_has_reset"])
 
     def _make_env(self) -> None:
-        """Create the Gymnasium environment and take its spaces and metadata."""
+        """Create the Gymnasium environment and take its spaces and metadata.
+
+        Called once every setting is checked, so it also records which schedulable settings are on:
+        only those can change between episodes."""
+        self._scheduled = tuple(n for n in self.SCHEDULABLE_SETTINGS if getattr(self, n))
         self.env = gym.make(
             self.env_name,
             render_mode=self.render_mode,
@@ -214,6 +237,72 @@ class BaseEnvWrapper:
         except ValueError:
             self.env.close()
             raise
+
+    @classmethod
+    def check_setting(cls, name: str, value: Any) -> Any:
+        """
+        ``value`` of the schedulable setting ``name``, checked and normalised as the constructor
+        does (a randomization mapping under its canonical names, in the order given).
+
+        Raises:
+            ValueError: If ``name`` is not in :attr:`SCHEDULABLE_SETTINGS`, or ``value`` is invalid.
+        """
+        if name not in cls.SCHEDULABLE_SETTINGS:
+            raise ValueError(
+                f"{cls.__name__} cannot change {name} between episodes; it can change "
+                f"{', '.join(cls.SCHEDULABLE_SETTINGS)}"
+            )
+        return cls._checked_setting(name, value)
+
+    @classmethod
+    def _checked_setting(cls, name: str, value: Any) -> Any:
+        """The check of each schedulable setting; a subclass handles its own names first."""
+        if name == "obs_noise_std":
+            return non_negative_setting(name, value)
+        raise NotImplementedError(f"{cls.__name__} lists {name} but does not check it")
+
+    def scheduled_settings(self) -> dict[str, Any]:
+        """The settings :meth:`apply_settings` may change, those on when the environment was built,
+        with their current values (copies)."""
+        return {
+            name: dict(value) if isinstance(value, Mapping) else value
+            for name, value in ((n, getattr(self, n)) for n in self._scheduled)
+        }
+
+    def apply_settings(self, settings: Mapping[str, Any]) -> None:
+        """
+        Change schedulable settings, all or none. Call it between episodes: noise takes effect at
+        the next reset or step (the reset's observation is noised too), randomization at the next
+        reset. It draws no random numbers.
+
+        Only a setting on at construction can change, so every capability check made then (an
+        action space that supports action noise, physics that can be randomized) still holds; a
+        randomization keeps its parameters, in their construction order, and only their ranges
+        move.
+
+        Raises:
+            ValueError: If a setting cannot be scheduled, was off at construction, or has an
+                invalid value; nothing is changed.
+        """
+        checked = {}
+        for name, value in settings.items():
+            new = self.check_setting(name, value)
+            if name not in self._scheduled:
+                raise ValueError(
+                    f"{name} was off when the environment was built, so it cannot change between "
+                    f"episodes: build the environment with {name} on"
+                )
+            current = getattr(self, name)
+            if isinstance(current, Mapping):
+                if set(new) != set(current):
+                    raise ValueError(
+                        f"{name} must randomize the same parameters as at construction "
+                        f"({', '.join(current)}), got {', '.join(new) or 'none'}"
+                    )
+                new = {key: new[key] for key in current}  # the construction order of draws
+            checked[name] = new
+        for name, value in checked.items():
+            setattr(self, name, value)
 
     def _prepare_action(self, action: Any) -> Any:
         """The action to send to the environment for the agent's ``action``; unchanged by default."""

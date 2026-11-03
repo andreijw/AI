@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
-from typing import Unpack
+from typing import Any, Unpack
 
 import gymnasium as gym
 
@@ -34,6 +34,7 @@ class CartPoleEnv(BaseEnvWrapper):
     """
 
     VELOCITY_INDICES = MappingProxyType({"CartPole-v1": (1, 3)})
+    SCHEDULABLE_SETTINGS = ("obs_noise_std", "action_noise_prob", "domain_randomization")
 
     def __init__(
         self,
@@ -74,18 +75,12 @@ class CartPoleEnv(BaseEnvWrapper):
             env_name, render_mode, max_episode_steps, seed, obs_noise_std, **observation
         )
 
-        if not (0.0 <= action_noise_prob <= 1.0):
-            raise ValueError(
-                f"action_noise_prob must be in the interval [0, 1], got {action_noise_prob!r}"
-            )
-        self.action_noise_prob = action_noise_prob
-
-        # Domain randomization parameters
-        self.domain_randomization = self._validate_domain_randomization(domain_randomization)
+        self.action_noise_prob = self.check_setting("action_noise_prob", action_noise_prob)
+        self.domain_randomization = self.check_setting("domain_randomization", domain_randomization)
 
         # Validate CartPole-specific features early
         is_cartpole = "cartpole" in env_name.lower()
-        if domain_randomization and not is_cartpole:
+        if self.domain_randomization and not is_cartpole:
             raise ValueError(
                 f"Domain randomization is only supported for CartPole environments. "
                 f"Environment '{env_name}' does not appear to be a CartPole variant. "
@@ -106,8 +101,18 @@ class CartPoleEnv(BaseEnvWrapper):
                     f"Either use an environment with Discrete(2) actions or set action_noise_prob=0."
                 )
 
+    @classmethod
+    def _checked_setting(cls, name: str, value: Any) -> Any:
+        if name == "action_noise_prob":
+            if not (0.0 <= value <= 1.0):
+                raise ValueError(f"action_noise_prob must be in the interval [0, 1], got {value!r}")
+            return float(value)
+        if name == "domain_randomization":
+            return cls._validate_domain_randomization(value)
+        return super()._checked_setting(name, value)
+
+    @staticmethod
     def _validate_domain_randomization(
-        self,
         domain_randomization: Mapping[str, Sequence[float] | tuple[float, float]] | None,
     ) -> dict[str, tuple[float, float]]:
         """Validate and normalize domain randomization configuration."""

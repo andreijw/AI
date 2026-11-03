@@ -151,56 +151,6 @@ def make_vec_env(
         return SyncVectorEnv(env_fns)  # type: ignore[arg-type]
 
 
-def _validate_domain_randomization(
-    domain_rand: dict[str, Any] | None,
-) -> dict[str, tuple[float, float]] | None:
-    """
-    Validate and normalize domain randomization configuration.
-
-    Args:
-        domain_rand: Optional dictionary with parameter ranges for randomization.
-            If None or empty, no domain randomization is applied.
-
-    Returns:
-        Validated dictionary with tuples of (min, max) for each parameter, or None
-        if no domain randomization configuration is provided.
-
-    Raises:
-        ValueError: If ranges are malformed (wrong length, non-numeric, min > max)
-    """
-    if not domain_rand:
-        return None
-
-    validated_domain_rand = {}
-    for key, value in domain_rand.items():
-        # Convert list to tuple if needed
-        if isinstance(value, list):
-            value = tuple(value)
-
-        # Validate that it's a 2-element tuple of numbers
-        if not isinstance(value, tuple) or len(value) != 2:
-            raise ValueError(
-                f"Domain randomization range for '{key}' must be a 2-element list/tuple "
-                f"[min, max], got: {value}"
-            )
-
-        min_val, max_val = value
-        if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
-            raise ValueError(
-                f"Domain randomization range for '{key}' must contain numeric values, "
-                f"got: [{min_val}, {max_val}]"
-            )
-
-        if min_val > max_val:
-            raise ValueError(
-                f"Domain randomization range for '{key}' has min > max: [{min_val}, {max_val}]"
-            )
-
-        validated_domain_rand[key] = value
-
-    return validated_domain_rand
-
-
 def make_env_from_config(config: dict) -> CartPoleEnv:
     """
     Create a CartPole environment from a configuration dictionary.
@@ -235,8 +185,9 @@ def make_env_from_config(config: dict) -> CartPoleEnv:
     # Checked although unused here: one environment section may serve both factories.
     async_envs_setting(config, ACCEPTED_SETTINGS["async_envs"])
     del settings["async_envs"]
-    settings["domain_randomization"] = _validate_domain_randomization(
-        settings["domain_randomization"]
+    # Checked here, by the wrapper's own rule, so a bad range fails before any worker starts.
+    settings["domain_randomization"] = CartPoleEnv.check_setting(
+        "domain_randomization", settings["domain_randomization"]
     )
     return make_env(
         env_name=settings.pop("name"),
@@ -272,8 +223,9 @@ def make_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.Vect
         >>> vec_env = make_vec_env_from_config(config, num_envs=8)
     """
     settings = read_env_settings(config, ACCEPTED_SETTINGS, "CartPole-v1")
-    settings["domain_randomization"] = _validate_domain_randomization(
-        settings["domain_randomization"]
+    # Checked here, by the wrapper's own rule, so a bad range fails before any worker starts.
+    settings["domain_randomization"] = CartPoleEnv.check_setting(
+        "domain_randomization", settings["domain_randomization"]
     )
     settings["async_envs"] = async_envs_setting(config, ACCEPTED_SETTINGS["async_envs"])
     return make_vec_env(

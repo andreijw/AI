@@ -443,7 +443,10 @@ plots/
      subclass takes `**observation: Unpack[ObservationOptions]` and passes it to `super().__init__`, lists its
      velocity entries by environment id in `VELOCITY_INDICES` (`mask_velocity` is refused for an id it does not
      list), validates its own settings, calls `_make_env()`, and overrides `_prepare_action` (action noise) and
-     `_apply_domain_randomization` (per-episode physics); both default to doing nothing.
+     `_apply_domain_randomization` (per-episode physics); both default to doing nothing. A setting a curriculum may
+     change between episodes is listed in `SCHEDULABLE_SETTINGS` (the base lists `obs_noise_std`) and checked in
+     `_checked_setting`, which the constructor uses too; `apply_settings` then changes it, all or nothing, if it was
+     on at construction (a randomization keeps its parameters and their order of draws).
    - `environments/make_env.py`: `make_env`, an `ENV_DEFAULTS` dict naming each environment setting the challenge
      supports with its default (spreading `rl_core.environments.OBSERVATION_DEFAULTS` into it), and
      `make_env_from_config`, which reads them with `rl_core.utils.config.read_env_settings`: null takes the
