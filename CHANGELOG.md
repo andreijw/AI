@@ -16,6 +16,18 @@ Acrobot-v1) and
 
 ### Added
 
+- **Robustness benchmark** (`feature/curriculum-robustness-benchmark`), the last of three PRs for the curriculum
+  item, which is now complete: `robustness.py` plays a checkpoint greedily on the config's target and on environments
+  perturbed one setting at a time (`--sweep SETTING=V1,V2,...`: a schedulable noise level, or a physics parameter
+  pinned to one value), each built from the config, with paired start states. Each row says whether the value is
+  inside the range the agent trained on (the config's value, or the curriculum's start to the difficulty the run
+  reached, replayed from the trainer file; a config with another curriculum is refused, as a resume refuses it) and
+  gives the greedy reward, length and share at the solve threshold;
+  `--report` writes it as Markdown, and nothing is written without it (`rl_core.training.robustness`). The wrappers
+  list their randomizable parameters in `RANDOMIZABLE_PARAMETERS` (Pendulum's `SUPPORTED_DR_PARAMS` renamed);
+  `Trainer.evaluate_episodes` returns each greedy episode that `evaluate` averages; `src/benchmark.py`'s report names
+  each agent that trained through a curriculum. Smoke runs only (CartPole and Pendulum PPO, 10 and 30 episodes, seed
+  42): no learning claim, and whether a curriculum helps is a parked idea in the roadmap.
 - **Curriculum scheduling** (`feature/curriculum-scheduler`), the second of three PRs for the curriculum item:
   `environment.curriculum` trains through easier noise and randomization first, with `linear`, `step` or
   `reward_threshold` pacing of one difficulty from 0 to 1 (`rl_core.training.curriculum.CurriculumScheduler`, built

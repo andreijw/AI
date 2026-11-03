@@ -1,7 +1,6 @@
 """Export a trained agent's greedy policy as one self-contained C header, and check it in C."""
 
 import argparse
-import hashlib
 import os
 import sys
 
@@ -11,13 +10,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from rl_core.export import c_header, verify
 from rl_core.export.rollout import greedy_rollout, policy_disagreements
 from rl_core.seeding import eval_seed_for
-from train import add_challenge_arguments, load_run_config, select_run_challenge
+from rl_core.training.checkpoints import file_sha256
+from train import (
+    add_challenge_arguments,
+    add_checkpoint_arguments,
+    load_run_config,
+    numpy_agent_config,
+    select_run_challenge,
+)
 
 
 def _source(checkpoint):
-    with open(checkpoint, "rb") as f:
-        digest = hashlib.sha256(f.read()).hexdigest()
-    return f"{os.path.basename(checkpoint)} (sha256 {digest})"
+    return f"{os.path.basename(checkpoint)} (sha256 {file_sha256(checkpoint)})"
 
 
 def _write(path, header, policy):
@@ -35,18 +39,7 @@ def _fail(message):
 def main():
     """Load a checkpoint as record.py does, write its C header, and verify it on greedy episodes."""
     parser = argparse.ArgumentParser(description="Export a trained RL agent as a C header")
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="configs/cartpole_default.yaml",
-        help="Configuration the checkpoint was trained with",
-    )
-    parser.add_argument(
-        "--checkpoint",
-        type=str,
-        required=True,
-        help="Agent checkpoint to export (e.g. checkpoints/ppo/agent_episode_1400.pt)",
-    )
+    add_checkpoint_arguments(parser, "export")
     parser.add_argument(
         "--output", type=str, required=True, help="Header to write (e.g. policy_weights.h)"
     )
@@ -64,8 +57,7 @@ def main():
 
     config, agent_type = load_run_config(args.config, args.agent_type)
     run_challenge = select_run_challenge(config, agent_type, args.challenge)
-    # A PyTorch-backend checkpoint loads into the NumPy agent: exporting needs no PyTorch.
-    agent_config = {**config["agent"]["config"], "backend": "numpy"}
+    agent_config = numpy_agent_config(config)
     env = run_challenge.make_env(config["environment"], render_mode=None)
     try:
         agent = run_challenge.make_agent(agent_type, agent_config, env)

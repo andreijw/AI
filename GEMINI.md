@@ -44,8 +44,8 @@ To optimize token usage and context window limits:
   * `src/rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
     observation noise, episode statistics, `wrap_env`), and `checked_range` for domain randomization ranges.
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`), the checkpoint's trainer file
-    (`checkpoints.py`) and curriculum scheduling of the training environment's noise and randomization
-    (`curriculum.py`).
+    (`checkpoints.py`), curriculum scheduling of the training environment's noise and randomization
+    (`curriculum.py`) and the robustness benchmark's perturbations and greedy rows (`robustness.py`).
   * `src/rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
     settings that agents, trainer and environments share (`config_values.py`), structured logging (`logger.py`),
     video recording (`video.py`), visualization helpers (`visualization.py`, imported directly: the package does
@@ -90,6 +90,8 @@ To optimize token usage and context window limits:
   (reuses `train.py`'s config loading and challenge selection).
 * **`export.py`**: Exports a trained agent's greedy policy from a checkpoint into one standalone C header and
   checks it by compiling it (`src/rl_core/export/`; the same config loading and challenge selection).
+* **`robustness.py`**: Plays a checkpoint greedily on environments perturbed one setting at a time and reports
+  each row inside or beyond its training range (`src/rl_core/training/robustness.py`).
 * **`example.py`**: Minimal standalone usage example of the framework.
 * **`ARCHITECTURE.md`** / **`TESTING.md`**: Component architecture reference and manual test procedures.
 * **`setup.ps1`**: Windows developer setup (installs Python 3.12, creates `.venv`, runs CI checks).

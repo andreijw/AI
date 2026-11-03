@@ -54,44 +54,13 @@ an item.
 - [ ] **Prioritised-replay DQN**: parked, tested but not merged, on `feature/dqn-prioritized-replay`; it did not help
   MountainCar (MountainCar item, Phase 7). Double and dueling DQN stay opt-in (`double_q`, `dueling`; CHANGELOG.md,
   2026-10-29).
+- [ ] **Does a curriculum help?**: curriculum scheduling and the robustness benchmark are in (CHANGELOG.md,
+  2026-11-03), but no committed config has a curriculum and none has been measured. A trial would train CartPole PPO
+  with noise and length randomization at the target, with and without a curriculum, on seeds 1 to 5, and compare the
+  greedy evaluation at the target and `robustness.py`'s rows beyond the training range. If one helps but forgets the
+  easy settings, mixing easier episodes back in is the follow-up (out of scope of the curriculum item).
 
 ### Phase 6 — Advanced RL & Robotics Extensions
-
-- [~] **Curriculum Learning & Domain Randomization Scheduling**
-  - **Description**: Add dynamic curriculum pacing that scales domain randomization and noise injection difficulty
-    as the agent reaches performance milestones during training. The config's `environment` section stays the
-    target (the hardest settings, which evaluation always uses); `environment.curriculum` gives the easiest
-    settings and the pacing, and one difficulty from 0 to 1 moves every scheduled setting between the two.
-  - **Progress**: three PRs (plan approved 2026-11-03). Done: the wrappers' schedulable settings
-    (`feature/curriculum-wrapper-settings`), then the scheduler, the trainer wiring, resume and the scripts
-    (`feature/curriculum-scheduler`; both CHANGELOG.md, 2026-11-03). Next: the robustness benchmark, whose report
-    should also say when a run trained through a curriculum, since its solve episode then comes from training
-    rewards that mix difficulties (review of PR 1b, 2026-11-03). No committed config has a curriculum, and whether
-    one helps any challenge has not been measured.
-  - **Acceptance criteria** (rewritten 2026-11-03: the `DomainRandomizationWrapper` the first version named does
-    not exist; noise and randomization live in each challenge's wrapper):
-    - `CurriculumScheduler` in `rl_core/training/curriculum.py`: linear, step and reward-threshold pacing of one
-      difficulty from 0 to 1, an integer stage, exact at both ends, no randomness.
-    - Each wrapper lists `SCHEDULABLE_SETTINGS` (observation noise everywhere; action noise and domain randomization
-      on CartPole and Pendulum) and changes them between episodes through `apply_settings`: all or nothing, the
-      constructor's checks, only settings on at construction, the same randomization parameters. (Done.)
-    - The curriculum is set in `environment.curriculum`; `read_env_settings` passes the key through, so `record.py`,
-      `export.py` and the benchmark load the same config. Evaluation runs at the target on its own environment; a
-      curriculum without one is refused.
-    - Resumable mid-curriculum by replaying the saved training rewards; the curriculum is saved, and a resume with
-      a different one is refused (the maintainer's decision, 2026-11-03).
-    - No curriculum means unchanged training, pinned by the wrappers' recorded trajectories
-      (`tests/test_env_golden.py`, recorded before the change).
-    - Robustness benchmark: a trained checkpoint evaluated greedily over perturbations inside and beyond its training
-      range, one evaluation environment per perturbation built from the config.
-    - Unit tests in `tests/test_curriculum.py`, plus wrapper, trainer and script tests.
-  - **Solve rule under a curriculum** (the maintainer's decision, 2026-11-03): unchanged; a curriculum result also
-    quotes greedy evaluation at the target.
-  - **Known edge cases**: Catastrophic forgetting across difficulty stages; oscillation near threshold boundaries
-    (difficulty never falls, and a stage lasts at least `min_episodes_per_stage`, no fewer than `window`).
-  - **Out of scope**: Adversarial environment generation; automatic domain randomization (ADR) meta-policies;
-    curricula over anything but the wrappers' noise and randomization; vector environments; mixing easier episodes
-    back in against forgetting (a follow-up if a learning run shows it).
 
 - [~] **Lightweight Embedded Inference Export (C Header & ONNX)**
   - **Progress (2026-11-02)**: the C header PR is done (`export.py`, `rl_core.export`; CHANGELOG.md, 2026-11-02).
