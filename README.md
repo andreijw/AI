@@ -52,7 +52,7 @@ AI/
 │   │   │   ├── returns.py       # Discounted returns shared by the episodic agents
 │   │   │   └── softmax.py       # Numerically stable softmax shared by the discrete policies
 │   │   ├── environments/        # BaseEnvWrapper: seeding, observation noise, velocity masking, frame stacking
-│   │   ├── training/            # Generic training pipeline (trainer.py)
+│   │   ├── training/            # Generic training pipeline (trainer.py, curriculum.py)
 │   │   ├── utils/               # Config & its strict readers, logging, video, plotting, rolling averages
 │   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges
 │   │   ├── export/              # Greedy policy to a C header (c_header.py), checked by compiling it (verify.py)
@@ -377,7 +377,8 @@ outputs; copy its folders first to keep a run. Logs in `logs/` are timestamped p
 
 Every checkpoint is two files: `agent_episode_<n>.pt` (the agent, its optimizer state, generators and any replay
 buffer) and `trainer_episode_<n>.npz` beside it (the episode and step counts, reward history, evaluation seed and
-the training environment's generators, and a hash of the agent file, so a mismatched pair is refused). Resuming
+the training environment's generators, the curriculum if any, and a hash of the agent file, so a mismatched pair is
+refused). Resuming
 from one continues the run so that it ends exactly as it would have without the stop; the budget counts what was
 already trained, and checkpoint numbering continues:
 
@@ -547,6 +548,12 @@ environment:
   # frame_stack: 4        # optional, every challenge: the last 4 observations, oldest first, as one vector
   # mask_velocity: true   # optional, every challenge: zero the velocity entries (a partially observed task)
   # frame_deltas: true    # optional, with frame_stack >= 2: the newest frame, then the differences between frames
+  # obs_noise_std: 0.05   # optional: noise and domain randomization, the settings evaluation always plays
+  # curriculum:           # optional: train from easier settings up to the ones above (see below)
+  #   mode: step          #   linear | step | reward_threshold
+  #   episodes: 400       #   linear and step: training episodes to reach the target
+  #   stages: 4           #   step and reward_threshold
+  #   start: {obs_noise_std: 0.0}
 
 # Agent settings
 agent:
@@ -568,6 +575,28 @@ training:
   checkpoint_dir: "./checkpoints"
   log_dir: "./logs"
 ```
+
+### Curriculum
+
+`environment.curriculum` trains through easier settings first. The `environment` section stays the target: the
+evaluation environment is built from it as always, so evaluation and its greedy episodes play the hardest settings.
+`start` gives the easiest value of any schedulable setting the section turns on (`obs_noise_std` on every
+challenge; `action_noise_prob` or `action_noise_std` and `domain_randomization` on CartPole and Pendulum). A start
+randomization may name some of the target's parameters; the others stay at their target range. Before each
+training episode one difficulty d, from 0 to 1, sets every scheduled setting to `(1 - d) * start + d * target`, and
+moves a randomization range's two ends separately.
+
+| `mode` | Keys | Difficulty |
+| :--- | :--- | :--- |
+| `linear` | `episodes` | episodes done / `episodes`, capped at 1 |
+| `step` | `episodes`, `stages` | `stages` equal steps over `episodes` |
+| `reward_threshold` | `stages`, `threshold`, `window`, `min_episodes_per_stage` | one stage up when the average training reward of the stage's last `window` episodes reaches `threshold`, after at least `min_episodes_per_stage` (no fewer than `window`) at that stage; it never falls |
+
+The 10-episode metrics records carry `curriculum_difficulty` (and `curriculum_stage`) of the last episode trained,
+the log says when a stage advances, and a run that ends below difficulty 1 warns. The solve rule is unchanged, but
+its training average then mixes difficulties, so quote a curriculum run's greedy evaluation at the target as well.
+A run with a curriculum resumes only with the same one. `record.py`, `export.py` and the benchmark's evaluation
+build the target and ignore the curriculum; `src/benchmark.py` trains each run through its config's curriculum.
 
 ## Development
 

@@ -369,6 +369,7 @@ class BenchmarkRunner:
         budget = budget_of(train_cfg)
         eval_env = self.challenge.setup_eval_env(agent_type, seed)
         try:
+            curriculum = self.challenge.setup_curriculum(agent_type, seed, env)
             trainer = Trainer(
                 agent=agent,
                 env=env,
@@ -376,6 +377,7 @@ class BenchmarkRunner:
                 logger=self.logger,
                 eval_env=eval_env,
                 eval_seed=None if eval_env is None else eval_seed_for(seed),
+                curriculum=curriculum,
             )
 
             start_time = time.perf_counter()

@@ -86,6 +86,8 @@ class TrainerState:
     first_non_finite_episode: int | None = None
     eval_seed: int | None = None
     env_state: dict[str, np.ndarray] = field(default_factory=dict)
+    # The run's curriculum (CurriculumScheduler.spec()), or None for a run without one.
+    curriculum: str | None = None
 
     def to_arrays(self) -> dict[str, Any]:
         """The state as ``.npz`` arrays."""
@@ -104,6 +106,8 @@ class TrainerState:
             arrays["first_non_finite_episode"] = np.array(self.first_non_finite_episode)
         if self.eval_seed is not None:
             arrays["eval_seed"] = np.array(self.eval_seed)
+        if self.curriculum is not None:
+            arrays["curriculum"] = np.array(self.curriculum)
         clashing = sorted(arrays.keys() & self.env_state.keys())
         if clashing:
             raise ValueError(
@@ -138,6 +142,7 @@ class TrainerState:
             first_non_finite_episode=_optional_integer(data, "first_non_finite_episode"),
             eval_seed=_optional_integer(data, "eval_seed"),
             env_state={k: np.asarray(data[k]) for k in data if k not in _KNOWN},
+            curriculum=_text(data, "curriculum") if "curriculum" in data else None,
         )
         match = _AGENT_NAME.match(name)
         episodes = int(match.group(1)) if match else -1
@@ -179,7 +184,7 @@ _REQUIRED = (
     "update_metric_window",
     "non_finite_metrics_seen",
 )
-_KNOWN = (*_REQUIRED, "first_non_finite_episode", "eval_seed")
+_KNOWN = (*_REQUIRED, "first_non_finite_episode", "eval_seed", "curriculum")
 
 
 def _scalar(data: Mapping[str, Any], key: str) -> Any:

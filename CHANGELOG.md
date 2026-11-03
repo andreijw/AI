@@ -16,6 +16,17 @@ Acrobot-v1) and
 
 ### Added
 
+- **Curriculum scheduling** (`feature/curriculum-scheduler`), the second of three PRs for the curriculum item:
+  `environment.curriculum` trains through easier noise and randomization first, with `linear`, `step` or
+  `reward_threshold` pacing of one difficulty from 0 to 1 (`rl_core.training.curriculum.CurriculumScheduler`, built
+  by `curriculum_from_config` in `train.py` and the benchmark). The `environment` section stays the target, which
+  the evaluation environment plays; a curriculum without one is refused. The trainer applies the scheduled settings
+  before each training episode, logs `curriculum_difficulty` and `curriculum_stage` in its 10-episode records, says
+  when a stage advances and warns if a run ends below the target. The trainer file saves the curriculum; a resume
+  replays the saved rewards and refuses a different curriculum. Without one, training is unchanged. CartPole now
+  refuses a randomization range reaching 0, as Pendulum does (`checked_range(..., positive=True)`). Smoke runs only
+  (CartPole and Pendulum PPO, 30 episodes, seed 42): no committed config has a curriculum, and whether one helps
+  has not been measured.
 - **Schedulable wrapper settings** (`feature/curriculum-wrapper-settings`), the first of three PRs for the curriculum
   item: each challenge wrapper lists the settings a curriculum may change between episodes in
   `SCHEDULABLE_SETTINGS` (observation noise everywhere; action noise and domain randomization on CartPole and

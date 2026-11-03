@@ -18,6 +18,7 @@ from rl_core.challenges import (
 from rl_core.seeding import eval_seed_for
 from rl_core.training import Trainer
 from rl_core.training.budget import apply_budget_override
+from rl_core.training.curriculum import curriculum_from_config
 from rl_core.utils import load_config, setup_logger
 from rl_core.utils.video import TrainingVideoRecorder
 
@@ -312,6 +313,7 @@ def main():
             # evaluates does not change which start states its training episodes see.
             eval_env = run_challenge.make_env(config["environment"], render_mode=None)
             eval_seed = eval_seed_for(config["environment"].get("seed"))
+            curriculum = curriculum_from_config(config["environment"], env)
             if args.record_video:
                 require_moviepy()
             logger.info(f"Environments created (evaluation start states from seed {eval_seed})")
@@ -326,8 +328,13 @@ def main():
                 logger=logger,
                 eval_env=eval_env,
                 eval_seed=eval_seed,
+                curriculum=curriculum,
             )
             logger.info("Trainer created")
+            if curriculum is not None:
+                logger.info(
+                    f"Curriculum ({curriculum.mode}) from {curriculum.start} to {curriculum.target}"
+                )
             if args.resume is not None:
                 trainer.resume(args.resume)
             if args.record_video:

@@ -301,3 +301,12 @@ def test_the_cartpole_factories_check_ranges_before_building_anything(factory, m
     monkeypatch.setattr(factories, "make_vec_env", must_not_build)
     with pytest.raises(ValueError, match="Unsupported domain randomization parameter 'foo'"):
         factory({"domain_randomization": {"foo": [1.0, 2.0]}})
+
+
+@pytest.mark.parametrize("param", ["gravity", "masscart", "masspole", "length"])
+def test_cartpole_refuses_a_physical_range_that_reaches_zero(param):
+    """CartPole's dynamics divide by the pole's length and the total mass, so a range reaching 0
+    (a curriculum's start, or the target) could draw a zero and give NaN or inf states. Gravity
+    follows the same rule, as Pendulum's does."""
+    with pytest.raises(ValueError, match=f"Physical parameter '{param}' must be strictly positive"):
+        CartPoleEnv(seed=0, domain_randomization={param: [0.0, 1.0]})

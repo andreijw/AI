@@ -346,7 +346,12 @@ evaluation seed and, for an environment that
 implements `rl_core.environments.ResumableEnv`, its generators) as a `TrainerState` that also records the agent
 file's SHA-256, both files through
 `rl_core.training.checkpoints.write_atomically`; `Trainer.resume` (`train.py --resume`) reads both, so a resumed
-run ends exactly as an uninterrupted one. Without an evaluation
+run ends exactly as an uninterrupted one. With a curriculum (`rl_core.training.curriculum.CurriculumScheduler`,
+built from `environment.curriculum` by `curriculum_from_config` in `train.py` and through the challenge's
+`setup_curriculum` in the benchmark), the trainer calls the training environment's `apply_settings` with the
+scheduler's settings before each training episode and records the episode's reward with it after; the trainer file
+holds the curriculum as JSON, and `resume` refuses a different one and replays the saved rewards to reach the same
+difficulty. A curriculum needs the evaluation environment, which stays at the target. Without an evaluation
 environment (direct `Trainer` callers and tests) evaluation runs on the training environment. `record.py` passes its
 playback environment as the evaluation environment with the same seed, so a playback shows the training run's
 evaluation start states.
@@ -363,6 +368,9 @@ sequenceDiagram
 
     User->>Trainer: train()
     loop Episode Loop (1 to num_episodes)
+        opt Curriculum
+            Trainer->>Env: apply_settings(curriculum.settings())
+        end
         Trainer->>Env: reset()
         Env-->>Trainer: obs, info
         loop Step Loop (until done or max_steps)
@@ -374,6 +382,9 @@ sequenceDiagram
         end
         Trainer->>Agent: update(trajectory / batch)
         Agent-->>Trainer: loss_metrics
+        opt Curriculum
+            Trainer->>Trainer: curriculum.record(episode_reward)
+        end
         opt Periodic Evaluation
             Trainer->>Trainer: evaluate(eval_episodes) on the evaluation env, reset(seed=eval_seed + i)
             Trainer->>Logger: log eval stats & rewards

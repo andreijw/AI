@@ -13,6 +13,7 @@ import gymnasium as gym
 from rl_core.agents.base_agent import BaseAgent
 from rl_core.environments import OBSERVATION_DEFAULTS
 from rl_core.training.budget import apply_budget_override
+from rl_core.training.curriculum import CurriculumScheduler, curriculum_from_config
 from rl_core.utils.config import load_config
 
 
@@ -189,6 +190,20 @@ class BenchmarkChallenge(abc.ABC):
             return None
         config = self.load_run_config(agent_type, seed, None)
         return self.make_env(config["environment"], render_mode=None)
+
+    def setup_curriculum(
+        self, agent_type: str, seed: int, env: ChallengeEnv
+    ) -> CurriculumScheduler | None:
+        """
+        The curriculum a benchmark run's training ``env`` follows: what its config's
+        ``environment.curriculum`` asks for (see
+        :func:`~rl_core.training.curriculum.curriculum_from_config`), or None. Challenges without
+        a config for ``agent_type`` (see :meth:`setup_eval_env`) have none.
+        """
+        if agent_type not in self.CONFIG_MAP:
+            return None
+        config = self.load_run_config(agent_type, seed, None)
+        return curriculum_from_config(config["environment"], env)
 
     def unsupported_agent_error(self, agent_type: str) -> ValueError:
         """The error for an agent type this challenge cannot build, naming the ones it can."""

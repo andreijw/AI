@@ -127,13 +127,7 @@ class PendulumEnv(BaseEnvWrapper):
                     f"[min, max], got: {value!r}"
                 )
 
-            validated_range = checked_range(param, *val_tuple)
-            if val_tuple[0] <= 0:
-                raise ValueError(
-                    f"Physical parameter '{param}' must be strictly positive, "
-                    f"got min: {val_tuple[0]}"
-                )
-            validated[canon_key] = validated_range
+            validated[canon_key] = checked_range(param, *val_tuple, positive=True)
 
         return validated
 

@@ -21,6 +21,7 @@ from .checkpoints import (
     trainer_state_path,
     write_atomically,
 )
+from .curriculum import CurriculumScheduler, require_schedulable
 
 _logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ class Trainer:
         logger: Any | None = None,
         eval_env: gym.Env | Any | None = None,
         eval_seed: int | None = None,
+        curriculum: CurriculumScheduler | None = None,
     ):
         """
         Initialize the trainer.
@@ -58,9 +60,14 @@ class Trainer:
             eval_seed: Required with ``eval_env``: episode i of every evaluation resets ``eval_env``
                 with ``eval_seed + i``, so all evaluations in a run play the same start states
                 (see ``rl_core.seeding.eval_seed_for``).
+            curriculum: Settings for ``env`` before each training episode, from easy to the
+                target ``eval_env`` was built with (see ``rl_core.training.curriculum``). Without
+                one the training environment's settings are never touched.
 
         Raises:
-            ValueError: If ``eval_env`` is given without a non-negative integer ``eval_seed``.
+            ValueError: If ``eval_env`` is given without a non-negative integer ``eval_seed``, or
+                ``curriculum`` without ``eval_env`` or with an ``env`` that cannot change its
+                settings between episodes.
         """
         if eval_env is not None and (
             eval_seed is None
@@ -69,6 +76,15 @@ class Trainer:
             or eval_seed < 0
         ):
             raise ValueError(f"eval_env needs eval_seed, a non-negative integer; got {eval_seed!r}")
+        if curriculum is not None:
+            # Evaluation and the solve check of greedy episodes must play the target, not the
+            # training environment's current difficulty.
+            if eval_env is None:
+                raise ValueError(
+                    "A curriculum needs an evaluation environment built at the target settings"
+                )
+            require_schedulable(env)
+        self.curriculum = curriculum
         self.env = env
         self.eval_env = eval_env
         self.eval_seed: int | None = (
@@ -305,11 +321,18 @@ class Trainer:
         while self._budget_left(len(self.episode_rewards)):
             episode = len(self.episode_rewards)  # done so far, restored by resume()
             self.current_episode = episode + 1
+            if self.curriculum is not None:
+                self._start_curriculum_episode()
             episode_reward, episode_length = self._run_episode(training=True)
 
             self.episode_rewards.append(episode_reward)
             self.episode_lengths.append(episode_length)
             self.total_steps_trained += episode_length
+            if self.curriculum is not None and self.curriculum.record(episode_reward):
+                self._log_info(
+                    f"Curriculum stage {self.curriculum.stage}/{self.curriculum.stages} "
+                    f"(difficulty {self.curriculum.difficulty:.2f}) from episode {episode + 2}"
+                )
 
             # Log progress
             if (episode + 1) % _LOG_INTERVAL == 0:
@@ -326,6 +349,7 @@ class Trainer:
                         "episode": episode + 1,
                         "avg_reward": avg_reward,
                         "avg_length": avg_length,
+                        **((self.curriculum and self.curriculum.played_metrics()) or {}),
                         **self._drain_update_metrics(),
                     }
                 )
@@ -343,13 +367,34 @@ class Trainer:
 
         self._log_info("Training complete!")
 
-        return {
+        stats = {
             "total_episodes": len(self.episode_rewards),
             "total_steps": self.total_steps_trained,
             "avg_reward": np.mean(self.episode_rewards),
             "avg_length": np.mean(self.episode_lengths),
             "final_avg_reward": np.mean(self.episode_rewards[-100:]),
         }
+        if self.curriculum is not None:
+            stats["curriculum_difficulty"] = self._end_curriculum()
+        return stats
+
+    def _start_curriculum_episode(self) -> None:
+        """Give the training environment the curriculum's settings for the next episode."""
+        assert self.curriculum is not None
+        require_schedulable(self.env).apply_settings(self.curriculum.settings())
+
+    def _end_curriculum(self) -> float:
+        """The difficulty the last training episode played, warning if it is below the target."""
+        assert self.curriculum is not None
+        played = (self.curriculum.played_metrics() or self.curriculum.metrics())[
+            "curriculum_difficulty"
+        ]
+        if played < 1.0:
+            self._log_warning(
+                f"Training ended at curriculum difficulty {played:.2f}, below the target its "
+                "evaluation played"
+            )
+        return float(played)
 
     def _budget_left(self, episodes_done: int) -> bool:
         """Whether another training episode starts: steps when budgeted in steps, else episodes."""
@@ -507,6 +552,7 @@ class Trainer:
             first_non_finite_episode=self.first_non_finite_episode,
             eval_seed=self.eval_seed,
             env_state=self.env.rng_state() if isinstance(self.env, ResumableEnv) else {},
+            curriculum=None if self.curriculum is None else self.curriculum.spec(),
         )
 
     def resume(self, agent_checkpoint: str) -> None:
@@ -549,6 +595,8 @@ class Trainer:
         self.first_non_finite_episode = state.first_non_finite_episode
         if state.eval_seed is not None:
             self.eval_seed = state.eval_seed
+        if self.curriculum is not None:
+            self.curriculum.replay(self.episode_rewards)
         self._log_info(
             f"Resumed from {agent_checkpoint} after {self.current_episode} episodes "
             f"({self.total_steps_trained} steps)"
@@ -574,6 +622,16 @@ class Trainer:
                 if state.eval_seed is not None
                 else "The run evaluated on its training environment; this trainer has an "
                 "evaluation environment"
+            )
+        own = None if self.curriculum is None else self.curriculum.spec()
+        if state.curriculum != own:
+            raise ValueError(
+                "The run trained without a curriculum; this trainer has one"
+                if state.curriculum is None
+                else "The run trained with a curriculum; give this trainer the same one"
+                if own is None
+                else "The run trained with a different curriculum (mode, pacing, start or target) "
+                "from this trainer's"
             )
         if isinstance(self.env, ResumableEnv):
             expected = set(self.env.rng_state())

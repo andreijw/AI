@@ -94,8 +94,9 @@ def config_get(config: Mapping[str, Any], key: str, default: Any) -> Any:
 
 
 # Environment settings every challenge accepts without a default: the scripts read them, and a
-# challenge passes them through as given (null meaning null).
-PASS_THROUGH_ENV_SETTINGS = frozenset({"render_mode", "seed"})
+# challenge passes them through as given (null meaning null). ``curriculum`` is read only by the
+# training scripts (rl_core.training.curriculum); every environment is built at the target.
+PASS_THROUGH_ENV_SETTINGS = frozenset({"curriculum", "render_mode", "seed"})
 
 
 def read_env_settings(
@@ -104,8 +105,8 @@ def read_env_settings(
     """
     A challenge's environment settings from a config's ``environment`` section.
 
-    Each key of ``defaults`` is read with :func:`config_get`. ``render_mode`` and ``seed`` are
-    allowed and left to the caller. Any other key set to a value is rejected; one left off (null,
+    Each key of ``defaults`` is read with :func:`config_get`. ``curriculum``, ``render_mode`` and
+    ``seed`` are allowed and left to the caller. Any other key set to a value is rejected; one left off (null,
     0, false or empty) is accepted, so a config copied from another challenge with its noise off
     still loads. A misspelt setting left off, such as ``obs_nosie_std: 0.0``, is accepted too.
 
