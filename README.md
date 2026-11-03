@@ -494,14 +494,14 @@ does, including the agent's observation normalisation, and needs only `<math.h>`
 the observation after the environment's `mask_velocity`, `frame_stack` and `frame_deltas`, which the header's
 comment names but does not apply.
 
-Every agent with a network exports: REINFORCE, Actor-Critic and PPO (discrete and continuous), DQN (plain and
-dueling), DDPG and TD3. A checkpoint trained on the PyTorch backend exports without PyTorch, through the NumPy
-agent. Before writing the header, `export.py` plays `--verify-episodes` greedy episodes (default 3; 0 skips
-this), compiles the header with `$CC`, `cc`, `gcc` or `clang`, and checks its outputs against NumPy's on every
-observation, to within 1e-5 absolute plus 1e-5 relative; the summary gives the worst error as a share of that
-tolerance. If they disagree it writes no header and exits with status 1; without a compiler it writes the header
-unchecked and exits with status 1. A discrete action may differ only where NumPy's two best outputs are that
-close; these are reported as near-ties.
+Every agent with a network exports: REINFORCE, Actor-Critic and PPO (discrete and continuous), DQN (plain and dueling),
+DDPG and TD3. A checkpoint trained on the PyTorch backend exports without PyTorch, through the NumPy agent. The random
+agents are refused ("has no network to export") before the checkpoint is read. Before writing the header, `export.py`
+plays `--verify-episodes` greedy episodes (default 3; 0 skips this), compiles the header with `$CC`, `cc`, `gcc` or
+`clang`, and checks its outputs against NumPy's on every observation, to within 1e-5 absolute plus 1e-5 relative; the
+summary gives the worst error as a share of that tolerance. If they disagree it writes no header and exits with status
+1; without a compiler it writes the header unchecked and exits with status 1. A discrete action may differ only where
+NumPy's two best outputs are that close; these are reported as near-ties.
 
 ### Multi-Agent Benchmarking
 
@@ -851,7 +851,7 @@ person makes three decisions: which work to do, whether the plan is right, and w
 | `experiment-runner` | Runs seeded training sweeps outside your saved results and reports what they do and do not show | When the question is whether an agent learns |
 | `training-doctor` | Finds why an agent does not learn, diverges or gives NaN, cheapest check first | Before any hyperparameter is changed to fix a bad run |
 | `cleanup` | Finds and merges duplication against the whole codebase; removes leftovers | After the implementation |
-| `pr-reviewer` | Final review: acceptance criteria, numerical correctness, soundness of the learning, what gets committed | Before you are asked to commit |
+| `pr-reviewer` | Final review: acceptance criteria, numerical correctness, soundness of the learning, what gets committed, whether the docs still describe every changed file | Before you are asked to commit |
 | `doc-sync` | Brings roadmap, TESTING, README, ARCHITECTURE and assistant docs back in line | Before you are asked to commit |
 
 `architect`, `cleanup` and `pr-reviewer` build on the [brooks-lint](https://github.com/hyhmrright/brooks-lint) plugin
