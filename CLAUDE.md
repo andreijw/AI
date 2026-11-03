@@ -13,7 +13,8 @@
 
 Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥1.0**
 · **NumPy** agents, with an optional **PyTorch** backend for DDPG and TD3 only (`backend: torch`; see CONTRIBUTING.md
-"Framework Independence") · optional **Box2D** for LunarLander (`box2d` extra) · **pytest** · **Ruff** (line length
+"Framework Independence") · optional **Box2D** for LunarLander (`box2d` extra) · optional **onnx** and
+**onnxruntime** for the ONNX export (`onnx` extra) · **pytest** · **Ruff** (line length
 100) · **mypy**.
 
 - **Coding standards** → **[CONTRIBUTING.md](CONTRIBUTING.md)** §1–3.
@@ -84,19 +85,22 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 ## Environment
 
 - First-time setup on Windows: `.\setup.ps1` (installs Python 3.12 via winget, creates `.venv`, installs
-  `.[dev,video]`, runs the CI checks). Flags: `-Update`, `-NonInteractive`, `-SkipChecks`, `-InstallHooks`.
+  `.[dev,video,onnx]`, runs the CI checks). Flags: `-Update`, `-NonInteractive`, `-SkipChecks`, `-InstallHooks`.
 - **Run every Python tool from `.venv`**: `.venv/Scripts/python -m pytest`, `.venv/Scripts/python -m ruff check .`,
   `.venv/Scripts/python -m mypy src`. Never use bare `python` — on this machine it is the Microsoft Store stub.
   On Linux and macOS the interpreter is `.venv/bin/python`; the skills write `python` and mean whichever applies.
 - If `.venv` is missing, ask the user to run `.\setup.ps1`; do not `pip install` into a global interpreter.
 - Linux and macOS: `./setup.sh --profile cpu|gpu`. **`cpu`** (the default) builds `.venv` with
-  `.[dev,video,box2d]`: no PyTorch, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with
-  `.[dev,video,torch,box2d]` from PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests
+  `.[dev,video,box2d,onnx]`: no PyTorch, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with
+  `.[dev,video,torch,box2d,onnx]` from PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests
   (`tests/test_torch_ddpg_agent.py`, skipped elsewhere) and for `train.py` runs with `backend: torch`. Both build Box2D
   (`box2d-py` from source with `swig`) before the extras. CI installs neither PyTorch nor Box2D, and their tests skip
   there (`needs_torch`, `needs_box2d`/`env_marks` in `tests/helpers.py`; maintainer's decisions, 2026-10-25 and
   2026-10-27). The C export tests (`needs_cc`) skip on Windows and where no `CC`, `cc`, `gcc` or `clang` is found;
-  CI's Linux runner has gcc, and `test_ci_has_a_c_compiler` fails there if it ever does not.
+  CI's Linux runner has gcc, and `test_ci_has_a_c_compiler` fails there if it ever does not. CI's test job installs
+  the `onnx` extra (maintainer's decision, 2026-11-02), so the ONNX tests (`needs_onnx`) run there.
+  `tests/conftest.py` runs them after every other test: importing onnxruntime starts a thread, and a fork after it
+  (an async vector environment) may deadlock.
 
 ## Tool Mapping (GEMINI.md → Claude Code)
 

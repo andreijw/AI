@@ -5,7 +5,27 @@ import sys
 import pytest
 
 from rl_core.challenges import CHALLENGES, registry
-from tests.helpers import FAKE_PACKAGE_PREFIX
+from tests.helpers import FAKE_PACKAGE_PREFIX, uses_onnx
+
+
+def pytest_collection_modifyitems(items):
+    """Run the tests that need onnxruntime after all the others. Importing it starts a thread that
+    lives as long as the process, and a test that forks afterwards (an async vector environment)
+    could deadlock in the child (Python warns "This process ... is multi-threaded, use of fork() may
+    lead to deadlocks")."""
+    items.sort(key=uses_onnx)  # stable: the order within each group is kept
+
+
+@pytest.fixture(autouse=True)
+def onnxruntime_only_in_onnx_tests(request):
+    """Fail a test not marked needs_onnx that leaves onnxruntime imported: it would run before the
+    tests that fork. A test that hides the onnx extra hides onnxruntime too (sys.modules[...] = None)."""
+    yield
+    if not uses_onnx(request.node) and sys.modules.get("onnxruntime") is not None:
+        pytest.fail(
+            "onnxruntime is imported, but this test is not marked needs_onnx (tests/helpers.py), so it "
+            "runs before tests that fork: mark it, or hide onnxruntime as well as onnx"
+        )
 
 
 @pytest.fixture

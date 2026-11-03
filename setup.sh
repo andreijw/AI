@@ -2,13 +2,13 @@
 # Create a virtual environment for this project on Linux or macOS (Windows: setup.ps1).
 #
 # Profiles:
-#   cpu (default)  .venv      .[dev,video,box2d]         No PyTorch: the default environment for every tool.
-#   gpu            .venv-gpu  .[dev,video,torch,box2d]   Adds PyTorch for the optional DDPG and TD3 backend
-#                                                        (backend: torch) and its tests; from PyTorch's CUDA 13.2
-#                                                        index, which drives the Jetson's GPU
-#                                                        (docs/pytorch_jetson_timing.md). About 5 GiB.
+#   cpu (default)  .venv      .[dev,video,box2d,onnx]         No PyTorch: the default environment for every tool.
+#   gpu            .venv-gpu  .[dev,video,torch,box2d,onnx]   Adds PyTorch for the optional DDPG and TD3 backend
+#                                                             (backend: torch) and its tests; from PyTorch's CUDA
+#                                                             13.2 index, which drives the Jetson's GPU
+#                                                             (docs/pytorch_jetson_timing.md). About 5 GiB.
 # Both build Box2D for LunarLander first (box2d-py from source with swig, about 90 s; needs a C++ compiler and the
-# Python headers). CI installs neither PyTorch nor Box2D, and skips their tests.
+# Python headers). CI installs neither PyTorch nor Box2D, and skips their tests; it installs the onnx extra.
 #
 # Usage: ./setup.sh [--profile cpu|gpu] [--skip-checks]
 # An existing environment is reused and its packages upgraded. Then the CI checks run (unless --skip-checks).
@@ -26,9 +26,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$profile" in
-    cpu) venv=".venv"; extras="dev,video,box2d"; index_args=() ;;
+    cpu) venv=".venv"; extras="dev,video,box2d,onnx"; index_args=() ;;
     gpu)
-        venv=".venv-gpu"; extras="dev,video,torch,box2d"
+        venv=".venv-gpu"; extras="dev,video,torch,box2d,onnx"
         index_args=(--index-url https://download.pytorch.org/whl/cu132 --extra-index-url https://pypi.org/simple)
         ;;
     *) echo "--profile must be cpu or gpu, got '$profile'" >&2; exit 2 ;;
