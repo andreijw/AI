@@ -160,7 +160,8 @@ Use the `doc-sync` skill. If `.github/workflows/` changed, it runs `python scrip
 
 ### 9. Hand-off, then touchpoint 3
 
-Stage the changed files by name with `git add`. Then report:
+Stage the changed files by name with `git add`. Then report, starting with the PR's **quick summary** (its
+bullets are in the `pr-reviewer` skill's Report section), updated for the fixes made after the review:
 
 - what changed, in terms of what someone training an agent or extending the framework will notice
 - the decisions you made on their behalf
@@ -178,8 +179,8 @@ with a progress note until the last one. Anything still live in the item (a foll
 the open item it belongs to, or a new one, before the item is removed.
 
 After they have committed: push the branch, then open the PR against `develop` with `gh pr create`, following
-`.github/pull_request_template.md`, with every ticked box true. Watch `gh pr checks` until it finishes, and
-fix a red check without being asked.
+`.github/pull_request_template.md`, with the quick summary as the first lines of its Description and every
+ticked box true. Watch `gh pr checks` until it finishes, and fix a red check without being asked.
 
 ## Honesty in the hand-off
 

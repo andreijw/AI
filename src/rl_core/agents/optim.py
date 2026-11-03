@@ -12,7 +12,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from .config_values import optional_positive_int
+from rl_core.utils.config_values import optional_positive_int
 
 OPTIMIZERS = ("sgd", "adam")
 

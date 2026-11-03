@@ -1,6 +1,8 @@
 """Strict readers for config values, so a mistyped setting fails at construction.
 
-The agents read their settings here; the challenges' environment factories read ``async_envs``.
+The agents and the trainer read their settings here, the environment wrappers their observation
+settings, and the challenges' environment factories ``async_envs``. It lives in ``rl_core.utils`` so
+that none of those depends on another for it.
 """
 
 from collections.abc import Mapping

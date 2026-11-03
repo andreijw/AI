@@ -5,9 +5,9 @@ from typing import Any
 import numpy as np
 
 from rl_core.seeding import AGENT_REPLAY_STREAM, derive_rng
+from rl_core.utils.config_values import optional_positive_int, positive_int
 
 from .actor_critic_base import ActorCriticBase
-from .config_values import optional_positive_int, positive_int
 from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import episode_end, gae
 from .rollout import EpisodeRollout, RolloutColumns

@@ -40,7 +40,6 @@ AI/
 │   │   │   ├── base_agent.py
 │   │   │   ├── actor_critic_agent.py
 │   │   │   ├── actor_critic_base.py
-│   │   │   ├── config_values.py # Strict readers for integer and boolean agent settings
 │   │   │   ├── continuous_actor_critic.py
 │   │   │   ├── continuous_ppo.py
 │   │   │   ├── continuous_random_agent.py
@@ -54,7 +53,7 @@ AI/
 │   │   │   └── softmax.py       # Numerically stable softmax shared by the discrete policies
 │   │   ├── environments/        # BaseEnvWrapper: seeding, observation noise, velocity masking, frame stacking
 │   │   ├── training/            # Generic training pipeline (trainer.py)
-│   │   ├── utils/               # Config, logging, video recording, plotting & rolling averages
+│   │   ├── utils/               # Config & its strict readers, logging, video, plotting, rolling averages
 │   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges
 │   │   ├── export/              # Greedy policy to a C header (c_header.py), checked by compiling it (verify.py)
 │   │   └── seeding.py           # Separate seeded random streams (derive_rng)
@@ -851,7 +850,7 @@ person makes three decisions: which work to do, whether the plan is right, and w
 | `experiment-runner` | Runs seeded training sweeps outside your saved results and reports what they do and do not show | When the question is whether an agent learns |
 | `training-doctor` | Finds why an agent does not learn, diverges or gives NaN, cheapest check first | Before any hyperparameter is changed to fix a bad run |
 | `cleanup` | Finds and merges duplication against the whole codebase; removes leftovers | After the implementation |
-| `pr-reviewer` | Final review: acceptance criteria, numerical correctness, soundness of the learning, what gets committed, whether the docs still describe every changed file | Before you are asked to commit |
+| `pr-reviewer` | Final review: acceptance criteria, numerical correctness, soundness of the learning, what gets committed, whether the docs still describe every changed file; opens with a quick summary for you | Before you are asked to commit |
 | `doc-sync` | Brings roadmap, TESTING, README, ARCHITECTURE and assistant docs back in line | Before you are asked to commit |
 
 `architect`, `cleanup` and `pr-reviewer` build on the [brooks-lint](https://github.com/hyhmrright/brooks-lint) plugin

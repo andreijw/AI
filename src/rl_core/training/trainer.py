@@ -11,8 +11,8 @@ import gymnasium as gym
 import numpy as np
 
 from ..agents.base_agent import BaseAgent
-from ..agents.config_values import optional_positive_int
 from ..environments import ResumableEnv
+from ..utils.config_values import optional_positive_int
 from ..utils.logger import json_safe
 from .checkpoints import (
     TrainerState,

@@ -12,6 +12,17 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-03
+
+### Changed
+
+- **Config readers moved to `rl_core.utils.config_values`** (`feature/neutral-config-readers`), from
+  `rl_core.agents.config_values`: the strict integer and boolean readers are shared by the agents, the trainer, the
+  environment wrappers and the challenges' environment factories, so the environments no longer import the agents
+  package. `tests/test_source_conventions.py` now fails if any `environments` package, `rl_core`'s or a challenge's,
+  imports `rl_core.agents`, relative imports included. No behaviour change. Code that imported the old module path
+  must use the new one.
+
 ## 2026-11-02
 
 ### Added

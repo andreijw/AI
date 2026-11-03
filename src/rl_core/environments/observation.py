@@ -13,7 +13,7 @@ from typing import Any, TypedDict
 import gymnasium as gym
 import numpy as np
 
-from rl_core.agents.config_values import check_positive_int
+from rl_core.utils.config_values import check_positive_int
 
 
 class ObservationOptions(TypedDict, total=False):

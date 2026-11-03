@@ -13,10 +13,10 @@ from rl_core.seeding import (
     AGENT_WEIGHTS_STREAM,
     derive_rng,
 )
+from rl_core.utils.config_values import flag, non_negative_int, positive_int
 
 from .base_agent import BaseAgent
 from .bounds import action_bounds
-from .config_values import flag, non_negative_int, positive_int
 from .inference import DenseLayer, InferencePolicy
 from .optim import Adam, anneal_fraction, anneal_steps_from_config
 from .returns import discounted_returns, gae

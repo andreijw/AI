@@ -8,8 +8,8 @@ from typing import Any, ClassVar
 import numpy as np
 
 from rl_core.seeding import AGENT_TARGET_NOISE_STREAM, derive_rng
+from rl_core.utils.config_values import positive_int
 
-from .config_values import positive_int
 from .ddpg_agent import Array, DDPGAgent
 from .mlp import Params, init_mlp
 from .optim import Adam
