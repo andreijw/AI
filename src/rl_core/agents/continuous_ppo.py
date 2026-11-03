@@ -6,7 +6,8 @@ from typing import Any
 
 import numpy as np
 
-from .config_values import positive_int
+from rl_core.utils.config_values import positive_int
+
 from .continuous_actor_critic import ContinuousActorCriticBase
 from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import episode_end, gae

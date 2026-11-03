@@ -36,10 +36,6 @@ an item.
   TD3, whose buffers would keep inputs normalised by statistics that later change; SB3 stores raw observations and
   normalises at sample time. Not measured: whether Pendulum PPO or the continuous Actor-Critic learn better with it
   (only smoke runs, CHANGELOG.md, 2026-11-02).
-- [ ] **Environments independent of the agents package**: `rl_core.environments` imports
-  `rl_core.agents.config_values` (`check_positive_int`, `check_bool`) since 2026-11-01; moving those readers to a
-  neutral module (for example `rl_core.utils`) would remove the edge.
-
 - [ ] **The continuous Actor-Critic's training average**: its greedy policy matches rl-zoo's A2C, but its 100-episode
   training average stays at about -300 on Pendulum (CHANGELOG.md, 2026-10-18). True A2C, each chunk trained on as it
   is collected (`update_every: 8`), did not close it: mean final -295.0 against -298.5, better on 3 of 5 seeds

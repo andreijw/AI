@@ -152,7 +152,23 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
 
 ## Report
 
-**Verdict** first: *Approve*, or *Changes needed* with the count of Critical and Warning findings.
+**Quick summary** first, for the maintainer, who reads it before anything else and may read nothing else.
+Five short bullets, in plain words, no `path:line`s:
+
+- **What it does**: what someone training an agent or extending the framework will notice, in one or two
+  sentences.
+- **Size**: files changed and lines added and removed (`git diff <base>...HEAD --shortstat`), and whether
+  production code, tests, docs, configs or `.github/` changed.
+- **Risk**: low, medium or high, and the one reason why (for example "moves an import; no maths changes", or
+  "changes PPO's loss; only a learning run shows the effect").
+- **Verified / not verified**: the evidence that matters most, and the most important thing nobody ran.
+- **Needs you**: any decision that is the maintainer's (a dependency, a committed config, `.github/`, a
+  threshold), or "nothing".
+
+The author puts the same summary as the first lines of the PR description's Description section (the template
+has no section of its own for it), updated for the fixes made after the review, and repeats it in the hand-off.
+
+**Verdict** next: *Approve*, or *Changes needed* with the count of Critical and Warning findings.
 
 Then findings, most severe first. Each one: severity, `path:line`, then **Symptom** → **Source** →
 **Consequence** → **Remedy**. Make the consequence concrete: the input or sequence that goes wrong and what

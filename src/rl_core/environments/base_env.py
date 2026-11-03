@@ -8,7 +8,6 @@ from typing import Any, ClassVar, Protocol, runtime_checkable
 import gymnasium as gym
 import numpy as np
 
-from rl_core.agents.config_values import check_bool, check_positive_int
 from rl_core.seeding import (
     WRAPPER_STREAM,
     check_generator_state,
@@ -16,6 +15,7 @@ from rl_core.seeding import (
     generator_state,
     restore_generator,
 )
+from rl_core.utils.config_values import check_bool, check_positive_int
 
 from .observation import (
     OBSERVATION_DEFAULTS,

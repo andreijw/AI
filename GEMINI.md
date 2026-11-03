@@ -36,16 +36,17 @@ To optimize token usage and context window limits:
     `TD3Agent`),
     `ReplayBuffer`, and the shared `mlp.py` (multi-layer networks), `bounds.py` (action bounds), `softmax.py`
     (the discrete policies' numerically stable softmax), `exploration_noise.py` (DDPG's Gaussian and
-    Ornstein-Uhlenbeck noise), `config_values.py` (strict readers for integer and boolean settings),
-    `observation_normalizer.py` (running observation statistics and `standardize`) and `inference.py`
-    (`InferencePolicy`, the frozen greedy network that `BaseAgent.inference_policy()` returns for export).
+    Ornstein-Uhlenbeck noise), `observation_normalizer.py` (running observation statistics and `standardize`)
+    and `inference.py` (`InferencePolicy`, the frozen greedy network that `BaseAgent.inference_policy()` returns
+    for export).
   * `src/rl_core/export/`: `export.py`'s back end: the C header writer (`c_header.py`), the ONNX model writer and
     its onnxruntime check (`onnx_model.py`, the only module importing onnx), the comparison with NumPy and the C
     compile-and-compare check (`verify.py`), and the greedy rollout they are checked on (`rollout.py`).
   * `src/rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
     observation noise, episode statistics, `wrap_env`), and `checked_range` for domain randomization ranges.
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).
-  * `src/rl_core/utils/`: Configuration parsing (`config.py`), structured logging (`logger.py`),
+  * `src/rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
+    settings that agents, trainer and environments share (`config_values.py`), structured logging (`logger.py`),
     video recording (`video.py`), visualization helpers (`visualization.py`, imported directly: the package does
     not re-export them, and `train.py` and `src/benchmark.py` import them only inside the code that plots, so a run
     without plots never loads matplotlib), and the rolling average behind solve numbers and plots (`smoothing.py`).

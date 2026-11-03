@@ -6,9 +6,9 @@ from typing import Any
 import numpy as np
 
 from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, derive_rng
+from rl_core.utils.config_values import positive_int
 
 from .base_agent import BaseAgent
-from .config_values import positive_int
 from .inference import DenseLayer, InferencePolicy
 from .optim import Optimizer, optimizer_from_config
 from .returns import discounted_returns

@@ -7,9 +7,9 @@ import numpy as np
 import numpy.typing as npt
 
 from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, derive_rng
+from rl_core.utils.config_values import flag, positive_int
 
 from .base_agent import BaseAgent
-from .config_values import flag, positive_int
 from .inference import DenseLayer, InferencePolicy
 from .mid_episode import MidEpisodeUpdates
 from .optim import Optimizer, anneal_fraction, anneal_steps_from_config, optimizer_from_config

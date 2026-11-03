@@ -1,9 +1,9 @@
-"""Tests for the strict agent config readers."""
+"""Tests for the strict config readers (rl_core.utils.config_values)."""
 
 import numpy as np
 import pytest
 
-from rl_core.agents.config_values import (
+from rl_core.utils.config_values import (
     async_envs_setting,
     check_positive_int,
     flag,

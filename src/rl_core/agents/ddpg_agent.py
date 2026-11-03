@@ -13,15 +13,15 @@ from rl_core.seeding import (
     AGENT_WEIGHTS_STREAM,
     derive_rng,
 )
-
-from .base_agent import BaseAgent
-from .bounds import action_bounds
-from .config_values import (
+from rl_core.utils.config_values import (
     check_positive_int,
     non_negative_int,
     optional_positive_int,
     positive_int,
 )
+
+from .base_agent import BaseAgent
+from .bounds import action_bounds
 from .exploration_noise import make_exploration_noise
 from .inference import DenseLayer, InferencePolicy
 from .mid_episode import MidEpisodeUpdates

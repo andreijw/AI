@@ -10,10 +10,10 @@ from typing import Any, ClassVar, final
 
 import numpy as np
 
-from rl_core.agents.config_values import flag
 from rl_core.agents.inference import InferencePolicy
 from rl_core.agents.observation_normalizer import RunningMeanStd
 from rl_core.seeding import check_generator_state, generator_state, restore_generator
+from rl_core.utils.config_values import flag
 
 # What to tell someone whose config chooses a backend whose library is missing.
 BACKEND_INSTALL_HINTS = {
@@ -409,7 +409,7 @@ class BaseAgent(ABC):
     def _validate_dims(observation_dim: int, action_dim: int) -> None:
         """
         Validate the observation and action dimensions. Hidden widths are checked where they are
-        read from the config (``rl_core.agents.config_values``).
+        read from the config (``rl_core.utils.config_values``).
 
         Args:
             observation_dim: Observation space dimensionality.
