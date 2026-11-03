@@ -16,6 +16,19 @@ Acrobot-v1) and
 
 ### Added
 
+- **ONNX export** (`feature/onnx-export`), completing the embedded-export item: `python export.py --format onnx
+  --config <config> --checkpoint <checkpoint> --output policy.onnx` writes the same greedy policy as the C header as
+  one ONNX model (opset 17, IR version 8): input `observation` (float32, any batch size), outputs `outputs` and
+  `action`, normalisation and action head included, float32 weights, and the agent, checkpoint and observation
+  settings in its metadata. It is checked in onnxruntime as the header is checked in C (same rollout, tolerance and
+  near-tie rule) and written only if it passes. `onnx` and `onnxruntime` are the new optional `onnx` extra (the
+  maintainer's decision), imported only by `rl_core/export/onnx_model.py`; the setup scripts and CI's test job
+  install it. On this machine's checkpoints for seven runs over five challenges every model passed with no action
+  mismatch; the worst error was 0.58 of the tolerance, on LunarLanderContinuous TD3 (400x300; TESTING.md `EXP-2`).
+  Along the way: `export.py --format c` stays the default and writes the same header (now always with LF line
+  endings); the tests every format must pass are shared (`tests/export_cases.py`), and the onnxruntime tests run
+  last, because importing onnxruntime starts a thread and a fork after it may deadlock.
+
 - **C header export** (`feature/c-header-export`), the first of two PRs for the embedded-export item (ONNX
   follows; it needs `onnx` as a new dependency): `python export.py --config <config> --checkpoint <checkpoint>
   --output policy_weights.h` writes a trained agent's greedy policy as one C99 header with the weights as exact

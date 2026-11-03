@@ -1,12 +1,15 @@
 """
-Compile an exported C header into a small harness, run it on observations, and compare what it
-computes with the NumPy reference (:class:`~rl_core.agents.inference.InferencePolicy`).
+Compare an exported policy with the NumPy reference
+(:class:`~rl_core.agents.inference.InferencePolicy`), and check a C header by compiling it into a
+small harness and running it on observations. The ONNX model is run in ``onnx_model`` and compared
+here too.
 
-The harness reads observations and prints outputs as hexadecimal floats, so nothing is lost on
-the way in or out: the observations are rounded to float32 (as the C code takes them) and the
-reference is computed in float64 from those same values. Outputs agree when every one is within
-``ATOL + RTOL · |reference|``; the report gives the worst error as a share of that. A discrete action may differ only where the reference's two largest
-outputs are that close (a near-tie, counted apart); a continuous action within the same tolerance.
+The observations are rounded to float32 (as the exported code takes them) and the reference is
+computed in float64 from those same values; the C harness reads and prints hexadecimal floats, so
+nothing is lost on the way. Outputs agree when every one is within ``ATOL + RTOL · |reference|``;
+the report gives the worst error as a share of that. A discrete action may differ only where the
+reference's two largest outputs are that close (a near-tie, counted apart); a continuous action
+within the same tolerance.
 """
 
 from __future__ import annotations
@@ -63,8 +66,9 @@ def near_ties(outputs: npt.ArrayLike) -> npt.NDArray[np.bool_]:
 
 @dataclass(frozen=True)
 class VerificationReport:
-    """How the compiled header's outputs and actions compare with the reference's."""
+    """How an exported policy's outputs and actions compare with the reference's."""
 
+    target: str
     observations: int
     max_abs_error: float
     max_rel_error: float
@@ -72,8 +76,8 @@ class VerificationReport:
     outputs_within: bool
     action_mismatches: int
     near_ties: int
-    c_outputs: npt.NDArray[np.float64]
-    c_actions: npt.NDArray[np.float64]
+    outputs: npt.NDArray[np.float64]
+    actions: npt.NDArray[np.float64]
 
     @property
     def passed(self) -> bool:
@@ -82,7 +86,7 @@ class VerificationReport:
     def summary(self) -> str:
         verdict = "passed" if self.passed else "FAILED"
         return (
-            f"C verification {verdict} on {self.observations} observations: worst output error "
+            f"{self.target} verification {verdict} on {self.observations} observations: worst output error "
             f"{self.worst_tolerance_share:.2g} of the tolerance ({ATOL:g} + {RTOL:g} x |output|; "
             f"max abs error {self.max_abs_error:.3g}, max rel error {self.max_rel_error:.3g}), "
             f"{self.action_mismatches} action mismatch(es), {self.near_ties} near-tie(s)"
@@ -92,15 +96,18 @@ class VerificationReport:
 def compare(
     reference_outputs: npt.ArrayLike,
     reference_actions: npt.ArrayLike,
-    c_outputs: npt.ArrayLike,
-    c_actions: npt.ArrayLike,
+    outputs: npt.ArrayLike,
+    actions: npt.ArrayLike,
     discrete: bool,
+    *,
+    target: str,
 ) -> VerificationReport:
-    """Compare C's outputs (B, O) and actions with the reference's; see the module docstring."""
+    """Compare an exported policy's outputs (B, O) and actions with the reference's (see the module
+    docstring); ``target`` names the format checked ("C", "ONNX") in the report."""
     ref = np.asarray(reference_outputs, dtype=np.float64)
-    got = np.asarray(c_outputs, dtype=np.float64)
+    got = np.asarray(outputs, dtype=np.float64)
     ref_actions = np.asarray(reference_actions)
-    got_actions = np.asarray(c_actions)
+    got_actions = np.asarray(actions)
     error = np.abs(got - ref)
     tolerance = ATOL + RTOL * np.abs(ref)
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -117,6 +124,7 @@ def compare(
         bad = action_error > ATOL + RTOL * np.abs(ref_actions.astype(np.float64))
         mismatches = int(np.sum(bad.reshape(len(bad), -1).any(axis=1)))
     return VerificationReport(
+        target=target,
         observations=len(ref),
         max_abs_error=float(error.max(initial=0.0)),
         max_rel_error=float(relative.max(initial=0.0)),
@@ -124,8 +132,8 @@ def compare(
         outputs_within=bool(np.all(error <= tolerance)),
         action_mismatches=mismatches,
         near_ties=ties,
-        c_outputs=got,
-        c_actions=got_actions,
+        outputs=got,
+        actions=got_actions,
     )
 
 
@@ -233,5 +241,19 @@ def verify_c_header(
             c_outputs, c_actions = run_c_header(header, policy, obs, temporary, compiler, werror)
     else:
         c_outputs, c_actions = run_c_header(header, policy, obs, workdir, compiler, werror)
-    exact = obs.astype(np.float64)
-    return compare(policy.outputs(exact), policy.act(exact), c_outputs, c_actions, policy.discrete)
+    return compare_with_policy(policy, obs, c_outputs, c_actions, target="C")
+
+
+def compare_with_policy(
+    policy: InferencePolicy,
+    observations: npt.NDArray[np.float32],
+    outputs: npt.ArrayLike,
+    actions: npt.ArrayLike,
+    target: str,
+) -> VerificationReport:
+    """Compare what an export gave on ``observations`` (float32, as it took them) with ``policy``
+    computed in float64 from those same values."""
+    exact = np.asarray(observations, dtype=np.float32).astype(np.float64)
+    return compare(
+        policy.outputs(exact), policy.act(exact), outputs, actions, policy.discrete, target=target
+    )

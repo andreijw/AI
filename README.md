@@ -56,7 +56,7 @@ AI/
 │   │   ├── training/            # Generic training pipeline (trainer.py)
 │   │   ├── utils/               # Config, logging, video recording, plotting & rolling averages
 │   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges
-│   │   ├── export/              # Greedy policy to a C header (c_header.py), checked by compiling it (verify.py)
+│   │   ├── export/              # Greedy policy to C (c_header.py) or ONNX (onnx_model.py), checked vs NumPy
 │   │   └── seeding.py           # Separate seeded random streams (derive_rng)
 │   ├── rl_cartpole/             # CartPole-v1 discrete balance control challenge
 │   │   ├── environments/        # CartPole wrappers and vectorization factories
@@ -84,7 +84,7 @@ AI/
 │   └── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 on PyTorch)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
-├── export.py                    # Checkpoint to a standalone C header (policy_weights.h)
+├── export.py                    # Checkpoint to a standalone C header or an ONNX model
 ├── setup.ps1                   # Windows developer setup
 ├── pyproject.toml              # Project packaging & tool settings
 ├── CONTRIBUTING.md             # Coding standards & workflow
@@ -108,7 +108,7 @@ From PowerShell in the repository root, run:
 ```
 
 The script installs Git and Python 3.12 via `winget` if they are missing, creates a `.venv` virtual environment,
-installs the package with `[dev,video]` extras, and runs the same checks as CI (Ruff, mypy, pytest). Flags:
+installs the package with `[dev,video,onnx]` extras, and runs the same checks as CI (Ruff, mypy, pytest). Flags:
 `-NonInteractive` (no prompts), `-SkipChecks`, `-Update` (upgrade tools and packages), and `-InstallHooks`
 (`pre-commit install`). Activate the environment afterwards with `.\.venv\Scripts\Activate.ps1`.
 
@@ -117,12 +117,13 @@ If script execution is disabled, run it once with `powershell -ExecutionPolicy B
 ### Linux and macOS Setup
 
 ```bash
-./setup.sh                  # .venv, the CPU profile: .[dev,video,box2d], no PyTorch
+./setup.sh                  # .venv, the CPU profile: .[dev,video,box2d,onnx], no PyTorch
 ./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG and TD3 backend (backend: torch); about 5 GiB
 ```
 
 Each creates its environment if missing, upgrades its packages and runs the CI checks (`--skip-checks` to skip).
-Both build Box2D for LunarLander first (see below); CI installs neither PyTorch nor Box2D and skips their tests.
+Both build Box2D for LunarLander first (see below); CI installs neither PyTorch nor Box2D and skips their tests. Both
+profiles, `setup.ps1` and CI's test job install the `onnx` extra (`onnx` and `onnxruntime`) for the ONNX export.
 
 ### LunarLander (Box2D)
 
@@ -134,7 +135,7 @@ no build for the Jetson's aarch64, so this project's `box2d` extra names `box2d-
 ```bash
 pip install swig==4.5.1 "setuptools<85" "wheel<0.49"   # the versions it was verified with
 PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.5
-pip install -e ".[dev,video,box2d]"
+pip install -e ".[dev,video,box2d,onnx]"
 ```
 
 `setup.ps1` does not install it on Windows. Without Box2D the LunarLander challenges are still listed, and building
@@ -502,6 +503,26 @@ plays `--verify-episodes` greedy episodes (default 3; 0 skips this), compiles th
 summary gives the worst error as a share of that tolerance. If they disagree it writes no header and exits with status
 1; without a compiler it writes the header unchecked and exits with status 1. A discrete action may differ only where
 NumPy's two best outputs are that close; these are reported as near-ties.
+
+### Export a Trained Agent to ONNX
+
+For a device with an ONNX runtime (onnxruntime, TensorRT, OpenVINO and others), export the same policy as an ONNX
+model. It needs the `onnx` extra (`pip install -e ".[onnx]"`; the setup scripts install it):
+
+```bash
+python export.py --format onnx --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt --output policy.onnx
+```
+
+The model takes `observation` (float32, `[batch, observation size]`; one observation is a batch of one) and gives
+`outputs` (the network's outputs) and `action`: an int64 index per row for a discrete agent, a float32 action vector
+for a continuous one. Like the header it includes the observation normalisation and the action head, and takes the
+observation after `mask_velocity`, `frame_stack` and `frame_deltas`. The weights are float32; the model uses opset 17
+and IR version 8, which onnxruntime has loaded since 1.14; its metadata names the agent, the checkpoint (with its
+SHA-256), the action head and the observation settings.
+
+The same agents export, and the check is the same, run in onnxruntime instead of a compiler. The model is written only
+when it passes: without `onnx`, or without `onnxruntime` when checking, `export.py` stops before loading anything,
+names the install command and exits with status 1 (`--verify-episodes 0` writes it unchecked, needing only `onnx`).
 
 ### Multi-Agent Benchmarking
 

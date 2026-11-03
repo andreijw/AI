@@ -37,6 +37,8 @@ contributing, writing code, refactoring components, or submitting pull requests.
     (`tests/test_torch_ddpg_agent.py`), and its checkpoints are the NumPy agent's format.
   - PyTorch is never a required dependency: it is the `[torch]` extra, and CI does not install it.
   - TensorFlow, JAX and other frameworks remain out.
+  - Exporting is not training: the ONNX export's `onnx` and `onnxruntime` (the `[onnx]` extra) are imported only
+    inside the functions of `src/rl_core/export/onnx_model.py` (`tests/test_source_conventions.py` enforces it).
 - **Numerical Stability**:
   - Use the shared numerically stable softmax, `rl_core.agents.softmax.stable_softmax`, which computes
     `exp(z - max(z))` per row to prevent overflow; do not write another copy.

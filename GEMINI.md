@@ -39,8 +39,9 @@ To optimize token usage and context window limits:
     Ornstein-Uhlenbeck noise), `config_values.py` (strict readers for integer and boolean settings),
     `observation_normalizer.py` (running observation statistics and `standardize`) and `inference.py`
     (`InferencePolicy`, the frozen greedy network that `BaseAgent.inference_policy()` returns for export).
-  * `src/rl_core/export/`: `export.py`'s back end: the C header writer (`c_header.py`), its compile-and-compare
-    check (`verify.py`) and the greedy rollout it is checked on (`rollout.py`).
+  * `src/rl_core/export/`: `export.py`'s back end: the C header writer (`c_header.py`), the ONNX model writer and
+    its onnxruntime check (`onnx_model.py`, the only module importing onnx), the comparison with NumPy and the C
+    compile-and-compare check (`verify.py`), and the greedy rollout they are checked on (`rollout.py`).
   * `src/rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
     observation noise, episode statistics, `wrap_env`), and `checked_range` for domain randomization ranges.
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).
@@ -85,8 +86,9 @@ To optimize token usage and context window limits:
   initiating RL agent training runs.
 * **`record.py`**: Records a trained agent from a checkpoint into one MP4
   (reuses `train.py`'s config loading and challenge selection).
-* **`export.py`**: Exports a trained agent's greedy policy from a checkpoint into one standalone C header and
-  checks it by compiling it (`src/rl_core/export/`; the same config loading and challenge selection).
+* **`export.py`**: Exports a trained agent's greedy policy from a checkpoint into one standalone C header, or an
+  ONNX model with `--format onnx`, and checks it by compiling it or running it in onnxruntime
+  (`src/rl_core/export/`; the same config loading and challenge selection).
 * **`example.py`**: Minimal standalone usage example of the framework.
 * **`ARCHITECTURE.md`** / **`TESTING.md`**: Component architecture reference and manual test procedures.
 * **`setup.ps1`**: Windows developer setup (installs Python 3.12, creates `.venv`, runs CI checks).
@@ -133,12 +135,12 @@ Run these commands in the root workspace directory:
 # Windows: one-shot setup (Python 3.12 + .venv + dependencies + CI checks)
 .\setup.ps1
 
-# Linux and macOS: .venv with .[dev,video,box2d], Box2D built first (--profile gpu adds PyTorch)
+# Linux and macOS: .venv with .[dev,video,box2d,onnx], Box2D built first (--profile gpu adds PyTorch)
 ./setup.sh
 
 # Any OS: install dependencies in editable development mode inside an activated venv
 # (LunarLander's Box2D needs the extra steps in README, LunarLander)
-pip install -e ".[dev,video]"
+pip install -e ".[dev,video,onnx]"
 ```
 
 ### Code Formatting & Linting
