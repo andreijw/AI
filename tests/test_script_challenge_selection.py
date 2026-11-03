@@ -113,13 +113,15 @@ def test_record_plays_back_a_challenge_it_does_not_name(fake_challenge, tmp_path
     assert os.listdir(video_dir) == [f"{key}-playback-full.mp4"]
 
 
-@pytest.mark.parametrize("module", ["train", "record"])
+@pytest.mark.parametrize("module", ["train", "record", "export"])
 def test_unknown_environment_name_is_an_error(tmp_path, monkeypatch, module):
     """The bug fixed then: an unknown id (Acrobot-v1 at the time) silently trained CartPole."""
     args = ["--config", _config(tmp_path, name="Taxi-v3")]
     if module == "record":
         pytest.importorskip("moviepy")
         args += ["--checkpoint", str(tmp_path / "missing.pt")]
+    if module == "export":
+        args += ["--checkpoint", str(tmp_path / "missing.pt"), "--output", str(tmp_path / "p.h")]
     with pytest.raises(ValueError, match="Unknown environment 'Taxi-v3'.*CartPole-v1"):
         run_main(args, monkeypatch, module=module)
 
@@ -157,7 +159,7 @@ def test_cli_choices_come_from_the_registry(fake_challenge, monkeypatch, capsys)
     assert "scripted" in help_text, "--agent-type should offer every agent any challenge supports"
 
 
-@pytest.mark.parametrize("script", ["train.py", "record.py"])
+@pytest.mark.parametrize("script", ["train.py", "record.py", "export.py"])
 def test_scripts_name_no_challenge_package_or_environment(script):
     """Adding a challenge needs no edit to the scripts: they import and match none by name."""
     source = (REPO_ROOT / script).read_text(encoding="utf-8")

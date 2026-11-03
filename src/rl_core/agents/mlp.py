@@ -36,7 +36,8 @@ def init_mlp(sizes: Sequence[int], rng: np.random.Generator) -> Params:
     return params
 
 
-def _layers(params: Mapping[str, Any]) -> int:
+def layer_count(params: Mapping[str, Any]) -> int:
+    """The number of layers in ``params`` (a ``W`` and a ``b`` each)."""
     return len(params) // 2
 
 
@@ -51,7 +52,7 @@ def mlp_forward(
         :func:`mlp_backward`: ``inputs`` (each layer's input) and ``pre`` (each layer's
         pre-activation).
     """
-    n = _layers(params)
+    n = layer_count(params)
     inputs, pre = [], []
     h = x
     for i in range(n):
@@ -76,8 +77,8 @@ def mlp_backward(
     """
     grads: Params = {}
     d = np.asarray(d_out, dtype=np.float64)
-    for i in reversed(range(_layers(params))):
-        if i < _layers(params) - 1:
+    for i in reversed(range(layer_count(params))):
+        if i < layer_count(params) - 1:
             d = d * (cache["pre"][i] > 0.0)
         grads[f"W{i}"] = cache["inputs"][i].T @ d
         grads[f"b{i}"] = d.sum(axis=0)

@@ -4,12 +4,14 @@ import importlib
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from dataclasses import replace
 from types import MappingProxyType
 from typing import Any, ClassVar, final
 
 import numpy as np
 
 from rl_core.agents.config_values import flag
+from rl_core.agents.inference import InferencePolicy
 from rl_core.agents.observation_normalizer import RunningMeanStd
 from rl_core.seeding import check_generator_state, generator_state, restore_generator
 
@@ -475,6 +477,40 @@ class BaseAgent(ABC):
         Returns:
             Dictionary of training metrics
         """
+
+    @final
+    def inference_policy(self) -> InferencePolicy:
+        """
+        The greedy policy (``select_action(..., training=False)``) as plain data, for exporting:
+        the agent's network (:meth:`_inference_network`) with its observation normalisation, if
+        on, and its recorded observation settings. The arrays are copies, so later training does
+        not change it.
+
+        Raises:
+            ValueError: If the agent has no network to export (the random agents).
+        """
+        network = self._inference_network()
+        settings = dict(self.observation_settings or {})
+        statistics = self._obs_normalizer
+        if statistics is None:
+            return replace(network, observation_settings=settings, agent_name=type(self).__name__)
+        return replace(
+            network,
+            obs_mean=statistics.mean,
+            obs_scale=statistics.scale,
+            observation_settings=settings,
+            agent_name=type(self).__name__,
+        )
+
+    def _inference_network(self) -> InferencePolicy:
+        """
+        The layers and head of the greedy policy, without normalisation or settings, which
+        :meth:`inference_policy` adds.
+
+        Raises:
+            ValueError: By default: an agent without a network has nothing to export.
+        """
+        raise ValueError(f"{type(self).__name__} has no network to export")
 
     @abstractmethod
     def _checkpoint_arrays(self) -> dict[str, Any]:

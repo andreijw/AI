@@ -8,6 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_FILES = sorted((REPO_ROOT / "src").rglob("*.py")) + [
     REPO_ROOT / "train.py",
     REPO_ROOT / "record.py",
+    REPO_ROOT / "export.py",
 ]
 
 # Constructors for an owned generator. Everything else on numpy.random uses global state.

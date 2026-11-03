@@ -10,6 +10,7 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 
 from .base_agent import BaseAgent
 from .config_values import flag, positive_int
+from .inference import DenseLayer, InferencePolicy
 from .mid_episode import MidEpisodeUpdates
 from .optim import Optimizer, anneal_fraction, anneal_steps_from_config, optimizer_from_config
 from .replay_buffer import ReplayBuffer
@@ -539,6 +540,30 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
         limit = self.grad_clip_value
         for name, parameter in self._parameters().items():
             parameter -= lr * np.clip(grads[name], -limit, limit)  # in place, as for Adam
+
+    def _inference_network(self) -> InferencePolicy:
+        """
+        The online network's Q-values. A dueling network is folded into one of hidden width
+        2H whose outputs are ``V + A − mean_a A``: the hidden layers side by side, and the output
+        weights ``W2 − mean_a W2`` over the advantage units and ``W2_value`` on every action over
+        the value units.
+        """
+        hidden = DenseLayer(self._W1, self._b1, relu=True)
+        output = DenseLayer(self._W2, self._b2, relu=False)
+        if self.dueling:
+            w2, b2 = self._W2, self._b2
+            w2_value = np.broadcast_to(self._W2_value, w2.shape)
+            hidden = DenseLayer(
+                np.hstack([self._W1, self._W1_value]),
+                np.concatenate([self._b1, self._b1_value]),
+                relu=True,
+            )
+            output = DenseLayer(
+                np.vstack([w2 - w2.mean(axis=1, keepdims=True), w2_value]),
+                b2 - b2.mean() + self._b2_value,
+                relu=False,
+            )
+        return InferencePolicy(layers=(hidden, output), head="argmax")
 
     def _checkpoint_arrays(self) -> dict[str, Any]:
         """

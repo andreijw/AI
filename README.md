@@ -56,6 +56,7 @@ AI/
 │   │   ├── training/            # Generic training pipeline (trainer.py)
 │   │   ├── utils/               # Config, logging, video recording, plotting & rolling averages
 │   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges
+│   │   ├── export/              # Greedy policy to a C header (c_header.py), checked by compiling it (verify.py)
 │   │   └── seeding.py           # Separate seeded random streams (derive_rng)
 │   ├── rl_cartpole/             # CartPole-v1 discrete balance control challenge
 │   │   ├── environments/        # CartPole wrappers and vectorization factories
@@ -83,6 +84,7 @@ AI/
 │   └── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 on PyTorch)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
+├── export.py                    # Checkpoint to a standalone C header (policy_weights.h)
 ├── setup.ps1                   # Windows developer setup
 ├── pyproject.toml              # Project packaging & tool settings
 ├── CONTRIBUTING.md             # Coding standards & workflow
@@ -475,6 +477,31 @@ After training, copy the videos to your local machine and open them in any video
 # From your local machine
 scp -r user@orin-nano:/path/to/AI/videos .
 ```
+
+### Export a Trained Agent to C
+
+To run a trained policy without Python, on a microcontroller or a robot, export it as one self-contained C99
+header:
+
+```bash
+python export.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt --output policy_weights.h
+```
+
+The header holds the weights as `float` arrays (hexadecimal literals, exact in float32) and two functions,
+`policy_outputs(obs, out)` and `policy_act`: `int policy_act(const float *obs)` for a discrete agent, `void
+policy_act(const float *obs, float *action)` for a continuous one. It acts as `select_action(obs, training=False)`
+does, including the agent's observation normalisation, and needs only `<math.h>` (link with `-lm`). Its input is
+the observation after the environment's `mask_velocity`, `frame_stack` and `frame_deltas`, which the header's
+comment names but does not apply.
+
+Every agent with a network exports: REINFORCE, Actor-Critic and PPO (discrete and continuous), DQN (plain and
+dueling), DDPG and TD3. A checkpoint trained on the PyTorch backend exports without PyTorch, through the NumPy
+agent. Before writing the header, `export.py` plays `--verify-episodes` greedy episodes (default 3; 0 skips
+this), compiles the header with `$CC`, `cc`, `gcc` or `clang`, and checks its outputs against NumPy's on every
+observation, to within 1e-5 absolute plus 1e-5 relative; the summary gives the worst error as a share of that
+tolerance. If they disagree it writes no header and exits with status 1; without a compiler it writes the header
+unchecked and exits with status 1. A discrete action may differ only where NumPy's two best outputs are that
+close; these are reported as near-ties.
 
 ### Multi-Agent Benchmarking
 

@@ -23,8 +23,9 @@ from .config_values import (
     positive_int,
 )
 from .exploration_noise import make_exploration_noise
+from .inference import DenseLayer, InferencePolicy
 from .mid_episode import MidEpisodeUpdates
-from .mlp import Params, init_mlp, mlp_backward, mlp_forward
+from .mlp import Params, init_mlp, layer_count, mlp_backward, mlp_forward
 from .optim import Adam
 from .replay_buffer import ReplayBuffer
 
@@ -335,6 +336,19 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
         """The Adam of every trained network, by the network's name in :meth:`_networks`. Another
         backend trains these same networks and mirrors its optimizer state into these."""
         return {"actor": self._actor_optimizer, "critic": self._critic_optimizer}
+
+    def _inference_network(self) -> InferencePolicy:
+        """The actor: ReLU on every layer but the last, then ``bias + scale · tanh``."""
+        actor = self._networks()["actor"]
+        count = layer_count(actor)
+        return InferencePolicy(
+            layers=tuple(
+                DenseLayer(actor[f"W{i}"], actor[f"b{i}"], relu=i < count - 1) for i in range(count)
+            ),
+            head="tanh_scale",
+            action_low=self.action_low,
+            action_high=self.action_high,
+        )
 
     def _checkpoint_arrays(self) -> dict[str, Any]:
         """Everything training needs to resume beyond the generators: every network, every Adam

@@ -35,9 +35,9 @@ def test_trainer_and_challenges_do_not_import_matplotlib():
     )
 
 
-@pytest.mark.parametrize("module", ["train", "record", "benchmark"])
+@pytest.mark.parametrize("module", ["train", "record", "export", "benchmark"])
 def test_entry_points_do_not_import_matplotlib(module):
-    """train.py, record.py and src/benchmark.py load matplotlib only when they plot: pyplot costs
+    """train.py, record.py, export.py and src/benchmark.py load matplotlib only when they plot: pyplot costs
     about 0.8 s of start-up on the Jetson. A fresh process, as users get the modules."""
     code = (
         "import sys; sys.path.insert(0, 'src'); "

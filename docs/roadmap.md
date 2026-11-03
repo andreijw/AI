@@ -73,17 +73,31 @@ an item.
   - **Known edge cases**: Catastrophic forgetting across difficulty stages; oscillation near threshold boundaries.
   - **Out of scope**: Adversarial environment generation; automatic domain randomization (ADR) meta-policies.
 
-- [ ] **Lightweight Embedded Inference Export (C Header & ONNX)**
-  - **Description**: Export trained pure NumPy model parameters into zero-dependency standalone C header files
-    (`policy_weights.h`) and standard ONNX formats for edge microcontroller and robotics deployment.
-  - **Acceptance criteria**:
-    - CLI export script `scripts/export_c_header.py` converting checkpoints into self-contained C forward pass code.
-    - Standalone C verification harness compiled via GCC/Clang and checked against NumPy numerical output (tolerance
-      $10^{-5}$).
-    - Export utility for standard ONNX format compatible with visualizers (Netron).
-    - Unit tests in `tests/test_export.py`.
-  - **Known edge cases**: Floating-point precision discrepancies (FP32 vs FP64); activation clipping overflows.
-  - **Out of scope**: Quantization-aware training (INT8); target-specific MCU hardware optimizations (CMSIS-NN).
+- [~] **Lightweight Embedded Inference Export (C Header & ONNX)**
+  - **Progress (2026-11-02)**: the C header PR is done (`export.py`, `rl_core.export`; CHANGELOG.md, 2026-11-02).
+    Open: the ONNX export, which waits for the maintainer's decision on the `onnx` dependency.
+  - **Description**: Export a trained agent's greedy policy into a zero-dependency standalone C header
+    (`policy_weights.h`) for edge microcontroller and robotics deployment, and later into ONNX. Two PRs: the C header
+    first (`feature/c-header-export`), then ONNX, which needs the `onnx` package as a new dependency (the
+    maintainer's decision, not yet taken).
+  - **Acceptance criteria (C header PR)**:
+    - A CLI `export.py` beside `train.py` and `record.py`, taking a run config and a checkpoint as `record.py` does
+      (`--challenge` included), that writes one header holding the weights
+      as `float` arrays and a C forward pass: the network's raw outputs and the greedy action, the same action
+      `select_action(obs, training=False)` takes.
+    - Every NumPy agent with a network: REINFORCE, Actor-Critic and PPO (discrete and continuous), DQN (plain and
+      dueling), DDPG and TD3; a checkpoint from the PyTorch backend exports through the NumPy agent, without PyTorch.
+      Observation normalisation, when the agent uses it, is folded into the header. The random agents are refused.
+    - A C verification harness compiled with GCC or Clang that runs the header on observations from the challenge's
+      environment and compares outputs with NumPy's float64 forward pass (tolerance $10^{-5}$, absolute and relative)
+      and greedy actions with the agent's (a discrete action may differ only where the top two outputs are within the
+      tolerance; such near-ties are counted and reported).
+    - Unit tests in `tests/test_export.py`, compiling C where a compiler is found and skipping where not.
+  - **Known edge cases**: Floating-point precision discrepancies (FP32 vs FP64); ties between greedy actions (the C
+    code takes the first maximum, as `np.argmax` does); activation clipping overflows (`tanh` of large inputs).
+  - **Out of scope**: Quantization-aware training (INT8); target-specific MCU hardware optimizations (CMSIS-NN);
+    velocity masking, frame stacking and frame differences in C (the header takes the agent's input vector, after
+    them, and names the settings it was trained with); the ONNX export (second PR).
 
 ### Phase 7 — Challenge Ladder
 

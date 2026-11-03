@@ -10,6 +10,7 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 
 from .base_agent import BaseAgent
 from .config_values import positive_int
+from .inference import DenseLayer, InferencePolicy
 from .optim import Optimizer, optimizer_from_config
 from .softmax import stable_softmax
 
@@ -256,6 +257,16 @@ class ActorCriticBase(BaseAgent):
     @abstractmethod
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """Update agent parameters using collected trajectory data."""
+
+    def _inference_network(self) -> InferencePolicy:
+        """ReLU hidden layer, then the policy head's logits (the value head is not exported)."""
+        return InferencePolicy(
+            layers=(
+                DenseLayer(self._W1, self._b1, relu=True),
+                DenseLayer(self._W_pi, self._b_pi, relu=False),
+            ),
+            head="argmax",
+        )
 
     def _checkpoint_arrays(self) -> dict[str, Any]:
         arrays: dict[str, Any] = {k: np.asarray(v) for k, v in self._parameters().items()}
