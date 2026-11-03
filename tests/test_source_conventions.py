@@ -479,6 +479,64 @@ def test_the_torch_scan_covers_a_backend_module():
     )
 
 
+# onnx and onnxruntime are the optional onnx extra: only this module imports them, and only inside
+# its functions, so the rest of the export (and the C header) works without them.
+ONNX_MODULE = "rl_core/export/onnx_model.py"
+
+
+def onnx_imports(source: str) -> list[tuple[int, str, bool]]:
+    """(line, what, at module level) for every import of onnx or onnxruntime."""
+    tree = ast.parse(source)
+    top_level = {id(node) for node in tree.body}
+    found: list[tuple[int, str, bool]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0:
+            names = [node.module or ""]
+        else:
+            continue
+        for name in names:
+            if name.split(".")[0] in ("onnx", "onnxruntime"):
+                found.append((node.lineno, name, id(node) in top_level))
+                break
+    return found
+
+
+def test_only_the_onnx_module_imports_onnx_and_only_inside_functions():
+    onnx_module = REPO_ROOT / "src" / ONNX_MODULE
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}:{line} imports {module}"
+        for path in SOURCE_FILES
+        for line, module, top_level in onnx_imports(path.read_text(encoding="utf-8"))
+        if path != onnx_module or top_level
+    ]
+    assert not offenders, (
+        f"Only {ONNX_MODULE} may import onnx or onnxruntime, inside its functions:\n"
+        + "\n".join(offenders)
+    )
+
+
+def test_the_onnx_import_scan_sees_every_spelling():
+    source = (
+        "import onnx\n"
+        "from onnx import helper\n"
+        "import onnxruntime as ort\n"
+        "def f():\n    from onnx.reference import ReferenceEvaluator\n"
+        "import onnxish_name_is_fine\n"
+    )
+    assert [(line, top) for line, _, top in onnx_imports(source)] == [
+        (1, True),
+        (2, True),
+        (3, True),
+        (5, False),
+    ]
+
+
+def test_the_onnx_scan_covers_the_onnx_module():
+    assert (REPO_ROOT / "src" / ONNX_MODULE) in SOURCE_FILES
+
+
 def test_importing_the_framework_does_not_load_torch():
     """Training, the challenges and every agent import without PyTorch, installed or not."""
     import subprocess

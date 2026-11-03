@@ -137,8 +137,9 @@ compute capability 8.0 run on 8.7, so this works without a warning. Jetson AI La
 (`pypi.jetson-ai-lab.io`) had no JetPack 7 PyTorch wheels on 2026-10-25, so it was not needed. The wheel brings its
 own CUDA 13.2 libraries (cuBLAS, cuDNN 9.24), so the system toolkit is not used.
 
-In the repository, `./setup.sh --profile gpu` does all of this: it builds `.venv-gpu` with `.[dev,video,torch]`
-from that index and runs the checks. `.venv` stays the CPU profile, without PyTorch, as CI is.
+In the repository, `./setup.sh --profile gpu` does all of this: it builds `.venv-gpu` with
+`.[dev,video,torch,box2d,onnx]` from that index and runs the checks. `.venv` stays the CPU profile, without
+PyTorch, as CI is.
 
 To reproduce the agent table (the first table's scripts are at commit `8afafc5`):
 
