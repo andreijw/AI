@@ -4,6 +4,8 @@ reference Adam optimiser."""
 import importlib
 import importlib.util
 import math
+import os
+import shutil
 import sys
 import uuid
 from collections.abc import Callable, Mapping
@@ -205,6 +207,14 @@ needs_torch = pytest.mark.skipif(
 # CI.
 needs_box2d = pytest.mark.skipif(
     importlib.util.find_spec("Box2D") is None, reason="Box2D is not installed (./setup.sh)"
+)
+
+# The C export's compiled tests need a C compiler: $CC, cc, gcc or clang (CI's Linux runner has gcc;
+# test_export.test_ci_has_a_c_compiler holds it to that). MSVC's cl is not supported.
+needs_cc = pytest.mark.skipif(
+    sys.platform == "win32"
+    or not (os.environ.get("CC") or any(shutil.which(cc) for cc in ("cc", "gcc", "clang"))),
+    reason="no C compiler (set CC, or install gcc or clang)",
 )
 
 

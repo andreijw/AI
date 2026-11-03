@@ -9,6 +9,7 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 
 from .base_agent import BaseAgent
 from .config_values import positive_int
+from .inference import DenseLayer, InferencePolicy
 from .optim import Optimizer, optimizer_from_config
 from .returns import discounted_returns
 from .softmax import stable_softmax
@@ -223,6 +224,16 @@ class ReinforceAgent(BaseAgent):
             self._b2 -= steps["b2"]
 
         return {"policy_loss": float(total_loss / n_steps)}
+
+    def _inference_network(self) -> InferencePolicy:
+        """ReLU hidden layer, then the logits; softmax keeps their argmax, the greedy action."""
+        return InferencePolicy(
+            layers=(
+                DenseLayer(self._W1, self._b1, relu=True),
+                DenseLayer(self._W2, self._b2, relu=False),
+            ),
+            head="argmax",
+        )
 
     def _checkpoint_arrays(self) -> dict[str, Any]:
         arrays: dict[str, Any] = {"W1": self._W1, "b1": self._b1, "W2": self._W2, "b2": self._b2}

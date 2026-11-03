@@ -17,6 +17,7 @@ from rl_core.seeding import (
 from .base_agent import BaseAgent
 from .bounds import action_bounds
 from .config_values import flag, non_negative_int, positive_int
+from .inference import DenseLayer, InferencePolicy
 from .optim import Adam, anneal_fraction, anneal_steps_from_config
 from .returns import discounted_returns, gae
 
@@ -303,6 +304,20 @@ class ContinuousActorCriticBase(BaseAgent):
             "b_v": grad_b_v,
         }
         return grads, v_diff
+
+    def _inference_network(self) -> InferencePolicy:
+        """ReLU hidden layer, then the mean head: clipped to the bounds, or with ``bounded_mean``
+        squashed into them (``tanh_scale``). The standard deviation and value head are not
+        exported."""
+        return InferencePolicy(
+            layers=(
+                DenseLayer(self._W1, self._b1, relu=True),
+                DenseLayer(self._W_mu, self._b_mu, relu=False),
+            ),
+            head="tanh_scale" if self.bounded_mean else "clip",
+            action_low=self.action_low,
+            action_high=self.action_high,
+        )
 
     def _checkpoint_arrays(self) -> dict[str, Any]:
         return {

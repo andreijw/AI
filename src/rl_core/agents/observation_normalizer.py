@@ -19,6 +19,12 @@ CLIP = 10.0
 INITIAL_COUNT = 1e-4
 
 
+def standardize(x: np.ndarray, mean: np.ndarray, scale: np.ndarray) -> np.ndarray:
+    """``(x - mean) / scale`` clipped to ±10, as a new float64 array; ``scale`` is
+    ``sqrt(var + 1e-8)``."""
+    return np.clip((np.asarray(x, dtype=np.float64) - mean) / scale, -CLIP, CLIP)
+
+
 class RunningMeanStd:
     """The running mean and variance of ``dim``-entry observations, in float64."""
 
@@ -38,8 +44,12 @@ class RunningMeanStd:
 
     def normalize(self, x: np.ndarray) -> np.ndarray:
         """``x`` centred and scaled by the statistics, clipped to ±10, as a new float64 array."""
-        x = np.asarray(x, dtype=np.float64)
-        return np.clip((x - self.mean) / np.sqrt(self.var + EPSILON), -CLIP, CLIP)
+        return standardize(x, self.mean, self.scale)
+
+    @property
+    def scale(self) -> np.ndarray:
+        """``sqrt(var + 1e-8)``, what :meth:`normalize` divides by."""
+        return np.sqrt(self.var + EPSILON)
 
     def state(self) -> dict[str, np.ndarray]:
         """The statistics as arrays, by name (``mean``, ``var``, ``count``), for a checkpoint."""

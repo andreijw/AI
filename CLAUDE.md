@@ -95,7 +95,8 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
   (`tests/test_torch_ddpg_agent.py`, skipped elsewhere) and for `train.py` runs with `backend: torch`. Both build Box2D
   (`box2d-py` from source with `swig`) before the extras. CI installs neither PyTorch nor Box2D, and their tests skip
   there (`needs_torch`, `needs_box2d`/`env_marks` in `tests/helpers.py`; maintainer's decisions, 2026-10-25 and
-  2026-10-27).
+  2026-10-27). The C export tests (`needs_cc`) skip on Windows and where no `CC`, `cc`, `gcc` or `clang` is found;
+  CI's Linux runner has gcc, and `test_ci_has_a_c_compiler` fails there if it ever does not.
 
 ## Tool Mapping (GEMINI.md → Claude Code)
 

@@ -133,6 +133,16 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
 
 ## Pass 6: docs and the PR itself
 
+- **Every file the diff changes is checked against the docs that describe it.** List the changed files
+  (`git diff <base>...HEAD --name-only`). For each one, `Grep` every `*.md` file, `configs/*.yaml` comments
+  and the `.claude/skills/` files for its path, its module name, and each public name, flag, config key,
+  default, output path and printed message the diff added, changed or removed. Read every hit and confirm
+  it is still true of the code as it now stands; a stale sentence is a Warning, citing both `path:line`s.
+  Where a doc gives a command and the output to expect (a `TESTING.md` row, a README example), run it if it
+  takes under a minute, with outputs sent to a scratch directory, and say which ones you did not run. On
+  2026-11-02 `TESTING.md` `EXP-1` said exporting a random agent "stops with 'RandomAgent has no network to
+  export'". The test used a checkpoint saved by a random agent and passed. With the checkpoint the row names,
+  the command crashed with a `KeyError` before it got there. Only running the documented command found it.
 - The roadmap item matches what was built, including what was dropped.
 - `TESTING.md` has a row, with a runnable command and an expected number, for anything a person should now
   run.

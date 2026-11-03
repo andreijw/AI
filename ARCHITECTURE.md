@@ -108,6 +108,7 @@ flowchart TD
     subgraph CLI ["Entrypoints"]
         Train["train.py"]
         Record["record.py"]
+        Export["export.py"]
         Bench["src/benchmark.py"]
     end
 
@@ -137,6 +138,8 @@ flowchart TD
             Viz["visualization.py"]
             Smooth["smoothing.py"]
         end
+
+        ExportPkg["export: c_header, verify, rollout"]
     end
 
     Train --> Core
@@ -144,6 +147,9 @@ flowchart TD
     Bench --> Core
     Train --> Challenges
     Record --> Challenges
+    Export --> Challenges
+    Export --> ExportPkg
+    ExportPkg --> Agents
     Bench --> Challenges
     Trainer --> Challenges
     Trainer --> Agents
@@ -172,6 +178,8 @@ classDiagram
         +save(path)
         +load(path)
         +record_observation_settings(settings, defaults)
+        +inference_policy() InferencePolicy
+        #_inference_network() InferencePolicy
         #_checkpoint_arrays()* dict
         #_load_checkpoint_arrays(data)*
     }
@@ -469,3 +477,7 @@ plots/
 2. Implement `update(trajectory: list[dict[str, Any]]) -> dict[str, float]` with closed-form or autodiff gradients.
 3. Expose the agent in `src/rl_core/agents/__init__.py`.
 4. Register the agent in the challenge's `AGENT_CLASSES` map.
+5. To make it exportable (`export.py`), implement `_inference_network()`: its greedy policy as an `InferencePolicy`
+   (`rl_core/agents/inference.py`) of dense layers, ReLU between them, and an `argmax`, `clip` or `tanh_scale`
+   head. `BaseAgent.inference_policy()` adds the observation normalisation and settings; without the method the
+   agent is refused with "has no network to export".

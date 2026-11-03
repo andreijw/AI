@@ -16,6 +16,22 @@ Acrobot-v1) and
 
 ### Added
 
+- **C header export** (`feature/c-header-export`), the first of two PRs for the embedded-export item (ONNX
+  follows; it needs `onnx` as a new dependency): `python export.py --config <config> --checkpoint <checkpoint>
+  --output policy_weights.h` writes a trained agent's greedy policy as one C99 header with the weights as exact
+  float32 hexadecimal literals and `policy_outputs` and `policy_act` (an `int` action for discrete agents, an array
+  for continuous ones), observation normalisation included. Every agent with a network exports (REINFORCE,
+  Actor-Critic and PPO in both kinds, DQN plain and dueling, DDPG, TD3), PyTorch-backend checkpoints through the
+  NumPy agent; the random agents are refused. Each agent describes its policy through a new
+  `BaseAgent.inference_policy()` (`rl_core/agents/inference.py`), and dueling DQN is folded into one network whose
+  outputs are its Q-values. `export.py` then plays 3 greedy episodes (`--verify-episodes`), compiles the header
+  with gcc or clang and compares it with NumPy (1e-5 absolute plus 1e-5 relative; discrete near-ties counted
+  apart). On this machine's existing checkpoints of 11 runs over six of the seven challenges, every export passed
+  with no action mismatch (the MountainCar DQN checkpoint did not load under `configs/mountaincar_dqn.yaml`: it
+  holds a 100,000-transition replay buffer where the config sets 10,000); the largest absolute error was 7.3e-5,
+  on LunarLander DQN Q-values near 100 (TESTING.md `EXP-1`). The header takes the observation after
+  `mask_velocity`, `frame_stack` and `frame_deltas` and names them; it does not apply them.
+
 - **Observation normalisation and frame differences** (`feature/observation-normalization`,
   `feature/frame-deltas`): masked `frame_stack: 4` CartPole PPO solved 0 of 5 (CHANGELOG.md, 2026-11-01). The
   `training-doctor` diagnosis: the policy kept its entropy (about 0.41) and nothing went non-finite, but the value loss
