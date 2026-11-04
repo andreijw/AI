@@ -53,6 +53,9 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
   [.claude/settings.json](.claude/settings.json)) and add this project's knowledge. Project review rules C1–C6 live
   in [.brooks-lint.yaml](.brooks-lint.yaml). Use its read-only modes only (`brooks-review`, `brooks-audit`,
   `brooks-test`, `brooks-debt`); never `brooks-sweep`.
+- **Parallel work** (`dev-loop`, "Working in parallel"): spawn subagents, each in its own worktree, when work
+  splits into independent parts; propose a workflow in the plan, and run one only when the maintainer says
+  "use a workflow".
 - Run `architect` and `pr-reviewer` in a **fresh agent**: tell it to read the skill's `SKILL.md` and give it the plan
   or branch, since it cannot see the conversation.
 - If the plugin is missing, the skills still run with the project checks; say so and point to

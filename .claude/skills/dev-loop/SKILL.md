@@ -182,6 +182,12 @@ After they have committed: push the branch, then open the PR against `develop` w
 `.github/pull_request_template.md`, with the quick summary as the first lines of its Description and every
 ticked box true. Watch `gh pr checks` until it finishes, and fix a red check without being asked.
 
+When several PRs are open at once they share `CHANGELOG.md` and `docs/roadmap.md`. After each one merges,
+merge `develop` into every other open branch yourself, resolve the conflicts keeping both sides' entries, and
+check that each CHANGELOG entry and roadmap edit of both is still there before the maintainer merges it. On
+2026-11-04 a resolution kept one side: #172's CHANGELOG entry was lost and its finished item stayed in the
+roadmap until a follow-up PR restored them.
+
 Then clean up what the work left behind (the maintainer's decision, 2026-11-04): the git worktrees made for
 it (`git worktree remove <path>` once their branch is committed or abandoned; save an abandoned diff as a
 patch first), local branches that were abandoned or have merged (`git branch -d`), and scratch or
@@ -189,6 +195,46 @@ patch first), local branches that were abandoned or have merged (`git branch -d`
 folder a document points to. Never touch `checkpoints/`, `logs/`, `videos/` or `plots/` in the maintainer's
 checkout, or anything this work did not create. What you cannot remove (a denied deletion), list in the
 hand-off with the command for the maintainer to run.
+
+## Working in parallel
+
+The maintainer wants the loop to go faster where the work allows it (2026-11-04). The touchpoints do not
+change: one pick, one plan approval and one commit per item, batched when several items run together.
+
+**Subagents are your call.** Spawn them when the work splits into parts that do not depend on each other:
+the plan review and the PR review (always, as above), two or more roadmap items picked together (one agent
+per item), or a search across many files. Not for a few tool calls you could make yourself. Brief each one
+as a peer, since it sees only your prompt:
+
+- the skill it follows (`algorithm-crafter`, `training-doctor`, `test-crafter` ...) and the roadmap item;
+- its own worktree, branched from `develop` (`git worktree add -b <branch> ~/rl-experiments/<item>-repo
+  origin/develop`), with `PYTHONPATH=$PWD/src` for every Python tool, since the editable install points at the
+  main checkout;
+- what it must not touch: `CHANGELOG.md` and `docs/roadmap.md` (you write them for every item at hand-off,
+  so parallel branches do not conflict), the maintainer's `checkpoints/`, `logs/`, `videos/` and `plots/`, and
+  `git commit`;
+- no training run longer than a few minutes unless you scheduled it: the machine has 6 cores, so keep at most
+  3 runs going at once across all agents, each with `OPENBLAS_NUM_THREADS=1`.
+
+**The PR stage splits the same way.** Once the code passes the tests, run in parallel:
+
+- `doc-sync` in a subagent, in the branch's worktree: give it the diff (`git diff origin/develop`) and the facts
+  that changed (a key, a default, a result and its seeds). It edits the docs and reports what it changed and
+  what it could not settle. Meanwhile you run the mutation, duplication and cleanup gates.
+- Then the `pr-reviewer` agent on code and docs together. Beside it, for a PR that quotes results, a second
+  agent that checks every number in `CHANGELOG.md`, `README.md`, `TESTING.md` and config comments against
+  the results files (`benchmark_metrics.json`, the metrics logs), and for a large test change a third that runs
+  `brooks-lint:brooks-test` on the changed test files.
+
+Review the edits yourself (`git diff`), fix what the reports find, and rerun the gates the fixes could affect.
+
+Check what comes back before relying on it. A subagent's result is a claim, and its mistakes read as
+confidently as its findings.
+
+**Workflows only when the maintainer asks.** A workflow fans out many agents and costs far more tokens, and
+Claude Code runs one only on an explicit request ("use a workflow"). When a batch would gain from one (three
+or more independent items, or a review or experiment fan-out with a verify step for each finding or arm),
+say so in the plan with the rough number of agents and why, and run it only once the maintainer says to.
 
 ## Honesty in the hand-off
 
