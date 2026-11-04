@@ -82,7 +82,8 @@ To optimize token usage and context window limits:
   (e.g., `sync_workflow_docs.py`), and `pytorch_timing/`, the DDPG timing scripts behind
   `docs/pytorch_jetson_timing.md` (`time_ddpg.py`; its `torch` mode needs a separate PyTorch environment).
 * **`docs/`** (located at [docs/](docs/)): Feature guides, setup documents, summaries,
-  and roadmaps (`roadmap.md`, `environment_setup_summary.md`, `pytorch_jetson_timing.md`).
+  and roadmaps (`roadmap.md`, `agents.md` (how each agent works), `environment_setup_summary.md`,
+  `pytorch_jetson_timing.md`).
 * **`examples/`** (located at [examples/](examples/)): Demonstration scripts showcasing
   features (e.g., [demo_env_features.py](examples/demo_env_features.py)).
 * **`train.py`** (located at [train.py](train.py)): The main command-line entrypoint for

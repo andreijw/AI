@@ -1,0 +1,335 @@
+# How Each Agent Works
+
+A short technical guide to every agent in `src/rl_core/agents/`: the idea, the update as this code computes it, what
+this repo's version adds or leaves out, what was measured, and what was learned the hard way. It is kept current: a
+new agent adds its section, and a change to an agent's update, options, committed config or measured result updates
+its section, in the same pull request (the `doc-sync` skill).
+
+Terms used throughout:
+
+- **Solved** means the training reward averaged over 100 consecutive episodes reached the challenge's threshold
+  (475 on CartPole-v1, -200 on Pendulum-v1, -100 on Acrobot-v1, -110 on MountainCar-v0, 200 on LunarLander, 90 on
+  MountainCarContinuous); **held** means the last 100 episodes still average at or above it. **Greedy evaluation**
+  plays the policy without exploration on a separate environment.
+- **Terminated** is a true end (the pole fell, the lander crashed); **truncated** is a time-limit cut. A value target
+  bootstraps from the next state after a cut and not after a termination, unless a section says otherwise.
+- Results come from `src/benchmark.py` on seeds 1 to 5 unless they say otherwise; the dated `(CHANGELOG.md, <date>)`
+  entry has the full numbers.
+
+| Agent | Actions | Learns | Committed configs |
+| :--- | :--- | :--- | :--- |
+| REINFORCE | discrete | policy, from whole-episode returns | CartPole |
+| Actor-Critic | discrete, continuous | policy and state value | CartPole, Pendulum |
+| PPO | discrete, continuous | policy and state value, clipped reuse of rollouts | CartPole, Pendulum, Acrobot |
+| DQN | discrete | action value, from replay | CartPole, Acrobot, MountainCar, LunarLander |
+| DDPG | continuous | deterministic policy and action value, from replay | Pendulum, MountainCarContinuous |
+| TD3 | continuous | as DDPG, twin critics and delayed actor | Pendulum, MountainCarContinuous, LunarLanderContinuous |
+
+## REINFORCE (`ReinforceAgent`, `src/rl_core/agents/reinforce_agent.py`)
+
+**Idea.** Learns a softmax policy directly from sampled episodes (Williams 1992): after each episode it raises the
+probability of actions followed by above-average return and lowers the others. No value function is needed. The
+estimate is unbiased but noisy, since every action is credited with everything that happened after it.
+
+**Update.** Once per finished episode, one optimizer step:
+
+```text
+G_t    = r_t + gamma * G_{t+1}                    (Monte Carlo return; the episode's last step ends it)
+Ghat_t = (G_t - mean(G)) / std(G)                 (a constant baseline; mean only if std <= 1e-8)
+L      = -(1/T) * sum_t Ghat_t * log pi(a_t | s_t)    (Ghat held constant)
+```
+
+A time-limit cut is not bootstrapped: the returns simply stop at the last step.
+
+**In this repo.** `obs -> hidden_dim (ReLU) -> action_dim -> softmax` (`hidden_dim` 128), sampled in training and
+argmax in evaluation. `optimizer` defaults to plain SGD; `adam` and `max_grad_norm` are options; there is no entropy
+term and no annealing. `normalize_observations` (running mean and variance of the inputs) is available to every agent.
+
+**What was measured.** `configs/cartpole_reinforce.yaml` (Adam, 500,000 steps): 4 of 5 seeds solve and 3 hold;
+greedy evaluation 497 ± 5 (`docs/benchmarks/cartpole_results.md`).
+
+**Lessons.** Plain SGD solved 0 of 5 seeds in 2,000 episodes where Adam solved 5 of 5 (CHANGELOG.md, 2026-10-15).
+Seeding moved to named random streams per concern after a seed was found sharing numbers with Gymnasium's
+`reset(seed=)`, and the benchmarks were republished (CHANGELOG.md, 2026-10-19).
+
+## Actor-Critic, discrete (`ActorCriticAgent`, `src/rl_core/agents/actor_critic_agent.py`)
+
+**Idea.** REINFORCE plus a learned critic V(s), subtracted from the return as a state-dependent baseline, which cuts
+the gradient's variance far more than a single mean. Actor and critic share a hidden layer.
+
+**Update.** Once per episode, one optimizer step on the episode-averaged gradient:
+
+```text
+G_t = Monte Carlo return (no bootstrap, no GAE);   A_t = G_t - V(s_t)   (held constant in the actor term)
+L   = (1/T) * sum_t [ -A_t * log pi(a_t|s_t) + c_v * 0.5 * (V(s_t) - G_t)^2 - c_e * H(pi(.|s_t)) ]
+```
+
+`c_v` is `value_coef` (0.5) and `c_e` is `entropy_coef` (0.01); advantages are not normalised. Like REINFORCE it
+does not bootstrap a time-limit cut, unlike the continuous Actor-Critic and PPO.
+
+**In this repo.** A shared `obs -> hidden_dim (ReLU)` trunk (`ActorCriticBase`) with a softmax policy head and a
+scalar value head; the hand-written backward pass meets in the shared layer. Only the policy is exported.
+
+**What was measured.** `configs/cartpole_actor_critic.yaml` (Adam, 500,000 steps): 5 of 5 seeds solve, at 209k to
+456k steps, and 4 hold; greedy evaluation 500 (`docs/benchmarks/cartpole_results.md`).
+
+**Lessons.** Adam reached 475 at episodes 490 to 839 where SGD needed 906 to 1,269 (CHANGELOG.md, 2026-10-15). A
+"collapse" in a test was the test's fault: a fixed batch kept an action the policy had stopped choosing, so the
+-A·log π term had no lower bound. Tests now sample each batch from the current policy (CHANGELOG.md, 2026-10-29).
+
+## Actor-Critic, continuous (`ContinuousActorCriticAgent`, `src/rl_core/agents/continuous_actor_critic.py`)
+
+**Idea.** The same actor-critic with a diagonal Gaussian policy for continuous actions (Pendulum's torque): the
+network gives a state-dependent mean, and a separate learned log standard deviation sets the exploration noise.
+With `n_steps` it learns from short bootstrapped chunks, as A2C does.
+
+**Update.** With `n_steps: 0`, once per episode on Monte Carlo returns with normalised advantages. With `n_steps: N`
+the episode is replayed in chunks of N steps, one Adam step per chunk:
+
+```text
+A = gae(reward_scale * r, V, gamma, lambda, V(next state)),   R = A + V    (A, R held constant)
+L = -mean(log N(a | mu, sigma^2) * A) + c_v * 0.5 * mean((V - R)^2) - c_e * H,   H = sum(log_std + 0.5*log(2*pi*e))
+```
+
+A chunk bootstraps from the next state unless the episode truly terminated. With `training.update_every` equal to
+`n_steps` each chunk is trained on as it is collected (true A2C); any other value is refused.
+
+**In this repo.** A `hidden_dim` ReLU trunk, a mean head and a value head, and a state-independent `log_std`
+(started at `init_log_std`, kept within [-20, 2]). `bounded_mean: true` makes the mean `bias + scale * tanh(z)`
+inside the action bounds. Training actions are the unclipped sample (the environment clips), so the
+log-probability matches what was sampled; evaluation plays the mean. Always Adam with a global-norm clip
+(`max_grad_norm` 0.5); `anneal_steps` decays the learning rate linearly to 0; `reward_scale` multiplies the rewards.
+
+**What was measured.** `configs/pendulum_actor_critic.yaml` follows rl-zoo's A2C (`n_steps` 8, `gae_lambda` 0.9,
+`gamma` 0.9, lr 7e-4 annealed over 1,000,000 steps, `init_log_std` -2, `reward_scale` 0.05) with observation
+normalisation since 2026-11-04. It beats the random agent (greedy evaluation -170 ± 26 against -1,293) but does not
+solve: the training average ends near -283 (CHANGELOG.md, 2026-11-04).
+
+**Lessons.** A bounded mean and 8-step chunks made it beat random (CHANGELOG.md, 2026-10-18). Without the entropy
+bonus the log std collapses. True A2C (`update_every: 8`) and 50-step chunks did not close the gap to -200; rl-zoo's
+8 parallel environments are untried (CHANGELOG.md, 2026-10-30 and 2026-11-04; roadmap, "Parallel environments").
+
+## PPO, discrete and continuous (`PPOAgent`, `ppo_agent.py`; `ContinuousPPOAgent`, `continuous_ppo.py`)
+
+**Idea.** Proximal Policy Optimization (Schulman et al. 2017) reuses each rollout for several passes, and clips the
+probability ratio pi/pi_old so that no pass moves the policy far from the one that collected the data. That makes it
+far more sample-efficient and stable than a plain policy gradient. Both variants use the Actor-Critic networks above.
+
+**Update.** Episodes are buffered until the rollout holds at least `rollout_steps` transitions, then:
+
+```text
+A_t = gae(r, V_old, gamma, lambda),   R_t = A_t + V_old(s_t)        (once per rollout, then held constant)
+A_t <- (A_t - mean(A)) / (std(A) + 1e-8)
+ratio_t = exp(log pi(a_t|s_t) - log pi_old(a_t|s_t))
+L = -mean( min(ratio_t * A_t, clip(ratio_t, 1 - eps, 1 + eps) * A_t) ) + c_v * 0.5 * mean((V - R)^2) - c_e * mean(H)
+```
+
+repeated for `ppo_epochs` passes over shuffled mini-batches. Each episode ends its own GAE trace; a time-limit cut
+adds gamma·V(next state) to its last reward, a termination does not. `anneal_steps` decays the learning rate and the
+clip range together, linearly to 0.
+
+**In this repo.** Discrete: softmax policy, `ppo_epochs` 4, `gae_lambda` 1.0 by default, SGD or Adam, `minibatch_size`
+(the whole rollout by default). Continuous: the Gaussian policy above, always Adam, `ppo_epochs` 8, `gae_lambda` 0.95,
+`batch_size` 64, `reward_scale`; a log-ratio beyond ±20 is treated as stale and gets no gradient. The checkpoint holds
+the partly filled rollout and the annealing counter, so a resumed run continues exactly.
+
+**What was measured.**
+
+- CartPole, `configs/cartpole_ppo.yaml` (rl-zoo's settings on one environment: 256-step rollouts, 20 epochs, gamma
+  0.98, lambda 0.8, Adam with annealing, 200,000 steps): 5 of 5 solve at 72k to 90k steps and hold; greedy 500.
+- Pendulum, `configs/pendulum_ppo.yaml` (2,048-step rollouts, 10 epochs, gamma 0.9, `reward_scale` 0.1, 200,000
+  steps): 5 of 5 solve and 4 hold; greedy evaluation -188 ± 35 (`docs/benchmarks/pendulum_results.md`).
+- Acrobot, `configs/acrobot_ppo.yaml` (rl-zoo's settings, 500,000 steps): 5 of 5 solve and hold, greedy -86 ± 9
+  (CHANGELOG.md, 2026-10-22).
+
+**Lessons.**
+
+- Pendulum PPO needed five fixes at once: the log-probability of the clipped action gave NaN, the initial mean sat
+  outside the bounds, rewards were unscaled, the time limit was treated as terminal, and gamma 0.99 became 0.9
+  (CHANGELOG.md, 2026-10-15). Multi-episode rollouts then took it from 0 of 5 to 5 of 5 (2026-10-18).
+- Bootstrapping CartPole's 500-step cuts cut the mean steps to solve from 108,325 to 79,556 (2026-10-20).
+- On CartPole with the velocities masked, PPO solved 0 of 5 until `normalize_observations` and `frame_deltas` were
+  on, then 5 of 5 (2026-11-02). On Pendulum, normalisation made it worse (held 2 of 5 against 4): one seed learned and
+  then slid to about -1,000, cause open (2026-11-04; roadmap, "Why Pendulum PPO collapses").
+
+## DQN (`DQNAgent`, `src/rl_core/agents/dqn_agent.py`)
+
+**Idea.** Learns the action value Q(s, a), the discounted return of taking a in s and then acting greedily, with a
+small network trained off-policy by regression onto a one-step Bellman target. A replay buffer (random mini-batches
+break the correlation between consecutive steps) and a slowly moving target network (the target does not chase the
+weights being trained) keep that regression stable. It acts epsilon-greedily on Q.
+
+**Update.** For a mini-batch of B transitions sampled uniformly from the replay buffer:
+
+```text
+y = r + gamma * (1 - terminated) * max_a' Q_target(s', a')                     (default)
+y = r + gamma * (1 - terminated) * Q_target(s', argmax_a' Q_online(s', a'))    (double_q: true)
+L = mean_B( 0.5 * (Q_online(s, a) - y)^2 )                                     (y held constant)
+```
+
+Only a true termination stops the bootstrap: a time-limit cut is stored as not terminal. The loss is squared error,
+not SB3's Huber. The trainer calls `update` once per episode (or every `training.update_every` steps, below). Each
+call stores the new transitions and, once the buffer holds `min_buffer_size`, takes one gradient step, or
+`max(1, int(n_stored * updates_per_step))` capped at `max_updates_per_call` (64) with `updates_per_step`, each on a
+fresh mini-batch.
+
+**In this repo.**
+
+- Network: `obs -> hidden_dim (ReLU) -> action_dim`, He-initialised, with a target copy. `hidden_dim` defaults to
+  128; the Acrobot, MountainCar and LunarLander configs use one layer of 256 where rl-zoo has two.
+- Target network: a hard copy every `target_update_frequency` gradient steps (default 100; gradient steps, not
+  environment steps), or with `tau` in (0, 1] a Polyak average after every step.
+- Exploration, two exclusive schedules: `exploration_steps` (epsilon falls linearly per training action, from
+  `epsilon_start` 1.0 to `epsilon_end` 0.02) or `epsilon_decay` (0.995, multiplied once per `update` call that
+  trained, so once per episode). Evaluation is greedy and leaves epsilon alone.
+- Opt-in options: `double_q` (targets above); `dueling` (a second `hidden_dim` value stream on the observation and
+  `Q = V + A - mean_a A`, Wang et al. 2016; twice the hidden units, the same depth); `normalize_observations` (the
+  buffer stores raw observations and normalises each sampled batch with the current statistics); `anneal_steps`
+  (the step size decays linearly to 0 over that many transitions).
+- Optimizer: plain SGD with an element-wise clip (`grad_clip_value` 10.0) by default; every committed config uses
+  `optimizer: adam` with a global-norm clip (`max_grad_norm` 10.0).
+- Checkpoint: both networks, epsilon and the step counters, the optimizer state, the replay buffer and every
+  generator, so a resumed run continues exactly. A dueling checkpoint loads only into a dueling agent.
+
+**What was measured** (through the benchmark, 100-episode rule):
+
+- CartPole (`configs/cartpole_dqn.yaml`, Adam, 300,000 steps): solves and holds on 5 of 5 seeds, at 144k to 183k
+  steps, greedy evaluation 500 (CHANGELOG.md, 2026-10-18 and 2026-10-19).
+- Acrobot (`acrobot_dqn.yaml`, 100,000 steps): solves and holds on 5 of 5 (final -90 to -96, greedy -85 ± 6) with an
+  epsilon floor of 0.02; rl-zoo's 0.1 held on 1 of 5 (CHANGELOG.md, 2026-10-22).
+- MountainCar (`mountaincar_dqn.yaml`, 200,000 steps, a 100,000 buffer, a decaying rate and observation
+  normalisation): reaches -110 on 10 of seeds 1 to 5 and 11 to 15 but holds it on 3; final averages -106 to -119,
+  greedy -110 ± 7 (CHANGELOG.md, 2026-11-04). It learns the task but does not hold the threshold reliably.
+- LunarLander (`lunarlander_dqn.yaml`, 300,000 steps, epsilon floor 0.1): reaches 200 and holds it on 5 of seeds 1 to
+  5 and 4 of 11 to 15, at 152k to 297k steps (CHANGELOG.md, 2026-10-27).
+- Double DQN and dueling stay opt-in: neither won on any of the four configs (CHANGELOG.md, 2026-10-29). The
+  committed configs barely overestimate (logged mean Q within about 4 of the policy's own discounted return).
+
+**Lessons.**
+
+- Walk the numbers of a schedule through a real run (`.claude/skills/dev-loop/SKILL.md`; 0.995^500 ≈ 0.08):
+  `epsilon_decay: 0.995` "per update" was applied once per episode, so in a 500-episode run epsilon ended near 0.08
+  and never reached its floor. Read as per gradient step it would have ended exploration within 40 episodes. Hence
+  `exploration_steps`.
+- A small buffer forgets (2026-10-25): on MountainCar a 10,000-transition buffer holds about 85 episodes, and a good
+  greedy policy found mid-run drifted away; 100,000 helped the training average.
+- Plausible add-ons often lose against a tuned config: n-step returns, two layers, Huber loss and scaled inputs
+  on MountainCar (2026-10-23), prioritised replay on MountainCar and LunarLander (2026-10-27, 2026-11-04). Compare
+  paired by seed, then confirm on held-out seeds.
+
+## Replay buffer (`ReplayBuffer`, `src/rl_core/agents/replay_buffer.py`)
+
+A fixed-capacity ring buffer of (observation, action, reward, next observation, done) in pre-allocated NumPy arrays,
+shared by DQN, DDPG and TD3. When full it overwrites the oldest transition; `sample` draws indices uniformly without
+replacement, on its own named stream of the seed. The stored `done` means "do not bootstrap": `add_transitions` takes
+the trainer's `terminated` flags, so a time-limit cut stays non-terminal. Actions are int64 (discrete) or float64
+vectors (`action_dim`). With an agent's observation statistics it stores raw observations and normalises each sampled
+batch (CHANGELOG.md, 2026-11-04). The checkpoint holds the filled part, the write index and the generator state, at
+about 40 bytes a transition compressed (CHANGELOG.md, 2026-10-21).
+
+## Updating during the episode (`MidEpisodeUpdates`, `src/rl_core/agents/mid_episode.py`)
+
+By default the trainer hands an off-policy agent its transitions once per episode. With `training.update_every: N`
+it calls `update` every N steps and once more at the episode's end, as SB3's `train_freq` does, so the data comes
+from a policy updated moments before (CHANGELOG.md, 2026-10-30). The gradient steps owed are counted over all
+transitions, `floor((counted + n) * updates_per_step) - floor(counted * updates_per_step)`, so the total does not
+depend on how the episode is cut. DQN, DDPG and TD3 accept it (DQN needs `updates_per_step` and `exploration_steps`);
+REINFORCE and PPO train on whole episodes and refuse it; the continuous Actor-Critic accepts it only with
+`update_every` equal to its `n_steps` (true A2C).
+
+## Random agents (`RandomAgent`, `ContinuousRandomAgent`)
+
+The floor every learner is compared against: a uniform action (an integer below `action_dim`, or a vector inside
+the action bounds), drawn on their own streams, and no learning (`update` returns `{}`). Floors through the benchmark:
+CartPole about 23, Pendulum -1293, Acrobot -500, MountainCar -200, LunarLander -178 to -194 (`docs/benchmarks/` and
+CHANGELOG.md).
+
+## DDPG (`DDPGAgent`, `src/rl_core/agents/ddpg_agent.py`)
+
+**Idea.** Deep Deterministic Policy Gradient (Lillicrap et al. 2016) learns a deterministic actor mu(s) that outputs
+one action and a critic Q(s, a) that scores it. The critic is trained by bootstrapped regression on replayed
+transitions; the actor climbs the critic along dQ/da. Replacing DQN's max over actions with the target actor's action
+is what makes off-policy learning work for continuous actions.
+
+**Update.** One gradient step on a replayed mini-batch, in this order:
+
+```text
+y      = r + gamma * (1 - terminated) * Q'(s', mu'(s'))        (y held constant)
+L_crit = mean( 0.5 * (Q(s, a) - y)^2 )
+L_act  = -mean( Q(s, mu(s)) )                                    (stepped after the critic, critic held constant)
+target <- tau * online + (1 - tau) * target                      (Polyak, actor and critic, every step)
+mu(s)  = bias + scale * tanh(net(s)),  scale = (high - low) / 2, bias = (high + low) / 2
+```
+
+The first `learning_starts` training actions are uniform in the bounds; after that `update` takes `updates_per_step`
+gradient steps per stored transition (1.0). A time-limit cut bootstraps.
+
+**In this repo.** ReLU networks of `hidden_sizes` ([400, 300] by default, rl-zoo's; the committed configs use [64, 64],
+since 400×300 is about 16 times slower in NumPy). The critic takes `[obs, action]`. Adam only, one per network.
+Exploration is added in the scaled [-1, 1] space: Gaussian (`noise_std` 0.1) or, with `noise_type:
+ornstein_uhlenbeck`, SB3's OU process (`ou_theta` 0.15, `ou_dt` 0.01), whose state decays by only 0.15% a step, so a
+push persists like a held throttle; it resets at each episode's end. Evaluation plays mu(s). The checkpoint holds the
+four networks, both Adams, the counters and the replay buffer.
+
+**What was measured.**
+
+- Pendulum, `configs/pendulum_ddpg.yaml` (64×64, 40,000 steps): 5 of 5 solve at about 31,200 steps and hold; greedy
+  -158 ± 25 against rl-zoo's -152 (CHANGELOG.md, 2026-10-19).
+- MountainCarContinuous, `configs/mountaincar_continuous_ddpg.yaml` (OU noise 0.5, 64×64, 300,000 steps): 5 of 5 reach
+  90 at 25k to 69k steps and hold; greedy 93.4 ± 0.2 against rl-zoo's 93.5 (CHANGELOG.md, 2026-10-23).
+
+**Lessons.** Exploration noise must fit the task: on MountainCarContinuous, Gaussian noise of the same 0.5 solved 0 of
+5, four seeds learning to stand still; temporally correlated OU noise solved 5 of 5 (CHANGELOG.md, 2026-10-23).
+
+## TD3 (`TD3Agent`, `src/rl_core/agents/td3_agent.py`)
+
+**Idea.** Twin Delayed DDPG (Fujimoto et al. 2018) fixes DDPG's overestimation and brittleness three ways: two
+critics with the smaller target taken, clipped noise on the target action so the critic cannot be exploited at a
+sharp peak, and an actor (and targets) updated only every `policy_delay` critic steps.
+
+**Update.** With n counting gradient steps over the agent's life:
+
+```text
+eps  = clip(N(0, target_policy_noise^2), -target_noise_clip, target_noise_clip)      (scaled space, as SB3)
+a'   = clip(mu'(s') + scale * eps, low, high)
+y    = r + gamma * (1 - terminated) * min(Q1'(s', a'), Q2'(s', a'))                  (held constant)
+L_Qi = mean( 0.5 * (Qi(s, a) - y)^2 ),  i = 1, 2                                      (every step)
+every policy_delay steps:  L_act = -mean(Q1(s, mu(s))), then Polyak on the three targets
+```
+
+**In this repo.** A subclass of `DDPGAgent` (exploration, warm-up and `update` are DDPG's). Defaults are SB3's:
+`policy_delay` 2, `target_policy_noise` 0.2, `target_noise_clip` 0.5. The second critic is drawn after DDPG's networks
+and the target noise has its own random stream, so a seed's actor, first critic, exploration and replay match DDPG's.
+One Adam per critic. A TD3 agent refuses a DDPG checkpoint; a DDPG agent can load a TD3 one.
+
+**What was measured.**
+
+- Pendulum, `configs/pendulum_td3.yaml` (NumPy, 64×64, 40,000 steps): 5 of 5 solve at 32,600 to 33,400 steps and hold,
+  greedy -157 ± 24, about 1,700 steps after DDPG since the actor updates half as often (CHANGELOG.md, 2026-10-25).
+- MountainCarContinuous, `mountaincar_continuous_td3.yaml` (400×300, PyTorch backend, 300,000 steps): 5 of 5 reach 90
+  and hold, greedy 93.8 ± 0.2; about 20 minutes a seed on the Jetson (CHANGELOG.md, 2026-10-27).
+- LunarLanderContinuous, `lunarlander_continuous_td3.yaml` (400×300, PyTorch backend, 400,000 steps, updates after
+  every step): 5 of 5 reach 200 and hold, final averages 202 to 248, greedy 182 ± 69; 53 to 54 minutes a seed
+  (CHANGELOG.md, 2026-11-01).
+
+**Lessons.** LunarLanderContinuous needed SB3's update after every environment step (`training.update_every: 1`):
+once per episode it held on 3 of 5 seeds, every step on 5 of 5 (CHANGELOG.md, 2026-10-30; adopted 2026-11-01). TD3
+is not faster on an easy task; its gain shows on the long ones.
+
+## The PyTorch backend (`TorchDDPGAgent`, `TorchTD3Agent`)
+
+`backend: torch` in a DDPG or TD3 config runs the same gradient step in PyTorch (imported only then; PyTorch is
+allowed only in `rl_core/agents/torch_*.py`). Acting, exploration and the replay buffer stay in NumPy on the CPU;
+batches are sampled in the NumPy agent's order and moved to the device in chunks. On CUDA the whole step is captured
+as a CUDA graph and replayed as one launch, which is what pays: plain PyTorch on the GPU is no faster than NumPy for
+these small networks. Options: `device` (auto, cpu, cuda), `dtype` (float32, or float64, which matches the NumPy agent
+to rounding), `cuda_graph`. Checkpoints are the NumPy agent's format both ways. Measured on the Jetson: a 400×300 DDPG
+step 2.5 ms against NumPy's 44.7 ms; Pendulum DDPG 34 s a run against 144 s (`docs/pytorch_jetson_timing.md`).
+
+## Exporting a policy (`src/rl_core/agents/inference.py`, `src/rl_core/export/`, `export.py`)
+
+Every agent with a network describes its greedy policy as an `InferencePolicy`: dense ReLU layers, the observation
+statistics when it normalises, and a head (`argmax` for discrete agents, `clip` for a Gaussian mean, or `tanh_scale`
+for a bounded one and for DDPG and TD3). `export.py` writes it as a C99 header or an ONNX model, and writes nothing
+unless the exported policy matches the NumPy agent on every observation of a few greedy episodes (CHANGELOG.md,
+2026-11-02). It is the path to running a trained policy on a microcontroller or a robot's computer.

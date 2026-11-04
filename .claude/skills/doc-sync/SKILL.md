@@ -47,6 +47,7 @@ CONTRIBUTING.md, GEMINI.md and ARCHITECTURE.md.
 | `CHANGELOG.md` | One condensed entry per completed item, newest first, under the date it was handed off | When an item completes, in its hand-off commit; the item leaves the roadmap at the same time |
 | `TESTING.md` | Manual checks a person runs, as rows with an ID (`ENV-`, `TR-`, `VID-`, `OUT-`, `BM-`, `CKPT-`, `LOG-`, `CI-`), a command and an expected result | A command, flag, output path or expected behaviour was added or changed |
 | `README.md` | Features, project structure, install, usage commands, configuration, architecture summary | A headline feature, a command, a prerequisite or the folder layout changed |
+| `docs/agents.md` | How each agent works: its idea, its update as the code computes it, this repo's options, what was measured, lessons | An agent was added, or its update rule, options, committed config or measured result changed |
 | `ARCHITECTURE.md` | Package boundaries, the agent class diagram, the training sequence, the artifact tree, extension steps | A class, a base-class method in the diagram, a boundary or an output path changed |
 | `CONTRIBUTING.md` | Standards (§1 to §3), the workflow (§4), the artifact policy (§5) | A rule or a step changed |
 | `CLAUDE.md` | Claude-specific instructions, the skills table, known discrepancies | A skill, tool, git rule or discrepancy changed |
