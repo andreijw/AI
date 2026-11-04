@@ -112,7 +112,8 @@ line:
 - `configs/<challenge>_<agent>.yaml`, every key commented with its meaning and unit
 - `ALL_AGENTS` in `tests/test_agent_harness.py`, and `tests/test_<agent>_agent.py`
 - docs, through the `doc-sync` skill: the class diagram in ARCHITECTURE.md, the README agent list, a
-  `TR-*` row in TESTING.md, GEMINI.md §2
+  `TR-*` row in TESTING.md, GEMINI.md §2, and its section in `docs/agents.md` (idea, update, what this repo's
+  version does, what was measured, lessons), which keeps the maintainer current on how each agent works
 
 ## 7. Choose starting hyperparameters
 

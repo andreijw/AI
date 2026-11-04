@@ -795,7 +795,8 @@ The `BaseAgent` abstract class defines the interface for all RL agents:
 - `_checkpoint_arrays()` / `_load_checkpoint_arrays(data)`: what a checkpoint holds; `BaseAgent.save()` and
   `load()` write and read it, with every generator
 
-Implemented agents (in `src/rl_core/agents/`):
+Implemented agents (in `src/rl_core/agents/`; how each one works, its update and what it measured:
+[`docs/agents.md`](docs/agents.md)):
 
 - **Discrete Control Agents**:
   - `RandomAgent`: Random action baseline policy
