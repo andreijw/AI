@@ -122,6 +122,29 @@ def test_float64_cpu_backend_trains_exactly_as_the_numpy_agent(max_grad_norm, tm
     )
 
 
+def test_float64_cpu_backend_normalises_sampled_batches_as_the_numpy_agent(tmp_path):
+    """With normalize_observations both store raw observations and normalise each sampled batch
+    with the statistics of the moment: the same metrics and the same checkpoint."""
+    agents = [_build(normalize_observations=True), _build(normalize_observations=True, **CPU64)]
+    rng = np.random.default_rng(0)
+    for episode in range(4):
+        raw = rng.normal(3.0, 2.0, size=(EPISODE + 1, OBS))
+        terminated = np.zeros(EPISODE, dtype=bool)
+        terminated[-1] = episode % 2 == 1
+        rewards = rng.normal(size=EPISODE)
+        metrics = []
+        for agent in agents:
+            inputs = np.array([agent.normalize_observation(o, training=True) for o in raw])
+            actions = np.array([agent.select_action(o, training=True) for o in inputs[:-1]])
+            metrics.append(agent.update({
+                "observations": inputs[:-1], "actions": actions, "rewards": rewards,
+                "next_observations": inputs[1:], "terminated": terminated,
+                "raw_observations": raw[:-1], "raw_next_observations": raw[1:],
+            }))  # fmt: skip
+        _assert_same(metrics[0], metrics[1], what=f"episode {episode} metric ")
+    _assert_same_checkpoint(agents[0], agents[1], tmp_path)
+
+
 def test_a_torch_checkpoint_loads_into_the_numpy_agent_and_back(tmp_path):
     """Checkpoints are one format: saved from either backend, every array is the same."""
     torch_agent = _build(**CPU64)

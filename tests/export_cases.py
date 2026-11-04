@@ -32,6 +32,7 @@ DISCRETE = [
     (PPOAgent, {"seed": 3, "hidden_dim": 6, "normalize_observations": True}),
     (DQNAgent, {"seed": 3, "hidden_dim": 6}),
     (DQNAgent, {"seed": 3, "hidden_dim": 6, "dueling": True}),
+    (DQNAgent, {"seed": 3, "hidden_dim": 6, "normalize_observations": True}),
 ]
 CONTINUOUS = [
     (ContinuousActorCriticAgent, {"seed": 3, "hidden_dim": 6}),
@@ -39,6 +40,7 @@ CONTINUOUS = [
     (ContinuousPPOAgent, {"seed": 3, "hidden_dim": 6, **BOUNDS}),
     (ContinuousPPOAgent, {"seed": 3, "hidden_dim": 6, "normalize_observations": True, **BOUNDS}),
     (DDPGAgent, {"seed": 3, "hidden_sizes": [7, 5], **BOUNDS}),
+    (DDPGAgent, {"seed": 3, "hidden_sizes": [7, 5], "normalize_observations": True, **BOUNDS}),
     (TD3Agent, {"seed": 3, "hidden_sizes": [6], **BOUNDS}),
 ]
 EXPORTABLE = DISCRETE + CONTINUOUS

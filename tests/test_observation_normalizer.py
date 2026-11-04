@@ -9,6 +9,7 @@ from rl_cartpole.environments import CartPoleEnv
 from rl_core.agents import DDPGAgent, DQNAgent, PPOAgent, ReinforceAgent, TD3Agent
 from rl_core.agents.base_agent import OBS_NORM_KEY_PREFIX
 from rl_core.agents.observation_normalizer import RunningMeanStd
+from rl_core.agents.replay_buffer import ReplayBuffer
 from rl_core.training import Trainer
 from tests.helpers import minimal_config, run_main
 from tests.test_agent_harness import (
@@ -20,15 +21,9 @@ from tests.test_agent_harness import (
 
 ON = {"normalize_observations": True}
 
-# Every agent that may normalise, with a CartPole (discrete) or Pendulum (continuous) size.
-NORMALISING_AGENTS = [
-    pytest.param(c, cfg, 4, 2, id=agent_id(c, cfg))
-    for c, cfg in ALL_AGENTS
-    if c.SUPPORTS_OBSERVATION_NORMALIZATION
-] + [
-    pytest.param(c, cfg, 3, 1, id=c.__name__)
-    for c, cfg in CONTINUOUS_AGENTS
-    if c.SUPPORTS_OBSERVATION_NORMALIZATION
+# Every agent (each may normalise), with a CartPole (discrete) or Pendulum (continuous) size.
+NORMALISING_AGENTS = [pytest.param(c, cfg, 4, 2, id=agent_id(c, cfg)) for c, cfg in ALL_AGENTS] + [
+    pytest.param(c, cfg, 3, 1, id=c.__name__) for c, cfg in CONTINUOUS_AGENTS
 ]
 
 
@@ -184,12 +179,110 @@ def test_training_updates_before_normalising():
     assert abs(out[0]) < 0.02, "updated first, the first observation lands near 0"
 
 
-@pytest.mark.parametrize(
-    "agent_cls,dims", [(DQNAgent, (4, 2)), (DDPGAgent, (3, 1)), (TD3Agent, (3, 1))]
-)
-def test_the_replay_buffer_agents_refuse_the_setting(agent_cls, dims):
-    with pytest.raises(ValueError, match="normalize_observations"):
-        agent_cls(*dims, {"seed": 1, **ON})
+# --- The replay-buffer agents: raw observations stored, each sampled batch normalised -----------
+
+REPLAY_AGENTS = [(DQNAgent, (4, 2)), (DDPGAgent, (3, 1)), (TD3Agent, (3, 1))]
+
+
+def _raw_batch(rng, n, obs_dim, action_dim, discrete):
+    """A trainer batch from a normalising agent: raw observations beside (here dummy) inputs."""
+    raw = rng.normal(5.0, 2.0, (n + 1, obs_dim))
+    actions = rng.integers(0, 2, n) if discrete else rng.uniform(-1.0, 1.0, (n, action_dim))
+    terminated = np.zeros(n, dtype=bool)
+    return {
+        "observations": np.zeros((n, obs_dim)),  # what the agent acted on; never stored
+        "actions": actions,
+        "rewards": rng.normal(size=n),
+        "next_observations": np.zeros((n, obs_dim)),
+        "dones": terminated.copy(),
+        "terminated": terminated,
+        "raw_observations": raw[:-1],
+        "raw_next_observations": raw[1:],
+    }
+
+
+def _assert_same_rows(actual, expected, message):
+    """The two arrays hold the same rows in some order (a uniform sample is a permutation)."""
+    order = lambda a: a[np.lexsort(a.T[::-1])]  # noqa: E731
+    np.testing.assert_array_equal(order(actual), order(expected), err_msg=message)
+
+
+def test_a_normalising_buffer_samples_its_raw_rows_with_the_current_statistics():
+    statistics = RunningMeanStd(3)
+    buffer = ReplayBuffer(capacity=10, observation_dim=3, seed=4, normalizer=statistics)
+    rng = np.random.default_rng(0)
+    batch = _raw_batch(rng, 4, 3, 1, discrete=True)
+    assert buffer.add_transitions(batch) == 4
+    np.testing.assert_array_equal(buffer.observations[:4], batch["raw_observations"])
+    np.testing.assert_array_equal(buffer.next_observations[:4], batch["raw_next_observations"])
+
+    for x in rng.normal(-3.0, 0.5, (20, 3)):  # the statistics move after the rows were stored
+        statistics.update(x)
+    sample = buffer.sample(4)
+
+    _assert_same_rows(sample["observations"], statistics.normalize(batch["raw_observations"]),
+                      "a sample must be normalised by the statistics at sampling time")  # fmt: skip
+    _assert_same_rows(sample["next_observations"],
+                      statistics.normalize(batch["raw_next_observations"]),
+                      "next observations must be normalised the same way")  # fmt: skip
+    np.testing.assert_array_equal(buffer.observations[:4], batch["raw_observations"],
+                                  err_msg="sampling must not change what is stored")  # fmt: skip
+
+
+def test_a_normalising_buffer_refuses_a_batch_without_raw_observations():
+    buffer = ReplayBuffer(capacity=10, observation_dim=3, seed=4, normalizer=RunningMeanStd(3))
+    batch = _raw_batch(np.random.default_rng(0), 4, 3, 1, discrete=True)
+    del batch["raw_next_observations"]
+    with pytest.raises(ValueError, match="raw_next_observations"):
+        buffer.add_transitions(batch)
+    assert len(buffer) == 0
+
+
+def test_a_plain_buffer_stores_the_observations_it_is_given():
+    buffer = ReplayBuffer(capacity=10, observation_dim=3, seed=4)
+    batch = _raw_batch(np.random.default_rng(0), 4, 3, 1, discrete=True)
+    buffer.add_transitions(batch)
+    np.testing.assert_array_equal(buffer.observations[:4], batch["observations"])
+
+
+@pytest.mark.parametrize("agent_cls,dims", REPLAY_AGENTS)
+def test_the_replay_buffer_agents_store_raw_and_learn_on_normalised_inputs(agent_cls, dims):
+    obs_dim, action_dim = dims
+    warm_up = {"batch_size": 4, "min_buffer_size": 4, "learning_starts": 0}  # DQN's and DDPG's keys
+    agent = agent_cls(obs_dim, action_dim, {"seed": 1, **warm_up, **ON})
+    rng = np.random.default_rng(2)
+    for x in rng.normal(5.0, 2.0, (30, obs_dim)):
+        agent.normalize_observation(x, training=True)
+    batch = _raw_batch(rng, 6, obs_dim, action_dim, discrete=agent_cls is DQNAgent)
+    metrics = agent.update(batch)
+
+    assert metrics, "the agent must have taken a gradient step on the sampled batch"
+    assert all(np.isfinite(v) for v in metrics.values() if isinstance(v, float))
+    np.testing.assert_array_equal(agent.replay_buffer.observations[:6], batch["raw_observations"])
+    _assert_same_rows(agent.replay_buffer.sample(6)["observations"],
+                      agent.observation_normalizer.normalize(batch["raw_observations"]),
+                      "the agent's buffer must normalise with the agent's statistics")  # fmt: skip
+
+
+@pytest.mark.parametrize("agent_cls,dims", REPLAY_AGENTS)
+def test_a_loaded_replay_agent_samples_with_the_loaded_statistics(agent_cls, dims, tmp_path):
+    obs_dim, action_dim = dims
+    config = {"batch_size": 4, "min_buffer_size": 4, **ON}
+    saved = agent_cls(obs_dim, action_dim, {"seed": 1, **config})
+    rng = np.random.default_rng(3)
+    for x in rng.normal(5.0, 2.0, (30, obs_dim)):
+        saved.normalize_observation(x, training=True)
+    saved.update(_raw_batch(rng, 6, obs_dim, action_dim, discrete=agent_cls is DQNAgent))
+    path = str(tmp_path / "agent.npz")
+    saved.save(path)
+    loaded = agent_cls(obs_dim, action_dim, {"seed": 9, **config})
+    loaded.normalize_observation(np.full(obs_dim, -50.0), training=True)  # statistics to replace
+    loaded.load(path)
+
+    raw = loaded.replay_buffer.observations[:6]
+    _assert_same_rows(loaded.replay_buffer.sample(6)["observations"],
+                      saved.observation_normalizer.normalize(raw),
+                      "after a load the buffer must read the loaded statistics")  # fmt: skip
 
 
 @pytest.mark.parametrize("value", ["true", 1, None])
@@ -320,6 +413,29 @@ def test_the_trainer_normalises_each_observation_once_and_uses_it_everywhere(tmp
     fresh = RunningMeanStd(4)
     fresh.update(first_raw)
     np.testing.assert_array_equal(batch["observations"][0], fresh.normalize(first_raw))
+
+
+@pytest.mark.parametrize("on", [True, False], ids=["normalising", "plain"])
+def test_the_trainer_hands_raw_observations_beside_the_inputs_only_when_normalising(on, tmp_path):
+    agent = _SpyReinforce(4, 2, {"seed": 1, **(ON if on else {})})
+    _trainer(agent, tmp_path, episodes=1, steps=30).train()
+    (batch,) = agent.batches
+
+    if not on:
+        assert "raw_observations" not in batch and "raw_next_observations" not in batch, (
+            "a run without normalisation must hand the agent the same batch as before"
+        )
+        return
+    reference_env = CartPoleEnv(seed=5)
+    first_raw, _ = reference_env.reset()
+    reference_env.close()
+    np.testing.assert_array_equal(batch["raw_observations"][0], first_raw)
+    np.testing.assert_array_equal(
+        batch["raw_observations"][1:], batch["raw_next_observations"][:-1]
+    )
+    assert np.abs(batch["raw_observations"]).max() > 0 and not np.array_equal(
+        batch["raw_observations"], batch["observations"]
+    ), "raw observations must be the environment's, not the normalised inputs"
 
 
 def test_evaluation_leaves_the_statistics_unchanged(tmp_path):

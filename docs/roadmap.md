@@ -62,7 +62,8 @@ when picked.
 - [ ] **MountainCar-v0: Hold -110**
   - **Description**: MountainCar-v0's DQN does not reliably hold -110: with a 100,000-transition buffer, 2 of 10 seeds
     end at or above it (both crossing it only near the end of the run), and the final averages are -107 to -132
-    (CHANGELOG.md, 2026-10-25).
+    (CHANGELOG.md, 2026-10-25). With observations normalised when sampled, committed 2026-11-04, all of seeds 1 to 5
+    and 11 to 15 reach -110 and 3 of 10 hold it, final averages -106 to -119 (CHANGELOG.md, 2026-11-04).
   - **Diagnosis (2026-10-25)**: the agent reaches the flag reliably, so exploration is unlikely to be the limit. On seed
     4 the greedy policy evaluated -100 to -107 from episode 550 to 700, then settled near -125 with a spread of about
     20 and did not stay good: consistent with a good policy found and then forgotten. A larger buffer helps the

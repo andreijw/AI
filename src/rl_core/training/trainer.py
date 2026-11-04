@@ -430,8 +430,9 @@ class Trainer:
         episode_length = 0
 
         # Transitions not yet handed to the agent: the whole episode, or with update_every the
-        # steps since the last update.
-        transitions: list[tuple[Any, Any, Any, Any, bool, bool]] = []
+        # steps since the last update. Each keeps the raw observations too, for an agent whose
+        # replay buffer stores them and normalises when it samples.
+        transitions: list[tuple[Any, Any, Any, Any, bool, bool, Any, Any]] = []
         update_every = self.update_every if training else None
 
         done = False
@@ -440,11 +441,13 @@ class Trainer:
             raw_next, reward, terminated, truncated, info = env.step(action)
             next_obs = self.agent.normalize_observation(raw_next, training=training)
             done = terminated or truncated
-            transitions.append((obs, action, reward, next_obs, done, bool(terminated)))
+            transitions.append(
+                (obs, action, reward, next_obs, done, bool(terminated), raw_obs, raw_next)
+            )
 
             episode_reward += float(reward)
             episode_length += 1
-            obs = next_obs
+            obs, raw_obs = next_obs, raw_next
             # The step that ends the episode goes with the final update below.
             last = done or episode_length >= self.max_steps_per_episode
             if update_every is not None and episode_length % update_every == 0 and not last:
@@ -457,11 +460,17 @@ class Trainer:
 
         return episode_reward, episode_length
 
-    def _update_agent(self, transitions: list[tuple[Any, Any, Any, Any, bool, bool]]) -> None:
-        """Hand the agent these transitions, in order, as one batch, and keep its metrics."""
-        observations, actions, rewards, next_observations, dones, terminateds = zip(
-            *transitions, strict=True
-        )
+    def _update_agent(
+        self, transitions: list[tuple[Any, Any, Any, Any, bool, bool, Any, Any]]
+    ) -> None:
+        """
+        Hand the agent these transitions, in order, as one batch, and keep its metrics. A
+        normalising agent's batch also carries ``raw_observations`` and ``raw_next_observations``,
+        the environment's observations before normalisation, which a replay buffer stores; an
+        on-policy agent ignores them.
+        """
+        (observations, actions, rewards, next_observations, dones, terminateds, raws,
+         raw_nexts) = zip(*transitions, strict=True)  # fmt: skip
         batch = {
             "observations": np.array(observations),
             "actions": np.array(actions),
@@ -470,6 +479,9 @@ class Trainer:
             "dones": np.array(dones),
             "terminated": np.array(terminateds, dtype=bool),
         }
+        if self.agent.observation_normalizer is not None:
+            batch["raw_observations"] = np.array(raws)
+            batch["raw_next_observations"] = np.array(raw_nexts)
         self._record_update_metrics(self.agent.update(batch))
 
     def evaluate(self, num_episodes: int = 10) -> dict[str, float]:

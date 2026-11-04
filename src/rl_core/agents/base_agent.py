@@ -86,9 +86,6 @@ class BaseAgent(ABC):
     # not inherit its parent's (a TD3Agent(DDPGAgent) is not built as TorchDDPGAgent).
     BACKENDS: ClassVar[dict[str, str]] = {}
     _observation_settings: Mapping[str, bool | int] | None = None
-    # Whether ``normalize_observations`` may be set. An agent that keeps transitions in a replay
-    # buffer would store inputs normalised by statistics that later change, so it says False.
-    SUPPORTS_OBSERVATION_NORMALIZATION: ClassVar[bool] = True
     _observation_defaults: Mapping[str, bool | int] = MappingProxyType({})
 
     @final
@@ -145,11 +142,6 @@ class BaseAgent(ABC):
         self.config = config
         self._obs_normalizer: RunningMeanStd | None = None
         if flag(config, "normalize_observations", False):
-            if not self.SUPPORTS_OBSERVATION_NORMALIZATION:
-                raise ValueError(
-                    f"normalize_observations is not supported by {type(self).__name__}: its replay "
-                    "buffer would keep observations normalised by statistics that later change"
-                )
             self._obs_normalizer = RunningMeanStd(observation_dim)
 
     @property

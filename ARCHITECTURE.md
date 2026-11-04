@@ -342,12 +342,13 @@ observation settings (`BaseEnvWrapper.observation_settings()`, the keys of `OBSE
 before changing anything, a checkpoint saved with other values. An agent with `normalize_observations: true` keeps
 a running mean and variance of its inputs (`rl_core.agents.observation_normalizer.RunningMeanStd`, as SB3's
 `VecNormalize`); `Trainer` passes every observation through `BaseAgent.normalize_observation` once, updating the
-statistics in training and only reading them in evaluation, and the checkpoint holds them as `obs_norm_*`. The
-replay-buffer agents (DQN, DDPG, TD3) refuse the setting. Beside it the trainer writes
-`trainer_episode_<n>.npz` (episode and step counts, reward and length histories, the update-metric window, the
-evaluation seed and, for an environment that
-implements `rl_core.environments.ResumableEnv`, its generators) as a `TrainerState` that also records the agent
-file's SHA-256, both files through
+statistics in training and only reading them in evaluation, and the checkpoint holds them as `obs_norm_*`. For the
+replay-buffer agents (DQN, DDPG, TD3) the trainer's batch also carries `raw_observations` and
+`raw_next_observations`: the `ReplayBuffer` holds the agent's statistics, stores the raw observations and normalises
+each sampled batch with the statistics as they are then, as SB3 does, so no stored input goes stale. Beside it the
+trainer writes `trainer_episode_<n>.npz` (episode and step counts, reward and length histories, the update-metric
+window, the evaluation seed and, for an environment that implements `rl_core.environments.ResumableEnv`, its
+generators) as a `TrainerState` that also records the agent file's SHA-256, both files through
 `rl_core.training.checkpoints.write_atomically`; `Trainer.resume` (`train.py --resume`) reads both, so a resumed
 run ends exactly as an uninterrupted one. With a curriculum (`rl_core.training.curriculum.CurriculumScheduler`,
 built from `environment.curriculum` by `curriculum_from_config` in `train.py` and through the challenge's

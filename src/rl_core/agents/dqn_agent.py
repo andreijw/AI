@@ -1,7 +1,7 @@
 """Deep Q-Network (DQN) agent for CartPole."""
 
 from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -68,9 +68,6 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
       (0, 1], ``min_buffer_size >= batch_size`` and ``buffer_capacity >= min_buffer_size``.
     """
 
-    # Replay holds observations from earlier in the run (BaseAgent).
-    SUPPORTS_OBSERVATION_NORMALIZATION: ClassVar[bool] = False
-
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """
         Initialise the DQN agent.
@@ -121,6 +118,7 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
             capacity=self.buffer_capacity,
             observation_dim=self.observation_dim,
             seed=config.get("seed"),
+            normalizer=self.observation_normalizer,  # raw observations stored when normalising
         )
         self._optimizer: Optimizer | None = optimizer_from_config(config, self._parameters())
 

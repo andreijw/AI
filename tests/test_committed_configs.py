@@ -298,7 +298,9 @@ def test_mountaincar_dqn_uses_rl_zoo_settings_with_a_decaying_learning_rate():
     transition. Its target sync every 600 environment steps is 300 gradient steps here, epsilon falls to
     0.02 rather than 0.07, and the learning rate decays to zero over a 200,000-step budget instead of
     staying fixed over 120,000 (CHANGELOG.md, 2026-10-23). The replay buffer holds 100,000 transitions,
-    not rl-zoo's 10,000, so a good policy found mid-run is forgotten less often (CHANGELOG.md, 2026-10-25)."""
+    not rl-zoo's 10,000, so a good policy found mid-run is forgotten less often (CHANGELOG.md, 2026-10-25).
+    Observations are normalised at sampling time, which reached -110 on 10 of seeds 1-5 and 11-15 against 3
+    (CHANGELOG.md, 2026-11-04)."""
     env, agent, _ = discover_challenges()["mountaincar"]().setup_run("dqn", seed=1, episodes=None)
     env.close()
     assert isinstance(optimizer(agent), Adam)
@@ -308,3 +310,4 @@ def test_mountaincar_dqn_uses_rl_zoo_settings_with_a_decaying_learning_rate():
     assert (agent.exploration_steps, agent.epsilon_end) == (24_000, pytest.approx(0.02))
     assert (agent.updates_per_step, agent.max_updates_per_call) == (0.5, 100)
     assert agent.anneal_steps == 200_000, "the rate decays over the whole budget"
+    assert agent.observation_normalizer is not None, "the config must normalise observations"
