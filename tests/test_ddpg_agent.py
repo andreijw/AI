@@ -6,6 +6,7 @@ Critic loss mean ½ (Q - y)²; actor loss -mean Q(s, mu(s)) with the critic held
 """
 
 import copy
+import re
 
 import numpy as np
 import pytest
@@ -567,3 +568,57 @@ def test_a_checkpoint_with_other_hidden_sizes_is_rejected(tmp_path):
     _agent().save(path)
     with pytest.raises(ValueError, match="hidden_sizes, observation_dim or action_dim"):
         _agent(hidden_sizes=[4, 3]).load(path)
+
+
+def _saved_arrays(tmp_path) -> dict[str, np.ndarray]:
+    """Every array of a trained DDPG agent's checkpoint, by key."""
+    agent = _agent(learning_starts=2)
+    agent.update(_batch(seed=1))
+    path = tmp_path / "saved.npz"
+    agent.save(str(path))
+    with np.load(path) as data:
+        return {key: data[key] for key in data.files}
+
+
+def _load_arrays(tmp_path, arrays: dict[str, np.ndarray]) -> None:
+    path = tmp_path / "edited.npz"
+    np.savez(path, **arrays)
+    _agent(seed=99).load(str(path))
+
+
+@pytest.mark.parametrize(
+    "removed,message",
+    [
+        (("critic_b2",), "not a DDPG checkpoint: it has no critic_b2"),
+        (
+            ("target_critic_W0", "target_critic_b0", "target_critic_W1"),
+            "not a DDPG checkpoint: it has no target_critic_W0, target_critic_b0, ...",
+        ),
+    ],
+    ids=["one-entry", "a-whole-network"],
+)
+def test_a_checkpoint_without_one_of_the_networks_is_refused(tmp_path, removed, message):
+    """Another agent's file (or a damaged one) names its first two missing entries."""
+    arrays = {k: v for k, v in _saved_arrays(tmp_path).items() if k not in removed}
+    with pytest.raises(ValueError, match=re.escape(message) + "$"):
+        _load_arrays(tmp_path, arrays)
+
+
+def test_a_checkpoint_with_a_wrongly_shaped_network_is_refused(tmp_path):
+    arrays = _saved_arrays(tmp_path)
+    arrays["critic_W0"] = np.zeros((2, 2))
+    shape = re.escape(
+        f"critic_W0 has shape (2, 2), expected {_saved_arrays(tmp_path)['critic_W0'].shape}"
+    )
+    with pytest.raises(ValueError, match=shape):
+        _load_arrays(tmp_path, arrays)
+
+
+def test_a_missing_network_is_reported_before_a_wrong_shape(tmp_path):
+    """The presence check runs first, so another agent's file is named as such even when its
+    shared networks also have other shapes."""
+    arrays = _saved_arrays(tmp_path)
+    arrays["critic_W0"] = np.zeros((2, 2))
+    del arrays["target_critic_b2"]
+    with pytest.raises(ValueError, match="not a DDPG checkpoint: it has no target_critic_b2$"):
+        _load_arrays(tmp_path, arrays)

@@ -269,7 +269,9 @@ since 400×300 is about 16 times slower in NumPy). The critic takes `[obs, actio
 Exploration is added in the scaled [-1, 1] space: Gaussian (`noise_std` 0.1) or, with `noise_type:
 ornstein_uhlenbeck`, SB3's OU process (`ou_theta` 0.15, `ou_dt` 0.01), whose state decays by only 0.15% a step, so a
 push persists like a held throttle; it resets at each episode's end. Evaluation plays mu(s). The checkpoint holds the
-four networks, both Adams, the counters and the replay buffer.
+four networks, both Adams, the counters and the replay buffer. The replay buffer, warm-up, update scheduling, critic
+loss, Polyak averaging and checkpoints live in `OffPolicyAgent` (`src/rl_core/agents/off_policy.py`), which TD3 shares;
+DDPG adds the actor, its target and the exploration noise.
 
 **What was measured.**
 
@@ -297,10 +299,10 @@ L_Qi = mean( 0.5 * (Qi(s, a) - y)^2 ),  i = 1, 2                                
 every policy_delay steps:  L_act = -mean(Q1(s, mu(s))), then Polyak on the three targets
 ```
 
-**In this repo.** A subclass of `DDPGAgent` (exploration, warm-up and `update` are DDPG's). Defaults are SB3's:
-`policy_delay` 2, `target_policy_noise` 0.2, `target_noise_clip` 0.5. The second critic is drawn after DDPG's networks
-and the target noise has its own random stream, so a seed's actor, first critic, exploration and replay match DDPG's.
-One Adam per critic. A TD3 agent refuses a DDPG checkpoint; a DDPG agent can load a TD3 one.
+**In this repo.** A subclass of `DDPGAgent` (exploration is DDPG's; warm-up and `update` are `OffPolicyAgent`'s).
+Defaults are SB3's: `policy_delay` 2, `target_policy_noise` 0.2, `target_noise_clip` 0.5. The second critic is drawn
+after DDPG's networks and the target noise has its own random stream, so a seed's actor, first critic, exploration and
+replay match DDPG's. One Adam per critic. A TD3 agent refuses a DDPG checkpoint; a DDPG agent can load a TD3 one.
 
 **What was measured.**
 

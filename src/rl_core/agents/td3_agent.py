@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any, ClassVar
 
 import numpy as np
@@ -10,11 +9,10 @@ import numpy as np
 from rl_core.seeding import AGENT_TARGET_NOISE_STREAM, derive_rng
 from rl_core.utils.config_values import positive_int
 
-from .ddpg_agent import Array, DDPGAgent
+from .ddpg_agent import DDPGAgent
 from .mlp import Params, init_mlp
+from .off_policy import Array, add_metrics, mean_metrics
 from .optim import Adam
-
-TD3_NETWORKS = ("critic_2", "target_critic_2")
 
 
 class TD3Agent(DDPGAgent):
@@ -32,13 +30,15 @@ class TD3Agent(DDPGAgent):
       the rhythm.
 
     Everything else is DDPGAgent's: exploration, warm-up, the replay buffer, when :meth:`update`
-    trains, :meth:`end_episode`. For the same seed the actor and the first critic start as
+    trains, :meth:`end_episode`, checkpoints (a DDPG checkpoint, without the second critic, is
+    refused). For the same seed the actor and the first critic start as
     DDPG's; the second critic is drawn after them. Each critic has its own Adam, as one Adam over
     both would be without clipping; ``max_grad_norm`` (SB3's TD3 has none) clips each critic on
     its own. ``critic_loss`` is the mean of the two critics' losses, comparable with DDPG's.
     """
 
     BACKENDS: ClassVar[dict[str, str]] = {"torch": "rl_core.agents.torch_td3_agent:TorchTD3Agent"}
+    SHORT_NAME: ClassVar[str] = "TD3"
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """
@@ -75,6 +75,9 @@ class TD3Agent(DDPGAgent):
 
     def _optimizers_by_net(self) -> dict[str, Adam]:
         return {**super()._optimizers_by_net(), "critic_2": self._critic_2_optimizer}
+
+    def _critic_names(self) -> tuple[str, ...]:
+        return ("critic", "critic_2")
 
     def _target_names(self) -> list[tuple[str, str]]:
         return [*super()._target_names(), ("critic_2", "target_critic_2")]
@@ -124,9 +127,9 @@ class TD3Agent(DDPGAgent):
         """What :meth:`update` returns from the summed per-step metrics: critic metrics over
         every step, actor metrics over the actor steps (absent without one), and
         ``actor_updates``. Every backend's TD3 reduces its sums with this."""
-        metrics = {name: total / num_updates for name, total in critic_totals.items()}
+        metrics = mean_metrics(critic_totals, num_updates)
         if actor_updates:
-            metrics.update({name: total / actor_updates for name, total in actor_totals.items()})
+            metrics.update(mean_metrics(actor_totals, actor_updates))
         metrics["actor_updates"] = float(actor_updates)
         return metrics
 
@@ -149,45 +152,11 @@ class TD3Agent(DDPGAgent):
             targets = self._td3_targets(
                 sample["rewards"], sample["next_observations"], sample["dones"], noise
             )
-            first, grads_1 = self._critic_loss_and_grads(obs, actions, targets, self._critic)
-            second, grads_2 = self._critic_loss_and_grads(obs, actions, targets, self._critic_2)
-            self._apply(self._critic, self._critic_optimizer, grads_1)
-            self._apply(self._critic_2, self._critic_2_optimizer, grads_2)
-            step = {
-                "critic_loss": (first["critic_loss"] + second["critic_loss"]) / 2.0,
-                "mean_q": first["mean_q"],
-                "critic_grad_norm": float(
-                    np.hypot(first["critic_grad_norm"], second["critic_grad_norm"])
-                ),
-            }
-            for name, value in step.items():
-                critic_totals[name] = critic_totals.get(name, 0.0) + value
+            add_metrics(critic_totals, self._critic_step(obs, actions, targets))
             if self._is_actor_step(self._gradient_steps):
                 actor, actor_grads = self._actor_loss_and_grads(obs)
                 self._apply(self._actor, self._actor_optimizer, actor_grads)
                 self._polyak()
                 actor_updates += 1
-                for name, value in actor.items():
-                    actor_totals[name] = actor_totals.get(name, 0.0) + value
+                add_metrics(actor_totals, actor)
         return self._step_means(critic_totals, actor_totals, num_updates, actor_updates)
-
-    # ------------------------------------------------------------------
-    # Checkpoints
-    # ------------------------------------------------------------------
-
-    def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
-        """
-        Raises:
-            ValueError: If the checkpoint has no second critic (a DDPG checkpoint), or a stored
-                network has a different shape.
-        """
-        missing = [
-            f"{net}_{name}"
-            for net in TD3_NETWORKS
-            for name in self._networks()[net]
-            if f"{net}_{name}" not in data
-        ]
-        if missing:
-            more = ", ..." if len(missing) > 2 else ""
-            raise ValueError(f"not a TD3 checkpoint: it has no {', '.join(missing[:2])}{more}")
-        super()._load_checkpoint_arrays(data)

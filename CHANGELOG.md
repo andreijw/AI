@@ -34,6 +34,14 @@ Acrobot-v1) and
 
 ### Changed
 
+- **Shared off-policy base for DDPG and TD3** (`feature/off-policy-base`; PR 1 of 4 of the roadmap item "SAC and
+  BipedalWalker-v3"): `OffPolicyAgent` (`rl_core/agents/off_policy.py`) now holds what DDPG and TD3 share and SAC will
+  need: the config keys with per-class defaults, action bounds, the replay buffer, warm-up, update scheduling, the
+  critic step (one critic or twin), Polyak averaging and checkpoints. `DDPGAgent` keeps its noise, actor target and
+  actor loss; `TD3Agent` still extends it. A pure refactor: DDPG and TD3 train bit-for-bit as before, NumPy and
+  PyTorch, shown by new golden cases recorded on the old code (updates during the episode, save, load and continue,
+  and DDPG loading a TD3 checkpoint). A DDPG checkpoint missing a network is now refused with "not a DDPG
+  checkpoint" (a `ValueError`, before a `KeyError`); the checkpoint format is unchanged.
 - **Observation normalisation for the continuous Actor-Critic** (`feature/code-health-trials`):
   `configs/pendulum_actor_critic.yaml` sets `normalize_observations: true` (the maintainer's decision). Pendulum-v1,
   1,000,000 steps, through the benchmark, paired against the config without it: on seeds 1 to 5 the final
