@@ -14,6 +14,9 @@ Documentation here is read by the maintainer and by other AI assistants, and bot
 checking. A stale command or number in a doc becomes a wrong decision later. The work is less about writing
 new text than about finding every sentence the change made untrue.
 
+This skill can run in a subagent while the dev loop's other gates run (`dev-loop`, "Working in parallel"):
+it then works in the branch's worktree, never commits, and reports every file it edited.
+
 ## 1. Work out what changed in fact
 
 From `git diff develop...HEAD` (and unstaged work), write down the facts that moved:

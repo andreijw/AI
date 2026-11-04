@@ -216,6 +216,18 @@ as a peer, since it sees only your prompt:
 - no training run longer than a few minutes unless you scheduled it: the machine has 6 cores, so keep at most
   3 runs going at once across all agents, each with `OPENBLAS_NUM_THREADS=1`.
 
+**The PR stage splits the same way.** Once the code passes the tests, run in parallel:
+
+- `doc-sync` in a subagent, in the branch's worktree: give it the diff (`git diff origin/develop`) and the facts
+  that changed (a key, a default, a result and its seeds). It edits the docs and reports what it changed and
+  what it could not settle. Meanwhile you run the mutation, duplication and cleanup gates.
+- Then the `pr-reviewer` agent on code and docs together. Beside it, for a PR that quotes results, a second
+  agent that checks every number in `CHANGELOG.md`, `README.md`, `TESTING.md` and config comments against
+  the results files (`benchmark_metrics.json`, the metrics logs), and for a large test change a third that runs
+  `brooks-lint:brooks-test` on the changed test files.
+
+Review the edits yourself (`git diff`), fix what the reports find, and rerun the gates the fixes could affect.
+
 Check what comes back before relying on it. A subagent's result is a claim, and its mistakes read as
 confidently as its findings.
 
