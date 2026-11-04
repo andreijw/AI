@@ -14,6 +14,8 @@ from rl_core.seeding import (
     restore_generator,
 )
 
+from .observation_normalizer import RunningMeanStd
+
 _COLUMNS = ("observations", "actions", "rewards", "next_observations", "dones")
 
 
@@ -29,6 +31,11 @@ class ReplayBuffer:
 
     Actions are discrete (int64 scalars) by default, or continuous float64 vectors of length
     ``action_dim`` when it is given.
+
+    With a ``normalizer`` (an agent's ``normalize_observations`` statistics) the buffer stores the
+    raw observations a trainer batch carries (``raw_observations``, ``raw_next_observations``) and
+    normalises each sampled batch with the statistics as they are then, as Stable-Baselines3 does,
+    so no stored input goes stale as the statistics move. The buffer only reads them.
     """
 
     def __init__(
@@ -38,6 +45,7 @@ class ReplayBuffer:
         seed: int | None = None,
         *,
         action_dim: int | None = None,
+        normalizer: RunningMeanStd | None = None,
     ) -> None:
         """
         Initialise the ReplayBuffer.
@@ -47,6 +55,8 @@ class ReplayBuffer:
             observation_dim: Dimensionality of observation vectors.
             seed: Optional RNG seed for reproducible random sampling.
             action_dim: Length of a continuous action vector, or None for discrete actions.
+            normalizer: Running statistics that sampled observations are normalised with, or
+                None to store and sample the observations as given.
 
         Raises:
             ValueError: If capacity, observation_dim or action_dim is non-positive.
@@ -62,6 +72,7 @@ class ReplayBuffer:
         self.capacity: int = int(capacity)
         self.action_dim: int | None = None if action_dim is None else int(action_dim)
         self.observation_dim: int = int(observation_dim)
+        self._normalizer: RunningMeanStd | None = normalizer
         # Sampling on the agent's replay stream of the seed, apart from the environment's numbers.
         self._rng: np.random.Generator = derive_rng(seed, AGENT_REPLAY_STREAM)
 
@@ -189,13 +200,16 @@ class ReplayBuffer:
 
         Uses the batch's ``terminated`` flags when present (the trainer sends them), else its
         ``dones``, so a cut at the time limit still bootstraps from the next state. A batch
-        without ``next_observations`` or without either flag is not stored.
+        without ``next_observations`` or without either flag is not stored. With a normalizer
+        the batch's ``raw_observations`` and ``raw_next_observations`` are stored instead of its
+        (normalised) ``observations`` and ``next_observations``.
 
         Returns:
             The number of transitions stored (0 if the batch was not stored).
 
         Raises:
-            ValueError: If ``terminated`` has a different length from ``actions``.
+            ValueError: If ``terminated`` has a different length from ``actions``, or, with a
+                normalizer, a stored batch lacks ``raw_observations`` or ``raw_next_observations``.
         """
         terminal = batch.get("terminated", batch.get("dones"))
         if "terminated" in batch and len(batch["terminated"]) != len(batch.get("actions", [])):
@@ -205,11 +219,20 @@ class ReplayBuffer:
             )
         if "next_observations" not in batch or terminal is None:
             return 0
+        prefix = ""
+        if self._normalizer is not None:
+            prefix = "raw_"
+            for key in ("raw_observations", "raw_next_observations"):
+                if key not in batch:
+                    raise ValueError(
+                        f"a normalising agent's batch needs {key}: its buffer stores the raw "
+                        "observations and normalises them when sampled (the Trainer sends them)"
+                    )
         self.add_batch(
-            batch["observations"],
+            batch[f"{prefix}observations"],
             batch["actions"],
             batch["rewards"],
-            batch["next_observations"],
+            batch[f"{prefix}next_observations"],
             terminal,
         )
         return len(batch["actions"])
@@ -244,7 +267,8 @@ class ReplayBuffer:
 
         Returns:
             Dictionary with keys 'observations', 'actions', 'rewards',
-            'next_observations', and 'dones'.
+            'next_observations', and 'dones'; with a normalizer, both observation arrays are
+            normalised by its current statistics.
 
         Raises:
             ValueError: If batch_size <= 0 or batch_size > len(self).
@@ -259,12 +283,18 @@ class ReplayBuffer:
         indices = self._rng.choice(self._size, size=batch_size, replace=False)
 
         return {
-            "observations": self.observations[indices],
+            "observations": self._sampled(self.observations[indices]),
             "actions": self.actions[indices],
             "rewards": self.rewards[indices],
-            "next_observations": self.next_observations[indices],
+            "next_observations": self._sampled(self.next_observations[indices]),
             "dones": self.dones[indices],
         }
+
+    def _sampled(self, observations: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        """Stored observations as a sample gives them: normalised now, with a normalizer."""
+        if self._normalizer is None:
+            return observations
+        return self._normalizer.normalize(observations)
 
     def can_sample(self, batch_size: int) -> bool:
         """Return True if the buffer contains at least batch_size transitions."""

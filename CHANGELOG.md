@@ -12,6 +12,26 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-04
+
+### Added
+
+- **Observation normalisation for DQN, DDPG and TD3** (`feature/replay-obs-normalization`): `normalize_observations`
+  is no longer refused for the replay-buffer agents. As Stable-Baselines3 does, the `ReplayBuffer` holds the agent's
+  running statistics, stores the raw observations and normalises each sampled batch (observations and next
+  observations) with the statistics as they are then, so no stored input goes stale. The `Trainer` adds
+  `raw_observations` and `raw_next_observations` to a normalising agent's batch; a normalising buffer refuses a batch
+  without them. Acting, export, the PyTorch backend and the checkpoint format are unchanged (the buffer saves raw
+  observations, the agent its statistics as before), and without the setting batches and training are bit-for-bit
+  as before. `SUPPORTS_OBSERVATION_NORMALIZATION` is gone. Through the benchmark, paired by seed against the
+  committed configs: MountainCar DQN reached -110 on 5 of seeds 1 to 5 against 2 and held it on 1 against 2, with
+  a better final 100-episode average on 4 of 5 (+13.3, +10.8, +1.5, +7.6, -5.6; mean -112.3 against -117.8); on
+  held-out seeds 11 to 15 it reached -110 on 5 against 1, held it on 2 against 0 and was better on 4 of 5 (+7.0,
+  +11.8, -0.2, +16.0, +4.5; mean -110.8 against -118.7); greedy evaluation -110 ± 7 against -119 across the ten.
+  `configs/mountaincar_dqn.yaml` now sets it (the maintainer's decision); a MountainCar DQN checkpoint saved before
+  this no longer loads with the committed config. A run takes about 10% longer. Pendulum TD3 showed no difference
+  (5 of 5 hold either way, mean final -151.7 against -152.2) and its config is unchanged.
+
 ## 2026-11-03
 
 ### Added

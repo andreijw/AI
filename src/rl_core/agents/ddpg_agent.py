@@ -61,8 +61,6 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
     """
 
     BACKENDS: ClassVar[dict[str, str]] = {"torch": "rl_core.agents.torch_ddpg_agent:TorchDDPGAgent"}
-    # Replay holds observations from earlier in the run (BaseAgent); TD3 and the torch backends inherit it.
-    SUPPORTS_OBSERVATION_NORMALIZATION: ClassVar[bool] = False
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """
@@ -114,9 +112,14 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
         self._build_networks(derive_rng(seed, AGENT_WEIGHTS_STREAM))
 
         self._explore_rng = derive_rng(seed, AGENT_EXPLORATION_STREAM)
-        # The buffer samples on the replay stream of the seed itself.
+        # The buffer samples on the replay stream of the seed itself, and stores raw observations
+        # when normalising (ReplayBuffer).
         self.replay_buffer = ReplayBuffer(
-            self.buffer_capacity, observation_dim, seed=seed, action_dim=action_dim
+            self.buffer_capacity,
+            observation_dim,
+            seed=seed,
+            action_dim=action_dim,
+            normalizer=self.observation_normalizer,
         )
         self._training_actions = 0
         self._gradient_steps = 0

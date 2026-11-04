@@ -32,10 +32,6 @@ with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
 Parked ideas, not scheduled. Each needs the maintainer's pick, and some a decision on the win rule, before it becomes
 an item.
 
-- [ ] **Observation normalisation for the replay-buffer agents**: `normalize_observations` is refused for DQN, DDPG and
-  TD3, whose buffers would keep inputs normalised by statistics that later change; SB3 stores raw observations and
-  normalises at sample time. Not measured: whether Pendulum PPO or the continuous Actor-Critic learn better with it
-  (only smoke runs, CHANGELOG.md, 2026-11-02).
 - [ ] **The continuous Actor-Critic's training average**: its greedy policy matches rl-zoo's A2C, but its 100-episode
   training average stays at about -300 on Pendulum (CHANGELOG.md, 2026-10-18). True A2C, each chunk trained on as it
   is collected (`update_every: 8`), did not close it: mean final -295.0 against -298.5, better on 3 of 5 seeds
@@ -104,7 +100,8 @@ when picked.
 - [ ] **MountainCar-v0: Hold -110**
   - **Description**: MountainCar-v0's DQN does not reliably hold -110: with a 100,000-transition buffer, 2 of 10 seeds
     end at or above it (both crossing it only near the end of the run), and the final averages are -107 to -132
-    (CHANGELOG.md, 2026-10-25).
+    (CHANGELOG.md, 2026-10-25). With observations normalised when sampled, committed 2026-11-04, all of seeds 1 to 5
+    and 11 to 15 reach -110 and 3 of 10 hold it, final averages -106 to -119 (CHANGELOG.md, 2026-11-04).
   - **Diagnosis (2026-10-25)**: the agent reaches the flag reliably, so exploration is unlikely to be the limit. On seed
     4 the greedy policy evaluated -100 to -107 from episode 550 to 700, then settled near -125 with a spread of about
     20 and did not stay good: consistent with a good policy found and then forgotten. A larger buffer helps the
