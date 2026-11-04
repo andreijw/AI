@@ -24,35 +24,28 @@ No open items.
 
 The last health dashboard (brooks-health, 2026-10-22) scored 94/100 with 0 Critical findings; its four Warnings are
 fixed (CHANGELOG.md, 2026-10-22 and 2026-10-25). The five ideas the maintainer picked on 2026-10-28 are done
-(CHANGELOG.md, 2026-10-28 and 2026-10-29). A learning change is committed only if, on seeds 1 to 5 against the
+(CHANGELOG.md, 2026-10-28 and 2026-10-29), and the ideas picked on 2026-11-03 are measured (CHANGELOG.md,
+2026-11-04), but for the one in progress below. A learning change is committed only if, on seeds 1 to 5 against the
 committed config, more seeds hold the threshold or the mean final average is better on at least 4 of 5 paired seeds
 with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
+
+- [~] **Observation normalisation for the replay-buffer agents**: `normalize_observations` is refused for DQN, DDPG and
+  TD3, whose buffers would keep inputs normalised by statistics that later change; SB3 stores raw observations and
+  normalises at sample time. In progress (the maintainer's pick, 2026-11-03): the buffer stores raw observations and
+  normalises each sampled batch with the current statistics, to be measured on MountainCar DQN and Pendulum TD3. For the
+  on-policy agents it is measured: adopted for the continuous Actor-Critic, worse for Pendulum PPO (CHANGELOG.md,
+  2026-11-04).
 
 Parked ideas, not scheduled. Each needs the maintainer's pick, and some a decision on the win rule, before it becomes
 an item.
 
-- [ ] **Observation normalisation for the replay-buffer agents**: `normalize_observations` is refused for DQN, DDPG and
-  TD3, whose buffers would keep inputs normalised by statistics that later change; SB3 stores raw observations and
-  normalises at sample time. Not measured: whether Pendulum PPO or the continuous Actor-Critic learn better with it
-  (only smoke runs, CHANGELOG.md, 2026-11-02).
 - [ ] **The continuous Actor-Critic's training average**: its greedy policy matches rl-zoo's A2C, but its 100-episode
-  training average stays at about -300 on Pendulum (CHANGELOG.md, 2026-10-18). True A2C, each chunk trained on as it
-  is collected (`update_every: 8`), did not close it: mean final -295.0 against -298.5, better on 3 of 5 seeds
-  (CHANGELOG.md, 2026-10-30; PR #153). Untried: rl-zoo's 8 parallel environments (64 transitions per update, against
-  8 here), and gSDE exploration (a PPO version was tried on Pendulum, CHANGELOG.md, 2026-10-29; its code is in
-  `~/rl-experiments/item5/` on the development machine).
-- [ ] **Faster to the threshold, same final average**: these two reached the threshold sooner on most seeds but did not
-  end higher, and the win rule judges the final average only. Adopting either needs a shorter-budget run showing it
-  holds as often, or a win rule that also counts steps to the threshold, which is the maintainer's to set.
-  - Pendulum PPO with gSDE and separate 64-64 tanh actor and critic, rl-zoo's recipe: it reached -200 sooner on 9 of
-    seeds 1 to 5 and 11 to 15 (46,400 to 127,200 steps against 72,400 to 193,000) but held on 8 of 10, as the
-    committed config does, and failed the win rule on 11 to 15 (CHANGELOG.md, 2026-10-29).
-  - LunarLander DQN with `dueling: true`: it reached 200 sooner on all of seeds 1 to 5 (100,000 to 148,000 steps
-    against 152,000 to 228,000) with the same final average (234.8 against 235.3; one seed 34 lower). Held-out seeds
-    were not run.
-- [ ] **Prioritised-replay DQN**: parked, tested but not merged, on `feature/dqn-prioritized-replay`; it did not help
-  MountainCar (MountainCar item, Phase 7). Double and dueling DQN stay opt-in (`double_q`, `dueling`; CHANGELOG.md,
-  2026-10-29).
+  training average stays near -300 on Pendulum (CHANGELOG.md, 2026-10-18), -283 with observation normalisation
+  (CHANGELOG.md, 2026-11-04). Tried without closing it: true A2C (`update_every: 8`; CHANGELOG.md, 2026-10-30) and
+  50-step chunks (50 transitions per update from one environment, against rl-zoo's 64 from eight; CHANGELOG.md,
+  2026-11-04). Untried: rl-zoo's 8 parallel environments, which need vectorised collection in the `Trainer`
+  (several environments stepped in lockstep, per-environment episode bookkeeping), a new item for the maintainer to
+  place; and gSDE exploration (its PPO version is in `~/rl-experiments/item5/` on the development machine).
 
 ### Phase 6 — Advanced RL & Robotics Extensions
 
