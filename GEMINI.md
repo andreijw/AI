@@ -44,7 +44,9 @@ To optimize token usage and context window limits:
     compile-and-compare check (`verify.py`), and the greedy rollout they are checked on (`rollout.py`).
   * `src/rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
     observation noise, episode statistics, `wrap_env`), and `checked_range` for domain randomization ranges.
-  * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`).
+  * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`), the checkpoint's trainer file
+    (`checkpoints.py`) and curriculum scheduling of the training environment's noise and randomization
+    (`curriculum.py`).
   * `src/rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
     settings that agents, trainer and environments share (`config_values.py`), structured logging (`logger.py`),
     video recording (`video.py`), visualization helpers (`visualization.py`, imported directly: the package does

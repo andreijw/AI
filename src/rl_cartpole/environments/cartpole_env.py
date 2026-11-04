@@ -137,7 +137,7 @@ class CartPoleEnv(BaseEnvWrapper):
                     f"Domain randomization range for '{param}' must be a 2-element list/tuple "
                     f"[min, max], got: {value!r}"
                 )
-            validated[param] = checked_range(param, *value)
+            validated[param] = checked_range(param, *value, positive=True)
 
         return validated
 

@@ -47,6 +47,8 @@ class ResumableEnv(Protocol):
 class SchedulableEnv(Protocol):
     """An environment whose noise and randomization settings can change between episodes."""
 
+    def check_setting(self, name: str, value: Any) -> Any: ...
+
     def scheduled_settings(self) -> dict[str, Any]: ...
 
     def apply_settings(self, settings: Mapping[str, Any]) -> None: ...
@@ -443,12 +445,18 @@ class BaseEnvWrapper:
         return self._episode_reward
 
 
-def checked_range(param: str, min_val: Any, max_val: Any) -> tuple[float, float]:
+def checked_range(
+    param: str, min_val: Any, max_val: Any, *, positive: bool = False
+) -> tuple[float, float]:
     """
     A domain randomization range ``[min_val, max_val]`` as floats.
 
+    Args:
+        positive: Also refuse a range reaching 0 or below (a physical length, mass or gravity).
+
     Raises:
-        ValueError: Naming ``param``, if a bound is not a number, is not finite, or min > max.
+        ValueError: Naming ``param``, if a bound is not a number, is not finite, or min > max,
+            or with ``positive`` if min <= 0.
     """
     if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
         raise ValueError(
@@ -463,5 +471,9 @@ def checked_range(param: str, min_val: Any, max_val: Any) -> tuple[float, float]
     if min_val > max_val:
         raise ValueError(
             f"Domain randomization range for '{param}' has min > max: [{min_val}, {max_val}]"
+        )
+    if positive and min_val <= 0:
+        raise ValueError(
+            f"Physical parameter '{param}' must be strictly positive, got min: {min_val}"
         )
     return float(min_val), float(max_val)

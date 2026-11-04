@@ -63,11 +63,11 @@ an item.
     target (the hardest settings, which evaluation always uses); `environment.curriculum` gives the easiest
     settings and the pacing, and one difficulty from 0 to 1 moves every scheduled setting between the two.
   - **Progress**: three PRs (plan approved 2026-11-03). Done: the wrappers' schedulable settings
-    (`feature/curriculum-wrapper-settings`, CHANGELOG.md, 2026-11-03). Next: the scheduler, the trainer wiring,
-    resume and the scripts; then the robustness benchmark. For the next PR: CartPole accepts a randomization range
-    with a lower bound of 0 (`length`, `masspole`, `masscart`, `gravity`), which Pendulum refuses; a curriculum
-    reaching it would divide by zero at reset, so the curriculum's config check, or CartPole's rule, should refuse
-    it (review of PR 1a, 2026-11-03).
+    (`feature/curriculum-wrapper-settings`), then the scheduler, the trainer wiring, resume and the scripts
+    (`feature/curriculum-scheduler`; both CHANGELOG.md, 2026-11-03). Next: the robustness benchmark, whose report
+    should also say when a run trained through a curriculum, since its solve episode then comes from training
+    rewards that mix difficulties (review of PR 1b, 2026-11-03). No committed config has a curriculum, and whether
+    one helps any challenge has not been measured.
   - **Acceptance criteria** (rewritten 2026-11-03: the `DomainRandomizationWrapper` the first version named does
     not exist; noise and randomization live in each challenge's wrapper):
     - `CurriculumScheduler` in `rl_core/training/curriculum.py`: linear, step and reward-threshold pacing of one
