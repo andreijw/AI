@@ -35,6 +35,9 @@ class CartPoleEnv(BaseEnvWrapper):
 
     VELOCITY_INDICES = MappingProxyType({"CartPole-v1": (1, 3)})
     SCHEDULABLE_SETTINGS = ("obs_noise_std", "action_noise_prob", "domain_randomization")
+    RANDOMIZABLE_PARAMETERS = MappingProxyType(
+        {name: name for name in ("gravity", "masscart", "masspole", "length")}
+    )
 
     def __init__(
         self,
@@ -111,8 +114,9 @@ class CartPoleEnv(BaseEnvWrapper):
             return cls._validate_domain_randomization(value)
         return super()._checked_setting(name, value)
 
-    @staticmethod
+    @classmethod
     def _validate_domain_randomization(
+        cls,
         domain_randomization: Mapping[str, Sequence[float] | tuple[float, float]] | None,
     ) -> dict[str, tuple[float, float]]:
         """Validate and normalize domain randomization configuration."""
@@ -121,13 +125,12 @@ class CartPoleEnv(BaseEnvWrapper):
         if not isinstance(domain_randomization, dict):
             raise ValueError("domain_randomization must be a dictionary of parameter ranges.")
 
-        supported_params = {"gravity", "masscart", "masspole", "length"}
         validated: dict[str, tuple[float, float]] = {}
         for param, value in domain_randomization.items():
-            if param not in supported_params:
+            if param not in cls.RANDOMIZABLE_PARAMETERS:
                 raise ValueError(
                     f"Unsupported domain randomization parameter '{param}'. "
-                    f"Supported parameters: {sorted(supported_params)}."
+                    f"Supported parameters: {sorted(cls.RANDOMIZABLE_PARAMETERS)}."
                 )
 
             if isinstance(value, list):

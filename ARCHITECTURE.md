@@ -109,6 +109,7 @@ flowchart TD
         Train["train.py"]
         Record["record.py"]
         Export["export.py"]
+        Robust["robustness.py"]
         Bench["src/benchmark.py"]
     end
 
@@ -148,6 +149,8 @@ flowchart TD
     Train --> Challenges
     Record --> Challenges
     Export --> Challenges
+    Robust --> Core
+    Robust --> Challenges
     Export --> ExportPkg
     ExportPkg --> Agents
     Bench --> Challenges

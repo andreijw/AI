@@ -84,6 +84,7 @@ AI/
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── export.py                    # Checkpoint to a standalone C header or an ONNX model
+├── robustness.py                # Checkpoint played on perturbed environments (robustness report)
 ├── setup.ps1                   # Windows developer setup
 ├── pyproject.toml              # Project packaging & tool settings
 ├── CONTRIBUTING.md             # Coding standards & workflow
@@ -617,7 +618,33 @@ The 10-episode metrics records carry `curriculum_difficulty` (and `curriculum_st
 the log says when a stage advances, and a run that ends below difficulty 1 warns. The solve rule is unchanged, but
 its training average then mixes difficulties, so quote a curriculum run's greedy evaluation at the target as well.
 A run with a curriculum resumes only with the same one. `record.py`, `export.py` and the benchmark's evaluation
-build the target and ignore the curriculum; `src/benchmark.py` trains each run through its config's curriculum.
+build the target and ignore the curriculum; `src/benchmark.py` trains each run through its config's curriculum, and
+its report names each agent that did.
+
+### Robustness of a Trained Agent
+
+`robustness.py` plays a checkpoint greedily with one setting changed at a time, to show how far outside its training
+the policy holds up:
+
+```bash
+python robustness.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt --sweep length=0.25,0.5,1.0,2.0 --sweep obs_noise_std=0,0.05,0.1 --report <scratch>/robustness.md
+```
+
+Each `--sweep SETTING=V1,V2,...` names a noise setting the challenge's wrapper can schedule (`obs_noise_std`;
+`action_noise_prob` on CartPole, `action_noise_std` on Pendulum) or a physics parameter it can randomize (CartPole
+`gravity`, `masscart`, `masspole`, `length`; Pendulum `g`, `m`, `l` or their long names), one `--sweep` per setting.
+Every value gets a new evaluation environment built from the config's `environment` section, with the noise level
+set or the parameter pinned to that value (other randomized parameters keep their ranges), and plays `--episodes`
+greedy episodes (default 20). Episode i of every row resets with the same seed, so the start states are paired;
+noise draws are not once a pinned parameter adds a draw at each reset. The first row is the config's own target.
+
+Each row says whether the value is inside the range the agent trained on: the config's value without a curriculum,
+or from the curriculum's start to the difficulty the run reached, replayed from the trainer file beside the
+checkpoint (the configured start to target when there is none). A config whose curriculum differs from the one in
+the trainer file, or that has none where the run had one, is refused, as a resume refuses it. The table gives mean
+and spread of the greedy reward, mean length and the share of episodes at or above the solve threshold. It is
+printed; `--report` also writes it as Markdown, and nothing is written without it. A checkpoint from the PyTorch
+backend loads into the NumPy agent, so no PyTorch is needed.
 
 ## Development
 

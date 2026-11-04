@@ -15,6 +15,7 @@ from rl_core.utils import setup_logger
 from rl_core.utils.video import merge_episode_clips
 from train import (
     add_challenge_arguments,
+    add_checkpoint_arguments,
     agent_output_dir,
     close_env,
     headless_rendering,
@@ -27,18 +28,7 @@ from train import (
 def main():
     """Play evaluation episodes with a checkpointed agent and save them as one MP4."""
     parser = argparse.ArgumentParser(description="Record a trained RL agent")
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="configs/cartpole_default.yaml",
-        help="Configuration the checkpoint was trained with",
-    )
-    parser.add_argument(
-        "--checkpoint",
-        type=str,
-        required=True,
-        help="Agent checkpoint to load (e.g. checkpoints/ppo/agent_episode_1400.pt)",
-    )
+    add_checkpoint_arguments(parser, "load")
     parser.add_argument(
         "--episodes",
         type=int,
