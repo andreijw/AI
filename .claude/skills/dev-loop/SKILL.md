@@ -182,6 +182,14 @@ After they have committed: push the branch, then open the PR against `develop` w
 `.github/pull_request_template.md`, with the quick summary as the first lines of its Description and every
 ticked box true. Watch `gh pr checks` until it finishes, and fix a red check without being asked.
 
+Then clean up what the work left behind (the maintainer's decision, 2026-11-04): the git worktrees made for
+it (`git worktree remove <path>` once their branch is committed or abandoned; save an abandoned diff as a
+patch first), local branches that were abandoned or have merged (`git branch -d`), and scratch or
+`~/rl-experiments/<item>/` folders that nothing in `CHANGELOG.md` or the roadmap cites. Keep an experiment
+folder a document points to. Never touch `checkpoints/`, `logs/`, `videos/` or `plots/` in the maintainer's
+checkout, or anything this work did not create. What you cannot remove (a denied deletion), list in the
+hand-off with the command for the maintainer to run.
+
 ## Honesty in the hand-off
 
 The maintainer acts on your report without re-checking it, so it has to be exact. Say "not verified" for

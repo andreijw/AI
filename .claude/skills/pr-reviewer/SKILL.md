@@ -114,8 +114,9 @@ The questions a training run, not an interpreter, would raise:
 
 - No training output: nothing from `logs/`, `checkpoints/`, `videos/`, `plots/`, `test_logs/` or
   `test_checkpoints/`, and no stray `.npz`, `.pt`, `.mp4` or `.png` elsewhere.
-- `docs/benchmarks/*.md` changed only if the roadmap item says to republish results, and then from a full
-  run, not a five-episode one.
+- `docs/benchmarks/*.md` changed only by a full rerun of the report's own agents and seeds, never a smoke
+  run (a smoke-run rewrite is Critical). A report the change makes stale (a listed agent's committed config or
+  training changed) and did not rerun is a Warning: doc-sync regenerates it in the same PR.
 - No import of PyTorch, TensorFlow, JAX or another learning framework; no new dependency in
   `pyproject.toml` that the plan did not announce.
 - A config key added or renamed is updated in every `configs/*.yaml` that uses the agent, and old
@@ -144,6 +145,12 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
   export'". The test used a checkpoint saved by a random agent and passed. With the checkpoint the row names,
   the command crashed with a `KeyError` before it got there. Only running the documented command found it.
 - The roadmap item matches what was built, including what was dropped.
+- **Every document the change makes stale is updated in this PR**, generated ones included: the README
+  results table, `docs/benchmarks/*.md`, `TESTING.md` expected numbers and timings, config header comments.
+  A stale one is a Warning, not a follow-up.
+- **Work items no longer needed are gone.** No roadmap entry still asks a question the change answered or
+  describes work it did. The hand-off lists the worktrees, branches and scratch folders the work made, and
+  either removes them or names the command to remove them (`dev-loop` step 9). A leftover is a Warning.
 - `TESTING.md` has a row, with a runnable command and an expected number, for anything a person should now
   run.
 - README usage, ARCHITECTURE.md (the class diagram, the extension steps) and config comments still

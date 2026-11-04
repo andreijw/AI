@@ -58,9 +58,17 @@ Two things are generated, so run the generator and never edit by hand:
 - **The workflow list in `README.md`**, between `<!-- WORKFLOWS:START -->` and `<!-- WORKFLOWS:END -->`:
   run `python scripts/sync_workflow_docs.py` (the virtual environment's Python) when `.github/workflows/`
   changed.
-- **`docs/benchmarks/<challenge>_results.md`**: written by `src/benchmark.py`. Regenerate it only when the
-  roadmap item calls for republished results, from a full run the maintainer has agreed to. If a smoke run
-  rewrote it, restore it.
+- **`docs/benchmarks/<challenge>_results.md`**: written by `src/benchmark.py`. Regenerate it in the same PR
+  whenever the change alters what one of its rows measures: a committed config of an agent the report lists, or
+  that agent's training (the maintainer's decision, 2026-11-04: every document a PR makes stale is updated in
+  it). Rerun the report's own agents and seeds (its header names them), on the branch's code, as a full run
+  with the default `--report`, never a smoke run; say in the hand-off how long it took, and ask first if it
+  would take more than half an hour. If a smoke run rewrote a report, restore it.
+
+**Work items no longer needed** go in the same PR. A roadmap entry the change answers (a parked idea now
+measured, a follow-up now done, a note that a later item supersedes) is removed or rewritten, with what
+was learned condensed into `CHANGELOG.md`, so nothing in the roadmap still asks a settled question. Then
+list what the work left on the machine (step 9 of the `dev-loop` skill clears it).
 
 Prefer pointing at the source over restating it. "See `configs/cartpole_dqn.yaml`" cannot go stale; a
 copied table of hyperparameters will.
