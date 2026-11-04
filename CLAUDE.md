@@ -59,7 +59,8 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
   [README → AI Assistant Skills](README.md#ai-assistant-skills).
 - **Training runs never write into the maintainer's results.** Send experiment output to the scratch directory:
   `src/benchmark.py` with `--output-dir` and `--report`, `train.py` with a copied config whose `checkpoint_dir` and
-  `log_dir` point there. The benchmark rewrites the tracked `docs/benchmarks/*.md` by default.
+  `log_dir` point there. The benchmark rewrites the tracked `docs/benchmarks/*.md` by default; it does so on
+  purpose only as a PR's full rerun of a report the change made stale (`doc-sync`).
 - **A smoke run is not evidence of learning.** Report which config, how many episodes and how many seeds; say
   "not verified" for anything not run.
 - Shared tooling: gradient checks in `tests/helpers.py` (`assert_gradients_match`), agent internals for maths
