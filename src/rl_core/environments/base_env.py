@@ -96,6 +96,10 @@ class BaseEnvWrapper:
     # The settings apply_settings may change, by constructor argument name.
     SCHEDULABLE_SETTINGS: ClassVar[tuple[str, ...]] = ("obs_noise_std",)
 
+    # The physics parameters domain_randomization accepts, each name (aliases too) mapped to its
+    # canonical one, which is the attribute it sets on the unwrapped Gymnasium environment.
+    RANDOMIZABLE_PARAMETERS: ClassVar[Mapping[str, str]] = MappingProxyType({})
+
     env: gym.Env[Any, Any]
     observation_space: gym.Space[Any]
     action_space: gym.Space[Any]

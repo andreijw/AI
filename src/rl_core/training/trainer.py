@@ -18,7 +18,7 @@ from .checkpoints import (
     TrainerState,
     checkpoint_paths,
     file_sha256,
-    trainer_state_path,
+    read_trainer_state,
     write_atomically,
 )
 from .curriculum import CurriculumScheduler, require_schedulable
@@ -498,28 +498,37 @@ class Trainer:
         Returns:
             Dictionary of evaluation metrics
         """
-        eval_rewards = []
-        eval_lengths = []
-
-        self.evaluating = True
-        try:
-            for i in range(num_episodes):
-                if self.eval_env is not None and self.eval_seed is not None:
-                    episode_reward, episode_length = self._run_episode(
-                        training=False, env=self.eval_env, reset_seed=self.eval_seed + i
-                    )
-                else:
-                    episode_reward, episode_length = self._run_episode(training=False)
-                eval_rewards.append(episode_reward)
-                eval_lengths.append(episode_length)
-        finally:
-            self.evaluating = False
-
+        episodes = self.evaluate_episodes(num_episodes)
+        eval_rewards = [reward for reward, _ in episodes]
+        eval_lengths = [length for _, length in episodes]
         return {
             "mean_reward": float(np.mean(eval_rewards)),
             "std_reward": float(np.std(eval_rewards)),
             "mean_length": float(np.mean(eval_lengths)),
         }
+
+    def evaluate_episodes(self, num_episodes: int) -> list[tuple[float, int]]:
+        """
+        Each greedy episode's reward and length, played as :meth:`evaluate` plays them.
+
+        Args:
+            num_episodes: Number of episodes to play
+        """
+        episodes = []
+        self.evaluating = True
+        try:
+            for i in range(num_episodes):
+                if self.eval_env is not None and self.eval_seed is not None:
+                    episodes.append(
+                        self._run_episode(
+                            training=False, env=self.eval_env, reset_seed=self.eval_seed + i
+                        )
+                    )
+                else:
+                    episodes.append(self._run_episode(training=False))
+        finally:
+            self.evaluating = False
+        return episodes
 
     def _save_checkpoint(self, episode: int) -> None:
         """
@@ -586,14 +595,7 @@ class Trainer:
                 had environment generators or an evaluation environment this trainer lacks (or
                 the other way round).
         """
-        trainer_path = trainer_state_path(agent_checkpoint)
-        if not os.path.exists(trainer_path):
-            raise FileNotFoundError(
-                f"{os.path.basename(trainer_path)} is missing beside {agent_checkpoint}: only "
-                "checkpoints saved with their trainer state can be resumed"
-            )
-        with np.load(trainer_path) as data:
-            state = TrainerState.from_arrays(data, agent_checkpoint)
+        state = read_trainer_state(agent_checkpoint)
         self._check_resumable(state)
         self.agent.load(agent_checkpoint)
         if isinstance(self.env, ResumableEnv):

@@ -35,14 +35,9 @@ class PendulumEnv(BaseEnvWrapper):
     VELOCITY_INDICES = MappingProxyType({"Pendulum-v1": (2,)})
     SCHEDULABLE_SETTINGS = ("obs_noise_std", "action_noise_std", "domain_randomization")
 
-    SUPPORTED_DR_PARAMS: dict[str, str] = {
-        "g": "g",
-        "gravity": "g",
-        "m": "m",
-        "mass": "m",
-        "l": "l",
-        "length": "l",
-    }
+    RANDOMIZABLE_PARAMETERS = MappingProxyType(
+        {"g": "g", "gravity": "g", "m": "m", "mass": "m", "l": "l", "length": "l"}
+    )
 
     def __init__(
         self,
@@ -103,14 +98,14 @@ class PendulumEnv(BaseEnvWrapper):
         validated: dict[str, tuple[float, float]] = {}
         for param, value in domain_randomization.items():
             param_lower = param.lower()
-            if param_lower not in cls.SUPPORTED_DR_PARAMS:
-                supported = sorted(set(cls.SUPPORTED_DR_PARAMS.keys()))
+            if param_lower not in cls.RANDOMIZABLE_PARAMETERS:
+                supported = sorted(set(cls.RANDOMIZABLE_PARAMETERS.keys()))
                 raise ValueError(
                     f"Unsupported domain randomization parameter '{param}'. "
                     f"Supported parameters: {supported}."
                 )
 
-            canon_key = cls.SUPPORTED_DR_PARAMS[param_lower]
+            canon_key = cls.RANDOMIZABLE_PARAMETERS[param_lower]
             if canon_key in validated:
                 raise ValueError(
                     f"Domain randomization parameter '{canon_key}' is given twice "

@@ -14,28 +14,60 @@ Acrobot-v1) and
 
 ## 2026-11-04
 
-### Added
+### Changed
 
-- **Observation normalisation for DQN, DDPG and TD3** (`feature/replay-obs-normalization`): `normalize_observations`
-  is no longer refused for the replay-buffer agents. As Stable-Baselines3 does, the `ReplayBuffer` holds the agent's
-  running statistics, stores the raw observations and normalises each sampled batch (observations and next
-  observations) with the statistics as they are then, so no stored input goes stale. The `Trainer` adds
-  `raw_observations` and `raw_next_observations` to a normalising agent's batch; a normalising buffer refuses a batch
-  without them. Acting, export, the PyTorch backend and the checkpoint format are unchanged (the buffer saves raw
-  observations, the agent its statistics as before), and without the setting batches and training are bit-for-bit
-  as before. `SUPPORTS_OBSERVATION_NORMALIZATION` is gone. Through the benchmark, paired by seed against the
-  committed configs: MountainCar DQN reached -110 on 5 of seeds 1 to 5 against 2 and held it on 1 against 2, with
-  a better final 100-episode average on 4 of 5 (+13.3, +10.8, +1.5, +7.6, -5.6; mean -112.3 against -117.8); on
-  held-out seeds 11 to 15 it reached -110 on 5 against 1, held it on 2 against 0 and was better on 4 of 5 (+7.0,
-  +11.8, -0.2, +16.0, +4.5; mean -110.8 against -118.7); greedy evaluation -110 ± 7 against -119 across the ten.
-  `configs/mountaincar_dqn.yaml` now sets it (the maintainer's decision); a MountainCar DQN checkpoint saved before
-  this no longer loads with the committed config. A run takes about 10% longer. Pendulum TD3 showed no difference
-  (5 of 5 hold either way, mean final -151.7 against -152.2) and its config is unchanged.
+- **Observation normalisation for the continuous Actor-Critic** (`feature/code-health-trials`):
+  `configs/pendulum_actor_critic.yaml` sets `normalize_observations: true` (the maintainer's decision). Pendulum-v1,
+  1,000,000 steps, through the benchmark, paired against the config without it: on seeds 1 to 5 the final
+  100-episode training average was better on 5 of 5 (+18.7, +9.1, +9.0, +18.4, +23.5; mean -282.7 against -298.5),
+  on held-out seeds 11 to 15 on 4 of 5 (+33.5, +28.1, +10.7, -6.1, +20.1; mean -298.9 against -316.2). No seed
+  reaches -200 either way; greedy evaluation is unchanged (-170 ± 26 against -172 ± 27 on seeds 1 to 5, -153 against
+  -154 on 11 to 15). A seed takes about 320 s against 272 s. An Actor-Critic checkpoint saved before this no longer
+  loads with the committed config, which refuses a checkpoint saved with the other `normalize_observations`.
+- **Code Health ideas measured and not adopted** (`feature/code-health-trials`; experiments, no code changed). Each
+  through the benchmark, paired by seed against the committed config, with the deciding seeds fixed beforehand:
+  - *Observation normalisation for Pendulum PPO*: held -200 on 2 of seeds 1 to 5 against 4, mean final -360.7
+    against -186.5. Seed 5 learned and then collapsed (final -1005.6): rerun through `train.py`, bit-identical, its
+    10-episode average reached -187 by episode 310 and fell to about -1000 by episode 900, with the entropy steady
+    near 0.45 and a small value loss. The cause was not established. An earlier scratch variant that froze the
+    statistics during each rollout collapsed on 3 of 5 (CHANGELOG.md, 2026-10-29).
+  - *Continuous Actor-Critic with `n_steps: 50`* (four equal chunks to a 200-step episode, 20,000 updates over 1,000,000
+    steps against 125,000; one environment, so not rl-zoo's 8 parallel ones, and the GAE horizon changes too): mean
+    final -342.5 against -298.5, better on 2 of 5, seed 4 worse by 243; greedy evaluation -257 against -172.
+  - *Faster to the threshold at a shorter budget* (the maintainer's rule, 2026-11-03: a shorter-budget run must hold
+    as often). Pendulum PPO with gSDE and separate 64-64 tanh actor and critic (scratch code), both arms at 130,000
+    steps with `anneal_steps` 130,000, on fresh seeds 21 to 25 (130,000 was chosen on seeds 1 to 5 and 11 to 15): it
+    reached -200 sooner on all 5 (45,800 to 102,400 steps against 77,000 to 125,800) but held on 3 against 4, mean
+    final -197.7 against -182.9, better on 1 of 5, at twice the time a seed. LunarLander DQN with `dueling: true`,
+    both arms at 200,000 steps, held 200 on 4 of seeds 11 to 15 against 3 (mean final 206.7 against 187.4; seed 14
+    worse by 20), and on 4 of seeds 1 to 5 against 2 (221.3 against 192.1; seed 3 worse by 16). It meets the win rule
+    at that budget, but it holds less often than the committed 300,000 steps, which hold on 5 of seeds 1 to 5 and 4 of
+    11 to 15 (CHANGELOG.md, 2026-10-27), and a 200,000-step dueling run took 874 to 937 s against 745 to 795 s for
+    them; the config is unchanged (the maintainer's decision).
+  - *Prioritised replay on LunarLander DQN*: rebuilt on develop (it combines with `double_q` and `dueling`), with
+    `priority_alpha` 0.6, `priority_beta_start` 0.4 and `priority_beta_steps` 300,000, 300,000 steps, seeds 1 to 5.
+    It held 200 on 1 of 5 against 5 of 5, mean final 166.6 against 235.3, worse on all 5. The baseline reproduced the
+    committed config's figures (CHANGELOG.md, 2026-10-27 and 2026-10-29). With MountainCar (2026-10-27) that is two
+    challenges where it did not help; it is not merged. The original branch `feature/dqn-prioritized-replay` stays
+    as it was, and the rebuilt diff is kept as `~/rl-experiments/per/prioritized-replay-on-develop-6011d4b.patch` on
+    the development machine.
 
 ## 2026-11-03
 
 ### Added
 
+- **Robustness benchmark** (`feature/curriculum-robustness-benchmark`), the last of three PRs for the curriculum
+  item, which is now complete: `robustness.py` plays a checkpoint greedily on the config's target and on environments
+  perturbed one setting at a time (`--sweep SETTING=V1,V2,...`: a schedulable noise level, or a physics parameter
+  pinned to one value), each built from the config, with paired start states. Each row says whether the value is
+  inside the range the agent trained on (the config's value, or the curriculum's start to the difficulty the run
+  reached, replayed from the trainer file; a config with another curriculum is refused, as a resume refuses it) and
+  gives the greedy reward, length and share at the solve threshold;
+  `--report` writes it as Markdown, and nothing is written without it (`rl_core.training.robustness`). The wrappers
+  list their randomizable parameters in `RANDOMIZABLE_PARAMETERS` (Pendulum's `SUPPORTED_DR_PARAMS` renamed);
+  `Trainer.evaluate_episodes` returns each greedy episode that `evaluate` averages; `src/benchmark.py`'s report names
+  each agent that trained through a curriculum. Smoke runs only (CartPole and Pendulum PPO, 10 and 30 episodes, seed
+  42): no learning claim; whether a curriculum helps is the trial under Changed below.
 - **Curriculum scheduling** (`feature/curriculum-scheduler`), the second of three PRs for the curriculum item:
   `environment.curriculum` trains through easier noise and randomization first, with `linear`, `step` or
   `reward_threshold` pacing of one difficulty from 0 to 1 (`rl_core.training.curriculum.CurriculumScheduler`, built
@@ -59,6 +91,31 @@ Acrobot-v1) and
   unsupported parameter now fails before any environment or worker process starts.
 
 ### Changed
+
+- **A curriculum did not help CartPole PPO at the trial's target** (`feature/curriculum-trial`, an experiment; no
+  code or config changed): `configs/cartpole_ppo.yaml` with `obs_noise_std: 0.05` and `domain_randomization: {length:
+  [0.25, 1.0]}`, 200,000 steps through `train.py`, seeds 1 to 5, flat (the target from the first episode) against
+  `curriculum: {mode: reward_threshold, stages: 4, threshold: 400, window: 20, min_episodes_per_stage: 20, start:
+  {obs_noise_std: 0.0, domain_randomization: {length: [0.5, 0.5]}}}`. The deciding measure, fixed beforehand, was the
+  greedy evaluation at the target (`robustness.py`'s nominal row, 20 episodes on the same start states for both arms,
+  on the last checkpoint, at most 10 episodes before the end):
+
+  | Seed | Flat | Curriculum | Curriculum at difficulty 1 from episode |
+  | :---: | :---: | :---: | :---: |
+  | 1 | 119 | 99 | 456 |
+  | 2 | 111 | 110 | 383 |
+  | 3 | 105 | 110 | 381 |
+  | 4 | 115 | 102 | 431 |
+  | 5 | 109 | 112 | 429 |
+
+  Better on 2 of 5 (by 5 and 3), worse on seeds 1 and 4 (by 20 and 13): it fails the win rule. No run of either arm
+  reached 475; final 100-episode training averages were 102 to 117 flat and 93 to 108 with the curriculum, which
+  reached the easy settings' 400 in stage 0 and fell to about 100 once the target's noise came in. Beyond the
+  training range (`--sweep length=0.125,...,2.0 --sweep obs_noise_std=0,...,0.15`) neither arm was more robust: at
+  length 2 the flat arm scored 115 to 140 and the curriculum 36 to 123; at noise 0.15, 80 to 105 against 61 to 98.
+  The one run that held 475 was the calibration run at seed 42 (curriculum, final average 497.7; flat 141.4), not
+  part of the trial. Untried: a target the committed config can learn flat (length randomization alone, or less
+  noise), where a curriculum could change how fast or how robustly it learns rather than whether.
 
 - **Config readers moved to `rl_core.utils.config_values`** (`feature/neutral-config-readers`), from
   `rl_core.agents.config_values`: the strict integer and boolean readers are shared by the agents, the trainer, the
