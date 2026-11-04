@@ -12,6 +12,46 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-04
+
+### Changed
+
+- **Observation normalisation for the continuous Actor-Critic** (`feature/code-health-trials`):
+  `configs/pendulum_actor_critic.yaml` sets `normalize_observations: true` (the maintainer's decision). Pendulum-v1,
+  1,000,000 steps, through the benchmark, paired against the config without it: on seeds 1 to 5 the final
+  100-episode training average was better on 5 of 5 (+18.7, +9.1, +9.0, +18.4, +23.5; mean -282.7 against -298.5),
+  on held-out seeds 11 to 15 on 4 of 5 (+33.5, +28.1, +10.7, -6.1, +20.1; mean -298.9 against -316.2). No seed
+  reaches -200 either way; greedy evaluation is unchanged (-170 ± 26 against -172 ± 27 on seeds 1 to 5, -153 against
+  -154 on 11 to 15). A seed takes about 320 s against 272 s. An Actor-Critic checkpoint saved before this no longer
+  loads with the committed config, which refuses a checkpoint saved with the other `normalize_observations`.
+- **Code Health ideas measured and not adopted** (`feature/code-health-trials`; experiments, no code changed). Each
+  through the benchmark, paired by seed against the committed config, with the deciding seeds fixed beforehand:
+  - *Observation normalisation for Pendulum PPO*: held -200 on 2 of seeds 1 to 5 against 4, mean final -360.7
+    against -186.5. Seed 5 learned and then collapsed (final -1005.6): rerun through `train.py`, bit-identical, its
+    10-episode average reached -187 by episode 310 and fell to about -1000 by episode 900, with the entropy steady
+    near 0.45 and a small value loss. The cause was not established. An earlier scratch variant that froze the
+    statistics during each rollout collapsed on 3 of 5 (CHANGELOG.md, 2026-10-29).
+  - *Continuous Actor-Critic with `n_steps: 50`* (four equal chunks to a 200-step episode, 20,000 updates over 1,000,000
+    steps against 125,000; one environment, so not rl-zoo's 8 parallel ones, and the GAE horizon changes too): mean
+    final -342.5 against -298.5, better on 2 of 5, seed 4 worse by 243; greedy evaluation -257 against -172.
+  - *Faster to the threshold at a shorter budget* (the maintainer's rule, 2026-11-03: a shorter-budget run must hold
+    as often). Pendulum PPO with gSDE and separate 64-64 tanh actor and critic (scratch code), both arms at 130,000
+    steps with `anneal_steps` 130,000, on fresh seeds 21 to 25 (130,000 was chosen on seeds 1 to 5 and 11 to 15): it
+    reached -200 sooner on all 5 (45,800 to 102,400 steps against 77,000 to 125,800) but held on 3 against 4, mean
+    final -197.7 against -182.9, better on 1 of 5, at twice the time a seed. LunarLander DQN with `dueling: true`,
+    both arms at 200,000 steps, held 200 on 4 of seeds 11 to 15 against 3 (mean final 206.7 against 187.4; seed 14
+    worse by 20), and on 4 of seeds 1 to 5 against 2 (221.3 against 192.1; seed 3 worse by 16). It meets the win rule
+    at that budget, but it holds less often than the committed 300,000 steps, which hold on 5 of seeds 1 to 5 and 4 of
+    11 to 15 (CHANGELOG.md, 2026-10-27), and a 200,000-step dueling run took 874 to 937 s against 745 to 795 s for
+    them; the config is unchanged (the maintainer's decision).
+  - *Prioritised replay on LunarLander DQN*: rebuilt on develop (it combines with `double_q` and `dueling`), with
+    `priority_alpha` 0.6, `priority_beta_start` 0.4 and `priority_beta_steps` 300,000, 300,000 steps, seeds 1 to 5.
+    It held 200 on 1 of 5 against 5 of 5, mean final 166.6 against 235.3, worse on all 5. The baseline reproduced the
+    committed config's figures (CHANGELOG.md, 2026-10-27 and 2026-10-29). With MountainCar (2026-10-27) that is two
+    challenges where it did not help; it is not merged. The original branch `feature/dqn-prioritized-replay` stays
+    as it was, and the rebuilt diff is kept as `~/rl-experiments/per/prioritized-replay-on-develop-6011d4b.patch` on
+    the development machine.
+
 ## 2026-11-03
 
 ### Added

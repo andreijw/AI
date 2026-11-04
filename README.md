@@ -289,7 +289,7 @@ numbers:
 | Pendulum-v1 | DDPG | `pendulum_ddpg.yaml` (rl-zoo settings, 64×64 networks) | 40,000 | 5 of 5 | 31k | 5 of 5 |
 | Pendulum-v1 | TD3 | `pendulum_td3.yaml` (rl-zoo settings, 64×64 networks); CHANGELOG.md, 2026-10-25 | 40,000 | 5 of 5 | 32.6k to 33.4k | 5 of 5 |
 | Pendulum-v1 | PPO | `pendulum_ppo.yaml` (2048-step rollouts, annealed) | 200,000 | 5 of 5 | 72k to 157k | 4 of 5 |
-| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates) | 1,000,000 | 0 of 5 | — | 0 of 5 |
+| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates, observation normalisation); CHANGELOG.md, 2026-11-04 | 1,000,000 | 0 of 5 | — | 0 of 5 |
 | Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
 | Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
 | MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate, 100k buffer); seeds 1 to 10, 2026-10-25 | 200,000 | 3 of 10 | 146k to 195k | 2 of 10 |

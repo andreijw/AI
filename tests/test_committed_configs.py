@@ -251,7 +251,8 @@ def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
 
 def test_pendulum_actor_critic_uses_the_measured_settings():
     """Bounded mean, 8-step chunked updates, entropy 0.01 and rewards x 0.05: evaluation -152 +/- 45 on
-    seeds 1-5, beating the random agent on 5 of 5 (CHANGELOG.md, 2026-10-18)."""
+    seeds 1-5, beating the random agent on 5 of 5 (CHANGELOG.md, 2026-10-18). Observation normalisation
+    raised the final training average on 5 of seeds 1-5 and 4 of 11-15 (CHANGELOG.md, 2026-11-04)."""
     from rl_pendulum.benchmark import PendulumChallenge
 
     env, agent, _ = PendulumChallenge().setup_run("actor_critic", seed=1, episodes=None)
@@ -263,6 +264,7 @@ def test_pendulum_actor_critic_uses_the_measured_settings():
         (0.4, 0.01, 0.05)
     )
     np.testing.assert_allclose(weights(agent)["log_std"], [-2.0])
+    assert agent.observation_normalizer is not None, "the config must normalise observations"
 
 
 def test_acrobot_dqn_uses_rl_zoo_settings_with_a_lower_exploration_floor():
