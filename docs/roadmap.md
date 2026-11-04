@@ -157,7 +157,7 @@ The core stays plain Python with no ROS dependency; ROS 2 comes as thin nodes at
 piece is tested against the simulator's ground truth, so the real robot later meets code that is known to be
 right in simulation. Step 1 is a full item; steps 2 to 5 are sketches to turn into full items when picked.
 
-- [ ] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04)
+- [~] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04; PR 2 of 5, the `sim/` library)
   - **Description**: A 2D Gymnasium environment and challenge package: a differential-drive robot (unicycle
     kinematics, linear and angular velocity commands, integrated at a fixed time step) in a walled arena with
     static obstacles (circles and axis-aligned boxes), reaching a goal. Its sensor is a configurable set of range

@@ -119,3 +119,46 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
     assert result.stdout.strip().splitlines()[-1] == "[]", (
         f"export.py --format c loaded {result.stdout.strip()}"
     )
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "rl_navigation",
+        "rl_navigation.sim",
+        "rl_navigation.sim.geometry",
+        "rl_navigation.sim.kinematics",
+        "rl_navigation.sim.sensors",
+        "rl_navigation.sim.layouts",
+        "rl_navigation.sim.world",
+    ],
+)
+def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
+    """The simulator is a plain NumPy library that a robot imports: Gymnasium and the training
+    framework stay out of it. A fresh process, because this session has imported both."""
+    code = (
+        "import sys; sys.path.insert(0, 'src'); "
+        f"import {module}; "
+        "print(sorted(m for m in sys.modules if m.split('.')[0] in ('gymnasium', 'rl_core'))[:5])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", (
+        f"Importing {module} loaded {result.stdout.strip()}: rl_navigation.sim may import only "
+        "NumPy and the standard library, and rl_navigation/__init__.py nothing."
+    )
+
+
+def test_importing_rl_navigation_loads_none_of_its_subpackages():
+    """rl_navigation/__init__.py imports nothing, so the robot's code pays only for what it uses."""
+    code = (
+        "import sys; sys.path.insert(0, 'src'); import rl_navigation; "
+        "print(sorted(m for m in sys.modules if m.startswith('rl_navigation.')))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", f"import rl_navigation loaded {result.stdout.strip()}."

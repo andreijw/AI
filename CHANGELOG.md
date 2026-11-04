@@ -16,6 +16,16 @@ Acrobot-v1) and
 
 ### Added
 
+- **`rl_navigation.sim`, a 2D robot simulator library** (`feature/navigation-sim`; PR 2 of 5 of the roadmap item
+  "Range-sensor navigation environment"): pure NumPy, importing neither Gymnasium nor `rl_core` (a subprocess test
+  holds the boundary), so the later estimation, mapping and planning steps and a real robot can import it. It has
+  an `Arena` of walls, circles and boxes; batched ray casting (`cast_rays`, chunked to bound memory); swept-disc
+  collision; an occupancy grid; batched unicycle kinematics on the exact arc; range sensors with an HC-SR04 preset
+  (2 cm to 4 m and a 15° cone from the datasheet, mounted on the robot's perimeter; noise and dropout are
+  placeholders until the real sensor is calibrated) and a lidar preset; a seeded layout generator that checks a path
+  exists; and a `World` that steps the robot with wheel slip. No environment, config or challenge yet. Tests use
+  hand-computed distances and arcs; 38 of 38 mutations caught. One robot step with a sonar read runs at about 1,700
+  a second on the Jetson's CPU.
 - **Observation normalisation for DQN, DDPG and TD3** (`feature/replay-obs-normalization`): `normalize_observations`
   is no longer refused for the replay-buffer agents. As Stable-Baselines3 does, the `ReplayBuffer` holds the agent's
   running statistics, stores the raw observations and normalises each sampled batch (observations and next

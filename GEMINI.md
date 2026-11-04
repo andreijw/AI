@@ -72,6 +72,12 @@ To optimize token usage and context window limits:
   * `src/rl_lunarlander/environments/`: lunar lander wrapper (observation noise only), shared by both ids, and a
     factory for each.
   * `src/rl_lunarlander/benchmark.py`: both LunarLander benchmark challenge implementations.
+* **`src/rl_navigation/`**: Range-sensor robot navigation (Phase 8); `__init__.py` imports nothing. No
+  `benchmark.py` yet, so challenge discovery skips it.
+  * `src/rl_navigation/sim/`: the simulator, NumPy and the standard library only (never Gymnasium or `rl_core`):
+    `geometry.py` (arena, batched ray casting, swept-disc collision, occupancy grid), `kinematics.py` (unicycle),
+    `sensors.py` (range sensors, `hc_sr04` and `lidar` presets), `layouts.py` (random layouts with a reachable
+    goal) and `world.py` (`World`: pose, motion with wheel slip, collision, goal, sensors).
 * **`src/rl_core/challenges/`**: The `BenchmarkChallenge` interface, the challenge registry and `discover_challenges`.
 * **`src/benchmark.py`**: The benchmark runner and its command line, for every discovered challenge.
 * **`tests/`** (located at [tests/](tests/)): Pytest unit and integration test suite
