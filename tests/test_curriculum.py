@@ -562,16 +562,39 @@ def test_train_py_trains_through_the_configs_curriculum(tmp_path, monkeypatch):
     assert difficulties == [0.5, 1.0], "the difficulty rises to the target over the run"
 
 
-def test_the_benchmark_trains_each_run_through_its_configs_curriculum(tmp_path, monkeypatch):
-    import benchmark
+_CURRICULUM_CONFIG = (
+    "environment:\n  obs_noise_std: 0.05\n  curriculum:\n    mode: linear\n    episodes: 4\n"
+    "    start: {obs_noise_std: 0.0}\nagent:\n  config: {}\n"
+)
+_PLAIN_CONFIG = "agent:\n  config: {}\n"
+
+
+def _benchmark(tmp_path, configs):
+    """Run the CartPole benchmark for 4 episodes on seed 1 with ``configs`` (agent type to YAML)
+    in tmp_path; return its Markdown report."""
     from benchmark import BenchmarkRunner, BenchmarkSettings
     from rl_cartpole.benchmark import CartPoleChallenge
 
-    (tmp_path / CartPoleChallenge.CONFIG_MAP["random"]).write_text(
-        "environment:\n  obs_noise_std: 0.05\n  curriculum:\n    mode: linear\n    episodes: 4\n"
-        "    start: {obs_noise_std: 0.0}\nagent:\n  config: {}\n",
-        encoding="utf-8",
+    for agent_type, text in configs.items():
+        (tmp_path / CartPoleChallenge.CONFIG_MAP[agent_type]).write_text(text, encoding="utf-8")
+    report = tmp_path / "report.md"
+    BenchmarkRunner(CartPoleChallenge(config_dir=str(tmp_path))).run(
+        settings=BenchmarkSettings(
+            agents=tuple(configs),
+            seeds=(1,),
+            episodes=4,
+            eval_episodes=1,
+            output_dir=str(tmp_path / "out"),
+        ),
+        report_path=str(report),
+        save_plot=False,
     )
+    return report.read_text(encoding="utf-8")
+
+
+def test_the_benchmark_trains_each_run_through_its_configs_curriculum(tmp_path, monkeypatch):
+    import benchmark
+
     built = []
 
     class _Seen(Trainer):
@@ -580,16 +603,16 @@ def test_the_benchmark_trains_each_run_through_its_configs_curriculum(tmp_path, 
             built.append(self.curriculum)
 
     monkeypatch.setattr(benchmark, "Trainer", _Seen)
-    BenchmarkRunner(CartPoleChallenge(config_dir=str(tmp_path))).run(
-        settings=BenchmarkSettings(
-            agents=("random",),
-            seeds=(1,),
-            episodes=4,
-            eval_episodes=1,
-            output_dir=str(tmp_path / "out"),
-        ),
-        report_path=str(tmp_path / "report.md"),
-        save_plot=False,
-    )
+    _benchmark(tmp_path, {"random": _CURRICULUM_CONFIG})
     (curriculum,) = built
     assert curriculum is not None and curriculum.difficulty == 1.0
+
+
+def test_the_benchmark_report_names_the_agents_that_trained_through_a_curriculum(tmp_path):
+    md = _benchmark(tmp_path, {"random": _CURRICULUM_CONFIG, "reinforce": _PLAIN_CONFIG})
+    assert "**random** trained through a curriculum (linear)" in md, "the curriculum run is named"
+    assert "**reinforce** trained through a curriculum" not in md, "only the run that had one"
+
+
+def test_the_benchmark_report_says_nothing_of_a_curriculum_without_one(tmp_path):
+    assert "curriculum" not in _benchmark(tmp_path, {"random": _PLAIN_CONFIG})

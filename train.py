@@ -49,6 +49,28 @@ def load_run_config(config_path, agent_type=None, num_episodes=None, total_steps
     return config, agent_type
 
 
+def add_checkpoint_arguments(parser, use):
+    """Add --config and --checkpoint, for a script that reads a checkpoint to ``use`` it."""
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/cartpole_default.yaml",
+        help="Configuration the checkpoint was trained with",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        required=True,
+        help=f"Agent checkpoint to {use} (e.g. checkpoints/ppo/agent_episode_1400.pt)",
+    )
+
+
+def numpy_agent_config(config):
+    """The run's agent config on the NumPy backend: a PyTorch-backend checkpoint loads into the
+    NumPy agent, which runs the same greedy maths without PyTorch."""
+    return {**config["agent"]["config"], "backend": "numpy"}
+
+
 def add_challenge_arguments(parser):
     """Discover the challenges and add --agent-type and --challenge with their choices to parser."""
     discover_challenges()

@@ -84,6 +84,7 @@ AI/
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── export.py                    # Checkpoint to a standalone C header or an ONNX model
+├── robustness.py                # Checkpoint played on perturbed environments (robustness report)
 ├── setup.ps1                   # Windows developer setup
 ├── pyproject.toml              # Project packaging & tool settings
 ├── CONTRIBUTING.md             # Coding standards & workflow
@@ -289,10 +290,10 @@ numbers:
 | Pendulum-v1 | DDPG | `pendulum_ddpg.yaml` (rl-zoo settings, 64×64 networks) | 40,000 | 5 of 5 | 31k | 5 of 5 |
 | Pendulum-v1 | TD3 | `pendulum_td3.yaml` (rl-zoo settings, 64×64 networks); CHANGELOG.md, 2026-10-25 | 40,000 | 5 of 5 | 32.6k to 33.4k | 5 of 5 |
 | Pendulum-v1 | PPO | `pendulum_ppo.yaml` (2048-step rollouts, annealed) | 200,000 | 5 of 5 | 72k to 157k | 4 of 5 |
-| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates) | 1,000,000 | 0 of 5 | — | 0 of 5 |
+| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates, observation normalisation); CHANGELOG.md, 2026-11-04 | 1,000,000 | 0 of 5 | — | 0 of 5 |
 | Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
 | Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
-| MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate, 100k buffer); seeds 1 to 10, 2026-10-25 | 200,000 | 3 of 10 | 146k to 195k | 2 of 10 |
+| MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate, 100k buffer, observations normalised when sampled); seeds 1 to 5 and 11 to 15, 2026-11-04 | 200,000 | 10 of 10 | 141k to 197k | 3 of 10 |
 | MountainCarContinuous-v0 | DDPG | `mountaincar_continuous_ddpg.yaml` (rl-zoo settings, OU noise, 64×64 networks) | 300,000 | 5 of 5 | 25k to 69k | 5 of 5 |
 | MountainCarContinuous-v0 | TD3 | `mountaincar_continuous_td3.yaml` (rl-zoo settings, OU noise, 400×300 networks, PyTorch backend); CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 37k to 70k | 5 of 5 |
 | LunarLander-v3 | DQN | `lunarlander_dqn.yaml` (rl-zoo settings, one hidden layer of 256, epsilon floor 0.1); seeds 1 to 5, which chose the floor; held-out seeds 11 to 15: 5 of 5 reach (166k to 297k), 4 of 5 hold; CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 152k to 228k | 5 of 5 |
@@ -313,8 +314,10 @@ MountainCar DQN learns to reach the flag but does not reliably hold -110. Its gr
 and does not stay there; a 100,000-transition replay buffer (rl-zoo: 10,000) helps the training average. On seeds 1 to
 10 the final training averages are -107 to -132 (mean -120.5, against -131.2 with 10,000) against the random agent's
 -200, its greedy evaluation is -120 ± 13, and 2 of 10 seeds end at or above -110, both crossing it in their last 5,000
-to 14,000 steps (CHANGELOG.md, 2026-10-25). Two hidden layers, a
-Huber loss or scaled inputs did not help (CHANGELOG.md, 2026-10-23). PPO has no
+to 14,000 steps (CHANGELOG.md, 2026-10-25). Since 2026-11-04 its observations are normalised when a batch is
+sampled: on seeds 1 to 5 and 11 to 15 every seed reaches -110 and 3 of 10 hold it, final averages -106 to -119,
+greedy evaluation -110 ± 7 (CHANGELOG.md, 2026-11-04). Two hidden layers, a Huber loss or scaled inputs did
+not help (CHANGELOG.md, 2026-10-23). PPO has no
 MountainCar config: without reward normalisation it never reached the flag in 1,000,000 steps on any of 5 seeds.
 MountainCarContinuous DDPG explores with Ornstein-Uhlenbeck noise (sigma 0.5), as rl-zoo's does; its greedy evaluation
 averages 93.4 (± 0.2 across seed means) against rl-zoo's 93.5. With Gaussian noise of the same std it solved no seed:
@@ -582,7 +585,8 @@ agent:
   config:
     seed: 42
     # normalize_observations: true  # optional: running mean and variance of the inputs, saved with the
-    #                               #   checkpoint (REINFORCE, Actor-Critic, PPO; not DQN, DDPG, TD3)
+    #                               #   checkpoint (every agent; DQN, DDPG and TD3 store raw observations
+    #                               #   and normalise each sampled batch)
 
 # Training settings
 training:
@@ -617,7 +621,33 @@ The 10-episode metrics records carry `curriculum_difficulty` (and `curriculum_st
 the log says when a stage advances, and a run that ends below difficulty 1 warns. The solve rule is unchanged, but
 its training average then mixes difficulties, so quote a curriculum run's greedy evaluation at the target as well.
 A run with a curriculum resumes only with the same one. `record.py`, `export.py` and the benchmark's evaluation
-build the target and ignore the curriculum; `src/benchmark.py` trains each run through its config's curriculum.
+build the target and ignore the curriculum; `src/benchmark.py` trains each run through its config's curriculum, and
+its report names each agent that did.
+
+### Robustness of a Trained Agent
+
+`robustness.py` plays a checkpoint greedily with one setting changed at a time, to show how far outside its training
+the policy holds up:
+
+```bash
+python robustness.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt --sweep length=0.25,0.5,1.0,2.0 --sweep obs_noise_std=0,0.05,0.1 --report <scratch>/robustness.md
+```
+
+Each `--sweep SETTING=V1,V2,...` names a noise setting the challenge's wrapper can schedule (`obs_noise_std`;
+`action_noise_prob` on CartPole, `action_noise_std` on Pendulum) or a physics parameter it can randomize (CartPole
+`gravity`, `masscart`, `masspole`, `length`; Pendulum `g`, `m`, `l` or their long names), one `--sweep` per setting.
+Every value gets a new evaluation environment built from the config's `environment` section, with the noise level
+set or the parameter pinned to that value (other randomized parameters keep their ranges), and plays `--episodes`
+greedy episodes (default 20). Episode i of every row resets with the same seed, so the start states are paired;
+noise draws are not once a pinned parameter adds a draw at each reset. The first row is the config's own target.
+
+Each row says whether the value is inside the range the agent trained on: the config's value without a curriculum,
+or from the curriculum's start to the difficulty the run reached, replayed from the trainer file beside the
+checkpoint (the configured start to target when there is none). A config whose curriculum differs from the one in
+the trainer file, or that has none where the run had one, is refused, as a resume refuses it. The table gives mean
+and spread of the greedy reward, mean length and the share of episodes at or above the solve threshold. It is
+printed; `--report` also writes it as Markdown, and nothing is written without it. A checkpoint from the PyTorch
+backend loads into the NumPy agent, so no PyTorch is needed.
 
 ## Development
 

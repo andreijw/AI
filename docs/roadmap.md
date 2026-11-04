@@ -9,9 +9,8 @@ an item that is done moves there, condensed, in the hand-off commit that complet
 
 ## Upcoming Milestones
 
-Order (the maintainer's decision, 2026-10-31): finish Training and Code Health first, then Phase 6 starting with frame
-stacking. The TD3 decision and gradient clipping with SGD are done (CHANGELOG.md, 2026-11-01), so Phase 6 is next. The
-parked ideas under Code Health do not block Phase 6.
+Order (the maintainer's decision, 2026-11-03): Phase 6 is done (CHANGELOG.md, 2026-11-03), so Code Health's
+parked ideas come next, then Phase 7.
 
 ### Workflow Tooling
 
@@ -25,73 +24,32 @@ No open items.
 
 The last health dashboard (brooks-health, 2026-10-22) scored 94/100 with 0 Critical findings; its four Warnings are
 fixed (CHANGELOG.md, 2026-10-22 and 2026-10-25). The five ideas the maintainer picked on 2026-10-28 are done
-(CHANGELOG.md, 2026-10-28 and 2026-10-29). A learning change is committed only if, on seeds 1 to 5 against the
+(CHANGELOG.md, 2026-10-28 and 2026-10-29), and the ideas picked on 2026-11-03 are measured (CHANGELOG.md,
+2026-11-04), but for the one in progress below. A learning change is committed only if, on seeds 1 to 5 against the
 committed config, more seeds hold the threshold or the mean final average is better on at least 4 of 5 paired seeds
 with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
+
+- [~] **Observation normalisation for the replay-buffer agents**: `normalize_observations` is refused for DQN, DDPG and
+  TD3, whose buffers would keep inputs normalised by statistics that later change; SB3 stores raw observations and
+  normalises at sample time. In progress (the maintainer's pick, 2026-11-03): the buffer stores raw observations and
+  normalises each sampled batch with the current statistics, to be measured on MountainCar DQN and Pendulum TD3. For the
+  on-policy agents it is measured: adopted for the continuous Actor-Critic, worse for Pendulum PPO (CHANGELOG.md,
+  2026-11-04).
 
 Parked ideas, not scheduled. Each needs the maintainer's pick, and some a decision on the win rule, before it becomes
 an item.
 
-- [ ] **Observation normalisation for the replay-buffer agents**: `normalize_observations` is refused for DQN, DDPG and
-  TD3, whose buffers would keep inputs normalised by statistics that later change; SB3 stores raw observations and
-  normalises at sample time. Not measured: whether Pendulum PPO or the continuous Actor-Critic learn better with it
-  (only smoke runs, CHANGELOG.md, 2026-11-02).
 - [ ] **The continuous Actor-Critic's training average**: its greedy policy matches rl-zoo's A2C, but its 100-episode
-  training average stays at about -300 on Pendulum (CHANGELOG.md, 2026-10-18). True A2C, each chunk trained on as it
-  is collected (`update_every: 8`), did not close it: mean final -295.0 against -298.5, better on 3 of 5 seeds
-  (CHANGELOG.md, 2026-10-30; PR #153). Untried: rl-zoo's 8 parallel environments (64 transitions per update, against
-  8 here), and gSDE exploration (a PPO version was tried on Pendulum, CHANGELOG.md, 2026-10-29; its code is in
-  `~/rl-experiments/item5/` on the development machine).
-- [ ] **Faster to the threshold, same final average**: these two reached the threshold sooner on most seeds but did not
-  end higher, and the win rule judges the final average only. Adopting either needs a shorter-budget run showing it
-  holds as often, or a win rule that also counts steps to the threshold, which is the maintainer's to set.
-  - Pendulum PPO with gSDE and separate 64-64 tanh actor and critic, rl-zoo's recipe: it reached -200 sooner on 9 of
-    seeds 1 to 5 and 11 to 15 (46,400 to 127,200 steps against 72,400 to 193,000) but held on 8 of 10, as the
-    committed config does, and failed the win rule on 11 to 15 (CHANGELOG.md, 2026-10-29).
-  - LunarLander DQN with `dueling: true`: it reached 200 sooner on all of seeds 1 to 5 (100,000 to 148,000 steps
-    against 152,000 to 228,000) with the same final average (234.8 against 235.3; one seed 34 lower). Held-out seeds
-    were not run.
-- [ ] **Prioritised-replay DQN**: parked, tested but not merged, on `feature/dqn-prioritized-replay`; it did not help
-  MountainCar (MountainCar item, Phase 7). Double and dueling DQN stay opt-in (`double_q`, `dueling`; CHANGELOG.md,
-  2026-10-29).
+  training average stays near -300 on Pendulum (CHANGELOG.md, 2026-10-18), -283 with observation normalisation
+  (CHANGELOG.md, 2026-11-04). Tried without closing it: true A2C (`update_every: 8`; CHANGELOG.md, 2026-10-30) and
+  50-step chunks (50 transitions per update from one environment, against rl-zoo's 64 from eight; CHANGELOG.md,
+  2026-11-04). Untried: rl-zoo's 8 parallel environments, which need vectorised collection in the `Trainer`
+  (several environments stepped in lockstep, per-environment episode bookkeeping), a new item for the maintainer to
+  place; and gSDE exploration (its PPO version is in `~/rl-experiments/item5/` on the development machine).
 
 ### Phase 6 — Advanced RL & Robotics Extensions
 
-- [~] **Curriculum Learning & Domain Randomization Scheduling**
-  - **Description**: Add dynamic curriculum pacing that scales domain randomization and noise injection difficulty
-    as the agent reaches performance milestones during training. The config's `environment` section stays the
-    target (the hardest settings, which evaluation always uses); `environment.curriculum` gives the easiest
-    settings and the pacing, and one difficulty from 0 to 1 moves every scheduled setting between the two.
-  - **Progress**: three PRs (plan approved 2026-11-03). Done: the wrappers' schedulable settings
-    (`feature/curriculum-wrapper-settings`), then the scheduler, the trainer wiring, resume and the scripts
-    (`feature/curriculum-scheduler`; both CHANGELOG.md, 2026-11-03). Next: the robustness benchmark, whose report
-    should also say when a run trained through a curriculum, since its solve episode then comes from training
-    rewards that mix difficulties (review of PR 1b, 2026-11-03). No committed config has a curriculum, and whether
-    one helps any challenge has not been measured.
-  - **Acceptance criteria** (rewritten 2026-11-03: the `DomainRandomizationWrapper` the first version named does
-    not exist; noise and randomization live in each challenge's wrapper):
-    - `CurriculumScheduler` in `rl_core/training/curriculum.py`: linear, step and reward-threshold pacing of one
-      difficulty from 0 to 1, an integer stage, exact at both ends, no randomness.
-    - Each wrapper lists `SCHEDULABLE_SETTINGS` (observation noise everywhere; action noise and domain randomization
-      on CartPole and Pendulum) and changes them between episodes through `apply_settings`: all or nothing, the
-      constructor's checks, only settings on at construction, the same randomization parameters. (Done.)
-    - The curriculum is set in `environment.curriculum`; `read_env_settings` passes the key through, so `record.py`,
-      `export.py` and the benchmark load the same config. Evaluation runs at the target on its own environment; a
-      curriculum without one is refused.
-    - Resumable mid-curriculum by replaying the saved training rewards; the curriculum is saved, and a resume with
-      a different one is refused (the maintainer's decision, 2026-11-03).
-    - No curriculum means unchanged training, pinned by the wrappers' recorded trajectories
-      (`tests/test_env_golden.py`, recorded before the change).
-    - Robustness benchmark: a trained checkpoint evaluated greedily over perturbations inside and beyond its training
-      range, one evaluation environment per perturbation built from the config.
-    - Unit tests in `tests/test_curriculum.py`, plus wrapper, trainer and script tests.
-  - **Solve rule under a curriculum** (the maintainer's decision, 2026-11-03): unchanged; a curriculum result also
-    quotes greedy evaluation at the target.
-  - **Known edge cases**: Catastrophic forgetting across difficulty stages; oscillation near threshold boundaries
-    (difficulty never falls, and a stage lasts at least `min_episodes_per_stage`, no fewer than `window`).
-  - **Out of scope**: Adversarial environment generation; automatic domain randomization (ADR) meta-policies;
-    curricula over anything but the wrappers' noise and randomization; vector environments; mixing easier episodes
-    back in against forgetting (a follow-up if a learning run shows it).
+No open items.
 
 ### Phase 7 — Challenge Ladder
 
@@ -104,7 +62,8 @@ when picked.
 - [ ] **MountainCar-v0: Hold -110**
   - **Description**: MountainCar-v0's DQN does not reliably hold -110: with a 100,000-transition buffer, 2 of 10 seeds
     end at or above it (both crossing it only near the end of the run), and the final averages are -107 to -132
-    (CHANGELOG.md, 2026-10-25).
+    (CHANGELOG.md, 2026-10-25). With observations normalised when sampled, committed 2026-11-04, all of seeds 1 to 5
+    and 11 to 15 reach -110 and 3 of 10 hold it, final averages -106 to -119 (CHANGELOG.md, 2026-11-04).
   - **Diagnosis (2026-10-25)**: the agent reaches the flag reliably, so exploration is unlikely to be the limit. On seed
     4 the greedy policy evaluated -100 to -107 from episode 550 to 700, then settled near -125 with a spread of about
     20 and did not stay good: consistent with a good policy found and then forgotten. A larger buffer helps the

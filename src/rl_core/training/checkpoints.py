@@ -41,6 +41,25 @@ def trainer_state_path(agent_checkpoint: str) -> str:
     return os.path.join(directory, f"{TRAINER_PREFIX}{match.group(1)}.npz")
 
 
+def read_trainer_state(agent_checkpoint: str) -> "TrainerState":
+    """
+    Read and check the trainer file beside an agent checkpoint (see :meth:`TrainerState.from_arrays`).
+
+    Raises:
+        FileNotFoundError: If there is no trainer file beside the checkpoint.
+        ValueError: If the checkpoint's name is not the trainer's, or the trainer file is malformed
+            or belongs to another agent file.
+    """
+    trainer_path = trainer_state_path(agent_checkpoint)
+    if not os.path.exists(trainer_path):
+        raise FileNotFoundError(
+            f"{os.path.basename(trainer_path)} is missing beside {agent_checkpoint}: only "
+            "checkpoints saved with their trainer state can be resumed"
+        )
+    with np.load(trainer_path) as data:
+        return TrainerState.from_arrays(data, agent_checkpoint)
+
+
 def write_atomically(path: str, write: Callable[[str], None]) -> None:
     """
     Have ``write`` write a temporary file beside ``path`` (same extension), then move it into

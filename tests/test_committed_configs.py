@@ -251,7 +251,8 @@ def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
 
 def test_pendulum_actor_critic_uses_the_measured_settings():
     """Bounded mean, 8-step chunked updates, entropy 0.01 and rewards x 0.05: evaluation -152 +/- 45 on
-    seeds 1-5, beating the random agent on 5 of 5 (CHANGELOG.md, 2026-10-18)."""
+    seeds 1-5, beating the random agent on 5 of 5 (CHANGELOG.md, 2026-10-18). Observation normalisation
+    raised the final training average on 5 of seeds 1-5 and 4 of 11-15 (CHANGELOG.md, 2026-11-04)."""
     from rl_pendulum.benchmark import PendulumChallenge
 
     env, agent, _ = PendulumChallenge().setup_run("actor_critic", seed=1, episodes=None)
@@ -263,6 +264,7 @@ def test_pendulum_actor_critic_uses_the_measured_settings():
         (0.4, 0.01, 0.05)
     )
     np.testing.assert_allclose(weights(agent)["log_std"], [-2.0])
+    assert agent.observation_normalizer is not None, "the config must normalise observations"
 
 
 def test_acrobot_dqn_uses_rl_zoo_settings_with_a_lower_exploration_floor():
@@ -296,7 +298,9 @@ def test_mountaincar_dqn_uses_rl_zoo_settings_with_a_decaying_learning_rate():
     transition. Its target sync every 600 environment steps is 300 gradient steps here, epsilon falls to
     0.02 rather than 0.07, and the learning rate decays to zero over a 200,000-step budget instead of
     staying fixed over 120,000 (CHANGELOG.md, 2026-10-23). The replay buffer holds 100,000 transitions,
-    not rl-zoo's 10,000, so a good policy found mid-run is forgotten less often (CHANGELOG.md, 2026-10-25)."""
+    not rl-zoo's 10,000, so a good policy found mid-run is forgotten less often (CHANGELOG.md, 2026-10-25).
+    Observations are normalised at sampling time, which reached -110 on 10 of seeds 1-5 and 11-15 against 3
+    (CHANGELOG.md, 2026-11-04)."""
     env, agent, _ = discover_challenges()["mountaincar"]().setup_run("dqn", seed=1, episodes=None)
     env.close()
     assert isinstance(optimizer(agent), Adam)
@@ -306,3 +310,4 @@ def test_mountaincar_dqn_uses_rl_zoo_settings_with_a_decaying_learning_rate():
     assert (agent.exploration_steps, agent.epsilon_end) == (24_000, pytest.approx(0.02))
     assert (agent.updates_per_step, agent.max_updates_per_call) == (0.5, 100)
     assert agent.anneal_steps == 200_000, "the rate decays over the whole budget"
+    assert agent.observation_normalizer is not None, "the config must normalise observations"

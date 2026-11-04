@@ -18,7 +18,7 @@ from .checkpoints import (
     TrainerState,
     checkpoint_paths,
     file_sha256,
-    trainer_state_path,
+    read_trainer_state,
     write_atomically,
 )
 from .curriculum import CurriculumScheduler, require_schedulable
@@ -430,8 +430,9 @@ class Trainer:
         episode_length = 0
 
         # Transitions not yet handed to the agent: the whole episode, or with update_every the
-        # steps since the last update.
-        transitions: list[tuple[Any, Any, Any, Any, bool, bool]] = []
+        # steps since the last update. Each keeps the raw observations too, for an agent whose
+        # replay buffer stores them and normalises when it samples.
+        transitions: list[tuple[Any, Any, Any, Any, bool, bool, Any, Any]] = []
         update_every = self.update_every if training else None
 
         done = False
@@ -440,11 +441,13 @@ class Trainer:
             raw_next, reward, terminated, truncated, info = env.step(action)
             next_obs = self.agent.normalize_observation(raw_next, training=training)
             done = terminated or truncated
-            transitions.append((obs, action, reward, next_obs, done, bool(terminated)))
+            transitions.append(
+                (obs, action, reward, next_obs, done, bool(terminated), raw_obs, raw_next)
+            )
 
             episode_reward += float(reward)
             episode_length += 1
-            obs = next_obs
+            obs, raw_obs = next_obs, raw_next
             # The step that ends the episode goes with the final update below.
             last = done or episode_length >= self.max_steps_per_episode
             if update_every is not None and episode_length % update_every == 0 and not last:
@@ -457,11 +460,17 @@ class Trainer:
 
         return episode_reward, episode_length
 
-    def _update_agent(self, transitions: list[tuple[Any, Any, Any, Any, bool, bool]]) -> None:
-        """Hand the agent these transitions, in order, as one batch, and keep its metrics."""
-        observations, actions, rewards, next_observations, dones, terminateds = zip(
-            *transitions, strict=True
-        )
+    def _update_agent(
+        self, transitions: list[tuple[Any, Any, Any, Any, bool, bool, Any, Any]]
+    ) -> None:
+        """
+        Hand the agent these transitions, in order, as one batch, and keep its metrics. A
+        normalising agent's batch also carries ``raw_observations`` and ``raw_next_observations``,
+        the environment's observations before normalisation, which a replay buffer stores; an
+        on-policy agent ignores them.
+        """
+        (observations, actions, rewards, next_observations, dones, terminateds, raws,
+         raw_nexts) = zip(*transitions, strict=True)  # fmt: skip
         batch = {
             "observations": np.array(observations),
             "actions": np.array(actions),
@@ -470,6 +479,9 @@ class Trainer:
             "dones": np.array(dones),
             "terminated": np.array(terminateds, dtype=bool),
         }
+        if self.agent.observation_normalizer is not None:
+            batch["raw_observations"] = np.array(raws)
+            batch["raw_next_observations"] = np.array(raw_nexts)
         self._record_update_metrics(self.agent.update(batch))
 
     def evaluate(self, num_episodes: int = 10) -> dict[str, float]:
@@ -486,28 +498,37 @@ class Trainer:
         Returns:
             Dictionary of evaluation metrics
         """
-        eval_rewards = []
-        eval_lengths = []
-
-        self.evaluating = True
-        try:
-            for i in range(num_episodes):
-                if self.eval_env is not None and self.eval_seed is not None:
-                    episode_reward, episode_length = self._run_episode(
-                        training=False, env=self.eval_env, reset_seed=self.eval_seed + i
-                    )
-                else:
-                    episode_reward, episode_length = self._run_episode(training=False)
-                eval_rewards.append(episode_reward)
-                eval_lengths.append(episode_length)
-        finally:
-            self.evaluating = False
-
+        episodes = self.evaluate_episodes(num_episodes)
+        eval_rewards = [reward for reward, _ in episodes]
+        eval_lengths = [length for _, length in episodes]
         return {
             "mean_reward": float(np.mean(eval_rewards)),
             "std_reward": float(np.std(eval_rewards)),
             "mean_length": float(np.mean(eval_lengths)),
         }
+
+    def evaluate_episodes(self, num_episodes: int) -> list[tuple[float, int]]:
+        """
+        Each greedy episode's reward and length, played as :meth:`evaluate` plays them.
+
+        Args:
+            num_episodes: Number of episodes to play
+        """
+        episodes = []
+        self.evaluating = True
+        try:
+            for i in range(num_episodes):
+                if self.eval_env is not None and self.eval_seed is not None:
+                    episodes.append(
+                        self._run_episode(
+                            training=False, env=self.eval_env, reset_seed=self.eval_seed + i
+                        )
+                    )
+                else:
+                    episodes.append(self._run_episode(training=False))
+        finally:
+            self.evaluating = False
+        return episodes
 
     def _save_checkpoint(self, episode: int) -> None:
         """
@@ -574,14 +595,7 @@ class Trainer:
                 had environment generators or an evaluation environment this trainer lacks (or
                 the other way round).
         """
-        trainer_path = trainer_state_path(agent_checkpoint)
-        if not os.path.exists(trainer_path):
-            raise FileNotFoundError(
-                f"{os.path.basename(trainer_path)} is missing beside {agent_checkpoint}: only "
-                "checkpoints saved with their trainer state can be resumed"
-            )
-        with np.load(trainer_path) as data:
-            state = TrainerState.from_arrays(data, agent_checkpoint)
+        state = read_trainer_state(agent_checkpoint)
         self._check_resumable(state)
         self.agent.load(agent_checkpoint)
         if isinstance(self.env, ResumableEnv):

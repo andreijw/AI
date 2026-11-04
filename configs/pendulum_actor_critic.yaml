@@ -4,6 +4,9 @@
 # scale. Measured 2026-10-18 (scratch harness, seeds 1-5, 1,000,000 steps): greedy evaluation -152 +/- 45 across
 # seed means, beating the random agent's -1224 on 5 of 5 seeds; the 100-episode training average stays at -286 to
 # -341 and does not reach -200 (CHANGELOG.md, 2026-10-18).
+# Observation normalisation since 2026-11-04: the final 100-episode training average was better on 5 of seeds 1-5
+# (mean -282.7 against -298.5) and 4 of held-out seeds 11-15 (-298.9 against -316.2), greedy evaluation unchanged;
+# still short of -200 (CHANGELOG.md, 2026-11-04).
 
 environment:
   name: "Pendulum-v1"
@@ -25,6 +28,7 @@ agent:
     entropy_coef: 0.01          # Entropy bonus: without it the log std collapses (0.003 and 0.001 measured worse)
     init_log_std: -2.0          # Initial log standard deviation (rl-zoo log_std_init)
     reward_scale: 0.05          # Rewards x 0.05; matched a running reward normaliser, 0.1 was worse
+    normalize_observations: true # Running mean and variance of the inputs, saved with the checkpoint
     hidden_dim: 128
     action_low: -2.0
     action_high: 2.0

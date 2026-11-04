@@ -210,6 +210,8 @@ class SeedRun:
     lengths: list[int]
     budget: tuple[int, str]
     separate_eval: bool
+    # The run's curriculum mode, or None for a run without one.
+    curriculum: str | None = None
 
 
 class BenchmarkRunner:
@@ -263,13 +265,19 @@ class BenchmarkRunner:
         # Whether every run evaluated on a separate environment (challenges without configs do not).
         separate_eval = all(run.separate_eval for agent_runs in runs.values() for run in agent_runs)
         summary = summarise_runs(results, budgets)
+        # Each agent's curriculum mode as its last seed set it; every seed shares one config.
+        curricula = {
+            agent: agent_runs[-1].curriculum
+            for agent, agent_runs in runs.items()
+            if agent_runs[-1].curriculum is not None
+        }
 
         plot_file = self._save_plot(runs, budgets, resolved) if save_plot else None
         metrics_json_path = self._write_metrics_json(resolved, summary, results, budgets)
         if report_path:
             os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
             report_md = self._generate_markdown_report(
-                summary, resolved, plot_file, report_path, separate_eval
+                summary, resolved, plot_file, report_path, separate_eval, curricula
             )
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write(report_md)
@@ -397,7 +405,14 @@ class BenchmarkRunner:
         result = self._run_record(
             seed, duration, eval_mean, episode_rewards, episode_lengths, settings.window
         )
-        return SeedRun(result, episode_rewards, episode_lengths, budget, eval_env is not None)
+        return SeedRun(
+            result,
+            episode_rewards,
+            episode_lengths,
+            budget,
+            eval_env is not None,
+            None if curriculum is None else curriculum.mode,
+        )
 
     def _run_record(
         self,
@@ -507,6 +522,7 @@ class BenchmarkRunner:
         plot_file: str | None,
         report_path: str,
         separate_eval: bool,
+        curricula: dict[str, str] | None = None,
     ) -> str:
         """Generate formatted Markdown report text for this challenge."""
         has_step_budget = any(stats["budget_unit"] == "steps" for stats in summary.values())
@@ -514,6 +530,7 @@ class BenchmarkRunner:
             *self._report_header(),
             *self._report_configuration(settings),
             *self._report_solve_rule(settings, separate_eval, has_step_budget),
+            *_report_curricula(curricula or {}),
             *_report_table(settings.agents, summary),
             *_report_plot_link(plot_file, report_path),
             "",
@@ -607,6 +624,21 @@ def _report_row(agent_type: str, stats: dict[str, Any]) -> str:
         f"±{stats['std_eval_reward']:.1f} | {solve_pct} | {avg_solve} | {avg_steps} | "
         f"{held_pct} | {eval_pct} | {stats['mean_duration']:.2f}s |"
     )
+
+
+def _report_curricula(curricula: dict[str, str]) -> list[str]:
+    """A note for each agent that trained through a curriculum; none without one."""
+    if not curricula:
+        return []
+    return [
+        "",
+        *(
+            f"- **{agent}** trained through a curriculum ({mode}): its solve episode comes from "
+            "training rewards at mixed difficulties; **Mean Eval Reward** is greedy evaluation "
+            "at the target."
+            for agent, mode in curricula.items()
+        ),
+    ]
 
 
 def _report_plot_link(plot_file: str | None, report_path: str) -> list[str]:
