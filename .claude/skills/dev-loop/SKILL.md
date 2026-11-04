@@ -196,6 +196,34 @@ folder a document points to. Never touch `checkpoints/`, `logs/`, `videos/` or `
 checkout, or anything this work did not create. What you cannot remove (a denied deletion), list in the
 hand-off with the command for the maintainer to run.
 
+## Working in parallel
+
+The maintainer wants the loop to go faster where the work allows it (2026-11-04). The touchpoints do not
+change: one pick, one plan approval and one commit per item, batched when several items run together.
+
+**Subagents are your call.** Spawn them when the work splits into parts that do not depend on each other:
+the plan review and the PR review (always, as above), two or more roadmap items picked together (one agent
+per item), or a search across many files. Not for a few tool calls you could make yourself. Brief each one
+as a peer, since it sees only your prompt:
+
+- the skill it follows (`algorithm-crafter`, `training-doctor`, `test-crafter` ...) and the roadmap item;
+- its own worktree, branched from `develop` (`git worktree add -b <branch> ~/rl-experiments/<item>-repo
+  origin/develop`), with `PYTHONPATH=$PWD/src` for every Python tool, since the editable install points at the
+  main checkout;
+- what it must not touch: `CHANGELOG.md` and `docs/roadmap.md` (you write them for every item at hand-off,
+  so parallel branches do not conflict), the maintainer's `checkpoints/`, `logs/`, `videos/` and `plots/`, and
+  `git commit`;
+- no training run longer than a few minutes unless you scheduled it: the machine has 6 cores, so keep at most
+  3 runs going at once across all agents, each with `OPENBLAS_NUM_THREADS=1`.
+
+Check what comes back before relying on it. A subagent's result is a claim, and its mistakes read as
+confidently as its findings.
+
+**Workflows only when the maintainer asks.** A workflow fans out many agents and costs far more tokens, and
+Claude Code runs one only on an explicit request ("use a workflow"). When a batch would gain from one (three
+or more independent items, or a review or experiment fan-out with a verify step for each finding or arm),
+say so in the plan with the rough number of agents and why, and run it only once the maintainer says to.
+
 ## Honesty in the hand-off
 
 The maintainer acts on your report without re-checking it, so it has to be exact. Say "not verified" for
