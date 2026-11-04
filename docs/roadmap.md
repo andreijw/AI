@@ -9,8 +9,11 @@ an item that is done moves there, condensed, in the hand-off commit that complet
 
 ## Upcoming Milestones
 
-Order (the maintainer's decision, 2026-11-03): Phase 6 is done (CHANGELOG.md, 2026-11-03), so Code Health's
-parked ideas come next, then Phase 7.
+Order (the maintainer's decision, 2026-11-04): the repo is the foundation for robotics work, so Phase 8 (Robot
+Navigation) leads. Its first item, the range-sensor navigation environment, and Phase 7's SAC and BipedalWalker
+item run in parallel (separate worktrees; one is mostly code, the other mostly GPU time), then Phase 8 continues in
+order. The Training and Code Health items are picked as they become useful (parallel environments before a PPO
+comparison on BipedalWalker or navigation).
 
 ### Workflow Tooling
 
@@ -116,12 +119,93 @@ when picked.
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 
-- [ ] **BipedalWalker-v3 and MuJoCo Tasks (Tier 3)**
-  - **Description**: High-dimensional continuous control over millions of steps (BipedalWalker threshold 300;
-    MuJoCo Hopper, HalfCheetah). BipedalWalker can use the `box2d` extra and the PyTorch backend that LunarLander
-    used (CHANGELOG.md, 2026-10-27 and 2026-10-28); MuJoCo needs `mujoco`.
-  - **Agent**: TD3, in NumPy and on the PyTorch backend (CHANGELOG.md, 2026-10-27); SAC is the next candidate
-    and the trigger for a shared off-policy base class. n-step returns stay out of scope.
+- [ ] **SAC and BipedalWalker-v3 (Tier 3)** (picked 2026-11-04)
+  - **Description**: Soft Actor-Critic (Haarnoja et al. 2018, with the automatic entropy temperature of the
+    follow-up paper, as Stable-Baselines3 implements it): a squashed Gaussian actor, twin critics with Polyak
+    targets, and a learned temperature against a target entropy of minus the action size. In NumPy and on the
+    PyTorch backend, as TD3 is (CHANGELOG.md, 2026-10-27). SAC is the second agent with twin critics and a replay
+    buffer, so it is the trigger for a shared off-policy base class with DDPG and TD3. Then a `bipedalwalker`
+    challenge (BipedalWalker-v3, `box2d` extra, 1,600-step episodes, threshold 300) with a SAC config translated
+    from rl-baselines3-zoo's, checked in Context7 and the zoo's `hyperparams/sac.yml` when planned.
+  - **Acceptance criteria**: the SAC loss, the entropy temperature's update and the tanh log-probability
+    correction pass finite-difference gradient checks and hand-computed values; the float64 PyTorch agent trains
+    exactly as the NumPy one (as TD3's parity tests do); on Pendulum-v1 and LunarLanderContinuous-v3 a SAC config
+    reaches the threshold on seeds 1 to 5 before BipedalWalker is tried; BipedalWalker is measured on seeds 1 to 5
+    against TD3 on the same budget, with the time a seed takes reported; `record.py` and the ONNX and C export
+    work for the SAC actor (its deterministic action, tanh of the mean).
+  - **Known edge cases**: the log-probability of an action squashed to ±1 (the correction's log of 1 - tanh²
+    needs the numerically stable form); the temperature's log parameter running away when the target entropy is
+    unreachable; BipedalWalker's -100 on a fall, which is a true termination, against the 1,600-step time limit,
+    which bootstraps; a seed taking hours, so the runs go in the background with the per-seed curves under
+    `~/rl-experiments/`.
+  - **Out of scope**: BipedalWalkerHardcore; MuJoCo (needs the `mujoco` dependency, the maintainer's decision);
+    n-step returns; PPO on BipedalWalker until parallel environments exist (Training).
+
+- [ ] **MuJoCo Tasks (Tier 3)**
+  - **Description**: Hopper and HalfCheetah after BipedalWalker, with the SAC and TD3 agents above; needs the
+    `mujoco` package (a new dependency, the maintainer's decision).
 
 - [ ] **Learning from Pixels (Tier 4)**
   - **Description**: CarRacing or Atari. Needs convolutional networks and a GPU; not practical in pure NumPy.
+
+### Phase 8 — Robot Navigation
+
+This repo prepares for robotics work (the maintainer, 2026-11-04). Phase 8 builds a navigation stack on the RL
+foundation, one robotics skill per step: sensing, state estimation, mapping and SLAM, planning and control, then
+real hardware. The maintainer has an HC-SR04 ultrasonic sensor, a wheeled robot base and a lidar or depth camera.
+The core stays plain Python with no ROS dependency; ROS 2 comes as thin nodes at the hardware step. Each simulated
+piece is tested against the simulator's ground truth, so the real robot later meets code that is known to be
+right in simulation. Step 1 is a full item; steps 2 to 5 are sketches to turn into full items when picked.
+
+- [ ] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04)
+  - **Description**: A 2D Gymnasium environment and challenge package: a differential-drive robot (unicycle
+    kinematics, linear and angular velocity commands, integrated at a fixed time step) in a walled arena with
+    static obstacles (circles and axis-aligned boxes), reaching a goal. Its sensor is a configurable set of range
+    beams ray-cast in NumPy. One preset models the HC-SR04 (about 2 cm to 4 m, a cone of about 15°, approximated
+    by several rays whose minimum is the reading, Gaussian range noise and dropouts that read as maximum range),
+    with the figures checked against the datasheet when planned; another models a 2D lidar (many narrow beams,
+    the count and range set by the config). The observation is the readings, the goal's distance and bearing in
+    the robot's frame and the last command; actions are continuous (linear and angular velocity) with a discrete
+    variant for DQN. The reward is progress towards the goal, a collision penalty and a small cost per step; a
+    collision or reaching the goal terminates, the time limit truncates. Obstacle layouts are drawn per episode
+    from the seed. The existing wrappers and tools apply: observation and action noise, frame stacking (the
+    sensor sees only a slice of the world), domain randomization (sensor noise, wheel slip, obstacle count) as
+    schedulable settings for the curriculum, the robustness benchmark, `record.py` and the benchmark.
+  - **Acceptance criteria**: `gymnasium.utils.env_checker.check_env` passes; the same seed gives the same layout,
+    readings and trajectory; unit tests with hand-computed values for a beam meeting a wall, a circle and a box
+    corner at a known distance, the cone minimum, the range limits, the dropout rate over many seeded draws, one
+    kinematics step, and collision against each obstacle kind; an `rgb_array` render for `record.py`; the random
+    agent's score and committed PPO and TD3 configs measured on seeds 1 to 5 against a solve threshold the
+    maintainer sets; TESTING rows for training, recording and the robustness sweep over sensor noise.
+  - **Known edge cases**: a spawn or a goal inside an obstacle, or a goal with no free path (layouts are
+    rejected and redrawn, a bounded number of times); a beam parallel to a wall or grazing a circle; a reading at
+    exactly the minimum or maximum range; a fast robot passing through a thin wall in one step (collision is
+    checked along the swept segment); angles wrapping at ±π.
+  - **Out of scope**: maps given to the agent, moving obstacles, 3D, odometry drift (step 2), real hardware
+    (step 5), and a physics engine (kinematics only).
+
+- [ ] **State estimation**
+  - **Description**: A Kalman filter and an extended Kalman filter for the robot's pose from wheel odometry and range
+    readings, then a particle filter (Monte Carlo localization) on a known map, in the step 1 simulator with
+    odometry noise added. Judged by the pose error against ground truth over many seeded runs, with and without
+    sensor dropouts.
+
+- [ ] **Occupancy-grid mapping and SLAM**
+  - **Description**: Occupancy-grid mapping from range readings with known poses (log-odds, an inverse sensor
+    model for both presets), then SLAM without them: landmark EKF-SLAM, then a particle-filter grid SLAM
+    (FastSLAM-style) with scan matching for the lidar preset. Judged by map and pose error against ground truth,
+    and loop closure on layouts that revisit a place.
+
+- [ ] **Planning and control**
+  - **Description**: A* on the occupancy grid (from step 3 or the true map), path smoothing, and a pure-pursuit or
+    PID follower that outputs the same velocity commands the RL agents do, as a classical baseline. Compared with
+    the RL policy on the same seeded layouts: success rate, path length, time to goal and collisions, and how each
+    degrades as sensor noise rises (the robustness benchmark).
+
+- [ ] **Hardware and ROS 2**
+  - **Description**: The HC-SR04 on the Jetson's GPIO (a 5 V echo needs a level shifter or divider for the
+    3.3 V pins): a driver, timing and calibration that fit the step 1 noise model to real readings. Then the
+    wheeled base (motor driver, wheel odometry) and the lidar, and ROS 2 nodes (sensor publisher, estimator,
+    mapper, planner, policy) over the plain-Python core. Ends with the simulated policy and planner run on the
+    robot, and a report of what transferred and what did not. New dependencies (`Jetson.GPIO`, ROS 2, a lidar
+    driver) are the maintainer's decision when the item is planned.
