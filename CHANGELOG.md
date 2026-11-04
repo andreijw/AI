@@ -27,7 +27,7 @@ Acrobot-v1) and
   list their randomizable parameters in `RANDOMIZABLE_PARAMETERS` (Pendulum's `SUPPORTED_DR_PARAMS` renamed);
   `Trainer.evaluate_episodes` returns each greedy episode that `evaluate` averages; `src/benchmark.py`'s report names
   each agent that trained through a curriculum. Smoke runs only (CartPole and Pendulum PPO, 10 and 30 episodes, seed
-  42): no learning claim, and whether a curriculum helps is a parked idea in the roadmap.
+  42): no learning claim; whether a curriculum helps is the trial under Changed below.
 - **Curriculum scheduling** (`feature/curriculum-scheduler`), the second of three PRs for the curriculum item:
   `environment.curriculum` trains through easier noise and randomization first, with `linear`, `step` or
   `reward_threshold` pacing of one difficulty from 0 to 1 (`rl_core.training.curriculum.CurriculumScheduler`, built
@@ -51,6 +51,31 @@ Acrobot-v1) and
   unsupported parameter now fails before any environment or worker process starts.
 
 ### Changed
+
+- **A curriculum did not help CartPole PPO at the trial's target** (`feature/curriculum-trial`, an experiment; no
+  code or config changed): `configs/cartpole_ppo.yaml` with `obs_noise_std: 0.05` and `domain_randomization: {length:
+  [0.25, 1.0]}`, 200,000 steps through `train.py`, seeds 1 to 5, flat (the target from the first episode) against
+  `curriculum: {mode: reward_threshold, stages: 4, threshold: 400, window: 20, min_episodes_per_stage: 20, start:
+  {obs_noise_std: 0.0, domain_randomization: {length: [0.5, 0.5]}}}`. The deciding measure, fixed beforehand, was the
+  greedy evaluation at the target (`robustness.py`'s nominal row, 20 episodes on the same start states for both arms,
+  on the last checkpoint, at most 10 episodes before the end):
+
+  | Seed | Flat | Curriculum | Curriculum at difficulty 1 from episode |
+  | :---: | :---: | :---: | :---: |
+  | 1 | 119 | 99 | 456 |
+  | 2 | 111 | 110 | 383 |
+  | 3 | 105 | 110 | 381 |
+  | 4 | 115 | 102 | 431 |
+  | 5 | 109 | 112 | 429 |
+
+  Better on 2 of 5 (by 5 and 3), worse on seeds 1 and 4 (by 20 and 13): it fails the win rule. No run of either arm
+  reached 475; final 100-episode training averages were 102 to 117 flat and 93 to 108 with the curriculum, which
+  reached the easy settings' 400 in stage 0 and fell to about 100 once the target's noise came in. Beyond the
+  training range (`--sweep length=0.125,...,2.0 --sweep obs_noise_std=0,...,0.15`) neither arm was more robust: at
+  length 2 the flat arm scored 115 to 140 and the curriculum 36 to 123; at noise 0.15, 80 to 105 against 61 to 98.
+  The one run that held 475 was the calibration run at seed 42 (curriculum, final average 497.7; flat 141.4), not
+  part of the trial. Untried: a target the committed config can learn flat (length randomization alone, or less
+  noise), where a curriculum could change how fast or how robustly it learns rather than whether.
 
 - **Config readers moved to `rl_core.utils.config_values`** (`feature/neutral-config-readers`), from
   `rl_core.agents.config_values`: the strict integer and boolean readers are shared by the agents, the trainer, the

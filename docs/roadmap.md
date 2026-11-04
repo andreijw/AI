@@ -53,11 +53,6 @@ an item.
 - [ ] **Prioritised-replay DQN**: parked, tested but not merged, on `feature/dqn-prioritized-replay`; it did not help
   MountainCar (MountainCar item, Phase 7). Double and dueling DQN stay opt-in (`double_q`, `dueling`; CHANGELOG.md,
   2026-10-29).
-- [ ] **Does a curriculum help?**: curriculum scheduling and the robustness benchmark are in (CHANGELOG.md,
-  2026-11-03), but no committed config has a curriculum and none has been measured. A trial would train CartPole PPO
-  with noise and length randomization at the target, with and without a curriculum, on seeds 1 to 5, and compare the
-  greedy evaluation at the target and `robustness.py`'s rows beyond the training range. If one helps but forgets the
-  easy settings, mixing easier episodes back in is the follow-up (out of scope of the curriculum item).
 
 ### Phase 6 — Advanced RL & Robotics Extensions
 
