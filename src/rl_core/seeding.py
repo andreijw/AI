@@ -13,11 +13,13 @@ WRAPPER_STREAM = 1
 # agent generator comes from one of these streams (and differs from WRAPPER_STREAM).
 # WEIGHTS: weight initialisation. EXPLORATION: action sampling, action noise, epsilon-greedy, random
 # agents' training actions. REPLAY: replay-buffer sampling and minibatch order. TARGET_NOISE: TD3's
-# target-policy smoothing noise (13 and 20 are the evaluation streams below).
+# target-policy smoothing noise. POLICY_NOISE: SAC's reparameterisation noise in its updates, for the
+# sampled batch and its next states (13 and 20 are the evaluation streams below).
 AGENT_WEIGHTS_STREAM = 10
 AGENT_EXPLORATION_STREAM = 11
 AGENT_REPLAY_STREAM = 12
 AGENT_TARGET_NOISE_STREAM = 14
+AGENT_POLICY_NOISE_STREAM = 15
 
 
 def derive_rng(seed: int | None, stream: int) -> np.random.Generator:

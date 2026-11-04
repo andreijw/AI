@@ -21,8 +21,9 @@ from tests.agent_internals import (
     counters,
     critic_forward,
     critic_loss_and_grads,
-    ddpg_networks,
     exploration_generator,
+    make_constant,
+    off_policy_networks,
     polyak_update,
     replay_generator,
     weights,
@@ -67,14 +68,6 @@ def _batch(n: int = 6, seed: int = 2, **extra) -> dict[str, np.ndarray]:
     return batch
 
 
-def _constant(params: dict[str, np.ndarray], value: float) -> None:
-    """Make a network output ``value`` for every input: zero weights, last bias = value."""
-    for name in params:
-        params[name][...] = 0.0
-    last = max(int(name[1:]) for name in params)
-    params[f"b{last}"][...] = value
-
-
 # ---------------------------------------------------------------------------
 # Gradient checks and hand-computed values
 # ---------------------------------------------------------------------------
@@ -99,7 +92,7 @@ def test_critic_gradients_match_finite_differences():
     _, grads = critic_loss_and_grads(agent, obs, actions, targets)
     assert_gradients_match(
         lambda: critic_loss_and_grads(agent, obs, actions, targets)[0]["critic_loss"],
-        ddpg_networks(agent)["critic"],
+        off_policy_networks(agent)["critic"],
         grads,
     )
 
@@ -111,14 +104,14 @@ def test_actor_gradients_flow_through_the_critic_and_match_finite_differences():
     _, grads = actor_loss_and_grads(agent, obs)
     assert_gradients_match(
         lambda: actor_loss_and_grads(agent, obs)[0]["actor_loss"],
-        ddpg_networks(agent)["actor"],
+        off_policy_networks(agent)["actor"],
         grads,
     )
 
 
 def test_computing_losses_changes_no_weights():
     agent = _agent()
-    nets = ddpg_networks(agent)
+    nets = off_policy_networks(agent)
     obs, actions, targets = _data()
     before = copy.deepcopy(
         [
@@ -143,7 +136,7 @@ def test_computing_losses_changes_no_weights():
 
 def test_losses_match_a_hand_computation_with_a_constant_critic():
     agent = _agent()
-    _constant(ddpg_networks(agent)["critic"], 0.5)
+    make_constant(off_policy_networks(agent)["critic"], 0.5)
     obs, actions, _ = _data(n=4)
     components, _ = critic_loss_and_grads(agent, obs, actions, np.array([1.0, 2.0, 3.0, 4.0]))
     # ½ mean((0.5 - y)²) = ½ (0.25 + 2.25 + 6.25 + 12.25) / 4 = 2.625
@@ -154,8 +147,8 @@ def test_losses_match_a_hand_computation_with_a_constant_critic():
 
 def test_actor_output_is_tanh_scaled_to_the_bounds():
     agent = _agent()
-    nets = ddpg_networks(agent)
-    _constant(nets["actor"], 0.0)
+    nets = off_policy_networks(agent)
+    make_constant(nets["actor"], 0.0)
     nets["actor"][f"b{len(agent.hidden_sizes)}"][...] = [
         np.arctanh(0.5),
         np.arctanh(-0.5),
@@ -169,9 +162,9 @@ def test_actor_output_is_tanh_scaled_to_the_bounds():
 
 def test_bellman_targets_use_the_target_networks_and_bootstrap_unless_terminated():
     agent = _agent(gamma=0.9)
-    nets = ddpg_networks(agent)
-    _constant(nets["critic"], 5.0)  # the online critic must not be used
-    _constant(nets["target_critic"], 2.0)
+    nets = off_policy_networks(agent)
+    make_constant(nets["critic"], 5.0)  # the online critic must not be used
+    make_constant(nets["target_critic"], 2.0)
     targets = bellman_targets(
         agent, np.array([1.0, -1.0]), np.zeros((2, OBS_DIM)), np.array([False, True])
     )
@@ -180,7 +173,7 @@ def test_bellman_targets_use_the_target_networks_and_bootstrap_unless_terminated
 
 def test_polyak_moves_each_target_a_fraction_tau_towards_the_online_network():
     agent = _agent(tau=0.3)
-    nets = ddpg_networks(agent)
+    nets = off_policy_networks(agent)
     for online, target in (
         (nets["actor"], nets["target_actor"]),
         (nets["critic"], nets["target_critic"]),
@@ -197,7 +190,7 @@ def test_polyak_moves_each_target_a_fraction_tau_towards_the_online_network():
 
 def test_one_actor_step_raises_the_critic_value_of_the_policy():
     agent = _agent()
-    nets = ddpg_networks(agent)
+    nets = off_policy_networks(agent)
     obs, _, _ = _data()
     before, grads = actor_loss_and_grads(agent, obs)
     for name in nets["actor"]:
@@ -214,7 +207,7 @@ def test_the_critic_can_fit_a_fixed_batch():
     for _ in range(500):
         _, grads = critic_loss_and_grads(agent, obs, actions, targets)
         for name, step in adam.step(grads).items():
-            ddpg_networks(agent)["critic"][name] -= step
+            off_policy_networks(agent)["critic"][name] -= step
     last = critic_loss_and_grads(agent, obs, actions, targets)[0]["critic_loss"]
     assert last < 0.05 * first
 
@@ -257,7 +250,7 @@ def test_warm_up_covers_the_whole_action_range():
 
 def test_noise_is_gaussian_with_noise_std_in_the_scaled_action_space():
     agent = _agent(noise_std=0.1)
-    _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias, far from both bounds
+    make_constant(off_policy_networks(agent)["actor"], 0.0)  # mu = bias, far from both bounds
     actions = np.array([agent.select_action(OBS, training=True) for _ in range(4000)])
     np.testing.assert_allclose(actions.mean(axis=0), [-0.5, 1.0], atol=0.02)
     np.testing.assert_allclose(actions.std(axis=0), 0.1 * np.array([1.5, 2.0]), rtol=0.08)
@@ -267,7 +260,7 @@ def test_gaussian_noise_is_drawn_exactly_as_before_the_noise_option():
     """The default path draws normal(0, noise_std, A) times scale once per action, so Pendulum DDPG
     runs and checkpoints repeat bit for bit."""
     agent = _agent(noise_std=0.1)
-    _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias
+    make_constant(off_policy_networks(agent)["actor"], 0.0)  # mu = bias
     rng = exploration_generator(agent)
     for _ in range(3):
         expected = np.clip(_mu(agent) + rng.normal(0.0, 0.1, ACT_DIM) * agent.scale, LOW, HIGH)
@@ -296,7 +289,7 @@ def _noise_of(agent: DDPGAgent) -> np.ndarray:
 
 def test_ou_noise_is_added_to_mu_in_the_scaled_action_space():
     agent = _agent(**OU)
-    _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias, so no action is clipped
+    make_constant(off_policy_networks(agent)["actor"], 0.0)  # mu = bias, so no action is clipped
     expected = _ou_increments(agent, 5)
     for x in expected:
         np.testing.assert_allclose(_noise_of(agent), x, atol=1e-6, err_msg="mu + scale * x_t")
@@ -304,7 +297,7 @@ def test_ou_noise_is_added_to_mu_in_the_scaled_action_space():
 
 def test_ou_training_actions_are_correlated_from_step_to_step():
     agent = _agent(**{**OU, "ou_theta": 0.15, "ou_dt": 0.01, "noise_std": 0.5})
-    _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias, far from the bounds
+    make_constant(off_policy_networks(agent)["actor"], 0.0)  # mu = bias, far from the bounds
     noise = np.array([_noise_of(agent)[0] for _ in range(400)])
     assert np.corrcoef(noise[:-1], noise[1:])[0, 1] > 0.9, (
         "OU noise should hold its direction across steps; white noise would not"
@@ -316,7 +309,7 @@ def test_end_episode_resets_the_ou_noise_for_the_next_episode(batch_change):
     """The Trainer calls end_episode after every training episode's update, so the next action
     starts the OU process from zero again, whether or not the update trained."""
     agent = _agent(**OU, batch_size=64 if batch_change == "too_few_to_sample" else 4)
-    _constant(ddpg_networks(agent)["actor"], 0.0)  # mu = bias, so no action is clipped
+    make_constant(off_policy_networks(agent)["actor"], 0.0)  # mu = bias, so no action is clipped
     for _ in range(25):
         agent.select_action(OBS, training=True)
     batch = _batch()
@@ -333,7 +326,7 @@ def test_update_alone_does_not_reset_the_ou_noise():
     """Resetting is the episode's end, not the update's: an agent updating mid-episode keeps its
     noise process running."""
     agent = _agent(**OU, batch_size=4)
-    _constant(ddpg_networks(agent)["actor"], 0.0)
+    make_constant(off_policy_networks(agent)["actor"], 0.0)
     for _ in range(25):
         agent.select_action(OBS, training=True)
     agent.update(_batch())
@@ -370,8 +363,8 @@ def test_the_noise_option_adds_nothing_to_the_checkpoint(tmp_path):
 
 def test_training_actions_stay_in_the_bounds_when_the_actor_is_saturated():
     agent = _agent(noise_std=0.5)
-    nets = ddpg_networks(agent)
-    _constant(nets["actor"], 0.0)
+    nets = off_policy_networks(agent)
+    make_constant(nets["actor"], 0.0)
     nets["actor"][f"b{len(agent.hidden_sizes)}"][...] = [
         50.0,
         -50.0,
@@ -426,7 +419,7 @@ def test_a_time_limit_cut_is_stored_as_not_terminal():
 def _replay(reference: DDPGAgent, batch, updates: int) -> None:
     """update() written out: store; per step sample, targets, critic Adam step, then the actor
     step against the updated critic, then Polyak on both target networks."""
-    reference_nets = ddpg_networks(reference)
+    reference_nets = off_policy_networks(reference)
     reference.replay_buffer.add_batch(
         batch["observations"], batch["actions"], batch["rewards"],
         batch["next_observations"], batch["terminated"],
@@ -532,9 +525,9 @@ def test_two_agents_with_one_seed_act_and_learn_identically():
         for _ in range(4):
             agent.select_action(OBS, training=True)
         agent.update(_batch())
-    for name in ddpg_networks(first)["actor"]:
+    for name in off_policy_networks(first)["actor"]:
         np.testing.assert_array_equal(
-            ddpg_networks(first)["actor"][name], ddpg_networks(second)["actor"][name]
+            off_policy_networks(first)["actor"][name], off_policy_networks(second)["actor"][name]
         )
 
 

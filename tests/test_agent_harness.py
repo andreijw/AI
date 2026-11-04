@@ -19,6 +19,7 @@ from rl_core.agents import (
     PPOAgent,
     RandomAgent,
     ReinforceAgent,
+    SACAgent,
     TD3Agent,
 )
 from rl_core.agents.off_policy import OffPolicyAgent
@@ -159,6 +160,7 @@ CONTINUOUS_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
     (ContinuousPPOAgent, {"seed": 42}),
     (DDPGAgent, {"seed": 42, "batch_size": 2, "learning_starts": 0}),
     (TD3Agent, {"seed": 42, "batch_size": 2, "learning_starts": 0}),
+    (SACAgent, {"seed": 42, "batch_size": 2, "learning_starts": 0}),
 ]
 # The PyTorch backend, where it is installed.
 CONTINUOUS_AGENTS += torch_backend_cases({"seed": 42, "batch_size": 2, "learning_starts": 0})

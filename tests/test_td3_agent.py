@@ -11,16 +11,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_core.agents import DDPGAgent, TD3Agent  # noqa: E402
 from rl_core.challenges import discover_challenges  # noqa: E402
-from tests.agent_internals import (  # noqa: E402
+from tests.agent_internals import (
     actor_forward,
     actor_loss_and_grads,
     assert_same_weights,
     counters,
     critic_forward,
     critic_loss_and_grads,
-    ddpg_networks,
     draw_target_noise,
     exploration_generator,
+    make_constant,  # noqa: E402
+    off_policy_networks,
     replay_generator,
     target_actions,
     target_noise_generator,
@@ -55,14 +56,6 @@ def _batch(n: int = 6, seed: int = 2) -> dict[str, np.ndarray]:
         "dones": np.array([False] * (n - 1) + [True]),
         "terminated": np.array([False] * (n - 2) + [True, False]),  # one true end mid-batch
     }
-
-
-def _constant(params: dict[str, np.ndarray], value: float) -> None:
-    """Make a network output ``value`` for every input: zero weights, last bias = value."""
-    for name in params:
-        params[name][...] = 0.0
-    last = max(int(name[1:]) for name in params)
-    params[f"b{last}"][...] = value
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +93,7 @@ def test_invalid_td3_settings_are_rejected_by_name(bad, key):
 def test_the_actor_and_first_critic_start_as_ddpgs_and_the_second_critic_differs():
     """Critic 2 is drawn after them from the same weights stream: a seed pairs TD3 with DDPG."""
     td3, ddpg = _agent(), DDPGAgent(OBS_DIM, ACT_DIM, SMALL)
-    td3_nets, ddpg_nets = ddpg_networks(td3), ddpg_networks(ddpg)
+    td3_nets, ddpg_nets = off_policy_networks(td3), off_policy_networks(ddpg)
     for net in ("actor", "critic", "target_actor", "target_critic"):
         for name, value in ddpg_nets[net].items():
             np.testing.assert_array_equal(td3_nets[net][name], value, err_msg=f"{net}_{name}")
@@ -127,8 +120,8 @@ def test_pendulum_builds_td3():
 
 def test_target_noise_is_clipped_then_the_action_is_clipped_to_the_bounds():
     agent = _agent()
-    nets = ddpg_networks(agent)
-    _constant(nets["target_actor"], 0.0)  # mu' = bias = [-0.5, 1]
+    nets = off_policy_networks(agent)
+    make_constant(nets["target_actor"], 0.0)  # mu' = bias = [-0.5, 1]
     noise = np.array([[0.3, -0.25], [0.5, 0.5], [-0.5, -0.5]])  # already clipped to ±0.5
     expected = np.array(
         [
@@ -139,7 +132,7 @@ def test_target_noise_is_clipped_then_the_action_is_clipped_to_the_bounds():
     )
     np.testing.assert_allclose(target_actions(agent, np.zeros((3, OBS_DIM)), noise), expected)
 
-    _constant(nets["target_actor"], 50.0)  # tanh saturates: mu' = high = [1, 3]
+    make_constant(nets["target_actor"], 50.0)  # tanh saturates: mu' = high = [1, 3]
     saturated = target_actions(agent, np.zeros((3, OBS_DIM)), noise)
     # Noise pushing past the upper bound is cut there; noise pulling down is kept.
     np.testing.assert_allclose(saturated, [[1.0, 2.5], [1.0, 3.0], [0.25, 2.0]])
@@ -155,14 +148,14 @@ def test_the_drawn_noise_is_scaled_and_clipped_as_sb3_draws_it():
 
 def test_the_target_is_the_smaller_target_critic_with_a_terminal_mask():
     agent = _agent(gamma=0.9)
-    nets = ddpg_networks(agent)
-    _constant(nets["target_critic"], 5.0)
-    _constant(nets["target_critic_2"], 3.0)
+    nets = off_policy_networks(agent)
+    make_constant(nets["target_critic"], 5.0)
+    make_constant(nets["target_critic_2"], 3.0)
     rewards, terminated = np.array([1.0, 2.0, 3.0]), np.array([False, True, False])
     y = td3_targets(agent, rewards, np.zeros((3, OBS_DIM)), terminated, np.zeros((3, ACT_DIM)))
     np.testing.assert_allclose(y, [1.0 + 0.9 * 3.0, 2.0, 3.0 + 0.9 * 3.0])  # min(5, 3) = 3
 
-    _constant(nets["target_critic"], -4.0)  # now the first is the smaller
+    make_constant(nets["target_critic"], -4.0)  # now the first is the smaller
     y = td3_targets(agent, rewards, np.zeros((3, OBS_DIM)), terminated, np.zeros((3, ACT_DIM)))
     np.testing.assert_allclose(y, [1.0 - 3.6, 2.0, 3.0 - 3.6])
 
@@ -175,7 +168,7 @@ def test_the_second_critics_gradients_match_finite_differences():
         rng.uniform(LOW, HIGH, (8, 2)),
         rng.standard_normal(8),
     )
-    critic_2 = ddpg_networks(agent)["critic_2"]
+    critic_2 = off_policy_networks(agent)["critic_2"]
     _, grads = critic_loss_and_grads(agent, obs, actions, targets, critic_2)
     assert_gradients_match(
         lambda: critic_loss_and_grads(agent, obs, actions, targets, critic_2)[0]["critic_loss"],
@@ -195,7 +188,7 @@ def _replay(reference: TD3Agent, batch, updates: int) -> None:
 
     It checks the order, the delay, the noise draw and which targets move; the target and loss
     maths it borrows from the agent are checked by the hand-worked tests above."""
-    nets = ddpg_networks(reference)
+    nets = off_policy_networks(reference)
     reference.replay_buffer.add_batch(
         batch["observations"], batch["actions"], batch["rewards"],
         batch["next_observations"], batch["terminated"],
@@ -254,7 +247,7 @@ def test_the_actor_and_targets_wait_for_every_second_step_across_updates():
     first = agent.update(_batch(seed=3))
     after_first = weights(agent)
     for net in ("actor", "target_actor", "target_critic", "target_critic_2"):
-        for name in ddpg_networks(agent)[net]:
+        for name in off_policy_networks(agent)[net]:
             key = f"{net}_{name}"
             np.testing.assert_array_equal(after_first[key], before[key], err_msg=f"{key} moved")
     assert not np.allclose(after_first["critic_2_W0"], before["critic_2_W0"]), "critics train"
@@ -269,11 +262,11 @@ def test_the_actor_and_targets_wait_for_every_second_step_across_updates():
 
 def test_the_critic_loss_is_the_mean_of_the_two_critics():
     agent = _agent(max_updates_per_call=1)
-    nets = ddpg_networks(agent)
-    _constant(nets["critic"], 1.0)
-    _constant(nets["critic_2"], 3.0)
-    _constant(nets["target_critic"], 0.0)
-    _constant(nets["target_critic_2"], 0.0)
+    nets = off_policy_networks(agent)
+    make_constant(nets["critic"], 1.0)
+    make_constant(nets["critic_2"], 3.0)
+    make_constant(nets["target_critic"], 0.0)
+    make_constant(nets["target_critic_2"], 0.0)
     batch = _batch(n=4)
     batch["rewards"] = np.zeros(4)
     metrics = agent.update(batch)  # y = 0: losses ½·1 and ½·9, so their mean is 2.5
@@ -332,8 +325,8 @@ def test_a_ddpg_checkpoint_is_refused_by_td3(tmp_path):
 
 def test_q_of_the_second_critic_is_computed_from_its_own_weights():
     agent = _agent()
-    nets = ddpg_networks(agent)
-    _constant(nets["critic_2"], 7.0)
+    nets = off_policy_networks(agent)
+    make_constant(nets["critic_2"], 7.0)
     q, _ = critic_forward(agent, np.zeros((2, OBS_DIM)), np.zeros((2, ACT_DIM)), nets["critic_2"])
     np.testing.assert_allclose(q, [7.0, 7.0])
 
@@ -347,7 +340,7 @@ def test_the_second_critic_continues_the_seeds_weights_stream():
     init_mlp([OBS_DIM, 6, 5, ACT_DIM], rng)  # the actor
     init_mlp([OBS_DIM + ACT_DIM, 6, 5, 1], rng)  # the first critic
     expected = init_mlp([OBS_DIM + ACT_DIM, 6, 5, 1], rng)
-    critic_2 = ddpg_networks(_agent())["critic_2"]
+    critic_2 = off_policy_networks(_agent())["critic_2"]
     for name, value in expected.items():
         np.testing.assert_array_equal(critic_2[name], value, err_msg=f"critic_2_{name}")
 
@@ -359,6 +352,6 @@ def test_without_target_noise_the_target_action_is_the_target_actors():
     next_obs = np.random.default_rng(1).standard_normal((5, OBS_DIM))
     mu = target_actions(agent, next_obs, noise)
     expected = np.clip(
-        actor_forward(agent, next_obs, ddpg_networks(agent)["target_actor"])[0], LOW, HIGH
+        actor_forward(agent, next_obs, off_policy_networks(agent)["target_actor"])[0], LOW, HIGH
     )
     np.testing.assert_allclose(mu, expected)

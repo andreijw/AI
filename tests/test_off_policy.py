@@ -10,7 +10,7 @@ import pytest
 from rl_core.agents.mlp import init_mlp
 from rl_core.agents.off_policy import OffPolicyAgent
 from rl_core.agents.optim import Adam
-from tests.agent_internals import critic_loss_and_grads, critic_step, ddpg_networks
+from tests.agent_internals import critic_loss_and_grads, critic_step, off_policy_networks
 
 OBS_DIM, ACT_DIM, B = 3, 2, 6
 DEFAULTS = {
@@ -113,12 +113,12 @@ def test_one_critic_steps_once_and_returns_its_own_metrics():
     agent = OneCritic(OBS_DIM, ACT_DIM, {"seed": 1})
     obs, actions, targets = _data()
     expected, _ = critic_loss_and_grads(copy.deepcopy(agent), obs, actions, targets)
-    before = copy.deepcopy(ddpg_networks(agent))
+    before = copy.deepcopy(off_policy_networks(agent))
     agent.calls.clear()
 
     assert critic_step(agent, obs, actions, targets) == expected
     assert agent.calls == [("gradients", "critic"), ("step", "critic")]
-    assert not np.array_equal(ddpg_networks(agent)["critic"]["W0"], before["critic"]["W0"])
+    assert not np.array_equal(off_policy_networks(agent)["critic"]["W0"], before["critic"]["W0"])
 
 
 def test_twin_critics_take_every_gradient_before_any_step_and_combine_their_metrics():
@@ -128,10 +128,10 @@ def test_twin_critics_take_every_gradient_before_any_step_and_combine_their_metr
     obs, actions, targets = _data()
     reference = copy.deepcopy(agent)
     first, _ = critic_loss_and_grads(
-        reference, obs, actions, targets, ddpg_networks(reference)["critic"]
+        reference, obs, actions, targets, off_policy_networks(reference)["critic"]
     )
     second, _ = critic_loss_and_grads(
-        reference, obs, actions, targets, ddpg_networks(reference)["critic_2"]
+        reference, obs, actions, targets, off_policy_networks(reference)["critic_2"]
     )
     agent.calls.clear()
 
@@ -151,5 +151,5 @@ def test_twin_critics_take_every_gradient_before_any_step_and_combine_their_metr
     assert first["critic_loss"] != second["critic_loss"], "the critics should start apart"
     for name in ("critic", "critic_2"):
         assert not np.array_equal(
-            ddpg_networks(agent)[name]["W0"], ddpg_networks(reference)[name]["W0"]
+            off_policy_networks(agent)[name]["W0"], off_policy_networks(reference)[name]["W0"]
         ), f"{name} should have taken a step"

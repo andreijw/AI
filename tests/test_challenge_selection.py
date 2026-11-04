@@ -24,6 +24,7 @@ from rl_core.agents import (
     PPOAgent,
     RandomAgent,
     ReinforceAgent,
+    SACAgent,
     TD3Agent,
 )
 from rl_core.challenges import CHALLENGES, discover_challenges, select_challenge
@@ -55,6 +56,7 @@ EXPECTED_AGENTS = {
         "ppo": ContinuousPPOAgent,
         "ddpg": DDPGAgent,
         "td3": TD3Agent,
+        "sac": SACAgent,
     },
     "lunarlander": {"random": RandomAgent, "dqn": DQNAgent},
     "lunarlander_continuous": {"random": ContinuousRandomAgent, "td3": TD3Agent},

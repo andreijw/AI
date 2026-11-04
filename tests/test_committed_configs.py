@@ -43,6 +43,7 @@ STEP_BUDGETS = {
     ("pendulum", "ppo"): 200_000,
     ("pendulum", "ddpg"): 40_000,
     ("pendulum", "td3"): 40_000,
+    ("pendulum", "sac"): 40_000,
     ("pendulum", "actor_critic"): 1_000_000,
     ("pendulum", "random"): 40_000,
 }
@@ -228,6 +229,27 @@ def test_lunarlander_continuous_td3_uses_rl_zoo_settings_on_the_torch_backend():
     assert config["training"].get("update_every") == 1, (
         "the published LunarLanderContinuous TD3 results update after every step"
     )
+
+
+def test_pendulum_sac_uses_rl_zoos_settings_for_40000_steps():
+    """rl-zoo's SAC for Pendulum-v1 (learning rate 1e-3, SB3's SAC defaults otherwise), updating
+    after every step, with pendulum_td3.yaml's 40,000-step budget and its 64x64 networks (the
+    maintainer's decision, 2026-11-04: seeds 1 to 5 solve and hold at 64x64)."""
+    from rl_pendulum.benchmark import PendulumChallenge
+
+    env, agent, train_cfg = PendulumChallenge().setup_run("sac", seed=1, episodes=None)
+    env.close()
+    assert agent.hidden_sizes == [64, 64]
+    assert (agent.learning_rate, agent.gamma, agent.tau) == pytest.approx((0.001, 0.99, 0.005))
+    assert (agent.batch_size, agent.learning_starts, agent.buffer_capacity) == (
+        256,
+        100,
+        1_000_000,
+    )
+    assert agent.updates_per_step == pytest.approx(1.0)
+    assert agent.learns_ent_coef and agent.ent_coef == pytest.approx(1.0)
+    assert agent.target_entropy == -1.0
+    assert train_cfg["update_every"] == 1
 
 
 def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():

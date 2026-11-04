@@ -24,6 +24,7 @@ Terms used throughout:
 | DQN | discrete | action value, from replay | CartPole, Acrobot, MountainCar, LunarLander |
 | DDPG | continuous | deterministic policy and action value, from replay | Pendulum, MountainCarContinuous |
 | TD3 | continuous | as DDPG, twin critics and delayed actor | Pendulum, MountainCarContinuous, LunarLanderContinuous |
+| SAC | continuous | stochastic policy, twin action values and an entropy temperature, from replay | Pendulum |
 
 ## REINFORCE (`ReinforceAgent`, `src/rl_core/agents/reinforce_agent.py`)
 
@@ -220,22 +221,22 @@ fresh mini-batch.
 ## Replay buffer (`ReplayBuffer`, `src/rl_core/agents/replay_buffer.py`)
 
 A fixed-capacity ring buffer of (observation, action, reward, next observation, done) in pre-allocated NumPy arrays,
-shared by DQN, DDPG and TD3. When full it overwrites the oldest transition; `sample` draws indices uniformly without
-replacement, on its own named stream of the seed. The stored `done` means "do not bootstrap": `add_transitions` takes
-the trainer's `terminated` flags, so a time-limit cut stays non-terminal. Actions are int64 (discrete) or float64
+shared by DQN, DDPG, TD3 and SAC. When full it overwrites the oldest transition; `sample` draws indices uniformly
+without replacement, on its own named stream of the seed. The stored `done` means "do not bootstrap": `add_transitions`
+takes the trainer's `terminated` flags, so a time-limit cut stays non-terminal. Actions are int64 (discrete) or float64
 vectors (`action_dim`). With an agent's observation statistics it stores raw observations and normalises each sampled
 batch (CHANGELOG.md, 2026-11-04). The checkpoint holds the filled part, the write index and the generator state, at
 about 40 bytes a transition compressed (CHANGELOG.md, 2026-10-21).
 
 ## Updating during the episode (`MidEpisodeUpdates`, `src/rl_core/agents/mid_episode.py`)
 
-By default the trainer hands an off-policy agent its transitions once per episode. With `training.update_every: N`
-it calls `update` every N steps and once more at the episode's end, as SB3's `train_freq` does, so the data comes
-from a policy updated moments before (CHANGELOG.md, 2026-10-30). The gradient steps owed are counted over all
-transitions, `floor((counted + n) * updates_per_step) - floor(counted * updates_per_step)`, so the total does not
-depend on how the episode is cut. DQN, DDPG and TD3 accept it (DQN needs `updates_per_step` and `exploration_steps`);
-REINFORCE and PPO train on whole episodes and refuse it; the continuous Actor-Critic accepts it only with
-`update_every` equal to its `n_steps` (true A2C).
+By default the trainer hands an off-policy agent its transitions once per episode. With `training.update_every: N` it
+calls `update` every N steps and once more at the episode's end, as SB3's `train_freq` does, so the data comes from a
+policy updated moments before (CHANGELOG.md, 2026-10-30). The gradient steps owed are counted over all transitions,
+`floor((counted + n) * updates_per_step) - floor(counted * updates_per_step)`, so the total does not depend on how the
+episode is cut. DQN, DDPG, TD3 and SAC accept it (DQN needs `updates_per_step` and `exploration_steps`); REINFORCE and
+PPO train on whole episodes and refuse it; the continuous Actor-Critic accepts it only with `update_every` equal to its
+`n_steps` (true A2C).
 
 ## Random agents (`RandomAgent`, `ContinuousRandomAgent`)
 
@@ -318,6 +319,51 @@ replay match DDPG's. One Adam per critic. A TD3 agent refuses a DDPG checkpoint;
 once per episode it held on 3 of 5 seeds, every step on 5 of 5 (CHANGELOG.md, 2026-10-30; adopted 2026-11-01). TD3
 is not faster on an easy task; its gain shows on the long ones.
 
+## SAC (`SACAgent`, `src/rl_core/agents/sac_agent.py`)
+
+**Idea.** Soft Actor-Critic (Haarnoja et al. 2018, with the learned temperature of their follow-up paper) maximises
+reward plus `alpha` times the policy's entropy. The actor is a Gaussian squashed by tanh into the bounds, trained
+through a reparameterised sample rather than a likelihood ratio; twin critics as TD3's keep the value honest; and
+`alpha` is tuned so the entropy stays near a target, exploring a lot early and little once the policy is confident.
+
+**Update.** Per gradient step, in Stable-Baselines3's order (t = tanh u, log pi of t in [-1, 1]):
+
+```text
+m, l     = actor(s) split in two; l = clip(l, -20, 2); u = m + e^l * eps; a = bias + scale * tanh(u)
+log pi   = sum(-eps^2/2 - l - log(2 pi)/2) - sum 2 (log 2 - u - softplus(-2u))    (the stable log(1 - t^2))
+L_alpha  = -log(alpha) * mean(log pi + target_entropy)     (log pi constant; alpha from before this step below)
+y        = r + gamma * (1 - terminated) * (min(Q1'(s', a'), Q2'(s', a')) - alpha * log pi(a'|s'))   (a' fresh)
+L_Qi     = mean( 0.5 * (Qi(s, a) - y)^2 ),  i = 1, 2
+L_act    = mean(alpha * log pi(a|s) - min(Q1, Q2)(s, a))    (on the critics just updated), then Polyak on the critics
+```
+
+**In this repo.** An `OffPolicyAgent` with SB3's SAC defaults (256×256, learning rate 3e-4, `gamma` 0.99, `tau`
+0.005, `learning_starts` 100, buffer 1,000,000). One actor MLP with 2A outputs (mean, then log std): the same
+initial distribution as SB3's two heads, and export cuts the last layer to its first A outputs for a `tanh_scale`
+head, so the greedy action is `bias + scale * tanh(m)`. `ent_coef: auto` learns `log alpha` from 0 (`auto_<x>`
+from log x; a number fixes alpha) by an unclipped Adam at the learning rate; `target_entropy: auto` is minus the
+action size. `log alpha` is a parameter group of shape (1,) saved with its Adam in every checkpoint, so DDPG and
+TD3 files are refused and they refuse SAC's. Training actions are policy samples (in the bounds, stored as executed)
+after uniform warm-up; the update's noise comes from its own seed stream (`AGENT_POLICY_NOISE_STREAM`). Logged:
+`ent_coef`, `ent_coef_loss`, `entropy` (-mean log pi), `saturation` and the losses and gradient norms. Deliberate
+differences from SB3: the exact stable tanh correction instead of `log(1 - t^2 + 1e-6)`; the critics see actions
+in the environment's scale, not SB3's [-1, 1]; training starts once the buffer can fill a batch, not at
+`learning_starts` (both as DDPG and TD3 here); left out: gSDE, n-step
+returns, learning-rate schedules, `target_update_interval` other than 1. NumPy only so far (PyTorch is PR 3 of the
+roadmap item).
+
+**What was measured.**
+
+- Pendulum, `configs/pendulum_sac.yaml` (NumPy, 64×64, 40,000 steps, updates after every step), seeds 1 to 5
+  through the benchmark (2026-11-04): all 5 solve -200 at 21,800 to 23,200 steps (episodes 109 to 116) and hold,
+  final 100-episode training averages -135.9 to -163.8, greedy evaluation -157 ± 20; about 9 minutes a seed (11 ms a
+  gradient step). TD3's committed 64×64 config solves at 32,600 to 33,400 steps with the same greedy score.
+- At SB3's 256×256 a gradient step takes about 88 ms (TD3 at that width with `policy_delay` 1: 73 ms), about an hour
+  a seed in NumPy; not measured for learning.
+
+**Lessons.** The plan's 30 ms a step, scaled from TD3 at 400×300, was three times too low: a SAC step runs eight
+forward and five backward passes, all of them every step. Time a short run before planning a sweep.
+
 ## The PyTorch backend (`TorchDDPGAgent`, `TorchTD3Agent`)
 
 `backend: torch` in a DDPG or TD3 config runs the same gradient step in PyTorch (imported only then; PyTorch is
@@ -331,7 +377,7 @@ step 2.5 ms against NumPy's 44.7 ms; Pendulum DDPG 34 s a run against 144 s (`do
 ## Exporting a policy (`src/rl_core/agents/inference.py`, `src/rl_core/export/`, `export.py`)
 
 Every agent with a network describes its greedy policy as an `InferencePolicy`: dense ReLU layers, the observation
-statistics when it normalises, and a head (`argmax` for discrete agents, `clip` for a Gaussian mean, or `tanh_scale`
-for a bounded one and for DDPG and TD3). `export.py` writes it as a C99 header or an ONNX model, and writes nothing
-unless the exported policy matches the NumPy agent on every observation of a few greedy episodes (CHANGELOG.md,
+statistics when it normalises, and a head (`argmax` for discrete agents, `clip` for a Gaussian mean, or `tanh_scale` for
+a bounded one and for DDPG, TD3 and SAC's mean). `export.py` writes it as a C99 header or an ONNX model, and writes
+nothing unless the exported policy matches the NumPy agent on every observation of a few greedy episodes (CHANGELOG.md,
 2026-11-02). It is the path to running a trained policy on a microcontroller or a robot's computer.

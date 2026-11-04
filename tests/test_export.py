@@ -25,8 +25,8 @@ from rl_core.agents.inference import DenseLayer, InferencePolicy  # noqa: E402
 from rl_core.export import c_header, rollout, verify  # noqa: E402
 from tests.agent_internals import (  # noqa: E402
     actor_forward,
-    ddpg_networks,
     gaussian_forward,
+    off_policy_networks,
     probabilities,
     q_values,
 )
@@ -167,7 +167,9 @@ def test_policy_arrays_are_read_only_copies():
     before = policy.outputs(obs)
     with pytest.raises(ValueError, match="read-only"):
         policy.layers[0].weight[0, 0] = 1.0
-    ddpg_networks(agent)["actor"]["W0"] += 1.0  # the agent trains on: the policy keeps its copy
+    off_policy_networks(agent)["actor"]["W0"] += (
+        1.0  # the agent trains on: the policy keeps its copy
+    )
     np.testing.assert_array_equal(policy.outputs(obs), before)
 
 

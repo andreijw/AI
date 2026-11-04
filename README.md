@@ -13,7 +13,7 @@ control loops and can be extended later.
 The architecture is designed to support:
 
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO with
-  Gaussian policies, and DDPG and TD3 with deterministic policies, for Pendulum; random, PPO and DQN for Acrobot;
+  Gaussian policies, DDPG and TD3 with deterministic policies, and SAC, for Pendulum; random, PPO and DQN for Acrobot;
   random and DQN for MountainCar; random, DDPG and TD3 with Ornstein-Uhlenbeck exploration noise for
   MountainCarContinuous; random and DQN for LunarLander; random and TD3 for LunarLanderContinuous)
 - Easy experimentation with different configurations
@@ -76,7 +76,7 @@ AI/
 ├── tests/                       # Unit & integration test suites
 ├── configs/                     # YAML hyperparameter configurations
 │   ├── cartpole_*.yaml          # CartPole challenge configs (default, PPO, DQN, etc.)
-│   ├── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG, TD3)
+│   ├── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG, TD3, SAC)
 │   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
 │   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
 │   ├── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
@@ -242,6 +242,9 @@ python train.py --config configs/pendulum_ddpg.yaml
 
 # Pendulum TD3
 python train.py --config configs/pendulum_td3.yaml
+
+# Pendulum SAC (64x64 networks, updating after every step; about 9 minutes)
+python train.py --config configs/pendulum_sac.yaml
 
 # Acrobot DQN and PPO
 python train.py --config configs/acrobot_dqn.yaml
@@ -499,13 +502,13 @@ the observation after the environment's `mask_velocity`, `frame_stack` and `fram
 comment names but does not apply.
 
 Every agent with a network exports: REINFORCE, Actor-Critic and PPO (discrete and continuous), DQN (plain and dueling),
-DDPG and TD3. A checkpoint trained on the PyTorch backend exports without PyTorch, through the NumPy agent. The random
-agents are refused ("has no network to export") before the checkpoint is read. Before writing the header, `export.py`
-plays `--verify-episodes` greedy episodes (default 3; 0 skips this), compiles the header with `$CC`, `cc`, `gcc` or
-`clang`, and checks its outputs against NumPy's on every observation, to within 1e-5 absolute plus 1e-5 relative; the
-summary gives the worst error as a share of that tolerance. If they disagree it writes no header and exits with status
-1; without a compiler it writes the header unchecked and exits with status 1. A discrete action may differ only where
-NumPy's two best outputs are that close; these are reported as near-ties.
+DDPG, TD3 and SAC (its mean). A checkpoint trained on the PyTorch backend exports without PyTorch, through the NumPy
+agent. The random agents are refused ("has no network to export") before the checkpoint is read. Before writing the
+header, `export.py` plays `--verify-episodes` greedy episodes (default 3; 0 skips this), compiles the header with `$CC`,
+`cc`, `gcc` or `clang`, and checks its outputs against NumPy's on every observation, to within 1e-5 absolute plus 1e-5
+relative; the summary gives the worst error as a share of that tolerance. If they disagree it writes no header and exits
+with status 1; without a compiler it writes the header unchecked and exits with status 1. A discrete action may differ
+only where NumPy's two best outputs are that close; these are reported as near-ties.
 
 ### Export a Trained Agent to ONNX
 
@@ -585,14 +588,14 @@ agent:
   config:
     seed: 42
     # normalize_observations: true  # optional: running mean and variance of the inputs, saved with the
-    #                               #   checkpoint (every agent; DQN, DDPG and TD3 store raw observations
+    #                               #   checkpoint (every agent; DQN, DDPG, TD3 and SAC store raw observations
     #                               #   and normalise each sampled batch)
 
 # Training settings
 training:
   num_episodes: 1000
   # total_steps: 100000  # optional: train for this many environment steps instead (num_episodes is then ignored)
-  # update_every: 1      # optional: update every N steps inside the episode, not after it (DQN, DDPG, TD3;
+  # update_every: 1      # optional: update every N steps inside the episode, not after it (DQN, DDPG, TD3, SAC;
   #                      #   the continuous Actor-Critic with n_steps equal to it, as A2C)
   max_steps_per_episode: 500
   eval_frequency: 100
@@ -814,6 +817,8 @@ Implemented agents (in `src/rl_core/agents/`; how each one works, its update and
     (`rl_core/agents/exploration_noise.py`)
   - `TD3Agent`: Twin Delayed DDPG: two critics with the smaller target, smoothed target actions and delayed actor
     and target updates (`configs/pendulum_td3.yaml`)
+  - `SACAgent`: Soft Actor-Critic: a squashed Gaussian actor, twin critics with Polyak targets and a learned
+    entropy temperature (`ent_coef`, `target_entropy`; `configs/pendulum_sac.yaml`); NumPy only for now
 - **Optional PyTorch backend**: `TorchDDPGAgent` and `TorchTD3Agent` train DDPG's and TD3's gradient steps in PyTorch,
   on the GPU as CUDA graphs, and keep everything else, acting included, in NumPy. Add `backend: torch` to a DDPG or
   TD3 config's `agent.config` (optional: `device: auto|cpu|cuda`, `dtype: float32|float64`,
@@ -843,9 +848,9 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 
 ### Next Steps
 
-1. **More Continuous Off-Policy Learning**: SAC (Soft Actor-Critic) on the replay buffer, networks and target updates
-   DDPG and TD3 already use.
-2. **Advanced Environments**: BipedalWalker, then MuJoCo tasks (the Phase 7 challenge ladder).
+1. **SAC on the GPU and BipedalWalker**: the PyTorch backend for SAC (LunarLanderContinuous), then the
+   BipedalWalker-v3 challenge with SAC against TD3 (the rest of the Phase 7 SAC item).
+2. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder).
 3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 
 ## Future Enhancements
