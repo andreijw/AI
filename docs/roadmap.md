@@ -18,23 +18,32 @@ No open items.
 
 ### Training
 
-No open items.
+- [ ] **Parallel environments for the on-policy agents** (added by the maintainer, 2026-11-04)
+  - **Description**: The `Trainer` steps one environment, one episode at a time. rl-zoo's A2C collects from 8
+    environments in lockstep (64 transitions per update on Pendulum), and its PPO configs usually from several too;
+    ours cannot follow either recipe. Add `training.num_envs` for the on-policy agents (REINFORCE, and Actor-Critic
+    and PPO in both action kinds): Gymnasium's `SyncVectorEnv` (or `AsyncVectorEnv` with `async_envs`) with autoreset,
+    each update built from every environment's steps, episode records and the solve rule per finished episode.
+  - **Acceptance criteria**: `num_envs: 1`, or no key, is bit-for-bit today's training (the golden tests); with N
+    environments each one's episodes are recorded, cut and bootstrapped as now (a time-limit cut bootstraps, a true
+    termination does not); evaluation, checkpoints and `--resume`, the curriculum and observation normalisation work
+    as with one; the replay-buffer agents refuse `num_envs` above 1 until they are designed for it. Then the
+    measurement the Code Health idea asks for: the continuous Actor-Critic with 8 environments and `n_steps: 8`
+    against the committed config, seeds 1 to 5, under the win rule.
+  - **Known edge cases**: environments finishing episodes at different steps; Gymnasium's autoreset mode (the
+    final observation of a cut episode is needed to bootstrap); seeding N environments reproducibly from one seed; a
+    step budget crossed partway through a vector step; `update_every` and the actor-critic's chunking across
+    environments.
+  - **Out of scope**: vectorised DQN, DDPG and TD3; changing any committed config before it is measured.
 
 ### Code Health
 
 The last health dashboard (brooks-health, 2026-10-22) scored 94/100 with 0 Critical findings; its four Warnings are
 fixed (CHANGELOG.md, 2026-10-22 and 2026-10-25). The five ideas the maintainer picked on 2026-10-28 are done
 (CHANGELOG.md, 2026-10-28 and 2026-10-29), and the ideas picked on 2026-11-03 are measured (CHANGELOG.md,
-2026-11-04), but for the one in progress below. A learning change is committed only if, on seeds 1 to 5 against the
+2026-11-04). A learning change is committed only if, on seeds 1 to 5 against the
 committed config, more seeds hold the threshold or the mean final average is better on at least 4 of 5 paired seeds
 with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
-
-- [~] **Observation normalisation for the replay-buffer agents**: `normalize_observations` is refused for DQN, DDPG and
-  TD3, whose buffers would keep inputs normalised by statistics that later change; SB3 stores raw observations and
-  normalises at sample time. In progress (the maintainer's pick, 2026-11-03): the buffer stores raw observations and
-  normalises each sampled batch with the current statistics, to be measured on MountainCar DQN and Pendulum TD3. For the
-  on-policy agents it is measured: adopted for the continuous Actor-Critic, worse for Pendulum PPO (CHANGELOG.md,
-  2026-11-04).
 
 Parked ideas, not scheduled. Each needs the maintainer's pick, and some a decision on the win rule, before it becomes
 an item.
@@ -43,9 +52,17 @@ an item.
   training average stays near -300 on Pendulum (CHANGELOG.md, 2026-10-18), -283 with observation normalisation
   (CHANGELOG.md, 2026-11-04). Tried without closing it: true A2C (`update_every: 8`; CHANGELOG.md, 2026-10-30) and
   50-step chunks (50 transitions per update from one environment, against rl-zoo's 64 from eight; CHANGELOG.md,
-  2026-11-04). Untried: rl-zoo's 8 parallel environments, which need vectorised collection in the `Trainer`
-  (several environments stepped in lockstep, per-environment episode bookkeeping), a new item for the maintainer to
-  place; and gSDE exploration (its PPO version is in `~/rl-experiments/item5/` on the development machine).
+  2026-11-04). Untried: rl-zoo's 8 parallel environments, which wait on the Training item "Parallel environments
+  for the on-policy agents"; and gSDE exploration (its PPO version is in `~/rl-experiments/item5/` on the
+  development machine).
+- [ ] **Why Pendulum PPO collapses with observation normalisation**: with `normalize_observations: true`
+  `configs/pendulum_ppo.yaml` held -200 on 2 of seeds 1 to 5 against 4; seed 5 reached -187 by episode 310 and slid
+  to about -1000 by episode 900 with the entropy steady and a small value loss, while the learning rate annealed
+  (CHANGELOG.md, 2026-11-04). A scratch variant with the statistics frozen per rollout collapsed on 3 of 5
+  (2026-10-29). The same option helps the continuous Actor-Critic and CartPole PPO (`TR-24`), so a defect in how PPO
+  uses normalised inputs is possible, not only a poor fit. A `training-doctor` diagnosis on seed 5 would settle
+  which: the statistics' drift late in the run, the policy's mean action and log standard deviation, and the update
+  metrics around the slide.
 
 ### Phase 6 — Advanced RL & Robotics Extensions
 

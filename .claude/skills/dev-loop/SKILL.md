@@ -182,6 +182,12 @@ After they have committed: push the branch, then open the PR against `develop` w
 `.github/pull_request_template.md`, with the quick summary as the first lines of its Description and every
 ticked box true. Watch `gh pr checks` until it finishes, and fix a red check without being asked.
 
+When several PRs are open at once they share `CHANGELOG.md` and `docs/roadmap.md`. After each one merges,
+merge `develop` into every other open branch yourself, resolve the conflicts keeping both sides' entries, and
+check that each CHANGELOG entry and roadmap edit of both is still there before the maintainer merges it. On
+2026-11-04 a resolution kept one side: #172's CHANGELOG entry was lost and its finished item stayed in the
+roadmap until a follow-up PR restored them.
+
 Then clean up what the work left behind (the maintainer's decision, 2026-11-04): the git worktrees made for
 it (`git worktree remove <path>` once their branch is committed or abandoned; save an abandoned diff as a
 patch first), local branches that were abandoned or have merged (`git branch -d`), and scratch or
