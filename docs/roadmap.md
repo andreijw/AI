@@ -9,9 +9,8 @@ an item that is done moves there, condensed, in the hand-off commit that complet
 
 ## Upcoming Milestones
 
-Order (the maintainer's decision, 2026-10-31): finish Training and Code Health first, then Phase 6 starting with frame
-stacking. The TD3 decision and gradient clipping with SGD are done (CHANGELOG.md, 2026-11-01), so Phase 6 is next. The
-parked ideas under Code Health do not block Phase 6.
+Order (the maintainer's decision, 2026-11-03): Phase 6 is done (CHANGELOG.md, 2026-11-03), so Code Health's
+parked ideas come next, then Phase 7.
 
 ### Workflow Tooling
 
@@ -62,31 +61,7 @@ an item.
 
 ### Phase 6 — Advanced RL & Robotics Extensions
 
-- [~] **Lightweight Embedded Inference Export (C Header & ONNX)**
-  - **Progress (2026-11-02)**: the C header PR is done (`export.py`, `rl_core.export`; CHANGELOG.md, 2026-11-02).
-    Open: the ONNX export, which waits for the maintainer's decision on the `onnx` dependency.
-  - **Description**: Export a trained agent's greedy policy into a zero-dependency standalone C header
-    (`policy_weights.h`) for edge microcontroller and robotics deployment, and later into ONNX. Two PRs: the C header
-    first (`feature/c-header-export`), then ONNX, which needs the `onnx` package as a new dependency (the
-    maintainer's decision, not yet taken).
-  - **Acceptance criteria (C header PR)**:
-    - A CLI `export.py` beside `train.py` and `record.py`, taking a run config and a checkpoint as `record.py` does
-      (`--challenge` included), that writes one header holding the weights
-      as `float` arrays and a C forward pass: the network's raw outputs and the greedy action, the same action
-      `select_action(obs, training=False)` takes.
-    - Every NumPy agent with a network: REINFORCE, Actor-Critic and PPO (discrete and continuous), DQN (plain and
-      dueling), DDPG and TD3; a checkpoint from the PyTorch backend exports through the NumPy agent, without PyTorch.
-      Observation normalisation, when the agent uses it, is folded into the header. The random agents are refused.
-    - A C verification harness compiled with GCC or Clang that runs the header on observations from the challenge's
-      environment and compares outputs with NumPy's float64 forward pass (tolerance $10^{-5}$, absolute and relative)
-      and greedy actions with the agent's (a discrete action may differ only where the top two outputs are within the
-      tolerance; such near-ties are counted and reported).
-    - Unit tests in `tests/test_export.py`, compiling C where a compiler is found and skipping where not.
-  - **Known edge cases**: Floating-point precision discrepancies (FP32 vs FP64); ties between greedy actions (the C
-    code takes the first maximum, as `np.argmax` does); activation clipping overflows (`tanh` of large inputs).
-  - **Out of scope**: Quantization-aware training (INT8); target-specific MCU hardware optimizations (CMSIS-NN);
-    velocity masking, frame stacking and frame differences in C (the header takes the agent's input vector, after
-    them, and names the settings it was trained with); the ONNX export (second PR).
+No open items.
 
 ### Phase 7 — Challenge Ladder
 

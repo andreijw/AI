@@ -201,8 +201,8 @@ function Initialize-Venv([string]$Python) {
     Write-Host "[*] Upgrading pip..." -ForegroundColor Cyan
     & $VenvPython -m pip install --upgrade pip | Out-Host
 
-    Write-Host "[*] Installing rl-cartpole in editable mode with [dev,video] extras..." -ForegroundColor Cyan
-    $pipArgs = @("-m", "pip", "install", "-e", ".[dev,video]")
+    Write-Host "[*] Installing rl-cartpole in editable mode with [dev,video,onnx] extras..." -ForegroundColor Cyan
+    $pipArgs = @("-m", "pip", "install", "-e", ".[dev,video,onnx]")
     if ($Update) {
         $pipArgs += "--upgrade"
     }

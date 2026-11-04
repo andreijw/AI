@@ -167,6 +167,23 @@ class InferencePolicy:
     def normalizes(self) -> bool:
         return self.obs_mean is not None
 
+    @property
+    def squash_centre(self) -> Array:
+        """``tanh_scale``'s action for an output of 0: the middle of the bounds, (A,)."""
+        low, high = self._squash_bounds()
+        return (high + low) / 2.0
+
+    @property
+    def squash_half_width(self) -> Array:
+        """``tanh_scale``'s scale: half the width of the bounds, (A,), so tanh's ±1 meets them."""
+        low, high = self._squash_bounds()
+        return (high - low) / 2.0
+
+    def _squash_bounds(self) -> tuple[Array, Array]:
+        if self.head != "tanh_scale" or self.action_low is None or self.action_high is None:
+            raise ValueError(f"only the tanh_scale head squashes its outputs, not {self.head!r}")
+        return self.action_low, self.action_high
+
     def outputs(self, observation: npt.ArrayLike) -> Array:
         """The last layer's outputs, before the head, for one observation or a batch (B, input)."""
         x = np.asarray(observation, dtype=np.float64)
@@ -187,7 +204,5 @@ class InferencePolicy:
             return int(choice) if choice.ndim == 0 else choice
         assert self.action_low is not None and self.action_high is not None  # _check_head
         if self.head == "tanh_scale":
-            centre = (self.action_high + self.action_low) / 2.0
-            half_width = (self.action_high - self.action_low) / 2.0
-            z = centre + half_width * np.tanh(z)
+            z = self.squash_centre + self.squash_half_width * np.tanh(z)
         return np.clip(z, self.action_low, self.action_high)

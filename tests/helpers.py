@@ -217,6 +217,20 @@ needs_cc = pytest.mark.skipif(
     reason="no C compiler (set CC, or install gcc or clang)",
 )
 
+# The ONNX export needs the onnx extra (pip install -e ".[onnx]"): onnx builds the model, onnxruntime
+# checks it. CI installs it. Importing onnxruntime starts a thread that never ends, and a fork after it
+# (an async vector environment) may deadlock, so tests/conftest.py runs these tests last.
+NEEDS_ONNX_REASON = 'the onnx extra is not installed (pip install -e ".[onnx]")'
+needs_onnx = pytest.mark.skipif(
+    importlib.util.find_spec("onnx") is None or importlib.util.find_spec("onnxruntime") is None,
+    reason=NEEDS_ONNX_REASON,
+)
+
+
+def uses_onnx(item: pytest.Item) -> bool:
+    """Whether a collected test is marked ``needs_onnx``."""
+    return any(m.kwargs.get("reason") == NEEDS_ONNX_REASON for m in item.iter_markers("skipif"))
+
 
 def env_marks(environment_id: str) -> list[pytest.MarkDecorator]:
     """The marks a test that builds ``environment_id`` needs: ``needs_box2d`` for Gymnasium's Box2D

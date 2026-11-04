@@ -12,7 +12,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_core.agents import (  # noqa: E402
-    ActorCriticAgent,
     ContinuousActorCriticAgent,
     ContinuousPPOAgent,
     ContinuousRandomAgent,
@@ -20,7 +19,6 @@ from rl_core.agents import (  # noqa: E402
     DQNAgent,
     PPOAgent,
     RandomAgent,
-    ReinforceAgent,
     TD3Agent,
 )
 from rl_core.agents.inference import DenseLayer, InferencePolicy  # noqa: E402
@@ -32,51 +30,23 @@ from tests.agent_internals import (  # noqa: E402
     probabilities,
     q_values,
 )
+from tests.export_cases import (  # noqa: E402
+    BOUNDS,
+    CONTINUOUS,
+    DISCRETE,
+    EXPORTABLE,
+    EXPORTERS,
+    NORMALISING,
+    OBS_DIM,
+    SQUASHING,
+    case_id,
+    dense_layer,
+    make_agent,
+    make_checkpoint,
+    random_observations,
+    run_export,
+)
 from tests.helpers import minimal_config, needs_cc, needs_torch, run_main  # noqa: E402
-
-OBS_DIM = 5
-BOUNDS = {"action_low": [-2.0, -0.5], "action_high": [2.0, 1.5]}
-DISCRETE = [
-    (ReinforceAgent, {"seed": 3, "hidden_dim": 6}),
-    (ActorCriticAgent, {"seed": 3, "hidden_dim": 6}),
-    (PPOAgent, {"seed": 3, "hidden_dim": 6}),
-    (PPOAgent, {"seed": 3, "hidden_dim": 6, "normalize_observations": True}),
-    (DQNAgent, {"seed": 3, "hidden_dim": 6}),
-    (DQNAgent, {"seed": 3, "hidden_dim": 6, "dueling": True}),
-]
-CONTINUOUS = [
-    (ContinuousActorCriticAgent, {"seed": 3, "hidden_dim": 6}),
-    (ContinuousActorCriticAgent, {"seed": 3, "hidden_dim": 6, "bounded_mean": True, **BOUNDS}),
-    (ContinuousPPOAgent, {"seed": 3, "hidden_dim": 6, **BOUNDS}),
-    (ContinuousPPOAgent, {"seed": 3, "hidden_dim": 6, "normalize_observations": True, **BOUNDS}),
-    (DDPGAgent, {"seed": 3, "hidden_sizes": [7, 5], **BOUNDS}),
-    (TD3Agent, {"seed": 3, "hidden_sizes": [6], **BOUNDS}),
-]
-EXPORTABLE = DISCRETE + CONTINUOUS
-
-
-def _id(case):
-    cls, config = case
-    options = [k for k in ("dueling", "bounded_mean", "normalize_observations") if config.get(k)]
-    return "-".join([cls.__name__, *options])
-
-
-def _action_dim(cls):
-    return 3 if any(cls is c for c, _ in DISCRETE) else 2
-
-
-def _observations(n=200, seed=0, scale=1.5):
-    return np.random.default_rng(seed).normal(0.0, scale, size=(n, OBS_DIM)).astype(np.float32)
-
-
-def _agent(cls, config):
-    """An agent with its initial weights; a normalising one has seen 300 shifted observations, so
-    its statistics are far from the identity."""
-    agent = cls(observation_dim=OBS_DIM, action_dim=_action_dim(cls), config=dict(config))
-    if config.get("normalize_observations"):
-        for obs in _observations(300, seed=9, scale=3.0) + 2.0:
-            agent.normalize_observation(obs, training=True)
-    return agent
 
 
 def _greedy(agent, raw_obs):
@@ -88,11 +58,11 @@ def _greedy(agent, raw_obs):
 # ---------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("case", EXPORTABLE, ids=[_id(c) for c in EXPORTABLE])
+@pytest.mark.parametrize("case", EXPORTABLE, ids=[case_id(c) for c in EXPORTABLE])
 def test_policy_acts_as_the_agent_acts_in_evaluation(case):
-    agent = _agent(*case)
+    agent = make_agent(*case)
     policy = agent.inference_policy()
-    for obs in _observations():
+    for obs in random_observations():
         expected = _greedy(agent, obs)
         actual = policy.act(obs)
         if np.ndim(expected) == 0:
@@ -102,14 +72,14 @@ def test_policy_acts_as_the_agent_acts_in_evaluation(case):
 
 
 @pytest.mark.parametrize(
-    "case", [c for c in DISCRETE if c[0] is not DQNAgent], ids=lambda c: _id(c)
+    "case", [c for c in DISCRETE if c[0] is not DQNAgent], ids=lambda c: case_id(c)
 )
 def test_discrete_policy_outputs_are_the_agents_logits(case):
     """Softmax of the exported outputs is the agent's action distribution: the outputs are its
     logits, not some other monotone transform that happens to share the argmax."""
-    agent = _agent(*case)
+    agent = make_agent(*case)
     policy = agent.inference_policy()
-    for obs in _observations(20):
+    for obs in random_observations(20):
         logits = policy.outputs(obs)
         exp = np.exp(logits - logits.max())
         np.testing.assert_allclose(
@@ -123,8 +93,8 @@ def test_discrete_policy_outputs_are_the_agents_logits(case):
 @pytest.mark.parametrize("dueling", [False, True])
 def test_dqn_policy_outputs_are_the_q_values(dueling):
     """Dueling DQN is folded into one network whose outputs are Q, not the advantage stream."""
-    agent = _agent(DQNAgent, {"seed": 3, "hidden_dim": 6, "dueling": dueling})
-    observations = _observations(20).astype(np.float64)
+    agent = make_agent(DQNAgent, {"seed": 3, "hidden_dim": 6, "dueling": dueling})
+    observations = random_observations(20).astype(np.float64)
     policy = agent.inference_policy()
     np.testing.assert_allclose(
         policy.outputs(observations), q_values(agent, observations), rtol=1e-10, atol=1e-12
@@ -134,12 +104,12 @@ def test_dqn_policy_outputs_are_the_q_values(dueling):
 @pytest.mark.parametrize(
     "case",
     [c for c in CONTINUOUS if c[0] in (ContinuousActorCriticAgent, ContinuousPPOAgent)],
-    ids=lambda c: _id(c),
+    ids=lambda c: case_id(c),
 )
 def test_continuous_policy_action_is_the_clipped_mean(case):
-    agent = _agent(*case)
+    agent = make_agent(*case)
     policy = agent.inference_policy()
-    for obs in _observations(20):
+    for obs in random_observations(20):
         mean = gaussian_forward(agent, agent.normalize_observation(obs, training=False))[0]
         np.testing.assert_allclose(
             policy.act(obs), np.clip(mean, agent.action_low, agent.action_high), rtol=1e-10
@@ -148,8 +118,8 @@ def test_continuous_policy_action_is_the_clipped_mean(case):
 
 @pytest.mark.parametrize("cls", [DDPGAgent, TD3Agent])
 def test_ddpg_policy_action_is_the_actor_output(cls):
-    agent = _agent(cls, {"seed": 3, "hidden_sizes": [7, 5], **BOUNDS})
-    observations = _observations(20).astype(np.float64)
+    agent = make_agent(cls, {"seed": 3, "hidden_sizes": [7, 5], **BOUNDS})
+    observations = random_observations(20).astype(np.float64)
     policy = agent.inference_policy()
     np.testing.assert_allclose(
         policy.act(observations), actor_forward(agent, observations)[0], rtol=1e-10
@@ -157,21 +127,21 @@ def test_ddpg_policy_action_is_the_actor_output(cls):
 
 
 def test_policy_outputs_for_a_batch_are_its_outputs_for_each_observation():
-    policy = _agent(DDPGAgent, {"seed": 3, "hidden_sizes": [4], **BOUNDS}).inference_policy()
-    observations = _observations(7)
+    policy = make_agent(DDPGAgent, {"seed": 3, "hidden_sizes": [4], **BOUNDS}).inference_policy()
+    observations = random_observations(7)
     np.testing.assert_allclose(
         policy.outputs(observations), np.stack([policy.outputs(o) for o in observations])
     )
 
 
 def test_discrete_policy_acts_on_a_batch_as_on_each_observation():
-    policy = _agent(PPOAgent, {"seed": 3, "hidden_dim": 4}).inference_policy()
-    observations = _observations(7)
+    policy = make_agent(PPOAgent, {"seed": 3, "hidden_dim": 4}).inference_policy()
+    observations = random_observations(7)
     np.testing.assert_array_equal(policy.act(observations), [policy.act(o) for o in observations])
 
 
 def test_policy_records_the_agents_observation_settings_and_name():
-    agent = _agent(PPOAgent, {"seed": 3, "hidden_dim": 4})
+    agent = make_agent(PPOAgent, {"seed": 3, "hidden_dim": 4})
     agent.record_observation_settings(
         {"frame_stack": 1, "mask_velocity": True}, {"frame_stack": 1, "mask_velocity": False}
     )
@@ -191,9 +161,9 @@ def test_an_agent_without_a_network_is_refused(agent):
 
 
 def test_policy_arrays_are_read_only_copies():
-    agent = _agent(DDPGAgent, {"seed": 3, "hidden_sizes": [4], **BOUNDS})
+    agent = make_agent(DDPGAgent, {"seed": 3, "hidden_sizes": [4], **BOUNDS})
     policy = agent.inference_policy()
-    obs = _observations(1)[0]
+    obs = random_observations(1)[0]
     before = policy.outputs(obs)
     with pytest.raises(ValueError, match="read-only"):
         policy.layers[0].weight[0, 0] = 1.0
@@ -201,18 +171,14 @@ def test_policy_arrays_are_read_only_copies():
     np.testing.assert_array_equal(policy.outputs(obs), before)
 
 
-def _layer(n_in, n_out, relu=True, value=0.1):
-    return DenseLayer(weight=np.full((n_in, n_out), value), bias=np.zeros(n_out), relu=relu)
-
-
 def test_policy_refuses_layers_that_do_not_chain():
     with pytest.raises(ValueError, match="layer 1 takes 4 inputs.*layer 0 gives 3"):
-        InferencePolicy(layers=(_layer(2, 3), _layer(4, 2, relu=False)), head="argmax")
+        InferencePolicy(layers=(dense_layer(2, 3), dense_layer(4, 2, relu=False)), head="argmax")
 
 
 def test_policy_refuses_a_hidden_activation_on_the_last_layer():
     with pytest.raises(ValueError, match="last layer"):
-        InferencePolicy(layers=(_layer(2, 3), _layer(3, 2, relu=True)), head="argmax")
+        InferencePolicy(layers=(dense_layer(2, 3), dense_layer(3, 2, relu=True)), head="argmax")
 
 
 def test_a_layer_refuses_non_finite_weights():
@@ -234,7 +200,7 @@ def test_a_layer_refuses_non_finite_weights():
 def test_policy_refuses_a_head_that_does_not_fit(head, low, high, match):
     with pytest.raises(ValueError, match=match):
         InferencePolicy(
-            layers=(_layer(2, 2, relu=False),),
+            layers=(dense_layer(2, 2, relu=False),),
             head=head,
             action_low=None if low is None else np.array(low),
             action_high=None if high is None else np.array(high),
@@ -256,8 +222,31 @@ def test_normalisation_is_clipped_to_ten_as_the_agent_clips_it():
 
 
 def test_argmax_takes_the_first_of_tied_outputs():
-    policy = InferencePolicy(layers=(_layer(2, 3, relu=False, value=0.0),), head="argmax")
+    policy = InferencePolicy(layers=(dense_layer(2, 3, relu=False, value=0.0),), head="argmax")
     assert policy.act(np.array([1.0, 2.0])) == 0
+
+
+def test_tanh_scale_maps_minus_one_to_one_onto_the_bounds():
+    """centre + half-width x tanh: the one definition NumPy, C and ONNX all use."""
+    policy = InferencePolicy(
+        layers=(dense_layer(2, 2, relu=False),),
+        head="tanh_scale",
+        action_low=np.array([-2.0, -0.5]),
+        action_high=np.array([2.0, 1.5]),
+    )
+    np.testing.assert_array_equal(policy.squash_centre, [0.0, 0.5])
+    np.testing.assert_array_equal(policy.squash_half_width, [2.0, 1.0])
+
+
+def test_only_the_tanh_scale_head_has_a_squash():
+    policy = InferencePolicy(
+        layers=(dense_layer(2, 2, relu=False),),
+        head="clip",
+        action_low=np.array([-1.0, -1.0]),
+        action_high=np.array([1.0, 1.0]),
+    )
+    with pytest.raises(ValueError, match="tanh_scale"):
+        _ = policy.squash_centre
 
 
 # ---------------------------------------------------------------------------------------------
@@ -268,7 +257,7 @@ HEX_FLOAT = re.compile(r"(-?0x[0-9a-f]+(?:\.[0-9a-f]*)?p[+-]\d+)f")
 
 
 def test_header_holds_every_weight_exactly_as_float32():
-    policy = _agent(DDPGAgent, {"seed": 3, "hidden_sizes": [7, 5], **BOUNDS}).inference_policy()
+    policy = make_agent(DDPGAgent, {"seed": 3, "hidden_sizes": [7, 5], **BOUNDS}).inference_policy()
     text = c_header.render_c_header(policy)
     literals = [float.fromhex(m) for m in HEX_FLOAT.findall(text)]
     expected = np.concatenate(  # stored [outputs][inputs] per layer, then the bias
@@ -281,7 +270,7 @@ def test_header_holds_every_weight_exactly_as_float32():
 
 
 def test_header_declares_its_dimensions_and_guard():
-    policy = _agent(PPOAgent, {"seed": 3, "hidden_dim": 6}).inference_policy()
+    policy = make_agent(PPOAgent, {"seed": 3, "hidden_dim": 6}).inference_policy()
     text = c_header.render_c_header(policy)
     assert "#ifndef POLICY_WEIGHTS_H" in text and "#define POLICY_WEIGHTS_H" in text
     assert f"#define POLICY_INPUT_DIM {OBS_DIM}" in text
@@ -306,20 +295,20 @@ def test_header_clips_only_to_finite_bounds():
 
 def test_header_says_it_cannot_be_linked_twice():
     text = c_header.render_c_header(
-        _agent(PPOAgent, {"seed": 3, "hidden_dim": 4}).inference_policy()
+        make_agent(PPOAgent, {"seed": 3, "hidden_dim": 4}).inference_policy()
     )
     assert "one policy per program" in text
 
 
 def test_continuous_header_acts_into_an_array():
-    policy = _agent(DDPGAgent, {"seed": 3, "hidden_sizes": [4], **BOUNDS}).inference_policy()
+    policy = make_agent(DDPGAgent, {"seed": 3, "hidden_sizes": [4], **BOUNDS}).inference_policy()
     text = c_header.render_c_header(policy)
     assert "#define POLICY_ACTION_DIM 2" in text
     assert "void policy_act(const float *obs, float *action)" in text
 
 
 def test_header_names_the_agent_settings_and_source():
-    agent = _agent(PPOAgent, {"seed": 3, "hidden_dim": 4})
+    agent = make_agent(PPOAgent, {"seed": 3, "hidden_dim": 4})
     agent.record_observation_settings({"frame_stack": 4}, {"frame_stack": 1})
     text = c_header.render_c_header(agent.inference_policy(), source="agent.pt sha256 abc123")
     assert "PPOAgent" in text
@@ -328,58 +317,49 @@ def test_header_names_the_agent_settings_and_source():
 
 
 def test_header_is_reproducible():
-    policy = _agent(DQNAgent, {"seed": 3, "hidden_dim": 4, "dueling": True}).inference_policy()
+    policy = make_agent(DQNAgent, {"seed": 3, "hidden_dim": 4, "dueling": True}).inference_policy()
     assert c_header.render_c_header(policy) == c_header.render_c_header(policy)
     assert not re.search(r"20\d\d-\d\d-\d\d", c_header.render_c_header(policy)), "no date"
 
 
 # ---------------------------------------------------------------------------------------------
-# Compiled: the C forward pass agrees with NumPy
+# Every exporter: the exported policy (compiled C, ONNX in onnxruntime) agrees with NumPy
 # ---------------------------------------------------------------------------------------------
 
 
-@needs_cc
-@pytest.mark.parametrize("case", EXPORTABLE, ids=[_id(c) for c in EXPORTABLE])
-def test_compiled_header_agrees_with_numpy(case, tmp_path):
-    policy = _agent(*case).inference_policy()
-    header = c_header.render_c_header(policy)
-    report = verify.verify_c_header(header, policy, _observations(), workdir=tmp_path, werror=True)
+@pytest.mark.parametrize("check", EXPORTERS)
+@pytest.mark.parametrize("case", EXPORTABLE, ids=[case_id(c) for c in EXPORTABLE])
+def test_exported_policy_agrees_with_numpy(check, case, tmp_path):
+    policy = make_agent(*case).inference_policy()
+    report = check(policy, random_observations(), tmp_path)
     assert report.passed, report.summary()
     assert report.action_mismatches == 0
     assert report.max_abs_error < 1e-5, report.summary()
 
 
-SQUASHING = [
-    c for c in CONTINUOUS if c[1].get("bounded_mean") or c[1].get("normalize_observations")
-]
-SQUASHING += [c for c in CONTINUOUS if c[0] is DDPGAgent]
-
-
-@needs_cc
-@pytest.mark.parametrize("case", SQUASHING, ids=[_id(c) for c in SQUASHING])
-def test_compiled_header_stays_finite_and_clipped_on_huge_observations(case, tmp_path):
+@pytest.mark.parametrize("check", EXPORTERS)
+@pytest.mark.parametrize("case", SQUASHING, ids=[case_id(c) for c in SQUASHING])
+def test_exported_policy_stays_finite_and_clipped_on_huge_observations(check, case, tmp_path):
     """tanh of a huge input saturates rather than overflowing; normalisation clips to ±10."""
-    policy = _agent(*case).inference_policy()
+    policy = make_agent(*case).inference_policy()
     observations = np.array([[1e6, -1e6, 1e6, -1e6, 1e6], [-1e6] * OBS_DIM], dtype=np.float32)
-    report = verify.verify_c_header(
-        c_header.render_c_header(policy), policy, observations, workdir=tmp_path
-    )
-    assert np.isfinite(report.c_outputs).all(), "non-finite C outputs"
+    report = check(policy, observations, tmp_path)
+    assert np.isfinite(report.outputs).all(), "non-finite exported outputs"
     assert report.passed, report.summary()
 
 
-@needs_cc
-def test_compiled_header_takes_the_first_of_tied_actions(tmp_path):
-    policy = InferencePolicy(layers=(_layer(OBS_DIM, 4, relu=False, value=0.0),), head="argmax")
-    report = verify.verify_c_header(
-        c_header.render_c_header(policy), policy, _observations(5), workdir=tmp_path
+@pytest.mark.parametrize("check", EXPORTERS)
+def test_exported_policy_takes_the_first_of_tied_actions(check, tmp_path):
+    policy = InferencePolicy(
+        layers=(dense_layer(OBS_DIM, 4, relu=False, value=0.0),), head="argmax"
     )
-    np.testing.assert_array_equal(report.c_actions, np.zeros(5))
+    report = check(policy, random_observations(5), tmp_path)
+    np.testing.assert_array_equal(report.actions, np.zeros(5))
 
 
-@needs_cc
-def test_compiled_header_clips_to_finite_bounds_only(tmp_path):
-    """Infinite bounds compile (no inf literal) and leave the mean unclipped on that side."""
+@pytest.mark.parametrize("check", EXPORTERS)
+def test_exported_policy_clips_to_finite_bounds_only(check, tmp_path):
+    """An infinite bound leaves the mean unclipped on that side (and, in C, has no literal)."""
     layer = DenseLayer(weight=np.full((OBS_DIM, 2), 10.0), bias=np.zeros(2), relu=False)
     policy = InferencePolicy(
         layers=(layer,),
@@ -387,14 +367,8 @@ def test_compiled_header_clips_to_finite_bounds_only(tmp_path):
         action_low=np.array([-np.inf, -1.0]),
         action_high=np.array([np.inf, 1.0]),
     )
-    report = verify.verify_c_header(
-        c_header.render_c_header(policy),
-        policy,
-        np.ones((1, OBS_DIM)),
-        workdir=tmp_path,
-        werror=True,
-    )
-    np.testing.assert_allclose(report.c_actions[0], [50.0, 1.0], rtol=1e-6)
+    report = check(policy, np.ones((1, OBS_DIM)), tmp_path)
+    np.testing.assert_allclose(report.actions[0], [50.0, 1.0], rtol=1e-6)
 
 
 def test_a_discrete_near_tie_is_counted_not_failed():
@@ -405,9 +379,10 @@ def test_a_discrete_near_tie_is_counted_not_failed():
     report = verify.compare(
         reference_outputs=reference,
         reference_actions=np.array([1, 1, 0]),
-        c_outputs=reference.astype(np.float32).astype(np.float64),
-        c_actions=np.array([0, 2, 1]),
+        outputs=reference.astype(np.float32).astype(np.float64),
+        actions=np.array([0, 2, 1]),
         discrete=True,
+        target="C",
     )
     assert report.near_ties == 2, "the two near-tied rows should count as near-ties"
     assert report.action_mismatches == 1, "the clear-gap row should count as a mismatch"
@@ -419,9 +394,10 @@ def test_outputs_beyond_the_tolerance_fail():
     report = verify.compare(
         reference_outputs=reference,
         reference_actions=reference,
-        c_outputs=reference + np.array([[0.0, 1e-3]]),
-        c_actions=reference,
+        outputs=reference + np.array([[0.0, 1e-3]]),
+        actions=reference,
         discrete=False,
+        target="C",
     )
     assert not report.passed
     assert report.max_abs_error == pytest.approx(1e-3)
@@ -434,13 +410,20 @@ def test_report_gives_the_worst_error_as_a_share_of_its_tolerance():
     report = verify.compare(
         reference_outputs=reference,
         reference_actions=np.array([0]),
-        c_outputs=reference + np.array([[5.05e-4, 2.5e-6]]),
-        c_actions=np.array([0]),
+        outputs=reference + np.array([[5.05e-4, 2.5e-6]]),
+        actions=np.array([0]),
         discrete=True,
+        target="C",
     )
     assert report.worst_tolerance_share == pytest.approx(0.5)
     assert report.passed
     assert "0.5 of the tolerance" in report.summary()
+
+
+def test_report_names_the_format_it_checked():
+    reference = np.array([[1.0, 2.0]])
+    report = verify.compare(reference, np.array([1]), reference, np.array([1]), True, target="ONNX")
+    assert report.summary().startswith("ONNX verification passed"), report.summary()
 
 
 def test_compiler_comes_from_cc_split_as_a_shell_would(monkeypatch):
@@ -486,8 +469,8 @@ class _ScriptedEnv:
 
 
 def _rollout(case, steps=12):
-    agent = _agent(*case)
-    observations = _observations(steps, seed=4, scale=3.0)
+    agent = make_agent(*case)
+    observations = random_observations(steps, seed=4, scale=3.0)
     env = _ScriptedEnv(observations)
     return agent, observations, rollout.greedy_rollout(env, agent, episodes=1, seed=0)
 
@@ -501,10 +484,7 @@ def test_greedy_rollout_records_raw_observations_and_the_agents_actions():
     assert result.actions == [_greedy(agent, obs) for obs in observations]
 
 
-NORMALISING = [c for c in EXPORTABLE if c[1].get("normalize_observations")]
-
-
-@pytest.mark.parametrize("case", NORMALISING, ids=[_id(c) for c in NORMALISING])
+@pytest.mark.parametrize("case", NORMALISING, ids=[case_id(c) for c in NORMALISING])
 def test_policy_disagreements_count_a_policy_that_acts_unlike_the_agent(case):
     agent, _, result = _rollout(case)
     policy = agent.inference_policy()
@@ -519,8 +499,8 @@ def test_policy_disagreements_count_a_policy_that_acts_unlike_the_agent(case):
 
 def test_policy_disagreements_do_not_fail_on_a_near_tie():
     """Tied outputs: the agent's other choice is a near-tie, not a disagreement."""
-    tied = InferencePolicy(layers=(_layer(OBS_DIM, 3, relu=False, value=0.0),), head="argmax")
-    result = rollout.GreedyRollout(_observations(2), [1, 0])
+    tied = InferencePolicy(layers=(dense_layer(OBS_DIM, 3, relu=False, value=0.0),), head="argmax")
+    result = rollout.GreedyRollout(random_observations(2), [1, 0])
     agreement = rollout.policy_disagreements(tied, result)
     assert (agreement.mismatches, agreement.near_ties) == (0, 1)
 
@@ -530,26 +510,8 @@ def test_policy_disagreements_do_not_fail_on_a_near_tie():
 # ---------------------------------------------------------------------------------------------
 
 
-def _checkpoint(tmp_path, cls=PPOAgent, config=None):
-    path = str(tmp_path / "agent.pt")
-    cls(observation_dim=4, action_dim=2, config=config or {}).save(path)
-    return path
-
-
-def _export(tmp_path, monkeypatch, agent_type="ppo", extra=(), checkpoint=None):
-    output = tmp_path / "out" / "policy_weights.h"
-    run_main(
-        ["--config", minimal_config(tmp_path), "--agent-type", agent_type]
-        + ["--checkpoint", checkpoint or _checkpoint(tmp_path), "--output", str(output)]
-        + list(extra),
-        monkeypatch,
-        module="export",
-    )
-    return output
-
-
 def test_export_writes_the_header_without_verification(tmp_path, monkeypatch):
-    output = _export(tmp_path, monkeypatch, extra=["--verify-episodes", "0"])
+    output = run_export(tmp_path, monkeypatch, extra=["--verify-episodes", "0"])
     text = output.read_text(encoding="utf-8")
     assert "#define POLICY_INPUT_DIM 4" in text
     digest = hashlib.sha256((tmp_path / "agent.pt").read_bytes()).hexdigest()
@@ -561,7 +523,7 @@ def test_export_writes_the_header_without_verification(tmp_path, monkeypatch):
 
 @needs_cc
 def test_export_verifies_on_environment_observations(tmp_path, monkeypatch, capsys):
-    output = _export(tmp_path, monkeypatch, extra=["--verify-episodes", "1"])
+    output = run_export(tmp_path, monkeypatch, extra=["--verify-episodes", "1"])
     assert output.exists()
     out = capsys.readouterr().out
     assert "passed" in out and "max abs error" in out
@@ -570,7 +532,7 @@ def test_export_verifies_on_environment_observations(tmp_path, monkeypatch, caps
 def test_export_without_a_compiler_writes_the_header_and_fails(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(verify, "find_c_compiler", lambda: None)
     with pytest.raises(SystemExit) as stop:
-        _export(tmp_path, monkeypatch, extra=["--verify-episodes", "1"])
+        run_export(tmp_path, monkeypatch, extra=["--verify-episodes", "1"])
     assert stop.value.code == 1
     assert (tmp_path / "out" / "policy_weights.h").exists()
     assert "--verify-episodes 0" in capsys.readouterr().err
@@ -581,7 +543,7 @@ def test_export_verifies_a_normalising_agent(tmp_path, monkeypatch, capsys):
     """Statistics far from the identity, so normalising twice (or not at all) would show."""
     config = {"normalize_observations": True}
     agent = PPOAgent(observation_dim=4, action_dim=2, config=dict(config))
-    for obs in _observations(300, seed=9, scale=0.5)[:, :4] + 0.3:
+    for obs in random_observations(300, seed=9, scale=0.5)[:, :4] + 0.3:
         agent.normalize_observation(obs, training=True)
     path = str(tmp_path / "agent.pt")
     agent.save(path)
@@ -599,12 +561,14 @@ def test_export_verifies_a_normalising_agent(tmp_path, monkeypatch, capsys):
 def test_export_keeps_no_header_that_failed_verification(tmp_path, monkeypatch):
     def failing(header, policy, observations, **_):
         n = len(observations)
-        return verify.compare(np.zeros((n, 2)), np.zeros(n), np.ones((n, 2)), np.zeros(n), True)
+        return verify.compare(
+            np.zeros((n, 2)), np.zeros(n), np.ones((n, 2)), np.zeros(n), True, target="C"
+        )
 
     monkeypatch.setattr(verify, "find_c_compiler", lambda: ["cc"])
     monkeypatch.setattr(verify, "verify_c_header", failing)
     with pytest.raises(SystemExit) as stop:
-        _export(tmp_path, monkeypatch, extra=["--verify-episodes", "1"])
+        run_export(tmp_path, monkeypatch, extra=["--verify-episodes", "1"])
     assert stop.value.code == 1
     assert not (tmp_path / "out" / "policy_weights.h").exists(), (
         "a header that failed verification should not be left at --output"
@@ -613,16 +577,16 @@ def test_export_keeps_no_header_that_failed_verification(tmp_path, monkeypatch):
 
 def test_export_refuses_a_negative_episode_count(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as stop:
-        _export(tmp_path, monkeypatch, extra=["--verify-episodes", "-1"])
+        run_export(tmp_path, monkeypatch, extra=["--verify-episodes", "-1"])
     assert stop.value.code == 2
 
 
 @pytest.mark.parametrize("saved_by", [RandomAgent, PPOAgent], ids=["random", "ppo"])
 def test_export_refuses_the_random_agent(tmp_path, monkeypatch, saved_by):
     # Refused before the checkpoint is read, so another agent's checkpoint gives the same message.
-    checkpoint = _checkpoint(tmp_path, cls=saved_by)
+    checkpoint = make_checkpoint(tmp_path, cls=saved_by)
     with pytest.raises(ValueError, match="RandomAgent has no network to export"):
-        _export(tmp_path, monkeypatch, agent_type="random", checkpoint=checkpoint)
+        run_export(tmp_path, monkeypatch, agent_type="random", checkpoint=checkpoint)
     assert not (tmp_path / "out").exists()
 
 

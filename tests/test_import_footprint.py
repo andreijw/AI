@@ -7,6 +7,10 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from tests.export_cases import make_checkpoint  # noqa: E402
+from tests.helpers import minimal_config  # noqa: E402
 
 
 def test_trainer_and_challenges_do_not_import_matplotlib():
@@ -73,4 +77,45 @@ def test_discovering_the_challenges_does_not_import_box2d():
     assert result.stdout.strip() == "[]", (
         f"Discovering the challenges loaded {result.stdout.strip()}: something imports Box2D at "
         "module level, so the challenges would not register where it is not installed."
+    )
+
+
+ONNX_PACKAGES = ("onnx", "onnxruntime")
+
+
+@pytest.mark.parametrize("module", ["train", "record", "export", "benchmark"])
+def test_entry_points_do_not_import_onnx(module):
+    """onnx and onnxruntime are an optional extra, loaded only when an ONNX export asks for them."""
+    code = (
+        "import sys; sys.path.insert(0, 'src'); "
+        f"import {module}; "
+        f"print(sorted(m for m in sys.modules if m.split('.')[0] in {ONNX_PACKAGES!r})[:5])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", (
+        f"Importing {module} loaded {result.stdout.strip()}: import onnx and onnxruntime inside the "
+        "functions of rl_core/export/onnx_model.py, not at module level."
+    )
+
+
+def test_a_c_export_does_not_import_onnx(tmp_path):
+    """export.py --format c runs to the end without loading the ONNX packages: a fresh process."""
+    checkpoint = make_checkpoint(tmp_path)
+    argv = ["export.py", "--config", minimal_config(tmp_path), "--agent-type", "ppo"]
+    argv += ["--format", "c", "--checkpoint", checkpoint, "--output", str(tmp_path / "p.h")]
+    argv += ["--verify-episodes", "0"]
+    code = (
+        f"import sys; sys.path.insert(0, 'src'); sys.argv = {argv!r}; "
+        "import export; export.main(); "
+        f"print(sorted(m for m in sys.modules if m.split('.')[0] in {ONNX_PACKAGES!r})[:5])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines()[-1] == "[]", (
+        f"export.py --format c loaded {result.stdout.strip()}"
     )

@@ -1,4 +1,5 @@
-"""Export a trained agent's greedy policy as one self-contained C header, and check it in C."""
+"""Export a trained agent's greedy policy as a self-contained C header or an ONNX model, and check
+it (compiled, or in onnxruntime) against NumPy before writing it."""
 
 import argparse
 import os
@@ -7,7 +8,7 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from rl_core.export import c_header, verify
+from rl_core.export import c_header, onnx_model, verify
 from rl_core.export.rollout import greedy_rollout, policy_disagreements
 from rl_core.seeding import eval_seed_for
 from rl_core.training.checkpoints import file_sha256
@@ -19,15 +20,24 @@ from train import (
     select_run_challenge,
 )
 
+WHAT = {"c": "C header", "onnx": "ONNX model"}
+
 
 def _source(checkpoint):
     return f"{os.path.basename(checkpoint)} (sha256 {file_sha256(checkpoint)})"
 
 
-def _write(path, header, policy):
+def _render(export_format, policy, source):
+    """The exported file's bytes (a header in UTF-8 with LF line endings on every platform)."""
+    if export_format == "onnx":
+        return onnx_model.render_onnx_model(policy, source=source)
+    return c_header.render_c_header(policy, source=source).encode("utf-8")
+
+
+def _write(path, exported, policy):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(header)
+    with open(path, "wb") as f:
+        f.write(exported)
     print(f"Wrote {policy.agent_name}'s greedy policy to '{path}'")
 
 
@@ -36,24 +46,54 @@ def _fail(message):
     sys.exit(1)
 
 
+def _check_onnx_packages(verify_episodes):
+    """Stop before loading anything if the onnx extra is missing: an ONNX model is written only
+    once checked, so onnxruntime is needed too unless the check is skipped."""
+    missing = onnx_model.missing_packages(verify=verify_episodes > 0)
+    if not missing:
+        return
+    skip = (
+        " or pass --verify-episodes 0 to write the model unchecked"
+        if missing == ["onnxruntime"]
+        else ""
+    )
+    _fail(
+        f"--format onnx needs the onnx extra ({', '.join(missing)} not installed): "
+        f"{onnx_model.INSTALL_COMMAND}{skip}."
+    )
+
+
 def main():
-    """Load a checkpoint as record.py does, write its C header, and verify it on greedy episodes."""
-    parser = argparse.ArgumentParser(description="Export a trained RL agent as a C header")
+    """Load a checkpoint as record.py does, export it, and verify it on greedy episodes."""
+    parser = argparse.ArgumentParser(
+        description="Export a trained RL agent as a C header or an ONNX model"
+    )
     add_checkpoint_arguments(parser, "export")
     parser.add_argument(
-        "--output", type=str, required=True, help="Header to write (e.g. policy_weights.h)"
+        "--format",
+        choices=sorted(WHAT),
+        default="c",
+        help="c: a C99 header (default); onnx: an ONNX model (needs the onnx extra)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        required=True,
+        help="File to write (e.g. policy_weights.h, or policy.onnx with --format onnx)",
     )
     parser.add_argument(
         "--verify-episodes",
         type=int,
         default=3,
-        help="Greedy episodes whose observations check the compiled header against NumPy "
-        "(default: 3; 0 skips the check)",
+        help="Greedy episodes whose observations check the export against NumPy, compiled or in "
+        "onnxruntime (default: 3; 0 skips the check)",
     )
     add_challenge_arguments(parser)
     args = parser.parse_args()
     if args.verify_episodes < 0:
         parser.error("--verify-episodes must be 0 or more.")
+    if args.format == "onnx":
+        _check_onnx_packages(args.verify_episodes)
 
     config, agent_type = load_run_config(args.config, args.agent_type)
     run_challenge = select_run_challenge(config, agent_type, args.challenge)
@@ -64,9 +104,9 @@ def main():
         agent.inference_policy()  # refuse an agent with no network before reading the checkpoint
         agent.load(args.checkpoint)
         policy = agent.inference_policy()
-        header = c_header.render_c_header(policy, source=_source(args.checkpoint))
+        exported = _render(args.format, policy, _source(args.checkpoint))
         if args.verify_episodes == 0:
-            _write(args.output, header, policy)
+            _write(args.output, exported, policy)
             return
         rollout = greedy_rollout(
             env, agent, args.verify_episodes, seed=eval_seed_for(config["environment"].get("seed"))
@@ -74,8 +114,9 @@ def main():
     finally:
         env.close()
 
-    # The header is written only once it is checked, or unchecked for want of a compiler (with
-    # exit status 1), so a failed export never leaves one behind.
+    # The export is written only once it is checked. The one exception is a C header without a
+    # compiler (exit status 1): the header is still useful, on Windows for example. So a failed
+    # export never leaves a file behind.
     agreement = policy_disagreements(policy, rollout)
     if agreement.mismatches:
         _fail(
@@ -83,17 +124,20 @@ def main():
         )
     if agreement.near_ties:
         print(f"NumPy: {agreement.near_ties} near-tie(s) with the agent's actions")
-    if verify.find_c_compiler() is None:
-        _write(args.output, header, policy)
-        _fail(
-            "No C compiler found to verify the header: set CC or install gcc or clang, "
-            "or pass --verify-episodes 0 to skip the check."
-        )
-    report = verify.verify_c_header(header, policy, rollout.observations)
+    if args.format == "onnx":
+        report = onnx_model.verify_onnx_model(exported, policy, rollout.observations)
+    else:
+        if verify.find_c_compiler() is None:
+            _write(args.output, exported, policy)
+            _fail(
+                "No C compiler found to verify the header: set CC or install gcc or clang, "
+                "or pass --verify-episodes 0 to skip the check."
+            )
+        report = verify.verify_c_header(exported.decode("utf-8"), policy, rollout.observations)
     print(report.summary())
     if not report.passed:
-        _fail(f"Not writing '{args.output}': the compiled header disagrees with NumPy")
-    _write(args.output, header, policy)
+        _fail(f"Not writing '{args.output}': the {WHAT[args.format]} disagrees with NumPy")
+    _write(args.output, exported, policy)
 
 
 if __name__ == "__main__":

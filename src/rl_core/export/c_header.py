@@ -82,7 +82,8 @@ def _act(policy: InferencePolicy) -> list[str]:
     body = []
     for j, (low, high) in enumerate(zip(policy.action_low, policy.action_high, strict=True)):
         if policy.head == "tanh_scale":
-            centre, half = c_float((high + low) / 2.0), c_float((high - low) / 2.0)
+            centre = c_float(policy.squash_centre[j])
+            half = c_float(policy.squash_half_width[j])
             body.append(f"    action[{j}] = {centre} + {half} * tanhf(action[{j}]);")
         if np.isfinite(low):
             body.append(f"    if (action[{j}] < {c_float(low)}) action[{j}] = {c_float(low)};")
