@@ -6,38 +6,15 @@ from collections.abc import Mapping
 from typing import Any, ClassVar
 
 import numpy as np
-import numpy.typing as npt
 
-from rl_core.seeding import (
-    AGENT_EXPLORATION_STREAM,
-    AGENT_WEIGHTS_STREAM,
-    derive_rng,
-)
-from rl_core.utils.config_values import (
-    check_positive_int,
-    non_negative_int,
-    optional_positive_int,
-    positive_int,
-)
-
-from .base_agent import BaseAgent
-from .bounds import action_bounds
 from .exploration_noise import make_exploration_noise
 from .inference import DenseLayer, InferencePolicy
-from .mid_episode import MidEpisodeUpdates
 from .mlp import Params, init_mlp, layer_count, mlp_backward, mlp_forward
+from .off_policy import Array, OffPolicyAgent, add_metrics, global_norm, mean_metrics
 from .optim import Adam
-from .replay_buffer import ReplayBuffer
-
-Array = npt.NDArray[np.float64]
 
 
-def _global_norm(grads: Params) -> float:
-    """The L2 norm of all gradients together."""
-    return float(np.sqrt(sum(float(np.sum(g**2)) for g in grads.values())))
-
-
-class DDPGAgent(MidEpisodeUpdates, BaseAgent):
+class DDPGAgent(OffPolicyAgent):
     """
     DDPG (Lillicrap et al., 2016) as Stable-Baselines3 implements it and rl-baselines3-zoo
     configures it for Pendulum-v1.
@@ -56,11 +33,24 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
       :meth:`end_episode` resets the noise; the Trainer calls it after every training episode.
       The clipped action is stored: the critic learns the value of what was executed.
 
-    Defaults are rl-zoo's Pendulum-v1 settings. Weights, exploration and replay sampling each
-    draw from their own stream of the seed (``rl_core.seeding``).
+    Defaults are rl-zoo's Pendulum-v1 settings. The config keys, warm-up, the replay buffer, when
+    :meth:`update` trains, the critic loss, Polyak averaging and checkpoints are
+    ``OffPolicyAgent``'s; this class adds the deterministic actor, its target network and the
+    exploration noise.
     """
 
     BACKENDS: ClassVar[dict[str, str]] = {"torch": "rl_core.agents.torch_ddpg_agent:TorchDDPGAgent"}
+    DEFAULTS: ClassVar[Mapping[str, Any]] = {
+        "hidden_sizes": [400, 300],
+        "learning_rate": 1e-3,
+        "gamma": 0.98,
+        "tau": 0.005,
+        "batch_size": 256,
+        "buffer_capacity": 200_000,
+        "learning_starts": 10_000,
+        "updates_per_step": 1.0,
+    }
+    SHORT_NAME: ClassVar[str] = "DDPG"
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """
@@ -73,56 +63,8 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
             ValueError: For a non-positive dimension or an invalid hyperparameter.
         """
         super().__init__(observation_dim, action_dim, config)
-        if observation_dim <= 0 or action_dim <= 0:
-            raise ValueError(
-                f"observation_dim and action_dim must be positive, got {observation_dim!r} "
-                f"and {action_dim!r}"
-            )
-
-        raw_sizes = config.get("hidden_sizes", [400, 300])
-        if np.ndim(raw_sizes) != 1:
-            raise ValueError(f"hidden_sizes must be a list of widths, got {raw_sizes!r}")
-        if len(raw_sizes) == 0:
-            raise ValueError(f"hidden_sizes must hold at least one width, got {raw_sizes!r}")
-        self.hidden_sizes: list[int] = [
-            check_positive_int(f"hidden_sizes[{i}]", width) for i, width in enumerate(raw_sizes)
-        ]
-        self.learning_rate = float(config.get("learning_rate", 1e-3))
-        self.gamma = float(config.get("gamma", 0.98))
-        self.tau = float(config.get("tau", 0.005))
-        self.batch_size = positive_int(config, "batch_size", 256)
-        self.buffer_capacity = positive_int(config, "buffer_capacity", 200_000)
-        self.learning_starts = non_negative_int(config, "learning_starts", 10_000)
         self.noise_std = float(config.get("noise_std", 0.1))
-        self.updates_per_step = float(config.get("updates_per_step", 1.0))
-        self.max_updates_per_call: int | None = optional_positive_int(
-            config, "max_updates_per_call"
-        )
-        raw_clip = config.get("max_grad_norm")
-        self.max_grad_norm: float | None = None if raw_clip is None else float(raw_clip)
-        self._validate(str(config.get("optimizer", "adam")).lower())
         self._noise = make_exploration_noise(config, action_dim, default_std=self.noise_std)
-
-        self.action_low, self.action_high = action_bounds(config, action_dim, require_finite=True)
-        low, high = self.action_low.astype(np.float64), self.action_high.astype(np.float64)
-        self.scale: Array = (high - low) / 2.0
-        self.bias: Array = (high + low) / 2.0
-
-        seed = config.get("seed")
-        self._build_networks(derive_rng(seed, AGENT_WEIGHTS_STREAM))
-
-        self._explore_rng = derive_rng(seed, AGENT_EXPLORATION_STREAM)
-        # The buffer samples on the replay stream of the seed itself, and stores raw observations
-        # when normalising (ReplayBuffer).
-        self.replay_buffer = ReplayBuffer(
-            self.buffer_capacity,
-            observation_dim,
-            seed=seed,
-            action_dim=action_dim,
-            normalizer=self.observation_normalizer,
-        )
-        self._training_actions = 0
-        self._gradient_steps = 0
 
     def _build_networks(self, weights_rng: np.random.Generator) -> None:
         """The actor and critic drawn from the weights stream, in that order, their targets as
@@ -134,21 +76,6 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
         self._target_critic: Params = {k: v.copy() for k, v in self._critic.items()}
         self._actor_optimizer = Adam(self._actor, self.max_grad_norm)
         self._critic_optimizer = Adam(self._critic, self.max_grad_norm)
-
-    def _validate(self, optimizer: str) -> None:
-        """Raise ValueError for any hyperparameter outside its range."""
-        if optimizer != "adam":
-            raise ValueError(f"DDPG trains with Adam; optimizer must be 'adam', got {optimizer!r}")
-        checks = [
-            ("learning_rate", self.learning_rate > 0.0),
-            ("gamma", 0.0 < self.gamma <= 1.0),
-            ("tau", 0.0 < self.tau <= 1.0),
-            ("updates_per_step", self.updates_per_step > 0.0),
-            ("max_grad_norm", self.max_grad_norm is None or self.max_grad_norm > 0.0),
-        ]
-        for name, ok in checks:
-            if not ok:
-                raise ValueError(f"{name} is out of range: {getattr(self, name)!r}")
 
     # ------------------------------------------------------------------
     # Networks
@@ -162,40 +89,12 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
         u = np.tanh(z)
         return self.bias + self.scale * u, u, cache
 
-    def _critic_forward(
-        self, obs: Array, actions: Array, params: Params
-    ) -> tuple[Array, dict[str, list[Array]]]:
-        """``(Q, cache)``: Q of shape (B,) for observations (B, O) and actions (B, A)."""
-        q, cache = mlp_forward(params, np.concatenate([obs, actions], axis=1))
-        return q[:, 0], cache
-
     def _bellman_targets(self, rewards: Array, next_obs: Array, terminated: Array) -> Array:
         """``r + gamma (1 - terminated) Q'(s', mu'(s'))`` from the target networks, shape (B,)."""
         next_actions, _, _ = self._actor_forward(next_obs, self._target_actor)
         next_q, _ = self._critic_forward(next_obs, next_actions, self._target_critic)
         not_done = 1.0 - np.asarray(terminated, dtype=np.float64)
         return np.asarray(rewards, dtype=np.float64) + self.gamma * not_done * next_q
-
-    def _critic_loss_and_grads(
-        self, obs: Array, actions: Array, targets: Array, params: Params | None = None
-    ) -> tuple[dict[str, float], Params]:
-        """
-        Critic loss ``mean ½ (Q(s, a) - y)²`` and its gradients, with ``targets`` constant, for
-        ``params`` (the critic by default).
-
-        Changes no state.
-        """
-        params = self._critic if params is None else params
-        q, cache = self._critic_forward(obs, actions, params)
-        td_error = q - targets
-        d_q = (td_error / len(q))[:, None]
-        grads, _ = mlp_backward(params, cache, d_q)
-        components = {
-            "critic_loss": float(np.mean(0.5 * td_error**2)),
-            "mean_q": float(np.mean(q)),
-            "critic_grad_norm": _global_norm(grads),
-        }
-        return components, grads
 
     def _actor_loss_and_grads(self, obs: Array) -> tuple[dict[str, float], Params]:
         """
@@ -213,96 +112,42 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
         components = {
             "actor_loss": float(-np.mean(q)),
             "saturation": float(np.mean(np.abs(u) > 0.99)),
-            "actor_grad_norm": _global_norm(grads),
+            "actor_grad_norm": global_norm(grads),
         }
         return components, grads
 
-    def _apply(self, params: Params, optimizer: Adam, grads: Params) -> None:
-        """One Adam step on ``params`` in place."""
-        for name, step in optimizer.step(grads, self.learning_rate).items():
-            params[name] -= step
+    def _critic_names(self) -> tuple[str, ...]:
+        return ("critic",)
 
     def _target_names(self) -> list[tuple[str, str]]:
-        """(online, target) names in :meth:`_networks` for every network with a target, in the
-        order they are averaged."""
         return [("actor", "target_actor"), ("critic", "target_critic")]
-
-    def _target_pairs(self) -> list[tuple[Params, Params]]:
-        """(online, target) parameters for every network with a target, in the order they are
-        averaged."""
-        networks = self._networks()
-        return [(networks[online], networks[target]) for online, target in self._target_names()]
-
-    def _polyak(self) -> None:
-        """Move each target parameter a fraction ``tau`` towards its online parameter."""
-        for online, target in self._target_pairs():
-            for name in online:
-                target[name] = self.tau * online[name] + (1.0 - self.tau) * target[name]
 
     # ------------------------------------------------------------------
     # BaseAgent interface
     # ------------------------------------------------------------------
 
-    def select_action(self, observation: np.ndarray, training: bool = True) -> np.ndarray:
-        """
-        A float32 action of shape (action_dim,) inside the bounds.
+    def _greedy_action(self, obs: Array) -> Array:
+        """``mu(s)``."""
+        return self._actor_forward(obs, self._actor)[0][0]
 
-        Evaluation (``training=False``) returns ``mu(s)`` and changes nothing. A training action
-        counts towards ``learning_starts``: uniform in the bounds during warm-up, then ``mu(s)``
-        plus the exploration noise times ``scale``, clipped to the bounds.
-        """
-        obs = np.asarray(observation, dtype=np.float64).reshape(1, -1)
-        if not training:
-            return self._actor_forward(obs, self._actor)[0][0].astype(np.float32)
-
-        self._training_actions += 1
-        if self._training_actions <= self.learning_starts:
-            action = self._explore_rng.uniform(self.action_low, self.action_high)
-        else:
-            mu = self._actor_forward(obs, self._actor)[0][0]
-            noise = self._noise.sample(self._explore_rng) * self.scale
-            action = np.clip(mu + noise, self.action_low, self.action_high)
-        return np.asarray(action, dtype=np.float32)
+    def _training_action(self, obs: Array) -> Array:
+        """``mu(s)`` plus the exploration noise times ``scale``, clipped to the bounds."""
+        mu = self._actor_forward(obs, self._actor)[0][0]
+        noise = self._noise.sample(self._explore_rng) * self.scale
+        return np.clip(mu + noise, self.action_low, self.action_high)
 
     def end_episode(self) -> None:
         """Restart the exploration noise: OU noise starts the next episode from zero."""
         self._noise.reset()
 
-    def update(self, batch: dict[str, Any]) -> dict[str, float]:
-        """
-        Store the episode's transitions, then train once warm-up is over.
-
-        Runs ``updates_per_step`` gradient steps per transition (at least one, at most
-        ``max_updates_per_call``), each: critic step, actor step, Polyak. Updating mid-episode
-        (:meth:`enable_mid_episode_updates`), the steps follow the running count of transitions
-        instead, so a call may take none.
-
-        Returns:
-            Means over the gradient steps of ``critic_loss``, ``actor_loss``, ``mean_q``,
-            ``saturation`` (share of actor outputs with |tanh| > 0.99) and the global gradient
-            norms ``critic_grad_norm`` and ``actor_grad_norm``; empty during warm-up or when the
-            batch stored nothing.
-        """
-        n = self.replay_buffer.add_transitions(batch)
-        if (
-            n == 0
-            or self._training_actions < self.learning_starts
-            or not self.replay_buffer.can_sample(self.batch_size)
-        ):
-            return {}
-
-        num_updates = self._updates_for(n, self.updates_per_step)
-        if num_updates == 0:
-            return {}
-        if self.max_updates_per_call is not None:
-            num_updates = min(num_updates, self.max_updates_per_call)
-        return self._train_steps(num_updates)
-
     def _train_steps(self, num_updates: int) -> dict[str, float]:
         """
-        Take ``num_updates`` gradient steps, each on a fresh sample from the replay buffer, and
-        return the mean of each metric over them. The step's backend: another backend overrides
-        only this.
+        ``num_updates`` DDPG steps, each: critic step, actor step, Polyak.
+
+        Returns:
+            Means over the steps of ``critic_loss``, ``actor_loss``, ``mean_q``, ``saturation``
+            (share of actor outputs with |tanh| > 0.99) and the global gradient norms
+            ``critic_grad_norm`` and ``actor_grad_norm``.
         """
         totals: dict[str, float] = {}
         for _ in range(num_updates):
@@ -310,17 +155,13 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
             targets = self._bellman_targets(
                 sample["rewards"], sample["next_observations"], sample["dones"]
             )
-            critic, critic_grads = self._critic_loss_and_grads(
-                sample["observations"], sample["actions"], targets
-            )
-            self._apply(self._critic, self._critic_optimizer, critic_grads)
+            critic = self._critic_step(sample["observations"], sample["actions"], targets)
             actor, actor_grads = self._actor_loss_and_grads(sample["observations"])
             self._apply(self._actor, self._actor_optimizer, actor_grads)
             self._polyak()
             self._gradient_steps += 1
-            for name, value in {**critic, **actor}.items():
-                totals[name] = totals.get(name, 0.0) + value
-        return {name: total / num_updates for name, total in totals.items()}
+            add_metrics(totals, {**critic, **actor})
+        return mean_metrics(totals, num_updates)
 
     # ------------------------------------------------------------------
     # Checkpoints
@@ -352,45 +193,3 @@ class DDPGAgent(MidEpisodeUpdates, BaseAgent):
             action_low=self.action_low,
             action_high=self.action_high,
         )
-
-    def _checkpoint_arrays(self) -> dict[str, Any]:
-        """Everything training needs to resume beyond the generators: every network, every Adam
-        state (``<net>_adam_``), the action and gradient-step counters and the replay buffer."""
-        arrays: dict[str, Any] = {
-            f"{net}_{name}": value
-            for net, params in self._networks().items()
-            for name, value in params.items()
-        }
-        for net, optimizer in self._optimizers_by_net().items():
-            arrays.update(optimizer.state(prefix=f"{net}_adam_"))
-        arrays["training_actions"] = np.array(self._training_actions)
-        arrays["gradient_steps"] = np.array(self._gradient_steps)
-        arrays.update(self._mid_episode_checkpoint_arrays())
-        arrays.update(self.replay_buffer.checkpoint_state())
-        return arrays
-
-    def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
-        """
-        Restore a checkpoint; one saved before the replay buffer was saved empties the buffer.
-
-        Raises:
-            ValueError: If a stored network has a different shape (other ``hidden_sizes``).
-        """
-        for net, params in self._networks().items():
-            for name in params:
-                stored = data[f"{net}_{name}"]
-                if stored.shape != params[name].shape:
-                    raise ValueError(
-                        f"{net}_{name} has shape {stored.shape}, expected "
-                        f"{params[name].shape}: the checkpoint has other hidden_sizes, "
-                        "observation_dim or action_dim"
-                    )
-        self.replay_buffer.restore(data)
-        for net, params in self._networks().items():
-            for name in params:
-                params[name] = np.array(data[f"{net}_{name}"], dtype=np.float64)
-        for net, optimizer in self._optimizers_by_net().items():
-            optimizer.load_state(data, prefix=f"{net}_adam_")
-        self._training_actions = int(data["training_actions"])
-        self._gradient_steps = int(data["gradient_steps"])
-        self._load_mid_episode_count(data)

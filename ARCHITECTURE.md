@@ -94,7 +94,12 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    any checkpoint save (`BaseAgent.end_episode`, a no-op by default). `update` itself no longer resets it, so an agent
    updated mid-episode keeps its noise process running. TD3 (`TD3Agent`, a `DDPGAgent` subclass) adds a second critic
    and target critic (taking the smaller target), target-policy smoothing noise drawn from its own seed stream, and
-   actor and target updates on every `policy_delay`-th gradient step.
+   actor and target updates on every `policy_delay`-th gradient step. Both build on `OffPolicyAgent`
+   (`rl_core/agents/off_policy.py`), which holds what a replay-buffer agent for bounded continuous actions shares: the
+   common config keys with each class's `DEFAULTS`, the action bounds, the replay buffer, warm-up and `select_action`
+   (the subclass supplies `_training_action`), when `update` trains, the critic loss and one step for each critic
+   `_critic_names` lists, Polyak averaging and checkpoints, which a file lacking one of the agent's networks fails to
+   load ("not a TD3 checkpoint"). It draws no weights: each subclass's `_build_networks` keeps its own draw order.
 
 ---
 
@@ -274,15 +279,23 @@ classDiagram
         #_step_means(...) dict
     }
 
-    class DDPGAgent {
-        +BACKENDS = torch: TorchDDPGAgent
+    class OffPolicyAgent {
+        <<abstract>>
         +ReplayBuffer replay_buffer
         +ndarray action_low
         +ndarray action_high
-        #dict _actor, _critic, _target_actor, _target_critic
-        #ExplorationNoise _noise
         +select_action(obs, training) ndarray
         +update(batch) dict
+        #_training_action(obs) ndarray
+        #_critic_names() tuple
+        #_critic_step(obs, actions, targets) dict
+        #_train_steps(num_updates) dict
+    }
+
+    class DDPGAgent {
+        +BACKENDS = torch: TorchDDPGAgent
+        #dict _actor, _critic, _target_actor, _target_critic
+        #ExplorationNoise _noise
         #_train_steps(num_updates) dict
     }
 
@@ -296,7 +309,8 @@ classDiagram
     BaseAgent <|-- ContinuousActorCriticBase
     ContinuousActorCriticBase <|-- ContinuousActorCriticAgent
     ContinuousActorCriticBase <|-- ContinuousPPOAgent
-    BaseAgent <|-- DDPGAgent
+    BaseAgent <|-- OffPolicyAgent
+    OffPolicyAgent <|-- DDPGAgent
     DDPGAgent <|-- TorchDDPGAgent
     DDPGAgent <|-- TD3Agent
     TorchDDPGAgent <|-- TorchTD3Agent

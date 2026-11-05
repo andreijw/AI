@@ -421,6 +421,9 @@ class TorchDDPGAgent(DDPGAgent):
     def _critic_loss_and_grads(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError("TorchDDPGAgent trains on the device")
 
+    def _critic_step(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError("TorchDDPGAgent trains on the device")
+
     def _actor_loss_and_grads(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError("TorchDDPGAgent trains on the device")
 

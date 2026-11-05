@@ -1,13 +1,17 @@
-"""DDPG's and TD3's seeded training, as recorded before the PyTorch backend read its layout from hooks.
+"""DDPG's and TD3's seeded training, as recorded before the PyTorch backend read its layout from hooks
+and before the two moved onto a shared off-policy base.
 
 The other DDPG and TD3 tests replay an update through the agent's own loss methods, so a reordered
 step or a renamed Adam key would agree with itself there. This file compares against arrays
 recorded from the code before the networks, optimizers and target pairs became declared hooks: for
 Gaussian and Ornstein-Uhlenbeck exploration, with and without gradient clipping, and for TD3 with
-a ``policy_delay`` boundary falling across two ``update`` calls. Each case plays seeded episodes
-through ``select_action``, ``update`` and ``end_episode``, then records every metric, every
-checkpoint array (weights, Adam states, counters, the replay buffer, every generator) with the
-checkpoint's keys, and a greedy action.
+a ``policy_delay`` boundary falling across two ``update`` calls. The cases recorded before
+``OffPolicyAgent`` (rl_core.agents.off_policy) took over the shared code add mid-episode updates
+(``update_every``, a running ``update_transitions`` count that a call can owe no step on), a save
+that a differently seeded agent loads and trains on from, and DDPG resuming from a TD3 checkpoint.
+Each case plays seeded episodes through ``select_action``, ``update`` and ``end_episode``, then
+records every metric, every checkpoint array (weights, Adam states, counters, the replay buffer,
+every generator) with the checkpoint's keys, and a greedy action.
 
 Names and every dtype must match exactly; the checkpoint's keys are compared as a set, since
 loading goes by name. Numbers agree to a relative 1e-12, as in
@@ -21,7 +25,9 @@ variable (a recording run fails on purpose, so it can never pass by accepting an
 """
 
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -53,38 +59,92 @@ BASE = {
 # Clips every critic step here; the actor's norm sits near 0.05, so some actor steps clip and some
 # do not.
 CLIP = {"max_grad_norm": 0.05}
+
+
+@dataclass(frozen=True)
+class Case:
+    """One recorded run: the agent, its config overrides, and how the episodes reach it."""
+
+    agent: type[DDPGAgent]
+    overrides: dict[str, Any] = field(default_factory=dict)
+    # Updating mid-episode: each episode reaches ``update`` in calls of this many transitions.
+    update_every: int | None = None
+    # Save after RESUME_AFTER episodes, load into a fresh agent of this class seeded otherwise (so
+    # anything the load skips shows), and play the remaining episodes on it.
+    resume_as: type[DDPGAgent] | None = None
+
+
+RESUME_AFTER, RESUME_SEED = 3, 99
+# A quarter step per transition, in calls of three, three, three and one: once training starts the
+# calls owe 0, 1, 1, 0, 1, 1, 0, 1 ... steps, so some calls past warm-up train not at all.
+MID_EPISODE = {"updates_per_step": 0.25}
 CASES = {
-    "ddpg-gaussian": (DDPGAgent, {}),
-    "ddpg-ou": (DDPGAgent, {"noise_type": "ornstein_uhlenbeck"}),
-    "ddpg-clipped": (DDPGAgent, CLIP),
-    "td3": (TD3Agent, {}),
-    "td3-clipped": (TD3Agent, CLIP),
+    "ddpg-gaussian": Case(DDPGAgent),
+    "ddpg-ou": Case(DDPGAgent, {"noise_type": "ornstein_uhlenbeck"}),
+    "ddpg-clipped": Case(DDPGAgent, CLIP),
+    "td3": Case(TD3Agent),
+    "td3-clipped": Case(TD3Agent, CLIP),
+    "ddpg-mid-episode": Case(DDPGAgent, MID_EPISODE, update_every=3),
+    "td3-mid-episode": Case(TD3Agent, MID_EPISODE, update_every=3),
+    "ddpg-resume": Case(DDPGAgent, {"noise_type": "ornstein_uhlenbeck"}, resume_as=DDPGAgent),
+    "td3-mid-episode-resume": Case(TD3Agent, MID_EPISODE, update_every=3, resume_as=TD3Agent),
+    "ddpg-from-td3": Case(TD3Agent, CLIP, resume_as=DDPGAgent),
 }
 
 
-def _outputs(name: str, tmp_path) -> dict[str, np.ndarray]:
-    agent_cls, overrides = CASES[name]
-    agent = agent_cls(OBS_DIM, ACT_DIM, {**BASE, **overrides})
-    rng = np.random.default_rng(3)
-    out: dict[str, np.ndarray] = {}
-    for episode in range(EPISODES):
+def _play(
+    agent: DDPGAgent,
+    case: Case,
+    rng: np.random.Generator,
+    episodes: range,
+    out: dict[str, np.ndarray],
+) -> None:
+    """Play ``episodes`` through the agent, recording its actions and every call's metrics."""
+    for episode in episodes:
         obs = rng.standard_normal((EPISODE + 1, OBS_DIM))
         actions = np.array([agent.select_action(o, training=True) for o in obs[:-1]])
         terminated = np.zeros(EPISODE, dtype=bool)
         terminated[-1] = episode % 2 == 1
-        metrics = agent.update(
-            {
-                "observations": obs[:-1],
-                "actions": actions,
-                "rewards": rng.normal(size=EPISODE),
-                "next_observations": obs[1:],
-                "terminated": terminated,
-            }
-        )
-        agent.end_episode()
+        rewards = rng.normal(size=EPISODE)
         out[f"actions_{episode}"] = actions
-        out[f"metric_names/{episode}"] = np.array(list(metrics), dtype=str)
-        out.update({f"metric_{episode}/{k}": np.asarray(v) for k, v in metrics.items()})
+        step = case.update_every or EPISODE
+        for call, start in enumerate(range(0, EPISODE, step)):
+            cut = slice(start, start + step)
+            metrics = agent.update(
+                {
+                    "observations": obs[:-1][cut],
+                    "actions": actions[cut],
+                    "rewards": rewards[cut],
+                    "next_observations": obs[1:][cut],
+                    "terminated": terminated[cut],
+                }
+            )
+            label = str(episode) if case.update_every is None else f"{episode}.{call}"
+            out[f"metric_names/{label}"] = np.array(list(metrics), dtype=str)
+            out.update({f"metric_{label}/{k}": np.asarray(v) for k, v in metrics.items()})
+        agent.end_episode()
+
+
+def _build(agent_cls: type[DDPGAgent], case: Case, **config: Any) -> DDPGAgent:
+    agent = agent_cls(OBS_DIM, ACT_DIM, {**BASE, **case.overrides, **config})
+    if case.update_every is not None:
+        agent.enable_mid_episode_updates(case.update_every)
+    return agent
+
+
+def _outputs(name: str, tmp_path) -> dict[str, np.ndarray]:
+    case = CASES[name]
+    agent = _build(case.agent, case)
+    rng = np.random.default_rng(3)
+    out: dict[str, np.ndarray] = {}
+    if case.resume_as is None:
+        _play(agent, case, rng, range(EPISODES), out)
+    else:
+        _play(agent, case, rng, range(RESUME_AFTER), out)
+        agent.save(str(tmp_path / "before.npz"))
+        agent = _build(case.resume_as, case, seed=RESUME_SEED)
+        agent.load(str(tmp_path / "before.npz"))
+        _play(agent, case, rng, range(RESUME_AFTER, EPISODES), out)
     out["greedy_action"] = agent.select_action(np.array([0.4, -0.3, 0.2]), training=False)
     path = tmp_path / "agent.npz"
     agent.save(str(path))
@@ -129,3 +189,33 @@ def test_the_recorded_cases_reach_warm_up_training_and_both_td3_step_kinds():
         # Five steps per call from gradient step 1: actor steps 2 and 4, then 6, 8 and 10.
         actor_updates = [float(golden[f"td3/metric_{e}/actor_updates"]) for e in (1, 2, 3)]
     assert actor_updates == [2.0, 3.0, 2.0]
+
+
+def test_the_new_cases_skip_calls_carry_the_delay_and_resume_seamlessly():
+    """Without these the mid-episode cases could pass with a count that never owes zero steps or a
+    policy delay reset per call, and a resumed run could differ from an uninterrupted one."""
+    with np.load(GOLDEN) as golden:
+        # A quarter step per transition: calls past warm-up owe no step and return no metrics.
+        assert golden["ddpg-mid-episode/metric_names/1.0"].size == 0, "1.0 owes no step"
+        assert golden["ddpg-mid-episode/metric_names/1.1"].size > 0, "1.1 should train"
+        assert int(golden["ddpg-mid-episode/checkpoint_update_transitions"]) == 40
+        # One step a call, so TD3's actor steps (every second) alternate across calls.
+        actor_updates = [
+            float(golden[f"td3-mid-episode/metric_{c}/actor_updates"])
+            for c in ("1.1", "1.2", "2.0", "2.1")
+        ]
+        assert actor_updates == [0.0, 1.0, 0.0, 1.0]
+        # A save loaded by an agent of another seed trains on exactly as if never interrupted.
+        for whole, resumed in (
+            ("ddpg-ou", "ddpg-resume"),
+            ("td3-mid-episode", "td3-mid-episode-resume"),
+        ):
+            keys = sorted(k.split("/", 1)[1] for k in golden.files if k.startswith(whole + "/"))
+            for key in keys:
+                np.testing.assert_array_equal(
+                    golden[f"{resumed}/{key}"],
+                    golden[f"{whole}/{key}"],
+                    err_msg=f"{resumed}/{key} should equal the uninterrupted {whole}/{key}",
+                )
+        # DDPG reads its own networks from a TD3 file and saves no second critic.
+        assert not any("critic_2" in k for k in golden["ddpg-from-td3/checkpoint_keys"])

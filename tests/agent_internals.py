@@ -34,6 +34,7 @@ from rl_core.agents import (
 )
 from rl_core.agents.actor_critic_base import ActorCriticBase
 from rl_core.agents.continuous_actor_critic import ContinuousActorCriticBase
+from rl_core.agents.off_policy import OffPolicyAgent
 from rl_core.agents.optim import Optimizer
 
 # ---------------------------------------------------------------------------
@@ -42,7 +43,7 @@ from rl_core.agents.optim import Optimizer
 # ---------------------------------------------------------------------------
 
 type PolicyAgent = ReinforceAgent | ActorCriticBase | ContinuousActorCriticBase
-type LearningAgent = PolicyAgent | DQNAgent | DDPGAgent
+type LearningAgent = PolicyAgent | DQNAgent | OffPolicyAgent
 type DiscretePolicyAgent = ReinforceAgent | ActorCriticBase
 type CriticAgent = ActorCriticBase | ContinuousActorCriticBase
 type AnyPPOAgent = PPOAgent | ContinuousPPOAgent
@@ -69,14 +70,14 @@ def weight_names(agent: LearningAgent) -> tuple[str, ...]:
     if isinstance(agent, DQNAgent):
         online = dqn_online_weights(agent)
         return (*online, *(f"target_{name}" for name in online))
-    if isinstance(agent, DDPGAgent):
+    if isinstance(agent, OffPolicyAgent):
         return tuple(
             f"{net}_{name}" for net, params in ddpg_networks(agent).items() for name in params
         )
     return ACTOR_CRITIC_WEIGHTS
 
 
-def _ddpg_slot(agent: DDPGAgent, name: str) -> tuple[dict[str, np.ndarray], str]:
+def _ddpg_slot(agent: OffPolicyAgent, name: str) -> tuple[dict[str, np.ndarray], str]:
     """The network dict and key that hold DDPG or TD3 weight ``name`` (``target_actor_W0``,
     ``critic_2_b1`` …): the network's name, then the layer's (``W0``, ``b1``)."""
     net, _, key = name.rpartition("_")
@@ -87,14 +88,14 @@ def _ddpg_slot(agent: DDPGAgent, name: str) -> tuple[dict[str, np.ndarray], str]
 
 
 def _read(agent: LearningAgent, name: str) -> Any:
-    if isinstance(agent, DDPGAgent):
+    if isinstance(agent, OffPolicyAgent):
         params, key = _ddpg_slot(agent, name)
         return params[key]
     return getattr(agent, f"_{name}")
 
 
 def _write(agent: LearningAgent, name: str, value: Any) -> None:
-    if isinstance(agent, DDPGAgent):
+    if isinstance(agent, OffPolicyAgent):
         params, key = _ddpg_slot(agent, name)
         params[key] = value
     else:
@@ -411,7 +412,7 @@ def apply_gradients(agent: DQNAgent, grads: dict[str, np.ndarray]) -> None:
     agent._apply_gradients(grads)
 
 
-def ddpg_networks(agent: DDPGAgent) -> dict[str, dict[str, np.ndarray]]:
+def ddpg_networks(agent: OffPolicyAgent) -> dict[str, dict[str, np.ndarray]]:
     """DDPG's four networks as live parameter dicts: ``actor``, ``critic``, ``target_actor``,
     ``target_critic``. A gradient check perturbs them in place; a test may write a layer. A
     PyTorch-backend agent first copies everything from its device (it copies only the actor after
@@ -451,6 +452,14 @@ def critic_loss_and_grads(
     """DDPG's critic loss and gradients for one mini-batch, targets held constant, for the critic
     or ``params`` laid out like it (TD3's second critic)."""
     return agent._critic_loss_and_grads(observations, actions, targets, params)
+
+
+def critic_step(
+    agent: OffPolicyAgent, observations: np.ndarray, actions: np.ndarray, targets: np.ndarray
+) -> dict[str, float]:
+    """One Adam step for every critic towards ``targets``, as a gradient step takes it; returns
+    the critic metrics."""
+    return agent._critic_step(observations, actions, targets)
 
 
 def target_actions(agent: TD3Agent, next_obs: np.ndarray, noise: np.ndarray) -> np.ndarray:
