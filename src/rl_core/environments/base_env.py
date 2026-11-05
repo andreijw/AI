@@ -213,16 +213,21 @@ class BaseEnvWrapper:
             restore_generator(generator, state[key])
         self._has_reset = bool(state["env_has_reset"])
 
-    def _make_env(self) -> None:
+    def _make_env(self, **make_kwargs: Any) -> None:
         """Create the Gymnasium environment and take its spaces and metadata.
 
         Called once every setting is checked, so it also records which schedulable settings are on:
-        only those can change between episodes."""
+        only those can change between episodes.
+
+        Args:
+            **make_kwargs: Extra keyword arguments for ``gym.make``, for an environment that takes
+                constructor options beyond the render mode and the step limit."""
         self._scheduled = tuple(n for n in self.SCHEDULABLE_SETTINGS if getattr(self, n))
         self.env = gym.make(
             self.env_name,
             render_mode=self.render_mode,
             max_episode_steps=self.max_episode_steps,
+            **make_kwargs,
         )
         if self.seed is not None:
             self.env.action_space.seed(self.seed)
@@ -351,6 +356,8 @@ class BaseEnvWrapper:
         """
         Reset the environment to an initial state.
 
+        Domain randomization runs first, on the wrapper's generator, so the inner environment's
+        reset sees the physics drawn for the new episode; the observation noise comes after.
         The constructor seed is applied on the first reset only. Later resets without a seed
         continue the same random sequences, so a seeded environment gives a reproducible series
         of different episodes. Passing a seed restarts that series from the given seed.
@@ -368,14 +375,14 @@ class BaseEnvWrapper:
         if seed is None and not self._has_reset:
             seed = self.seed
 
-        obs, info = self.env.reset(seed=seed, options=options)
-        self._has_reset = True
-
         if seed is not None:
             self._np_random = derive_rng(seed, WRAPPER_STREAM)
 
-        # Physics first, then the observation of the new start state.
+        # Physics first, so a parameter the inner reset reads applies to the episode it was drawn
+        # for; then the inner reset, then the observation of the new start state.
         self._apply_domain_randomization()
+        obs, info = self.env.reset(seed=seed, options=options)
+        self._has_reset = True
         obs = self._observe(obs, first=True)
 
         return obs, info
