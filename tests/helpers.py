@@ -242,12 +242,13 @@ def env_marks(environment_id: str) -> list[pytest.MarkDecorator]:
 
 
 def torch_backend_cases(ddpg_config: Mapping[str, object]) -> list[tuple[type, dict[str, object]]]:
-    """The PyTorch DDPG and TD3 backends as agent-contract cases, float64 on the CPU, where PyTorch
-    is installed; none elsewhere (.venv and CI). Append them to a list of DDPG cases."""
+    """The PyTorch DDPG, TD3 and SAC backends as agent-contract cases, float64 on the CPU, where
+    PyTorch is installed; none elsewhere (.venv and CI). Append them to a list of DDPG cases."""
     if importlib.util.find_spec("torch") is None:
         return []
     from rl_core.agents.torch_ddpg_agent import TorchDDPGAgent
+    from rl_core.agents.torch_sac_agent import TorchSACAgent
     from rl_core.agents.torch_td3_agent import TorchTD3Agent
 
     config = {**ddpg_config, "backend": "torch", "device": "cpu", "dtype": "float64"}
-    return [(TorchDDPGAgent, config), (TorchTD3Agent, dict(config))]
+    return [(TorchDDPGAgent, config), (TorchTD3Agent, dict(config)), (TorchSACAgent, dict(config))]

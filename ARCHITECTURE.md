@@ -261,12 +261,25 @@ classDiagram
         +update(trajectory) dict
     }
 
-    class TorchDDPGAgent {
+    class TorchOffPolicyAgent {
+        <<abstract>>
         +BACKEND = "torch"
         +device, dtype, cuda_graph
         #_train_steps(num_updates) dict
         #_step(kind)
         #_step_kind(gradient_step) str
+        #_critics_update(targets) list
+    }
+
+    class TorchDDPGAgent {
+        #_step(kind)
+        #_actor_update() list
+    }
+
+    class TorchSACAgent {
+        +float ent_coef
+        #_step(kind)
+        #_sample(obs, eps) tuple
     }
 
     class TorchTD3Agent {
@@ -295,6 +308,7 @@ classDiagram
     }
 
     class SACAgent {
+        +BACKENDS = torch: TorchSACAgent
         +bool learns_ent_coef
         +float ent_coef
         +float target_entropy
@@ -323,31 +337,43 @@ classDiagram
     BaseAgent <|-- OffPolicyAgent
     OffPolicyAgent <|-- DDPGAgent
     OffPolicyAgent <|-- SACAgent
+    OffPolicyAgent <|-- TorchOffPolicyAgent
+    TorchOffPolicyAgent <|-- TorchDDPGAgent
     DDPGAgent <|-- TorchDDPGAgent
     DDPGAgent <|-- TD3Agent
     TorchDDPGAgent <|-- TorchTD3Agent
     TD3Agent <|-- TorchTD3Agent
+    TorchOffPolicyAgent <|-- TorchSACAgent
+    SACAgent <|-- TorchSACAgent
 ```
 
 Every agent is NumPy by default. `BaseAgent.class_for_config(config)` returns the class to build for the config's
 `backend` key (`numpy` when absent): the class itself, or the version its `BACKENDS` names, imported only then.
-`BenchmarkChallenge.make_agent` builds through it, so `backend: torch` in a DDPG config builds `TorchDDPGAgent`, which
-runs DDPG's gradient steps in PyTorch (`_train_steps`, on the GPU as a CUDA graph) and keeps everything else, acting
-included, in NumPy. Its checkpoints are DDPGAgent's format, so either backend loads the other's. Only
-`rl_core/agents/torch_*.py` import torch; nothing imports them directly. Inheriting DDPGAgent brings its NumPy
-training maths too: TorchDDPGAgent overrides those methods to raise, since running them would train the NumPy
-mirror of its weights rather than the device.
+`BenchmarkChallenge.make_agent` builds through it, so `backend: torch` in a DDPG, TD3 or SAC config builds
+`TorchDDPGAgent`, `TorchTD3Agent` or `TorchSACAgent`, which run the gradient steps in PyTorch (`_train_steps`, on the
+GPU as a CUDA graph) and keep everything else, acting included, in NumPy. Their checkpoints are the NumPy agent's
+format, so either backend loads the other's. Only `rl_core/agents/torch_*.py` import torch; nothing imports them
+directly. Inheriting the NumPy agent brings its training maths too: each PyTorch class overrides those methods to
+raise (`TorchOffPolicyAgent` the shared critic step, Adam step and Polyak; each subclass its own agent's targets and
+losses), since running them would train the NumPy mirror of its weights rather than the device.
 
-The backend reads its layout from the NumPy agent rather than naming it: the networks (`_networks`), the Adam of
-each trained network (`_optimizers_by_net`, which also names the checkpoint's `<net>_adam_*` keys) and the target
-pairs (`_target_names`). A subclass that declares more, as TD3Agent declares a second critic, gets them on the device,
-in the mirror and in each captured graph's saved state without a change to TorchDDPGAgent. A backend for such a
-subclass is `class TorchX(TorchDDPGAgent, X)`, which `class_for_config` accepts because it subclasses `X`, and
-supplies only the device step: `_step` for each kind `_step_kind` names (each kind is its own CUDA graph, so TD3's
+`TorchOffPolicyAgent` (`rl_core/agents/torch_off_policy.py`) is everything the three backends share: the device
+copies, staging, CUDA-graph capture, the NumPy mirror, checkpoints, and the pieces of a step every agent uses (the
+critic step over `_critic_names`, the minimum target Q, the bootstrap, Polyak), each the device form of the
+`OffPolicyAgent` method of the same role. It reads its layout from the NumPy agent rather than naming it: the
+parameter groups (`_networks`; SAC's `log_ent_coef` is a one-value group, not an MLP), the Adam of each trained group
+(`_optimizers_by_net`, which also names the checkpoint's `<net>_adam_*` keys, and whose `max_grad_norm` says whether
+the group is clipped, so SAC's temperature never is) and the target pairs (`_target_names`). A NumPy agent that
+declares more, as TD3Agent declares a second critic, gets them on the device, in the mirror and in each captured
+graph's saved state without a change to the base. A backend is `class TorchX(TorchOffPolicyAgent, X)` (or
+`class TorchX(TorchDDPGAgent, X)` for a subclass of DDPG), which `class_for_config` accepts because it subclasses `X`,
+and supplies only the device step: `_step` for each kind `_step_kind` names (each kind is its own CUDA graph, so TD3's
 critic-only and full steps can both be captured), the inputs a step reads (`_input_shapes`, `_sample_inputs`) and its
-metrics (`STEP_METRICS`, `_reduce_metrics`). `TorchTD3Agent(TorchDDPGAgent, TD3Agent)` is that backend for TD3: it
-asks TD3Agent's `_is_actor_step` for each step's kind, stages the target noise from TD3Agent's generator with each
-batch, and reduces its metrics through `_step_means`, so the delay rule and the metric means each have one home.
+metrics (`STEP_METRICS`, `_reduce_metrics`). `TorchTD3Agent(TorchDDPGAgent, TD3Agent)` asks TD3Agent's
+`_is_actor_step` for each step's kind, stages the target noise from TD3Agent's generator with each batch, and reduces
+its metrics through `_step_means`, so the delay rule and the metric means each have one home.
+`TorchSACAgent(TorchOffPolicyAgent, SACAgent)` stages both of SAC's noises from SACAgent's generator the same way, so
+float64 training matches the NumPy agent to rounding.
 Moving the NumPy maths out of the agent classes instead was considered and rejected on 2026-10-26: it would have left
 every one of those names hard-coded in the backend.
 

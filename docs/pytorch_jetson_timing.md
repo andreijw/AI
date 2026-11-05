@@ -163,8 +163,9 @@ maintainer approved it on 2026-10-25; DDPG's is `TorchDDPGAgent`, TD3's `TorchTD
   and NumPy is already fast for them.
 - **Shape.** A `[torch]` extra in `pyproject.toml`, chosen per agent in the config. The NumPy agents stay the default
   and the gradient reference, with a test that both take the same step. That test has to run the PyTorch agent in
-  float64, or compare with a stated tolerance, because float32 is not bit-exact. (Built: `TorchDDPGAgent` and
-  `TorchTD3Agent`, tested by `tests/test_torch_ddpg_agent.py` on the board; CI never installs PyTorch.)
+  float64, or compare with a stated tolerance, because float32 is not bit-exact. (Built: `TorchDDPGAgent`,
+  `TorchTD3Agent` and `TorchSACAgent` on a shared `TorchOffPolicyAgent`, tested by `tests/test_torch_ddpg_agent.py`
+  on the board; CI never installs PyTorch.)
 - **Rules to keep.**
   - Act on the CPU: copy the actor's weights to NumPy after each update, or keep a CPU copy of the actor.
   - Keep the replay buffer on the GPU, so sampling stays inside the graph. (Built otherwise: the agent samples from

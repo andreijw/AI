@@ -349,8 +349,10 @@ after uniform warm-up; the update's noise comes from its own seed stream (`AGENT
 differences from SB3: the exact stable tanh correction instead of `log(1 - t^2 + 1e-6)`; the critics see actions
 in the environment's scale, not SB3's [-1, 1]; training starts once the buffer can fill a batch, not at
 `learning_starts` (both as DDPG and TD3 here); left out: gSDE, n-step
-returns, learning-rate schedules, `target_update_interval` other than 1. NumPy only so far (PyTorch is PR 3 of the
-roadmap item).
+returns, learning-rate schedules, `target_update_interval` other than 1. `backend: torch` runs the step in PyTorch
+(`TorchSACAgent`; see the PyTorch backend below), as `configs/lunarlander_continuous_sac.yaml` does: rl-zoo's
+LunarLanderContinuous settings (400×300, learning rate 7.3e-4 held constant where rl-zoo decays it linearly, `tau`
+0.01, 10,000 warm-up actions, 500,000 steps, updates after every step).
 
 **What was measured.**
 
@@ -364,15 +366,26 @@ roadmap item).
 **Lessons.** The plan's 30 ms a step, scaled from TD3 at 400×300, was three times too low: a SAC step runs eight
 forward and five backward passes, all of them every step. Time a short run before planning a sweep.
 
-## The PyTorch backend (`TorchDDPGAgent`, `TorchTD3Agent`)
+## The PyTorch backend (`TorchDDPGAgent`, `TorchTD3Agent`, `TorchSACAgent`)
 
-`backend: torch` in a DDPG or TD3 config runs the same gradient step in PyTorch (imported only then; PyTorch is
+`backend: torch` in a DDPG, TD3 or SAC config runs the same gradient step in PyTorch (imported only then; PyTorch is
 allowed only in `rl_core/agents/torch_*.py`). Acting, exploration and the replay buffer stay in NumPy on the CPU;
-batches are sampled in the NumPy agent's order and moved to the device in chunks. On CUDA the whole step is captured
-as a CUDA graph and replayed as one launch, which is what pays: plain PyTorch on the GPU is no faster than NumPy for
-these small networks. Options: `device` (auto, cpu, cuda), `dtype` (float32, or float64, which matches the NumPy agent
-to rounding), `cuda_graph`. Checkpoints are the NumPy agent's format both ways. Measured on the Jetson: a 400×300 DDPG
-step 2.5 ms against NumPy's 44.7 ms; Pendulum DDPG 34 s a run against 144 s (`docs/pytorch_jetson_timing.md`).
+batches are sampled in the NumPy agent's order and moved to the device in chunks, with any noise the step needs (TD3's
+target noise, SAC's two policy noises) drawn on the host from the NumPy agent's own generator. On CUDA the whole step
+is captured as a CUDA graph and replayed as one launch, which is what pays: plain PyTorch on the GPU is no faster than
+NumPy for these small networks. Options: `device` (auto, cpu, cuda), `dtype` (float32, or float64, which matches the
+NumPy agent to rounding: every case of `tests/test_ddpg_td3_golden.py` replays to a relative 1e-9), `cuda_graph`.
+Checkpoints are the NumPy agent's format both ways. The three share `TorchOffPolicyAgent`
+(`rl_core/agents/torch_off_policy.py`: device copies, staging, capture, the mirror, the critic step, the minimum
+target Q); each adds only its step. A group is clipped on the device exactly when its NumPy Adam clips it, so SAC's
+temperature never is. Measured on the Jetson: a 400×300 DDPG step 2.5 ms against NumPy's 44.7 ms; Pendulum DDPG 34 s
+a run against 144 s (`docs/pytorch_jetson_timing.md`); Pendulum SAC (64×64, seed 1) solves at 22,000 steps, final
+average -134.2, greedy -179.9, in 4.5 minutes, against NumPy's 21,800, -135.9 and about 9 minutes (2026-11-04).
+LunarLanderContinuous SAC at 400×300 costs about 10 ms an environment step once training starts, alone on the GPU
+(TD3's committed run: about 8 ms), and about 16 ms each with three runs at once (2026-11-04, 20,000-step timing runs).
+Through the benchmark on seeds 1 to 5 (500,000 steps): every seed reaches 200 at 79,587 to 244,525 steps and holds
+it (final 100-episode averages 266 to 284), greedy evaluation 282 ± 5, all 5 at 200 or more; TD3's published
+run reaches 200 at 174,000 to 294,000 steps, with greedy evaluation 182 ± 69 (2026-11-04).
 
 ## Exporting a policy (`src/rl_core/agents/inference.py`, `src/rl_core/export/`, `export.py`)
 
