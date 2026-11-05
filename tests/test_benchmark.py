@@ -710,8 +710,8 @@ def test_runner_refuses_an_agent_it_cannot_build_before_training_any(tmp_path, m
     hours of DDPG first, then an error and nothing saved."""
     # import torch now raises, whether PyTorch is installed or not
     monkeypatch.setitem(sys.modules, "torch", None)
-    for module in ("torch_ddpg_agent", "torch_td3_agent"):
-        monkeypatch.delitem(sys.modules, f"rl_core.agents.{module}", raising=False)
+    for module in [name for name in sys.modules if name.startswith("rl_core.agents.torch_")]:
+        monkeypatch.delitem(sys.modules, module)
     challenge = MountainCarContinuousChallenge()
 
     def train(*args, **kwargs):

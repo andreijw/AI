@@ -1,4 +1,5 @@
-"""The PyTorch DDPG and TD3 backends train exactly as the NumPy agents do, and share their checkpoints.
+"""The PyTorch DDPG, TD3 and SAC backends train exactly as the NumPy agents do, and share their
+checkpoints.
 
 Skipped unless PyTorch is installed (it is not in .venv or CI); the CUDA tests also need a GPU.
 Run them from the gpu profile's environment (./setup.sh --profile gpu):
@@ -16,13 +17,16 @@ torch = pytest.importorskip("torch")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from rl_core.agents import DDPGAgent, TD3Agent  # noqa: E402
+from rl_core.agents import DDPGAgent, SACAgent, TD3Agent  # noqa: E402
 from rl_core.agents.torch_ddpg_agent import TorchDDPGAgent  # noqa: E402
+from rl_core.agents.torch_sac_agent import TorchSACAgent  # noqa: E402
 from rl_core.agents.torch_td3_agent import TorchTD3Agent  # noqa: E402
 from rl_core.challenges import discover_challenges  # noqa: E402
+from tests import test_ddpg_td3_golden as golden  # noqa: E402
 from tests.agent_internals import device_arrays, weights  # noqa: E402
 
 needs_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA GPU")
+
 
 OBS, ACT, EPISODE = 3, 2, 20
 CONFIG = {
@@ -145,16 +149,19 @@ def test_float64_cpu_backend_normalises_sampled_batches_as_the_numpy_agent(tmp_p
     _assert_same_checkpoint(agents[0], agents[1], tmp_path)
 
 
-def test_a_torch_checkpoint_loads_into_the_numpy_agent_and_back(tmp_path):
-    """Checkpoints are one format: saved from either backend, every array is the same."""
-    torch_agent = _build(**CPU64)
+@pytest.mark.parametrize("agent_cls", [DDPGAgent, SACAgent])
+def test_a_torch_checkpoint_loads_into_the_numpy_agent_and_back(agent_cls, tmp_path):
+    """Checkpoints are one format: saved from either backend, every array is the same (SAC's
+    temperature and its Adam included)."""
+    torch_agent = _build(agent_cls, **CPU64)
     _train_in_lockstep([torch_agent], episodes=3)
     torch_agent.save(str(tmp_path / "torch.pt"))
 
-    numpy_agent = _build(seed=99)
+    numpy_agent = _build(agent_cls, seed=99)
+    assert type(numpy_agent) is agent_cls
     numpy_agent.load(str(tmp_path / "torch.pt"))
     numpy_agent.save(str(tmp_path / "numpy.pt"))
-    back = _build(seed=98, **CPU64)
+    back = _build(agent_cls, seed=98, **CPU64)
     back.load(str(tmp_path / "numpy.pt"))
     back.save(str(tmp_path / "back.pt"))
 
@@ -207,7 +214,10 @@ def test_the_device_holds_every_network_and_optimizer_the_numpy_agent_declares(t
         np.testing.assert_array_equal(device[key], value, err_msg=f"{key} differs on the device")
 
 
-@pytest.mark.parametrize("agent_type, expected", [("ddpg", TorchDDPGAgent), ("td3", TorchTD3Agent)])
+@pytest.mark.parametrize(
+    "agent_type, expected",
+    [("ddpg", TorchDDPGAgent), ("td3", TorchTD3Agent), ("sac", TorchSACAgent)],
+)
 def test_challenges_build_the_torch_agent_with_their_action_bounds(agent_type, expected):
     challenge = discover_challenges()["pendulum"]()
     env = challenge.make_env({"seed": 1}, render_mode=None)
@@ -258,8 +268,16 @@ def test_the_cuda_graph_trains_as_the_same_step_run_eagerly():
     )
 
 
-# TD3 with a delay of 3: both step kinds, the full one captured part-way through a call.
-AGENTS = {"ddpg": (DDPGAgent, {}), "td3": (TD3Agent, {"policy_delay": 3})}
+# TD3 with a delay of 3: both step kinds, the full one captured part-way through a call. SAC
+# with a learned temperature and every actor and critic step clipped.
+# Clips every actor and critic step here; the temperature's gradient, -(mean log pi + target
+# entropy), is far larger, so clipping it too would change every temperature step.
+TINY_CLIP = {"max_grad_norm": 1e-3}
+AGENTS = {
+    "ddpg": (DDPGAgent, {}),
+    "td3": (TD3Agent, {"policy_delay": 3}),
+    "sac": (SACAgent, TINY_CLIP),
+}
 
 
 @needs_cuda
@@ -412,6 +430,66 @@ def test_td3_cuda_graphs_train_as_the_same_steps_run_eagerly():
 
     _train_in_lockstep([graphed, eager], episodes=4)
 
+    _assert_same(
+        weights(eager), weights(graphed), rtol=1e-5, atol=1e-6, what="graph against eager, "
+    )
+
+
+# ----------------------------------------------------------------------
+# Every backend against the recorded NumPy training
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", list(golden.CASES))
+def test_float64_cpu_backend_replays_the_recorded_numpy_training(name, tmp_path):
+    """Each case of tests/test_ddpg_td3_golden.py (DDPG, TD3 and SAC; mid-episode updates, a
+    save loaded by another seed, DDPG from a TD3 file) trained on the device: every metric, the
+    checkpoint and the greedy action as recorded from the NumPy agent, to rounding."""
+    actual = golden.outputs(name, tmp_path, **CPU64)
+    golden.assert_matches_recording(name, actual, rtol=1e-9, atol=1e-12, exact=False)
+
+
+# ----------------------------------------------------------------------
+# SAC
+# ----------------------------------------------------------------------
+
+
+def test_float64_cpu_sac_never_clips_the_temperature(tmp_path):
+    """A learned temperature with every other group clipped: the same metrics (alpha each step
+    used among them), checkpoint and greedy action as NumPy SAC, which never clips log alpha;
+    and ``ent_coef`` reads the device's alpha between updates."""
+    numpy_agent = _build(SACAgent, **TINY_CLIP)
+    torch_agent = _build(SACAgent, **TINY_CLIP, **CPU64)
+    assert type(torch_agent) is TorchSACAgent
+
+    history = _train_in_lockstep([numpy_agent, torch_agent], episodes=4)
+
+    assert history[0] == [{}, {}], "Both should still be warming up after the first episode."
+    for step, (expected, actual) in enumerate(history[1:], start=1):
+        assert list(actual) == list(expected), f"episode {step} should report SAC's metrics"
+        _assert_same(expected, actual, what=f"episode {step} metric ")
+        assert expected["actor_grad_norm"] > 1e-3 and expected["critic_grad_norm"] > 1e-3
+    assert history[-1][0]["ent_coef"] < history[1][0]["ent_coef"], "alpha should have moved"
+    assert torch_agent.ent_coef == pytest.approx(numpy_agent.ent_coef, rel=1e-9, abs=0.0)
+    _assert_same_checkpoint(numpy_agent, torch_agent, tmp_path)
+    obs = np.array([0.4, -0.3, 0.2])
+    np.testing.assert_allclose(
+        torch_agent.select_action(obs, training=False),
+        numpy_agent.select_action(obs, training=False),
+        rtol=1e-6,
+    )
+
+
+@needs_cuda
+def test_sac_cuda_graph_trains_as_the_same_step_run_eagerly():
+    """In float32, the captured SAC step replays as the eager one does; capture trains nothing."""
+    graphed = _build(SACAgent, backend="torch", device="cuda", cuda_graph=True)
+    eager = _build(SACAgent, backend="torch", device="cuda", cuda_graph=False)
+
+    history = _train_in_lockstep([graphed, eager], episodes=4)
+
+    for step, (from_graph, from_eager) in enumerate(history[1:], start=1):
+        _assert_same(from_eager, from_graph, rtol=1e-5, atol=1e-6, what=f"episode {step} metric ")
     _assert_same(
         weights(eager), weights(graphed), rtol=1e-5, atol=1e-6, what="graph against eager, "
     )

@@ -16,6 +16,18 @@ Acrobot-v1) and
 
 ### Added
 
+- **SAC on the PyTorch backend, and LunarLanderContinuous SAC** (`feature/torch-sac`; PR 3 of 4 of the roadmap item
+  "SAC and BipedalWalker-v3"): `TorchSACAgent` (`backend: torch`) on a new `TorchOffPolicyAgent` base, which now also
+  carries what `TorchDDPGAgent` and `TorchTD3Agent` shared; each group is clipped on the device exactly when its NumPy
+  Adam clips it. In float64 on the CPU it replays the NumPy golden cases to a relative 1e-9. The NumPy agents' minimum
+  target Q and bootstrapped target moved into `OffPolicyAgent`. `configs/lunarlander_continuous_sac.yaml`: rl-zoo's
+  settings (400×300, learning rate 7.3e-4 held constant, as the agents have no schedule) for 500,000 steps on the
+  GPU. Through the benchmark, seeds 1 to 5: every seed reaches 200 at 79,587 to 244,525 steps (episodes 272 to 523)
+  and holds it, final 100-episode averages 266 to 284, greedy evaluation 282 ± 5, all 5 at 200 or more. TD3's
+  published run reaches 200 at 174,000 to 294,000 steps within 400,000, with greedy evaluation 182 ± 69 (2 of 5).
+  1.6 to 2.3 hours a seed with two or three runs at once on the Jetson's GPU. The published LunarLanderContinuous
+  report has no SAC row yet. Seed 42 was not measured.
+
 - **Soft Actor-Critic** (`feature/sac-agent`; PR 2 of 4 of the roadmap item "SAC and BipedalWalker-v3"): `SACAgent`
   in NumPy, as Stable-Baselines3 implements it: a squashed Gaussian actor, twin critics with Polyak targets and a
   learned entropy temperature against a target entropy of minus the action size, with the numerically stable form of

@@ -22,8 +22,8 @@ CRITIC_METRICS = 3
 class TorchTD3Agent(TorchDDPGAgent, TD3Agent):
     """
     TD3Agent with each gradient step computed in PyTorch: the same algorithm, defaults, config and
-    checkpoints, and everything TorchDDPGAgent describes (the device copies, the NumPy mirror,
-    staging, the config keys ``device``, ``dtype`` and ``cuda_graph``).
+    checkpoints, and everything TorchOffPolicyAgent describes (the device copies, the NumPy
+    mirror, staging, the config keys ``device``, ``dtype`` and ``cuda_graph``).
 
     A step is one of two kinds, as TD3Agent's ``_is_actor_step`` decides from its number: a
     ``critic`` step trains both critics; a ``full`` step also trains the actor and moves the three
@@ -64,16 +64,12 @@ class TorchTD3Agent(TorchDDPGAgent, TD3Agent):
     def _step(self, kind: str) -> None:
         """One TD3 step on the batch in ``self._inputs``: both critics towards the smoothed twin
         target, then, on a ``full`` step, the actor and the targets."""
-        x, nets = self._inputs, self._nets
+        x = self._inputs
         with torch.no_grad():
-            mu, _ = self._policy(nets["target_actor"], x["next_observations"])
+            mu, _ = self._policy(self._nets["target_actor"], x["next_observations"])
             next_actions = torch.clamp(mu + self._scale_t * x["noise"], self._low_t, self._high_t)
-            q1 = self._q(nets["target_critic"], x["next_observations"], next_actions)
-            q2 = self._q(nets["target_critic_2"], x["next_observations"], next_actions)
-            targets = x["rewards"] + self.gamma * (1.0 - x["dones"]) * torch.minimum(q1, q2)
-        loss_1, q, norm_1 = self._critic_update("critic", targets)
-        loss_2, _, norm_2 = self._critic_update("critic_2", targets)
-        metrics = [(loss_1 + loss_2) / 2.0, q.mean(), torch.hypot(norm_1, norm_2)]
+            targets = self._bootstrap(self._next_q(x["next_observations"], next_actions))
+        metrics = self._critics_update(targets)
         if kind == "full":
             metrics += self._actor_update()
             self._move_targets()

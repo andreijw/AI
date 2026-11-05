@@ -140,15 +140,19 @@ def _play(
 
 
 def _build(agent_cls: type[OffPolicyAgent], case: Case, **config: Any) -> OffPolicyAgent:
-    agent = agent_cls(OBS_DIM, ACT_DIM, {**BASE, **case.overrides, **config})
+    """The case's agent, in the backend ``config`` names (NumPy by default)."""
+    full = {**BASE, **case.overrides, **config}
+    agent = agent_cls.class_for_config(full)(OBS_DIM, ACT_DIM, full)
     if case.update_every is not None:
         agent.enable_mid_episode_updates(case.update_every)
     return agent
 
 
-def _outputs(name: str, tmp_path) -> dict[str, np.ndarray]:
+def outputs(name: str, tmp_path, **backend: Any) -> dict[str, np.ndarray]:
+    """Everything case ``name`` records, trained in the backend ``backend`` selects (the
+    ``backend``, ``device`` and ``dtype`` config keys; NumPy without them)."""
     case = CASES[name]
-    agent = _build(case.agent, case)
+    agent = _build(case.agent, case, **backend)
     rng = np.random.default_rng(3)
     out: dict[str, np.ndarray] = {}
     if case.resume_as is None:
@@ -156,7 +160,7 @@ def _outputs(name: str, tmp_path) -> dict[str, np.ndarray]:
     else:
         _play(agent, case, rng, range(RESUME_AFTER), out)
         agent.save(str(tmp_path / "before.npz"))
-        agent = _build(case.resume_as, case, seed=RESUME_SEED)
+        agent = _build(case.resume_as, case, seed=RESUME_SEED, **backend)
         agent.load(str(tmp_path / "before.npz"))
         _play(agent, case, rng, range(RESUME_AFTER, EPISODES), out)
     out["greedy_action"] = agent.select_action(np.array([0.4, -0.3, 0.2]), training=False)
@@ -168,29 +172,43 @@ def _outputs(name: str, tmp_path) -> dict[str, np.ndarray]:
     return out
 
 
-@pytest.mark.parametrize("name", list(CASES))
-def test_training_matches_the_recorded_arrays(name, tmp_path):
-    outputs = _outputs(name, tmp_path)
-    prefix, path = name + "/", CASES[name].golden
-    if RECORD:
-        recorded = dict(np.load(path)) if path.exists() else {}
-        recorded.update({prefix + k: v for k, v in outputs.items()})
-        path.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(path, **recorded)
-        pytest.fail(f"Recorded {prefix}; rerun without RECORD_DDPG_GOLDEN.")
-    with np.load(path) as golden:
+def assert_matches_recording(
+    name: str,
+    actual: dict[str, np.ndarray],
+    rtol: float = RTOL,
+    atol: float = ATOL,
+    exact: bool = EXACT,
+) -> None:
+    """Every array case ``name`` produced equals the recorded one: names, dtypes, counts and
+    generator states exactly, numbers to ``rtol`` and ``atol``, or bit for bit when ``exact``
+    (DDPG_GOLDEN_EXACT=1 by default)."""
+    prefix = name + "/"
+    with np.load(CASES[name].golden) as golden:
         expected = {k[len(prefix) :]: golden[k] for k in golden.files if k.startswith(prefix)}
-    assert sorted(outputs) == sorted(expected), f"{name} records other arrays than the file"
-    for key, value in outputs.items():
+    assert sorted(actual) == sorted(expected), f"{name} records other arrays than the file"
+    for key, value in actual.items():
         assert value.dtype == expected[key].dtype, f"{prefix}{key} changed dtype"
         if key == "checkpoint_keys":  # loading goes by name, so the order is not a contract
             value, expected[key] = np.sort(value), np.sort(expected[key])
-        if EXACT or value.dtype.kind not in "fc":  # names, counts and generator states: exact
+        if exact or value.dtype.kind not in "fc":  # names, counts and generator states: exact
             np.testing.assert_array_equal(value, expected[key], err_msg=f"{prefix}{key} differs")
         else:
             np.testing.assert_allclose(
-                value, expected[key], rtol=RTOL, atol=ATOL, err_msg=f"{prefix}{key} differs"
+                value, expected[key], rtol=rtol, atol=atol, err_msg=f"{prefix}{key} differs"
             )
+
+
+@pytest.mark.parametrize("name", list(CASES))
+def test_training_matches_the_recorded_arrays(name, tmp_path):
+    actual = outputs(name, tmp_path)
+    prefix, path = name + "/", CASES[name].golden
+    if RECORD:
+        recorded = dict(np.load(path)) if path.exists() else {}
+        recorded.update({prefix + k: v for k, v in actual.items()})
+        path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(path, **recorded)
+        pytest.fail(f"Recorded {prefix}; rerun without RECORD_DDPG_GOLDEN.")
+    assert_matches_recording(name, actual)
 
 
 def test_the_recorded_cases_reach_warm_up_training_and_both_td3_step_kinds():

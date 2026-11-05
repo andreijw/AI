@@ -80,7 +80,7 @@ AI/
 │   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
 │   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
 │   ├── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
-│   └── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 on PyTorch)
+│   └── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 and SAC on PyTorch)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── export.py                    # Checkpoint to a standalone C header or an ONNX model
@@ -118,7 +118,7 @@ If script execution is disabled, run it once with `powershell -ExecutionPolicy B
 
 ```bash
 ./setup.sh                  # .venv, the CPU profile: .[dev,video,box2d,onnx], no PyTorch
-./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG and TD3 backend (backend: torch); about 5 GiB
+./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG, TD3 and SAC backend (backend: torch); ~5 GiB
 ```
 
 Each creates its environment if missing, upgrades its packages and runs the CI checks (`--skip-checks` to skip).
@@ -268,6 +268,9 @@ python train.py --config configs/lunarlander_dqn.yaml
 
 # LunarLanderContinuous TD3 at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu; solves 200)
 .venv-gpu/bin/python train.py --config configs/lunarlander_continuous_td3.yaml
+
+# LunarLanderContinuous SAC at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu; solves 200)
+.venv-gpu/bin/python train.py --config configs/lunarlander_continuous_sac.yaml
 ```
 
 ### Which agents solve which challenge
@@ -818,14 +821,16 @@ Implemented agents (in `src/rl_core/agents/`; how each one works, its update and
   - `TD3Agent`: Twin Delayed DDPG: two critics with the smaller target, smoothed target actions and delayed actor
     and target updates (`configs/pendulum_td3.yaml`)
   - `SACAgent`: Soft Actor-Critic: a squashed Gaussian actor, twin critics with Polyak targets and a learned
-    entropy temperature (`ent_coef`, `target_entropy`; `configs/pendulum_sac.yaml`); NumPy only for now
-- **Optional PyTorch backend**: `TorchDDPGAgent` and `TorchTD3Agent` train DDPG's and TD3's gradient steps in PyTorch,
-  on the GPU as CUDA graphs, and keep everything else, acting included, in NumPy. Add `backend: torch` to a DDPG or
-  TD3 config's `agent.config` (optional: `device: auto|cpu|cuda`, `dtype: float32|float64`,
-  `cuda_graph: true|false`). It needs PyTorch, which `.venv` and CI do not have: build a separate environment as in
-  [`docs/pytorch_jetson_timing.md`](docs/pytorch_jetson_timing.md) and run `train.py` from it. Its checkpoints are
-  the NumPy agent's format, so `record.py` can replay a GPU-trained checkpoint without PyTorch by setting
-  `backend: numpy` in the run's config. Build the environment with `./setup.sh --profile gpu` (`.venv-gpu`).
+    entropy temperature (`ent_coef`, `target_entropy`; `configs/pendulum_sac.yaml`, and on the PyTorch backend
+    `configs/lunarlander_continuous_sac.yaml`)
+- **Optional PyTorch backend**: `TorchDDPGAgent`, `TorchTD3Agent` and `TorchSACAgent` train DDPG's, TD3's and SAC's
+  gradient steps in PyTorch, on the GPU as CUDA graphs, and keep everything else, acting included, in NumPy. Add
+  `backend: torch` to a DDPG, TD3 or SAC config's `agent.config` (optional: `device: auto|cpu|cuda`,
+  `dtype: float32|float64`, `cuda_graph: true|false`). It needs PyTorch, which `.venv` and CI do not have: build a
+  separate environment as in [`docs/pytorch_jetson_timing.md`](docs/pytorch_jetson_timing.md) and run `train.py`
+  from it. Its checkpoints are the NumPy agent's format, so `record.py` can replay a GPU-trained checkpoint without
+  PyTorch by setting `backend: numpy` in the run's config. Build the environment with `./setup.sh --profile gpu`
+  (`.venv-gpu`).
   Measured speed: see the timing document.
 
 ### Training Pipeline
@@ -848,8 +853,8 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 
 ### Next Steps
 
-1. **SAC on the GPU and BipedalWalker**: the PyTorch backend for SAC (LunarLanderContinuous), then the
-   BipedalWalker-v3 challenge with SAC against TD3 (the rest of the Phase 7 SAC item).
+1. **BipedalWalker**: the BipedalWalker-v3 challenge with SAC against TD3 (the rest of the Phase 7 SAC item; SAC
+   on the PyTorch backend solves LunarLanderContinuous on 5 of 5 seeds).
 2. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder).
 3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 
