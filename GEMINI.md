@@ -45,7 +45,10 @@ To optimize token usage and context window limits:
     its onnxruntime check (`onnx_model.py`, the only module importing onnx), the comparison with NumPy and the C
     compile-and-compare check (`verify.py`), and the greedy rollout they are checked on (`rollout.py`).
   * `src/rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
-    observation noise, episode statistics, `wrap_env`), and `checked_range` for domain randomization ranges.
+    observation noise, episode statistics, `wrap_env`, and the checks of the shared noise settings `obs_noise_std`,
+    `action_noise_std` and `action_noise_prob`), `checked_range` for one domain randomization range, and
+    `checked_randomization` with `ParameterBounds` and `POSITIVE`, which checks a whole randomization mapping against
+    a table of each parameter's bounds.
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`), the checkpoint's trainer file
     (`checkpoints.py`), curriculum scheduling of the training environment's noise and randomization
     (`curriculum.py`) and the robustness benchmark's perturbations and greedy rows (`robustness.py`).
@@ -74,12 +77,18 @@ To optimize token usage and context window limits:
   * `src/rl_lunarlander/environments/`: lunar lander wrapper (observation noise only), shared by both ids, and a
     factory for each.
   * `src/rl_lunarlander/benchmark.py`: both LunarLander benchmark challenge implementations.
-* **`src/rl_navigation/`**: Range-sensor robot navigation (Phase 8); `__init__.py` imports nothing. No
-  `benchmark.py` yet, so challenge discovery skips it.
+* **`src/rl_navigation/`**: Navigation-v0 (discrete) and NavigationContinuous-v0 range-sensor navigation challenges
+  (Phase 8); `__init__.py` imports nothing, so each layer below can be imported without the ones above it.
   * `src/rl_navigation/sim/`: the simulator, NumPy and the standard library only (never Gymnasium or `rl_core`):
     `geometry.py` (arena, batched ray casting, swept-disc collision, occupancy grid), `kinematics.py` (unicycle),
     `sensors.py` (range sensors, `hc_sr04` and `lidar` presets), `layouts.py` (random layouts with a reachable
-    goal) and `world.py` (`World`: pose, motion with wheel slip, collision, goal, sensors).
+    goal), `world.py` (`World`: pose, motion with wheel slip, collision, goal, sensors) and `render.py` (the arena
+    as an RGB array).
+  * `src/rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.
+    It imports Gymnasium and `rl_navigation.sim` only, never `rl_core`, so it works outside this framework.
+  * `src/rl_navigation/environments/`: `NavigationEnv`, the framework wrapper shared by both ids (action noise,
+    domain randomization of wheel slip, sensor noise, dropout and obstacle count), and a factory for each id.
+  * `src/rl_navigation/benchmark.py`: both navigation benchmark challenge implementations (random agent only).
 * **`src/rl_core/challenges/`**: The `BenchmarkChallenge` interface, the challenge registry and `discover_challenges`.
 * **`src/benchmark.py`**: The benchmark runner and its command line, for every discovered challenge.
 * **`tests/`** (located at [tests/](tests/)): Pytest unit and integration test suite

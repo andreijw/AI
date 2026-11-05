@@ -15,7 +15,8 @@ The architecture is designed to support:
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO with
   Gaussian policies, DDPG and TD3 with deterministic policies, and SAC, for Pendulum; random, PPO and DQN for Acrobot;
   random and DQN for MountainCar; random, DDPG and TD3 with Ornstein-Uhlenbeck exploration noise for
-  MountainCarContinuous; random and DQN for LunarLander; random and TD3 for LunarLanderContinuous)
+  MountainCarContinuous; random and DQN for LunarLander; random and TD3 for LunarLanderContinuous; random only, so
+  far, for the range-sensor navigation tasks Navigation-v0 and NavigationContinuous-v0)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -72,8 +73,11 @@ AI/
 │   ├── rl_lunarlander/          # LunarLander-v3 and LunarLanderContinuous-v3 (Box2D) challenges
 │   │   ├── environments/        # Lunar lander wrapper (observation noise) and a factory for each id
 │   │   └── benchmark.py         # Both LunarLander benchmark challenge implementations
-│   ├── rl_navigation/           # Range-sensor robot navigation (Phase 8); not a challenge yet
-│   │   └── sim/                 # NumPy-only simulator: arena, ray casting, sensors, layouts, World
+│   ├── rl_navigation/           # Navigation-v0 and NavigationContinuous-v0 range-sensor navigation (Phase 8)
+│   │   ├── sim/                 # NumPy-only simulator: arena, ray casting, sensors, layouts, World, renderer
+│   │   ├── gym_env.py           # The Gymnasium environment; imports only Gymnasium and sim/, never rl_core
+│   │   ├── environments/        # Navigation wrapper (noise, domain randomization) and a factory for each id
+│   │   └── benchmark.py         # Both navigation benchmark challenge implementations
 │   └── benchmark.py             # Benchmark runner & CLI (finds challenges through rl_core)
 ├── tests/                       # Unit & integration test suites
 ├── configs/                     # YAML hyperparameter configurations
@@ -82,7 +86,8 @@ AI/
 │   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
 │   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
 │   ├── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
-│   └── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 and SAC on PyTorch)
+│   ├── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 and SAC on PyTorch)
+│   └── navigation_*.yaml        # Navigation random baselines, discrete and continuous
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── export.py                    # Checkpoint to a standalone C header or an ONNX model
@@ -273,6 +278,10 @@ python train.py --config configs/lunarlander_dqn.yaml
 
 # LunarLanderContinuous SAC at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu; solves 200)
 .venv-gpu/bin/python train.py --config configs/lunarlander_continuous_sac.yaml
+
+# Navigation random baselines, discrete and continuous (no solve threshold yet; see Range-Sensor Navigation below)
+python train.py --config configs/navigation_default.yaml
+python train.py --config configs/navigation_continuous_default.yaml
 ```
 
 ### Which agents solve which challenge
@@ -372,10 +381,54 @@ python train.py --config configs/cartpole_default.yaml --agent-type dqn --num-ep
 
 The challenge comes from the config's `environment.name`, which must be a registered challenge's environment id
 exactly (`Acrobot-v1`, `CartPole-v1`, `LunarLander-v3`, `LunarLanderContinuous-v3`, `MountainCar-v0`,
-`MountainCarContinuous-v0` or `Pendulum-v1`); any other name is an error that lists the options. `--challenge acrobot`,
-`cartpole`, `lunarlander`, `lunarlander_continuous`, `mountaincar`, `mountaincar_continuous` or `pendulum` must agree
-with that name, and is required for a config that has no `environment.name`.
+`MountainCarContinuous-v0`, `Navigation-v0`, `NavigationContinuous-v0` or `Pendulum-v1`); any other name is an error
+that lists the options. `--challenge acrobot`, `cartpole`, `lunarlander`, `lunarlander_continuous`, `mountaincar`,
+`mountaincar_continuous`, `navigation`, `navigation_continuous` or `pendulum` must agree with that name, and is
+required for a config that has no `environment.name`.
 An agent the challenge does not support (for example `--agent-type dqn` on Pendulum) is rejected before training.
+
+### Range-Sensor Navigation
+
+`Navigation-v0` and `NavigationContinuous-v0` are this project's own Gymnasium environments (Phase 8 of
+[`docs/roadmap.md`](docs/roadmap.md)): a disc robot drives to a goal through randomly placed obstacles, seeing only
+its range sensors. Each reset draws a new layout; `reset(options={"layout": layout})` plays a given
+`rl_navigation.sim.Layout` instead.
+
+- **Actions**: `Navigation-v0` has five discrete actions (straight ahead, forward arcs left and right at half speed,
+  turns on the spot left and right). `NavigationContinuous-v0` takes two actions in [-1, 1]: forward speed from 0 to
+  0.5 m/s (no reverse, as the sonars face forward) and turn rate within ±2 rad/s.
+- **Observation**: goal distance, cos and sin of the goal's bearing, the last executed forward speed and turn rate,
+  then the range readings: five HC-SR04 sonars by default (`sensor: "hc_sr04"`, 10 values in all), or a full-circle
+  lidar (`sensor: "lidar"`, `lidar_beams`, default 64).
+- **Reward**: 10 × the progress toward the goal over the starting distance, -0.01 per step and -10 on a collision.
+  Reaching the goal or colliding ends the episode; otherwise it is truncated after 400 steps.
+- **Framework settings** (`rl_navigation.environments.NavigationEnv`): `action_noise_prob` (discrete) or
+  `action_noise_std` (continuous), `obs_noise_std`, `frame_stack`, `frame_deltas`, `num_obstacles`, and
+  `domain_randomization` ranges of `wheel_slip`, `sensor_noise_std`, `dropout_prob` and `num_obstacles`.
+  `mask_velocity: true` is refused.
+- **Rendering**: `render_mode: "rgb_array"` draws the arena in NumPy (`rl_navigation/sim/render.py`), so
+  `--record-video` and `record.py` work as for any challenge; `"human"` opens a window through Gymnasium's
+  `HumanRendering`, which needs pygame-ce (installed by the `box2d` extra).
+
+The committed configs train the random agent for 40,000 steps; no learning agent and no solve threshold exist yet,
+so the benchmark reports every run as not solved. Its random baseline has not been measured yet. A step with a sonar
+read takes about 0.65 ms and a reset about 20 ms (measured on the Jetson in the design review).
+
+The environment does not need the training framework. `rl_navigation.gym_env` imports only Gymnasium and the NumPy
+simulator `rl_navigation.sim`, never `rl_core`, so another project can use it directly:
+
+```python
+import gymnasium as gym
+
+import rl_navigation.gym_env  # registers Navigation-v0 and NavigationContinuous-v0
+
+env = gym.make("NavigationContinuous-v0")
+obs, info = env.reset(seed=0)
+obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
+```
+
+`info` holds `is_success`, `collision` and `goal_distance`. The framework's noise and domain randomization live in
+`rl_navigation.environments`, which does import `rl_core`.
 
 ### Visualization and video recording
 
@@ -578,7 +631,7 @@ environment:
   max_episode_steps: 500
   seed: 42
   # frame_stack: 4        # optional, every challenge: the last 4 observations, oldest first, as one vector
-  # mask_velocity: true   # optional, every challenge: zero the velocity entries (a partially observed task)
+  # mask_velocity: true   # optional, every challenge but Navigation: zero the velocity entries (partially observed)
   # frame_deltas: true    # optional, with frame_stack >= 2: the newest frame, then the differences between frames
   # obs_noise_std: 0.05   # optional: noise and domain randomization, the settings evaluation always plays
   # curriculum:           # optional: train from easier settings up to the ones above (see below)
@@ -614,7 +667,8 @@ training:
 `environment.curriculum` trains through easier settings first. The `environment` section stays the target: the
 evaluation environment is built from it as always, so evaluation and its greedy episodes play the hardest settings.
 `start` gives the easiest value of any schedulable setting the section turns on (`obs_noise_std` on every
-challenge; `action_noise_prob` or `action_noise_std` and `domain_randomization` on CartPole and Pendulum). A start
+challenge; `action_noise_prob` or `action_noise_std` and `domain_randomization` on CartPole, Pendulum and the two
+Navigation ids). A start
 randomization may name some of the target's parameters; the others stay at their target range. Before each
 training episode one difficulty d, from 0 to 1, sets every scheduled setting to `(1 - d) * start + d * target`, and
 moves a randomization range's two ends separately.
@@ -642,8 +696,9 @@ python robustness.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints
 ```
 
 Each `--sweep SETTING=V1,V2,...` names a noise setting the challenge's wrapper can schedule (`obs_noise_std`;
-`action_noise_prob` on CartPole, `action_noise_std` on Pendulum) or a physics parameter it can randomize (CartPole
-`gravity`, `masscart`, `masspole`, `length`; Pendulum `g`, `m`, `l` or their long names), one `--sweep` per setting.
+`action_noise_prob` on CartPole and Navigation-v0, `action_noise_std` on Pendulum and NavigationContinuous-v0) or a
+parameter it can randomize (CartPole `gravity`, `masscart`, `masspole`, `length`; Pendulum `g`, `m`, `l` or their long
+names; Navigation `wheel_slip`, `sensor_noise_std`, `dropout_prob`, `num_obstacles`), one `--sweep` per setting.
 Every value gets a new evaluation environment built from the config's `environment` section, with the noise level
 set or the parameter pinned to that value (other randomized parameters keep their ranges), and plays `--episodes`
 greedy episodes (default 20). Episode i of every row resets with the same seed, so the start states are paired;
@@ -772,9 +827,10 @@ Workflows are automatically synchronized from `.github/workflows` by
 
 ### Environment Wrapper
 
-The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment, `PendulumEnv` wraps Pendulum-v1 and `AcrobotEnv`
-wraps Acrobot-v1 and `MountainCarEnv` wraps MountainCar-v0 and MountainCarContinuous-v0 (observation noise only for
-both). All four subclass
+The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment, `PendulumEnv` wraps Pendulum-v1, `AcrobotEnv`
+wraps Acrobot-v1, `MountainCarEnv` wraps MountainCar-v0 and MountainCarContinuous-v0 and `LunarLanderEnv` wraps
+LunarLander-v3 and LunarLanderContinuous-v3 (observation noise only for those three), and `NavigationEnv` wraps this
+project's Navigation-v0 and NavigationContinuous-v0 (Range-Sensor Navigation below). All six subclass
 `rl_core.environments.BaseEnvWrapper`, which owns seeding, observation noise and episode statistics. They provide:
 
 - Episode tracking and statistics
@@ -782,7 +838,8 @@ both). All four subclass
 - Easy monitoring and logging integration
 
 Every challenge's `environment` section also takes `frame_stack`, `mask_velocity` and `frame_deltas`, applied by the
-base after the observation noise. `mask_velocity: true` zeroes the velocity entries and keeps the observation's length,
+base after the observation noise; Navigation refuses `mask_velocity: true`, as its observation holds no velocity of
+the robot's state. `mask_velocity: true` zeroes the velocity entries and keeps the observation's length,
 as rl-zoo's `MaskVelocityWrapper` does. `frame_stack: K` joins the last K observations, oldest first, into one vector;
 at a reset the first observation fills every slot. `frame_deltas: true` gives that stack as its newest frame followed by
 the differences between consecutive frames, newest first: the same entries, but a velocity hidden in the small change

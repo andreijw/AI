@@ -65,6 +65,8 @@ env = make_env(obs_noise_std=0.1)
 - Order: observation noise, then the mask, then the stack, then the differences, so a frame keeps the noise it was
   observed with and a masked entry is exactly zero
 - A reset fills every slot of the stack with the first observation, so its differences are zero
+- `mask_velocity: true` is refused for an environment id whose wrapper lists no velocity entries: Navigation-v0 and
+  NavigationContinuous-v0, whose observation holds no velocity of the robot's state
 - The stack is oldest frame first; with `frame_deltas` it becomes the newest frame, then the differences between
   consecutive frames, newest first (an invertible re-expression of the same entries)
 - Measured on CartPole PPO: masking alone drops greedy evaluation from 500 to 42; `frame_stack: 4` brings it back

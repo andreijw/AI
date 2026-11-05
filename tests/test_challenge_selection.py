@@ -10,6 +10,7 @@ import rl_acrobot.environments.acrobot_env as acrobot_env_module
 import rl_cartpole.environments.cartpole_env as cartpole_env_module
 import rl_lunarlander.environments.lunarlander_env as lunarlander_env_module
 import rl_mountaincar.environments.mountaincar_env as mountaincar_env_module
+import rl_navigation.environments.navigation_env as navigation_env_module
 import rl_pendulum.environments.pendulum_env as pendulum_env_module
 from rl_cartpole.environments import (
     make_vec_env_from_config as cartpole_make_vec_env_from_config,
@@ -64,6 +65,8 @@ EXPECTED_AGENTS = {
         "td3": TD3Agent,
         "sac": SACAgent,
     },
+    "navigation": {"random": RandomAgent},
+    "navigation_continuous": {"random": ContinuousRandomAgent},
 }
 
 ENV_CLASSES = {
@@ -74,6 +77,8 @@ ENV_CLASSES = {
     "pendulum": pendulum_env_module.PendulumEnv,
     "lunarlander": lunarlander_env_module.LunarLanderEnv,
     "lunarlander_continuous": lunarlander_env_module.LunarLanderEnv,
+    "navigation": navigation_env_module.NavigationEnv,
+    "navigation_continuous": navigation_env_module.NavigationEnv,
 }
 
 
@@ -94,6 +99,8 @@ def _building(key: str, *values: str) -> Any:
         ("CartPole-v1", "cartpole"),
         ("MountainCar-v0", "mountaincar"),
         ("MountainCarContinuous-v0", "mountaincar_continuous"),
+        ("Navigation-v0", "navigation"),
+        ("NavigationContinuous-v0", "navigation_continuous"),
         ("Pendulum-v1", "pendulum"),
     ],
 )
@@ -194,6 +201,29 @@ def _capture_env_kwargs(monkeypatch, key):
              "frame_stack": 5, "mask_velocity": False, "frame_deltas": False},
             {"env_name": "MountainCar-v0", "max_episode_steps": 60, "seed": 6, "obs_noise_std": 0.01,
              "frame_stack": 5, "mask_velocity": False, "frame_deltas": False,
+             "render_mode": "rgb_array"},
+        ),
+        (
+            "navigation",
+            {"name": "Navigation-v0", "max_episode_steps": 50, "seed": 4, "obs_noise_std": 0.03,
+             "action_noise_prob": 0.1, "domain_randomization": {"wheel_slip": [0.0, 0.2]},
+             "sensor": "lidar", "lidar_beams": 16, "num_obstacles": 3,
+             "frame_stack": 2, "mask_velocity": False, "frame_deltas": True},
+            {"env_name": "Navigation-v0", "max_episode_steps": 50, "seed": 4, "obs_noise_std": 0.03,
+             "action_noise_prob": 0.1, "domain_randomization": {"wheel_slip": [0.0, 0.2]},
+             "sensor": "lidar", "lidar_beams": 16, "num_obstacles": 3,
+             "frame_stack": 2, "mask_velocity": False, "frame_deltas": True,
+             "render_mode": "rgb_array"},
+        ),
+        (
+            "navigation_continuous",
+            {"name": "NavigationContinuous-v0", "seed": 8, "action_noise_std": 0.2,
+             "domain_randomization": {"num_obstacles": [2, 6]}},
+            {"env_name": "NavigationContinuous-v0", "max_episode_steps": 400, "seed": 8,
+             "obs_noise_std": 0.0, "action_noise_std": 0.2,
+             "domain_randomization": {"num_obstacles": [2, 6]},
+             "sensor": "hc_sr04", "lidar_beams": 64, "num_obstacles": 6,
+             "frame_stack": 1, "mask_velocity": False, "frame_deltas": False,
              "render_mode": "rgb_array"},
         ),
     ],
@@ -351,13 +381,18 @@ CONFIGURED = {
     "mountaincar_continuous": ("obs_noise_std",),
     "cartpole": ("obs_noise_std", "action_noise_prob", "domain_randomization"),
     "pendulum": ("obs_noise_std", "action_noise_std", "domain_randomization"),
+    "navigation": ("obs_noise_std", "action_noise_prob", "domain_randomization"),
+    "navigation_continuous": ("obs_noise_std", "action_noise_std", "domain_randomization"),
 }
-RANDOMIZED = {"cartpole", "pendulum"}  # the challenges with domain randomization
+# The challenges with domain randomization.
+RANDOMIZED = {"cartpole", "pendulum", "navigation", "navigation_continuous"}
 DEFAULT_STEPS = {
     "acrobot": 500,
     "cartpole": 500,
     "mountaincar": 200,
     "mountaincar_continuous": 999,
+    "navigation": 400,
+    "navigation_continuous": 400,
     "pendulum": 200,
 }
 
@@ -370,9 +405,9 @@ def test_make_env_takes_the_defaults_for_null_settings(key):
         assert env.env_name == CHALLENGES[key]().name
         assert env.max_episode_steps == DEFAULT_STEPS[key], "the challenge's own step limit"
         assert env.obs_noise_std == 0.0
-        if key == "cartpole":
+        if key in ("cartpole", "navigation"):
             assert env.action_noise_prob == 0.0
-        if key == "pendulum":
+        if key in ("pendulum", "navigation_continuous"):
             assert env.action_noise_std == 0.0
         if key in RANDOMIZED:
             assert not env.domain_randomization, "no randomization unless asked for"
@@ -395,6 +430,8 @@ def test_cartpole_turns_an_empty_randomization_into_none():
         ("cartpole", "obs_nosie_std"),
         ("pendulum", "action_noise_prob"),
         ("pendulum", "obs_nosie_std"),
+        ("navigation", "action_noise_std"),
+        ("navigation_continuous", "action_noise_prob"),
     ],
 )
 def test_make_env_rejects_a_setting_the_challenge_does_not_support(key, setting):

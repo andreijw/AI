@@ -1,7 +1,9 @@
 """The behaviour every challenge's environment wrapper shares: seeding, observation noise and episode
 statistics around a Gymnasium environment."""
 
-from collections.abc import Mapping
+import math
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
@@ -267,9 +269,17 @@ class BaseEnvWrapper:
 
     @classmethod
     def _checked_setting(cls, name: str, value: Any) -> Any:
-        """The check of each schedulable setting; a subclass handles its own names first."""
-        if name == "obs_noise_std":
+        """The check of each schedulable setting; a subclass handles its own names first.
+
+        The noise levels several wrappers share are checked here: ``obs_noise_std`` and
+        ``action_noise_std`` are finite and non-negative, ``action_noise_prob`` lies in
+        ``[0, 1]``; each is reached only by a wrapper that lists it."""
+        if name in ("obs_noise_std", "action_noise_std"):
             return non_negative_setting(name, value)
+        if name == "action_noise_prob":
+            if not (0.0 <= value <= 1.0):
+                raise ValueError(f"action_noise_prob must be in the interval [0, 1], got {value!r}")
+            return float(value)
         raise NotImplementedError(f"{cls.__name__} lists {name} but does not check it")
 
     def scheduled_settings(self) -> dict[str, Any]:
@@ -488,3 +498,74 @@ def checked_range(
             f"Physical parameter '{param}' must be strictly positive, got min: {min_val}"
         )
     return float(min_val), float(max_val)
+
+
+@dataclass(frozen=True)
+class ParameterBounds:
+    """
+    The values a randomized parameter may take: ``[low, high]``, and above zero with ``positive``
+    (a physical length, mass or gravity).
+    """
+
+    low: float = -math.inf
+    high: float = math.inf
+    positive: bool = False
+
+
+POSITIVE = ParameterBounds(positive=True)
+
+
+def checked_randomization(
+    randomization: Mapping[str, Any] | None,
+    parameters: Mapping[str, str],
+    bounds: Mapping[str, ParameterBounds],
+) -> dict[str, tuple[float, float]]:
+    """
+    A domain randomization mapping as ``{canonical name: (min, max)}``, in the order given.
+
+    Args:
+        randomization: Parameter name to a 2-element ``[min, max]`` sequence; None or empty for
+            none. Names are matched case-insensitively.
+        parameters: Each accepted name, aliases too, mapped to its canonical one (a wrapper's
+            :attr:`BaseEnvWrapper.RANDOMIZABLE_PARAMETERS`).
+        bounds: Each canonical name's allowed values; a name missing here accepts any finite
+            range.
+
+    Raises:
+        ValueError: If ``randomization`` is not a mapping, names an unknown parameter or one
+            parameter twice, or a range is not two finite numbers with min <= max inside the
+            parameter's bounds.
+    """
+    if not randomization:
+        return {}
+    if not isinstance(randomization, Mapping):
+        raise ValueError("domain_randomization must be a mapping of parameter ranges.")
+
+    validated: dict[str, tuple[float, float]] = {}
+    for param, value in randomization.items():
+        param_lower = param.lower()
+        if param_lower not in parameters:
+            raise ValueError(
+                f"Unsupported domain randomization parameter '{param}'. "
+                f"Supported parameters: {sorted(parameters)}."
+            )
+        canon_key = parameters[param_lower]
+        if canon_key in validated:
+            raise ValueError(
+                f"Domain randomization parameter '{canon_key}' is given twice "
+                f"(as '{param}' and an earlier name)"
+            )
+        if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or len(value) != 2:
+            raise ValueError(
+                f"Domain randomization range for '{param}' must be a 2-element sequence "
+                f"[min, max], got: {value!r}"
+            )
+        allowed = bounds.get(canon_key, ParameterBounds())
+        low, high = checked_range(param, *value, positive=allowed.positive)
+        if low < allowed.low or high > allowed.high:
+            raise ValueError(
+                f"Domain randomization range for '{param}' must lie within "
+                f"[{allowed.low:g}, {allowed.high:g}], got: [{low:g}, {high:g}]"
+            )
+        validated[canon_key] = (low, high)
+    return validated

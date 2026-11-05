@@ -1,0 +1,29 @@
+# NavigationContinuous-v0 Default / Random Agent Configuration (Continuous actions)
+# The random baseline the learning agents are measured against. No solve threshold yet.
+
+environment:
+  name: "NavigationContinuous-v0"
+  render_mode: null
+  max_episode_steps: 400
+  seed: 42
+  sensor: "hc_sr04"  # five HC-SR04 sonars; "lidar" for a lidar of lidar_beams beams
+  num_obstacles: 6
+
+agent:
+  type: "random"
+  config:
+    seed: 42
+    action_low: [-1.0, -1.0]
+    action_high: [1.0, 1.0]
+
+training:
+  total_steps: 40000  # Environment steps (random baseline: sets only its length)
+  max_steps_per_episode: 400
+  eval_frequency: 20
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

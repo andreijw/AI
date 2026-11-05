@@ -18,6 +18,7 @@ from rl_core.seeding import derive_rng
 from rl_core.training import Trainer
 from rl_lunarlander.environments import LunarLanderEnv
 from rl_mountaincar.environments import MountainCarEnv
+from rl_navigation.environments import NavigationEnv
 from rl_pendulum.environments import PendulumEnv
 from tests.helpers import env_marks
 
@@ -25,6 +26,11 @@ from tests.helpers import env_marks
 def lunarlander_continuous_env(**kwargs) -> LunarLanderEnv:
     """The LunarLander wrapper on LunarLanderContinuous-v3."""
     return LunarLanderEnv(env_name="LunarLanderContinuous-v3", **kwargs)
+
+
+def navigation_continuous_env(**kwargs) -> NavigationEnv:
+    """The navigation wrapper on NavigationContinuous-v0."""
+    return NavigationEnv(env_name="NavigationContinuous-v0", **kwargs)
 
 
 # Each wrapper's constructor (or a factory taking the same keywords), marked as its environment
@@ -40,6 +46,8 @@ ENV_CLASSES = [
         marks=env_marks("LunarLanderContinuous-v3"),
         id="LunarLanderContinuous",
     ),
+    NavigationEnv,
+    pytest.param(navigation_continuous_env, id="NavigationContinuous"),
 ]
 GRAVITY_RANGE = {CartPoleEnv: ("gravity", (5.0, 15.0)), PendulumEnv: ("g", (5.0, 15.0))}
 SEED = 42

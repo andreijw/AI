@@ -161,7 +161,8 @@ neither Gymnasium nor `rl_core`, and a trained policy reaches the robot through 
 robot needs neither the trainer nor the agents. Step 1 is a full item; steps 2 to 5 are sketches to turn into
 full items when picked.
 
-- [~] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04; PR 2 of 5, the `sim/` library)
+- [~] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04; PR 3 of 5, the environment and
+  challenges; PR 4 the PPO, DQN and TD3 configs, PR 5 the threshold, curriculum and robustness sweep)
   - **Description**: A 2D Gymnasium environment and challenge package: a differential-drive robot (unicycle
     kinematics, linear and angular velocity commands, integrated at a fixed time step) in a walled arena with
     static obstacles (circles and axis-aligned boxes), reaching a goal. Its sensor is a configurable set of range

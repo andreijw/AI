@@ -36,6 +36,8 @@ STEP_BUDGETS = {
     ("lunarlander_continuous", "random"): 50_000,
     ("lunarlander_continuous", "td3"): 400_000,
     ("lunarlander_continuous", "sac"): 500_000,
+    ("navigation", "random"): 40_000,
+    ("navigation_continuous", "random"): 40_000,
     ("cartpole", "reinforce"): 500_000,
     ("cartpole", "actor_critic"): 500_000,
     ("cartpole", "ppo"): 200_000,

@@ -51,7 +51,7 @@ A duplicate rarely shares a name with the original. For each candidate, search f
 | Backpropagates a Gaussian policy and value loss | `residual / (variance`, `(h > 0)` | `ContinuousActorCriticBase._batch_forward`, then `_policy_value_grads` with the loss's d/d(log π) |
 | Lists a Gaussian agent's parameters | `"W1": self._W1` | `ContinuousActorCriticBase._PARAM_NAMES`, `_params()` |
 | Stores and samples transitions | a list of tuples, `random.sample` | `ReplayBuffer` |
-| Wraps a Gymnasium environment with seeding, noise or episode statistics | `gym.make(` in a class, `info["episode"]` | subclass `rl_core.environments.BaseEnvWrapper`; `checked_range` for randomization ranges |
+| Wraps a Gymnasium environment with seeding, noise or episode statistics | `gym.make(` in a class, `info["episode"]` | subclass `rl_core.environments.BaseEnvWrapper`; its `_checked_setting` already checks `obs_noise_std`, `action_noise_std` and `action_noise_prob`; `checked_randomization` with a `ParameterBounds` table for a randomization mapping, `checked_range` for one range |
 | Reads or merges a config | `yaml.safe_load`, `json.load` | `load_config`, `merge_configs`, `train.load_run_config` |
 | Builds an environment or agent from config | `gym.make(`, a class lookup by name | `train.select_run_challenge`, then the challenge's `make_env` / `make_agent` (the base class's, over `AGENT_CLASSES`); a package's `make_env_from_config` over its `ENV_DEFAULTS` with `read_env_settings` |
 | Builds a per-challenge, per-agent output path | `os.path.join(` with the agent type | `train.agent_output_dir`; all four of a run's folders: `train.output_dirs` |

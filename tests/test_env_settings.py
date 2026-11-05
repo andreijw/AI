@@ -11,6 +11,7 @@ from rl_acrobot.environments.acrobot_env import AcrobotEnv
 from rl_cartpole.environments.cartpole_env import CartPoleEnv
 from rl_core.environments import BaseEnvWrapper, SchedulableEnv
 from rl_mountaincar.environments.mountaincar_env import MountainCarEnv
+from rl_navigation.environments.navigation_env import NavigationEnv
 from rl_pendulum.environments.pendulum_env import PendulumEnv
 
 # The module, not the make_env function its package re-exports under the same name.
@@ -23,7 +24,7 @@ PENDULUM_DR = {"l": [0.8, 1.2], "g": [9.0, 10.5]}
 def _wrapper_classes():
     """Every challenge's wrapper, LunarLander's included where Box2D is not installed: the class
     imports without it."""
-    classes = [CartPoleEnv, PendulumEnv, AcrobotEnv, MountainCarEnv]
+    classes = [CartPoleEnv, PendulumEnv, AcrobotEnv, MountainCarEnv, NavigationEnv]
     module = importlib.import_module("rl_lunarlander.environments.lunarlander_env")
     return classes + [module.LunarLanderEnv]
 
@@ -69,6 +70,12 @@ def test_each_wrapper_lists_its_schedulable_settings():
     expected = {
         CartPoleEnv: ("obs_noise_std", "action_noise_prob", "domain_randomization"),
         PendulumEnv: ("obs_noise_std", "action_noise_std", "domain_randomization"),
+        NavigationEnv: (
+            "obs_noise_std",
+            "action_noise_std",
+            "action_noise_prob",
+            "domain_randomization",
+        ),
     }
     for cls in _wrapper_classes():
         assert expected.get(cls, ("obs_noise_std",)) == cls.SCHEDULABLE_SETTINGS, cls.__name__

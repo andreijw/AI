@@ -23,8 +23,10 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │  rl_lunarlander  LunarLanderEnv  LunarLanderChallenge  discrete; Box2D      │
 │                                  LunarLanderContinuousChallenge  continuous │
 │                                                                             │
-│  rl_navigation   sim/ library only: NumPy, no gymnasium, no rl_core;        │
-│                  no benchmark.py yet, so discovery skips it                 │
+│  rl_navigation   NavigationEnv   NavigationChallenge   discrete; noise, DR  │
+│                                  NavigationContinuousChallenge  continuous  │
+│                  over gym_env.py (Gymnasium + sim/ only, no rl_core)        │
+│                  over sim/ (NumPy only: no gymnasium, no rl_core)           │
 │                                                                             │
 │  Each holds a BaseEnvWrapper subclass, ENV_DEFAULTS + make_env_from_config, │
 │  and a BenchmarkChallenge subclass with AGENT_CLASSES and CONFIG_MAP        │
@@ -48,6 +50,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │  environments/                                                              │
 │  - BaseEnvWrapper (seeding, observation noise, episode statistics)          │
 │  - observation.py (velocity masking and frame stacking, after the noise)    │
+│  - checked_randomization, ParameterBounds (randomization ranges)            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -57,12 +60,19 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 
 1. **Core Decoupling**: Algorithms and trainers in `rl_core` have zero coupling to specific Gymnasium environments.
 2. **Challenge Isolation**: Challenge-specific environments, physics domain randomizations, and configs reside in
-   independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`, `rl_mountaincar`, `rl_lunarlander`).
-   `rl_navigation` (Phase 8) is a library first: `rl_navigation/__init__.py` imports nothing, and
-   `rl_navigation.sim` (`geometry`: `Arena`, batched `cast_rays`, swept-disc `segment_hits`, `clearance`,
-   `occupancy_grid`; `kinematics`; `sensors`: `RangeSensor`, `hc_sr04`, `lidar`; `layouts`; `world`: `World`)
-   imports only NumPy and the standard library, never Gymnasium or `rl_core`, so a robot's own code can import it
-   (`tests/test_import_footprint.py`). The Gymnasium environment and the challenge will be layers over it.
+   independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`, `rl_mountaincar`, `rl_lunarlander`,
+   `rl_navigation`). `rl_navigation` (Phase 8) is a library first, in three layers, each importing only the ones
+   below it, so a robot's or another project's code can stop at any layer (`tests/test_import_footprint.py`):
+   - `rl_navigation.sim` (`geometry`: `Arena`, batched `cast_rays`, swept-disc `segment_hits`, `clearance`,
+     `occupancy_grid`; `kinematics`; `sensors`: `RangeSensor`, `hc_sr04`, `lidar`; `layouts`; `world`: `World`;
+     `render`: the arena as an RGB array) imports only NumPy and the standard library, never Gymnasium or `rl_core`.
+   - `rl_navigation.gym_env` (`NavigationGymEnv`) is the Gymnasium environment over the simulator, and importing it
+     registers `Navigation-v0` and `NavigationContinuous-v0`. It imports Gymnasium and `rl_navigation.sim` only, so
+     `import rl_navigation.gym_env; gym.make("NavigationContinuous-v0")` works without the training framework.
+   - `rl_navigation.environments` (`NavigationEnv`, a `BaseEnvWrapper`) and `rl_navigation.benchmark` (the two
+     challenges) are the framework's layer, as in every other challenge package.
+
+   `rl_navigation/__init__.py` imports nothing, so importing a subpackage loads only what that subpackage needs.
 3. **Discrete & Continuous Symmetry**: Shared base interfaces support discrete action selection and continuous
    bounded control (Gaussian policies).
 4. **Structured Artifact Scoping**: Generated logs, checkpoints, plots, and videos are partitioned deterministically
@@ -134,10 +144,12 @@ flowchart TD
         Acrobot["rl_acrobot: AcrobotEnv (Discrete)"]
         MountainCar["rl_mountaincar: MountainCarEnv (Discrete and Continuous)"]
         LunarLander["rl_lunarlander: LunarLanderEnv (Discrete and Continuous, Box2D)"]
+        Navigation["rl_navigation: NavigationEnv (Discrete and Continuous)"]
     end
 
-    subgraph Libraries ["Libraries (no Gymnasium, no rl_core)"]
-        NavSim["rl_navigation.sim: NumPy simulator (arena, ray casting, sensors, layouts, World)"]
+    subgraph Libraries ["Libraries (no rl_core)"]
+        NavGym["rl_navigation.gym_env: Navigation-v0, NavigationContinuous-v0 (Gymnasium + sim only)"]
+        NavSim["rl_navigation.sim: NumPy simulator (arena, ray casting, sensors, layouts, World, render)"]
     end
 
     subgraph Core ["rl_core Framework"]
@@ -180,6 +192,10 @@ flowchart TD
     Pendulum --> EnvBase
     Acrobot --> EnvBase
     MountainCar --> EnvBase
+    LunarLander --> EnvBase
+    Navigation --> EnvBase
+    Navigation --> NavGym
+    NavGym --> NavSim
 ```
 
 ---
@@ -526,7 +542,15 @@ plots/
      reset so it sees the new draw); both default to doing nothing. A setting a curriculum may change between
      episodes is listed in `SCHEDULABLE_SETTINGS` (the base lists `obs_noise_std`) and checked in `_checked_setting`,
      which the constructor uses too; `apply_settings` then changes it, all or nothing, if it was
-     on at construction (a randomization keeps its parameters and their order of draws).
+     on at construction (a randomization keeps its parameters and their order of draws). The base's
+     `_checked_setting` already checks the shared noise levels, `obs_noise_std` and `action_noise_std` (finite, not
+     negative) and `action_noise_prob` (in [0, 1]), for a wrapper that lists them; the subclass handles only its own
+     names, such as `domain_randomization`, and passes the rest up. A randomization is checked by
+     `rl_core.environments.checked_randomization(value, RANDOMIZABLE_PARAMETERS, bounds)`, which matches names
+     case-insensitively against the wrapper's `RANDOMIZABLE_PARAMETERS` (aliases mapped to a canonical name), refuses
+     a name given twice, and checks each `[min, max]` against that name's `ParameterBounds` (`low`, `high`,
+     `positive`; `POSITIVE` for a physical length, mass or gravity). Pendulum and Navigation use it; CartPole
+     still has its own validator.
    - `environments/make_env.py`: `make_env`, an `ENV_DEFAULTS` dict naming each environment setting the challenge
      supports with its default (spreading `rl_core.environments.OBSERVATION_DEFAULTS` into it), and
      `make_env_from_config`, which reads them with `rl_core.utils.config.read_env_settings`: null takes the
@@ -544,7 +568,8 @@ plots/
      config's `environment.name` exactly (`select_challenge`), or the one `--challenge` names, and build through it, so
      no script needs an edit. Two challenges may share an environment id; the config then needs `--challenge`.
      One package may hold several challenges sharing a wrapper, each with its own `ENV_DEFAULTS`-style table and
-     factory (`rl_mountaincar` and `rl_lunarlander`: `make_env_from_config` and `make_continuous_env_from_config`).
+     factory (`rl_mountaincar`, `rl_lunarlander` and `rl_navigation`: `make_env_from_config` and
+     `make_continuous_env_from_config`).
      `discover_challenges()` imports every `src/rl_*/benchmark.py`, so the runner needs no edit; a package that fails to
      import is reported with a warning, in `run_benchmark`'s unknown-challenge error and at the end of `src/benchmark.py
      --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the base class provides
