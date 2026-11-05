@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from rl_core.environments import BaseEnvWrapper, checked_range
+from rl_core.seeding import WRAPPER_STREAM, derive_rng
 
 
 class _ActionLog(gym.Wrapper):
@@ -134,3 +135,64 @@ def test_checked_range_returns_floats():
 def test_checked_range_rejects_bad_ranges_naming_the_parameter(low, high, message):
     with pytest.raises(ValueError, match=f"range for 'gravity' {message}"):
         checked_range("gravity", low, high)
+
+
+class _ProbeEnv(gym.Env):
+    """Reads ``gain`` in ``reset`` and keeps what it saw; ``option`` is a make() keyword."""
+
+    observation_space = gym.spaces.Box(-1.0, 1.0, (1,), np.float32)
+    action_space = gym.spaces.Discrete(2)
+
+    def __init__(self, render_mode=None, option="default"):
+        self.option = option
+        self.gain = -1.0
+        self.gains_seen = []
+
+    def reset(self, *, seed=None, options=None):
+        super().reset(seed=seed)
+        self.gains_seen.append(self.gain)
+        return np.zeros(1, np.float32), {}
+
+    def step(self, action):
+        return np.zeros(1, np.float32), 0.0, False, False, {}
+
+
+gym.register("ProbeEnv-v0", entry_point=_ProbeEnv)
+
+
+class _Randomized(BaseEnvWrapper):
+    """Draws ``gain`` from the wrapper generator at the start of each episode."""
+
+    def __init__(self, seed=None, **make_kwargs):
+        super().__init__("ProbeEnv-v0", None, 5, seed, 0.0)
+        self._make_env(**make_kwargs)
+
+    def _apply_domain_randomization(self):
+        self.env.unwrapped.gain = float(self._np_random.uniform(1.0, 2.0))
+
+
+def test_the_inner_reset_sees_the_gain_drawn_for_its_own_episode():
+    env = _Randomized(seed=7)
+    for _ in range(3):
+        env.reset()
+    rng = derive_rng(7, WRAPPER_STREAM)
+    drawn = [float(rng.uniform(1.0, 2.0)) for _ in range(3)]
+    assert env.env.unwrapped.gains_seen == drawn
+    env.close()
+
+
+def test_a_reset_seed_restarts_the_draws_the_inner_reset_sees():
+    env = _Randomized(seed=7)
+    env.reset()
+    env.reset(seed=3)
+    expected = float(derive_rng(3, WRAPPER_STREAM).uniform(1.0, 2.0))
+    assert env.env.unwrapped.gains_seen[-1] == expected
+    env.close()
+
+
+def test_extra_make_keywords_reach_gym_make():
+    custom, default = _Randomized(option="custom"), _Randomized()
+    assert custom.env.unwrapped.option == "custom"
+    assert default.env.unwrapped.option == "default"
+    custom.close()
+    default.close()
