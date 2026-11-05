@@ -155,7 +155,11 @@ foundation, one robotics skill per step: sensing, state estimation, mapping and 
 real hardware. The maintainer has an HC-SR04 ultrasonic sensor, a wheeled robot base and a lidar or depth camera.
 The core stays plain Python with no ROS dependency; ROS 2 comes as thin nodes at the hardware step. Each simulated
 piece is tested against the simulator's ground truth, so the real robot later meets code that is known to be
-right in simulation. Step 1 is a full item; steps 2 to 5 are sketches to turn into full items when picked.
+right in simulation. The goal is a navigation library other projects import (the maintainer, 2026-11-04: a
+Jetson robot built on it): `rl_navigation.sim` and the later estimation, mapping and planning modules import
+neither Gymnasium nor `rl_core`, and a trained policy reaches the robot through the ONNX or C export, so the
+robot needs neither the trainer nor the agents. Step 1 is a full item; steps 2 to 5 are sketches to turn into
+full items when picked.
 
 - [~] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04; PR 2 of 5, the `sim/` library)
   - **Description**: A 2D Gymnasium environment and challenge package: a differential-drive robot (unicycle
