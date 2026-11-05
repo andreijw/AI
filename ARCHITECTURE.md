@@ -23,6 +23,9 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │  rl_lunarlander  LunarLanderEnv  LunarLanderChallenge  discrete; Box2D      │
 │                                  LunarLanderContinuousChallenge  continuous │
 │                                                                             │
+│  rl_navigation   sim/ library only: NumPy, no gymnasium, no rl_core;        │
+│                  no benchmark.py yet, so discovery skips it                 │
+│                                                                             │
 │  Each holds a BaseEnvWrapper subclass, ENV_DEFAULTS + make_env_from_config, │
 │  and a BenchmarkChallenge subclass with AGENT_CLASSES and CONFIG_MAP        │
 └─────────────────────────────────────┬───────────────────────────────────────┘
@@ -55,6 +58,11 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 1. **Core Decoupling**: Algorithms and trainers in `rl_core` have zero coupling to specific Gymnasium environments.
 2. **Challenge Isolation**: Challenge-specific environments, physics domain randomizations, and configs reside in
    independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`, `rl_mountaincar`, `rl_lunarlander`).
+   `rl_navigation` (Phase 8) is a library first: `rl_navigation/__init__.py` imports nothing, and
+   `rl_navigation.sim` (`geometry`: `Arena`, batched `cast_rays`, swept-disc `segment_hits`, `clearance`,
+   `occupancy_grid`; `kinematics`; `sensors`: `RangeSensor`, `hc_sr04`, `lidar`; `layouts`; `world`: `World`)
+   imports only NumPy and the standard library, never Gymnasium or `rl_core`, so a robot's own code can import it
+   (`tests/test_import_footprint.py`). The Gymnasium environment and the challenge will be layers over it.
 3. **Discrete & Continuous Symmetry**: Shared base interfaces support discrete action selection and continuous
    bounded control (Gaussian policies).
 4. **Structured Artifact Scoping**: Generated logs, checkpoints, plots, and videos are partitioned deterministically
@@ -126,6 +134,10 @@ flowchart TD
         Acrobot["rl_acrobot: AcrobotEnv (Discrete)"]
         MountainCar["rl_mountaincar: MountainCarEnv (Discrete and Continuous)"]
         LunarLander["rl_lunarlander: LunarLanderEnv (Discrete and Continuous, Box2D)"]
+    end
+
+    subgraph Libraries ["Libraries (no Gymnasium, no rl_core)"]
+        NavSim["rl_navigation.sim: NumPy simulator (arena, ray casting, sensors, layouts, World)"]
     end
 
     subgraph Core ["rl_core Framework"]

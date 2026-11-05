@@ -72,6 +72,8 @@ AI/
 │   ├── rl_lunarlander/          # LunarLander-v3 and LunarLanderContinuous-v3 (Box2D) challenges
 │   │   ├── environments/        # Lunar lander wrapper (observation noise) and a factory for each id
 │   │   └── benchmark.py         # Both LunarLander benchmark challenge implementations
+│   ├── rl_navigation/           # Range-sensor robot navigation (Phase 8); not a challenge yet
+│   │   └── sim/                 # NumPy-only simulator: arena, ray casting, sensors, layouts, World
 │   └── benchmark.py             # Benchmark runner & CLI (finds challenges through rl_core)
 ├── tests/                       # Unit & integration test suites
 ├── configs/                     # YAML hyperparameter configurations
