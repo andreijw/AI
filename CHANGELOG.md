@@ -34,6 +34,12 @@ Acrobot-v1) and
 
 ### Changed
 
+- **Environment hooks for the navigation challenge** (`feature/navigation-env-hooks`; PR 1 of 5 of the roadmap item
+  "Range-sensor navigation environment"): `BaseEnvWrapper._make_env` forwards extra keywords to `gym.make`, for an
+  environment with constructor options, and `reset` applies domain randomization before the inner environment's
+  reset, so a parameter that reset reads (such as an obstacle count) applies to the episode it was drawn for.
+  CartPole and Pendulum, the only environments that randomize, read none at reset, so their training is
+  bit-for-bit unchanged (the golden tests, and the review's side-by-side run of both orders with resume).
 - **Observation normalisation for the continuous Actor-Critic** (`feature/code-health-trials`):
   `configs/pendulum_actor_critic.yaml` sets `normalize_observations: true` (the maintainer's decision). Pendulum-v1,
   1,000,000 steps, through the benchmark, paired against the config without it: on seeds 1 to 5 the final
