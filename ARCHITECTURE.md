@@ -94,7 +94,9 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    any checkpoint save (`BaseAgent.end_episode`, a no-op by default). `update` itself no longer resets it, so an agent
    updated mid-episode keeps its noise process running. TD3 (`TD3Agent`, a `DDPGAgent` subclass) adds a second critic
    and target critic (taking the smaller target), target-policy smoothing noise drawn from its own seed stream, and
-   actor and target updates on every `policy_delay`-th gradient step. Both build on `OffPolicyAgent`
+   actor and target updates on every `policy_delay`-th gradient step. SAC (`SACAgent`) has twin critics and their
+   targets, a squashed Gaussian actor with no target, and a learned temperature `log_ent_coef`, a one-parameter group
+   saved with its Adam; its update's noise comes from its own seed stream. All three build on `OffPolicyAgent`
    (`rl_core/agents/off_policy.py`), which holds what a replay-buffer agent for bounded continuous actions shares: the
    common config keys with each class's `DEFAULTS`, the action bounds, the replay buffer, warm-up and `select_action`
    (the subclass supplies `_training_action`), when `update` trains, the critic loss and one step for each critic
@@ -292,6 +294,15 @@ classDiagram
         #_train_steps(num_updates) dict
     }
 
+    class SACAgent {
+        +bool learns_ent_coef
+        +float ent_coef
+        +float target_entropy
+        #dict _actor, _critic, _critic_2, _target_critic, _target_critic_2, _log_ent_coef
+        #_policy(obs, eps) PolicySample
+        #_train_steps(num_updates) dict
+    }
+
     class DDPGAgent {
         +BACKENDS = torch: TorchDDPGAgent
         #dict _actor, _critic, _target_actor, _target_critic
@@ -311,6 +322,7 @@ classDiagram
     ContinuousActorCriticBase <|-- ContinuousPPOAgent
     BaseAgent <|-- OffPolicyAgent
     OffPolicyAgent <|-- DDPGAgent
+    OffPolicyAgent <|-- SACAgent
     DDPGAgent <|-- TorchDDPGAgent
     DDPGAgent <|-- TD3Agent
     TorchDDPGAgent <|-- TorchTD3Agent
@@ -357,7 +369,7 @@ before changing anything, a checkpoint saved with other values. An agent with `n
 a running mean and variance of its inputs (`rl_core.agents.observation_normalizer.RunningMeanStd`, as SB3's
 `VecNormalize`); `Trainer` passes every observation through `BaseAgent.normalize_observation` once, updating the
 statistics in training and only reading them in evaluation, and the checkpoint holds them as `obs_norm_*`. For the
-replay-buffer agents (DQN, DDPG, TD3) the trainer's batch also carries `raw_observations` and
+replay-buffer agents (DQN, DDPG, TD3, SAC) the trainer's batch also carries `raw_observations` and
 `raw_next_observations`: the `ReplayBuffer` holds the agent's statistics, stores the raw observations and normalises
 each sampled batch with the statistics as they are then, as SB3 does, so no stored input goes stale. Beside it the
 trainer writes `trainer_episode_<n>.npz` (episode and step counts, reward and length histories, the update-metric

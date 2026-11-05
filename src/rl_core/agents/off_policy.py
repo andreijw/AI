@@ -1,4 +1,4 @@
-"""What the replay-buffer agents for continuous actions share: DDPG and TD3."""
+"""What the replay-buffer agents for continuous actions share: DDPG, TD3 and SAC."""
 
 from __future__ import annotations
 
@@ -23,8 +23,9 @@ from rl_core.utils.config_values import (
 
 from .base_agent import BaseAgent
 from .bounds import action_bounds
+from .inference import DenseLayer, InferencePolicy
 from .mid_episode import MidEpisodeUpdates
-from .mlp import Params, mlp_backward, mlp_forward
+from .mlp import Params, layer_count, mlp_backward, mlp_forward
 from .optim import Adam
 from .replay_buffer import ReplayBuffer
 
@@ -79,6 +80,7 @@ class OffPolicyAgent(MidEpisodeUpdates, BaseAgent):
     * The critic loss ``mean ½ (Q(s, a) - y)²`` and a critic step over the critics
       ``_critic_names`` lists; one Adam step (``_apply``); Polyak averaging of the target pairs
       ``_target_names`` lists.
+    * The export policy of a tanh-squashed actor (``_tanh_scale_policy``).
     * Checkpoints of every network ``_networks`` returns and every Adam of
       ``_optimizers_by_net``, the counters and the replay buffer; loading refuses a file without
       one of the networks (another agent's) or with other shapes.
@@ -319,6 +321,23 @@ class OffPolicyAgent(MidEpisodeUpdates, BaseAgent):
         for online, target in self._target_pairs():
             for name in online:
                 target[name] = self.tau * online[name] + (1.0 - self.tau) * target[name]
+
+    def _tanh_scale_policy(self, actor: Params) -> InferencePolicy:
+        """The greedy policy of an actor MLP: ReLU on every layer but the last, the last cut to
+        its first ``action_dim`` outputs (all of a deterministic actor's; a squashed Gaussian's
+        mean), then ``bias + scale · tanh``."""
+        count, act_dim = layer_count(actor), self.action_dim
+        last = count - 1
+        layers = [DenseLayer(actor[f"W{i}"], actor[f"b{i}"], relu=True) for i in range(last)]
+        layers.append(
+            DenseLayer(actor[f"W{last}"][:, :act_dim], actor[f"b{last}"][:act_dim], relu=False)
+        )
+        return InferencePolicy(
+            layers=tuple(layers),
+            head="tanh_scale",
+            action_low=self.action_low,
+            action_high=self.action_high,
+        )
 
     # ------------------------------------------------------------------
     # BaseAgent interface

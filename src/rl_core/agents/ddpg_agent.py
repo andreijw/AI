@@ -8,8 +8,8 @@ from typing import Any, ClassVar
 import numpy as np
 
 from .exploration_noise import make_exploration_noise
-from .inference import DenseLayer, InferencePolicy
-from .mlp import Params, init_mlp, layer_count, mlp_backward, mlp_forward
+from .inference import InferencePolicy
+from .mlp import Params, init_mlp, mlp_backward, mlp_forward
 from .off_policy import Array, OffPolicyAgent, add_metrics, global_norm, mean_metrics
 from .optim import Adam
 
@@ -183,13 +183,4 @@ class DDPGAgent(OffPolicyAgent):
 
     def _inference_network(self) -> InferencePolicy:
         """The actor: ReLU on every layer but the last, then ``bias + scale · tanh``."""
-        actor = self._networks()["actor"]
-        count = layer_count(actor)
-        return InferencePolicy(
-            layers=tuple(
-                DenseLayer(actor[f"W{i}"], actor[f"b{i}"], relu=i < count - 1) for i in range(count)
-            ),
-            head="tanh_scale",
-            action_low=self.action_low,
-            action_high=self.action_high,
-        )
+        return self._tanh_scale_policy(self._networks()["actor"])

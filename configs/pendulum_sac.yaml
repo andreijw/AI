@@ -1,0 +1,42 @@
+# Pendulum SAC Training Configuration
+# rl-baselines3-zoo's SAC settings for Pendulum-v1 (hyperparams/sac.yml: learning rate 1e-3, the rest SB3's SAC
+# defaults), with one departure: 40,000 steps instead of 20,000, as pendulum_td3.yaml, so a 100-episode training
+# window fits, and 64x64 networks instead of SB3's 256x256, as pendulum_ddpg.yaml and pendulum_td3.yaml (the
+# maintainer's decision, 2026-11-04: measured at 64x64; 256x256 takes about an hour a seed in NumPy, not measured).
+# Seeds 1 to 5 (2026-11-04): all solve -200 at 21,800 to 23,200 steps and hold; greedy evaluation -157 +/- 20.
+
+environment:
+  name: "Pendulum-v1"
+  render_mode: null
+  max_episode_steps: 200
+  seed: 42
+
+agent:
+  type: "sac"
+  config:
+    hidden_sizes: [64, 64]     # Actor and both critics' hidden layers, units (SB3: [256, 256]; see the header)
+    learning_rate: 0.001       # Adam step size for actor, critics and log temperature (rl-zoo)
+    gamma: 0.99                # Discount factor per step: horizon ~100 of the 200-step episode (SB3 default)
+    tau: 0.005                 # Polyak rate of the target critics per gradient step: half-life ~139 steps (SB3)
+    batch_size: 256            # Mini-batch size, transitions (SB3 default)
+    buffer_capacity: 1000000   # Replay buffer size, transitions; never fills in 40,000 steps (SB3 default)
+    learning_starts: 100       # Uniform random training actions before learning; training starts once the
+                               # buffer holds a batch, at step 256 (SB3 default)
+    updates_per_step: 1.0      # Gradient steps per stored transition (SB3 train_freq 1, gradient_steps 1)
+    ent_coef: auto             # Temperature alpha: learned from 1.0 (auto), from x (auto_<x>), or fixed (a number)
+    target_entropy: auto       # Entropy alpha steers towards, nats of the [-1, 1] action: auto = -action size
+    optimizer: adam
+    seed: 42
+
+training:
+  total_steps: 40000  # Environment steps: twice rl-zoo's 20,000, as a 100-episode window needs room
+  max_steps_per_episode: 200
+  update_every: 1  # Update after every environment step, as SB3 (train_freq 1)
+  eval_frequency: 25
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

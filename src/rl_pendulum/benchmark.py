@@ -11,6 +11,7 @@ from rl_core.agents import (
     ContinuousPPOAgent,
     ContinuousRandomAgent,
     DDPGAgent,
+    SACAgent,
     TD3Agent,
 )
 from rl_core.challenges import (
@@ -33,6 +34,7 @@ class PendulumChallenge(BenchmarkChallenge):
         "ppo": ContinuousPPOAgent,
         "ddpg": DDPGAgent,
         "td3": TD3Agent,
+        "sac": SACAgent,
     }
     CONFIG_MAP: ClassVar[dict[str, str]] = {
         "random": "pendulum_default.yaml",
@@ -40,6 +42,7 @@ class PendulumChallenge(BenchmarkChallenge):
         "ppo": "pendulum_ppo.yaml",
         "ddpg": "pendulum_ddpg.yaml",
         "td3": "pendulum_td3.yaml",
+        "sac": "pendulum_sac.yaml",
     }
 
     @property

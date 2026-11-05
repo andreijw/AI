@@ -22,6 +22,7 @@ from rl_core.agents import (
     DQNAgent,
     RandomAgent,
     ReinforceAgent,
+    SACAgent,
     TD3Agent,
 )
 from rl_core.agents.base_agent import BaseAgent
@@ -257,7 +258,7 @@ def _steps(agent):
     return c["gradient_steps"] if "gradient_steps" in c else c["update_counter"]
 
 
-@pytest.mark.parametrize("cls", [DDPGAgent, TD3Agent])
+@pytest.mark.parametrize("cls", [DDPGAgent, TD3Agent, SACAgent])
 def test_ddpg_half_an_update_per_transition_holds_across_one_transition_chunks(cls):
     agent = _ddpg(cls, updates_per_step=0.5)
     agent.enable_mid_episode_updates(1)
@@ -266,7 +267,7 @@ def test_ddpg_half_an_update_per_transition_holds_across_one_transition_chunks(c
     assert _steps(agent) - start == 3, "6 transitions at 0.5 must give 3 gradient steps, not 6."
 
 
-@pytest.mark.parametrize("cls", [DDPGAgent, TD3Agent])
+@pytest.mark.parametrize("cls", [DDPGAgent, TD3Agent, SACAgent])
 def test_ddpg_without_mid_episode_updates_rounds_each_call_up_as_before(cls):
     agent = _ddpg(cls, updates_per_step=0.5)
     start = _steps(agent)

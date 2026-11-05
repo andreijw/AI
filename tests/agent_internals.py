@@ -11,7 +11,8 @@ Weights are keyed by the names the agent's checkpoint uses (``W1``, ``b1``, ``W2
 ``W1``, ``b1``, ``W_pi``, ``b_pi``, ``W_v``, ``b_v`` for the discrete actor-critic agents; ``W1``, ``b1``,
 ``W_mu``, ``b_mu``, ``log_std``, ``W_v``, ``b_v`` for the Gaussian ones; ``W1`` … ``b2`` and
 ``target_W1`` … ``target_b2`` for DQN, plus ``W1_value`` … ``b2_value`` and their targets for a
-dueling DQN; ``actor_W0``, ``critic_b1``, ``target_actor_W0`` … for DDPG).
+dueling DQN; ``actor_W0``, ``critic_b1``, ``target_actor_W0`` … for DDPG; SAC's networks the same way,
+plus its log temperature ``log_ent_coef_value``).
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from rl_core.agents import (
     DQNAgent,
     PPOAgent,
     ReinforceAgent,
+    SACAgent,
     TD3Agent,
 )
 from rl_core.agents.actor_critic_base import ActorCriticBase
@@ -72,16 +74,17 @@ def weight_names(agent: LearningAgent) -> tuple[str, ...]:
         return (*online, *(f"target_{name}" for name in online))
     if isinstance(agent, OffPolicyAgent):
         return tuple(
-            f"{net}_{name}" for net, params in ddpg_networks(agent).items() for name in params
+            f"{net}_{name}" for net, params in off_policy_networks(agent).items() for name in params
         )
     return ACTOR_CRITIC_WEIGHTS
 
 
-def _ddpg_slot(agent: OffPolicyAgent, name: str) -> tuple[dict[str, np.ndarray], str]:
-    """The network dict and key that hold DDPG or TD3 weight ``name`` (``target_actor_W0``,
-    ``critic_2_b1`` …): the network's name, then the layer's (``W0``, ``b1``)."""
+def _off_policy_slot(agent: OffPolicyAgent, name: str) -> tuple[dict[str, np.ndarray], str]:
+    """The parameter group and key that hold DDPG, TD3 or SAC weight ``name``
+    (``target_actor_W0``, ``critic_2_b1``, ``log_ent_coef_value`` …): the group's name, then the
+    parameter's (``W0``, ``b1``, ``value``)."""
     net, _, key = name.rpartition("_")
-    networks = ddpg_networks(agent)
+    networks = off_policy_networks(agent)
     if net not in networks or key not in networks[net]:
         raise KeyError(name)
     return networks[net], key
@@ -89,14 +92,14 @@ def _ddpg_slot(agent: OffPolicyAgent, name: str) -> tuple[dict[str, np.ndarray],
 
 def _read(agent: LearningAgent, name: str) -> Any:
     if isinstance(agent, OffPolicyAgent):
-        params, key = _ddpg_slot(agent, name)
+        params, key = _off_policy_slot(agent, name)
         return params[key]
     return getattr(agent, f"_{name}")
 
 
 def _write(agent: LearningAgent, name: str, value: Any) -> None:
     if isinstance(agent, OffPolicyAgent):
-        params, key = _ddpg_slot(agent, name)
+        params, key = _off_policy_slot(agent, name)
         params[key] = value
     else:
         setattr(agent, f"_{name}", value)
@@ -176,7 +179,7 @@ def gradient_check_parameters(
     For DQN these are the online network's (its target network gets no gradient). ``b_v`` is a
     Python float, which cannot be perturbed in place, so a one-element array stands in for it.
     The loss closure calls ``sync()`` first to copy that array back onto the agent. DDPG's
-    networks are already dicts of live arrays: see :func:`ddpg_networks`.
+    networks are already dicts of live arrays: see :func:`off_policy_networks`.
     """
     names = dqn_online_weights(agent) if isinstance(agent, DQNAgent) else weight_names(agent)
     boxed = {name: np.array([getattr(agent, f"_{name}")]) for name in _FLOAT_WEIGHTS & set(names)}
@@ -412,11 +415,12 @@ def apply_gradients(agent: DQNAgent, grads: dict[str, np.ndarray]) -> None:
     agent._apply_gradients(grads)
 
 
-def ddpg_networks(agent: OffPolicyAgent) -> dict[str, dict[str, np.ndarray]]:
-    """DDPG's four networks as live parameter dicts: ``actor``, ``critic``, ``target_actor``,
-    ``target_critic``. A gradient check perturbs them in place; a test may write a layer. A
-    PyTorch-backend agent first copies everything from its device (it copies only the actor after
-    an update)."""
+def off_policy_networks(agent: OffPolicyAgent) -> dict[str, dict[str, np.ndarray]]:
+    """Every parameter group of a replay-buffer agent as live parameter dicts, by checkpoint name:
+    DDPG's ``actor``, ``critic``, ``target_actor``, ``target_critic``; TD3's and SAC's second
+    critic and its target; SAC's ``log_ent_coef``. A gradient check perturbs them in place; a test
+    may write a layer. A PyTorch-backend agent first copies everything from its device (it copies
+    only the actor after an update)."""
     sync = getattr(agent, "_sync_numpy", None)
     if sync is not None:
         sync()
@@ -427,7 +431,7 @@ def actor_forward(
     agent: DDPGAgent, observations: np.ndarray, params: dict[str, np.ndarray] | None = None
 ) -> tuple[np.ndarray, np.ndarray, Any]:
     """``(mu, tanh output, cache)`` of the actor, or of ``params`` laid out like it."""
-    actor = ddpg_networks(agent)["actor"] if params is None else params
+    actor = off_policy_networks(agent)["actor"] if params is None else params
     return agent._actor_forward(observations, actor)
 
 
@@ -438,7 +442,7 @@ def critic_forward(
     params: dict[str, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, Any]:
     """``(Q, cache)`` of the critic, or of ``params`` laid out like it."""
-    critic = ddpg_networks(agent)["critic"] if params is None else params
+    critic = off_policy_networks(agent)["critic"] if params is None else params
     return agent._critic_forward(observations, actions, critic)
 
 
@@ -498,6 +502,60 @@ def actor_loss_and_grads(
 def polyak_update(agent: DDPGAgent) -> None:
     """Move DDPG's target networks a fraction ``tau`` towards the online ones."""
     agent._polyak()
+
+
+def make_constant(params: dict[str, np.ndarray], value: Any) -> None:
+    """Make an MLP's parameter dict output ``value`` (a number, or one per output) for every input:
+    zero every weight and bias, then set the last bias to ``value``."""
+    for name in params:
+        params[name][...] = 0.0
+    last = max(int(name[1:]) for name in params)
+    params[f"b{last}"][...] = value
+
+
+# ---------------------------------------------------------------------------
+# SAC (tests/test_sac_agent.py)
+# ---------------------------------------------------------------------------
+
+
+def sac_policy(agent: SACAgent, observations: np.ndarray, eps: np.ndarray) -> Any:
+    """SAC's squashed Gaussian sample for ``observations`` (B, O) with the given standard normal
+    noise ``eps`` (B, A): ``mean``, ``log_std_raw``, ``log_std``, ``pre_tanh``, ``squashed``,
+    ``action``, ``log_prob`` (B,) and the actor's forward ``cache``."""
+    return agent._policy(observations, eps)
+
+
+def sac_actor_loss_and_grads(
+    agent: SACAgent, observations: np.ndarray, eps: np.ndarray, alpha: float
+) -> tuple[dict[str, float], dict[str, np.ndarray]]:
+    """SAC's actor loss ``mean(alpha log pi - min(Q1, Q2))`` and its gradients for the actor, with
+    the noise, the temperature and both critics held constant."""
+    return agent._actor_loss_and_grads(observations, eps, alpha)
+
+
+def soft_targets(
+    agent: SACAgent,
+    rewards: np.ndarray,
+    next_obs: np.ndarray,
+    terminated: np.ndarray,
+    eps_next: np.ndarray,
+    alpha: float,
+) -> np.ndarray:
+    """SAC's TD targets: the smaller target critic at the online actor's next action, minus
+    ``alpha`` times its log-probability, with the given next-state noise."""
+    return agent._soft_targets(rewards, next_obs, terminated, eps_next, alpha)
+
+
+def ent_coef_loss_and_grads(
+    agent: SACAgent, log_prob: np.ndarray
+) -> tuple[dict[str, float], dict[str, np.ndarray]]:
+    """SAC's temperature loss and its gradient for ``log_ent_coef``, ``log_prob`` held constant."""
+    return agent._ent_coef_loss_and_grads(log_prob)
+
+
+def policy_noise_generator(agent: SACAgent) -> np.random.Generator:
+    """The generator SAC draws its update's policy noise from (the live one)."""
+    return agent._policy_noise_rng
 
 
 # ---------------------------------------------------------------------------

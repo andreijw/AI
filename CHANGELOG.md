@@ -16,6 +16,18 @@ Acrobot-v1) and
 
 ### Added
 
+- **Soft Actor-Critic** (`feature/sac-agent`; PR 2 of 4 of the roadmap item "SAC and BipedalWalker-v3"): `SACAgent`
+  in NumPy, as Stable-Baselines3 implements it: a squashed Gaussian actor, twin critics with Polyak targets and a
+  learned entropy temperature against a target entropy of minus the action size, with the numerically stable form of
+  the tanh correction. Built on `OffPolicyAgent`; its own random stream for the policy noise
+  (`AGENT_POLICY_NOISE_STREAM`); exports to ONNX and C (the greedy action, tanh of the mean). Gradient checks for the
+  actor, both critics and the temperature, and a float64 step checked against PyTorch autograd in review (actor
+  gradients to 1e-15). `configs/pendulum_sac.yaml`: rl-zoo's Pendulum settings (learning rate 1e-3, SB3's defaults
+  otherwise) for 40,000 steps with 64×64 networks, as DDPG and TD3 here (the maintainer's decision; SB3's 256×256
+  takes about an hour a seed in NumPy and was not measured). Through the benchmark, seeds 1 to 5: all solve -200 at
+  21,800 to 23,200 steps (TD3: 32,600 to 33,400) and hold, final 100-episode averages -135.9 to -163.8, greedy
+  evaluation -157 ± 20 (TD3: -157 ± 24); about 9 minutes a seed. The published Pendulum report has no SAC row yet
+  (the maintainer's decision).
 - **Observation normalisation for DQN, DDPG and TD3** (`feature/replay-obs-normalization`): `normalize_observations`
   is no longer refused for the replay-buffer agents. As Stable-Baselines3 does, the `ReplayBuffer` holds the agent's
   running statistics, stores the raw observations and normalises each sampled batch (observations and next

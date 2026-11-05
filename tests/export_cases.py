@@ -17,6 +17,7 @@ from rl_core.agents import (  # noqa: E402
     DQNAgent,
     PPOAgent,
     ReinforceAgent,
+    SACAgent,
     TD3Agent,
 )
 from rl_core.agents.inference import DenseLayer  # noqa: E402
@@ -42,13 +43,15 @@ CONTINUOUS = [
     (DDPGAgent, {"seed": 3, "hidden_sizes": [7, 5], **BOUNDS}),
     (DDPGAgent, {"seed": 3, "hidden_sizes": [7, 5], "normalize_observations": True, **BOUNDS}),
     (TD3Agent, {"seed": 3, "hidden_sizes": [6], **BOUNDS}),
+    (SACAgent, {"seed": 3, "hidden_sizes": [7, 5], **BOUNDS}),
+    (SACAgent, {"seed": 3, "hidden_sizes": [6], "normalize_observations": True, **BOUNDS}),
 ]
 EXPORTABLE = DISCRETE + CONTINUOUS
 # Cases whose action passes through tanh or whose input is normalised: huge inputs must saturate.
 SQUASHING = [
     c for c in CONTINUOUS if c[1].get("bounded_mean") or c[1].get("normalize_observations")
 ]
-SQUASHING += [c for c in CONTINUOUS if c[0] is DDPGAgent]
+SQUASHING += [c for c in CONTINUOUS if c[0] in (DDPGAgent, SACAgent)]
 NORMALISING = [c for c in EXPORTABLE if c[1].get("normalize_observations")]
 
 
