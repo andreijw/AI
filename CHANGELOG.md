@@ -12,6 +12,33 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-05
+
+### Added
+
+- **The navigation environment and challenges** (`feature/navigation-env`; PR 3 of 5 of the roadmap item
+  "Range-sensor navigation environment"): Gymnasium ids `Navigation-v0` (five actions: forward, two arcs, two spins)
+  and `NavigationContinuous-v0` (linear speed 0 to 0.5 m/s, no reverse, and turn rate up to 2 rad/s, clipped), 400
+  steps, on `rl_navigation.sim`. The raw environment, `rl_navigation/gym_env.py`, imports only Gymnasium and the
+  simulator (a subprocess test holds it), so other projects can `gym.make` it without the trainer. The observation is
+  the goal's distance, its bearing as cosine and sine, the last executed command and the range readings (HC-SR04 by
+  default, or a 64-beam lidar); the reward is 10 times the progress as a fraction of the start distance, -0.01 a step
+  and -10 on a collision (the maintainer's decision), so a crash never pays. A collision or the goal ends the episode.
+  `reset(options={"layout": ...})` fixes a layout. The `NavigationEnv` wrapper adds action noise, frame stacking and
+  domain randomization of wheel slip, sensor noise, dropout and obstacle count (checked against what the arena holds
+  before any episode, also in a curriculum or robustness sweep); a NumPy renderer draws `rgb_array` frames for
+  `record.py`. Challenges `navigation` and `navigation_continuous` with the random agent only and no solve threshold
+  yet; `configs/navigation_default.yaml` and `configs/navigation_continuous_default.yaml` (random, 40,000 steps).
+  Tests use hand-computed rewards, bearings and collisions; 19 of 19 mutations caught. Nothing is trained yet: the
+  PPO, DQN and TD3 configs are PR 4.
+
+### Changed
+
+- **One domain-randomization check for every wrapper** (`feature/navigation-env`): `checked_randomization` and
+  `ParameterBounds` in `rl_core.environments` check a randomization table against per-parameter bounds; Pendulum
+  uses it (its tests unchanged) and the navigation wrapper does, while CartPole keeps its own. The
+  `action_noise_std` and `action_noise_prob` checks moved into `BaseEnvWrapper`, with the same rules and messages.
+
 ## 2026-11-04
 
 ### Added

@@ -131,6 +131,7 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.sim.sensors",
         "rl_navigation.sim.layouts",
         "rl_navigation.sim.world",
+        "rl_navigation.sim.render",
     ],
 )
 def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
@@ -148,6 +149,26 @@ def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
     assert result.stdout.strip() == "[]", (
         f"Importing {module} loaded {result.stdout.strip()}: rl_navigation.sim may import only "
         "NumPy and the standard library, and rl_navigation/__init__.py nothing."
+    )
+
+
+def test_the_navigation_gymnasium_env_registers_its_ids_without_rl_core():
+    """rl_navigation.gym_env is the Gymnasium layer another project can use without the trainer:
+    importing it registers both ids and loads no rl_core module. A fresh process."""
+    code = (
+        "import sys; sys.path.insert(0, 'src'); "
+        "import gymnasium as gym; import rl_navigation.gym_env; "
+        "env = gym.make('NavigationContinuous-v0'); env.reset(seed=0); env.close(); "
+        "assert 'Navigation-v0' in gym.registry, sorted(gym.registry)[-5:]; "
+        "print(sorted(m for m in sys.modules if m.split('.')[0] == 'rl_core')[:5])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", (
+        f"rl_navigation.gym_env loaded {result.stdout.strip()}: it may import Gymnasium and "
+        "rl_navigation.sim only."
     )
 
 

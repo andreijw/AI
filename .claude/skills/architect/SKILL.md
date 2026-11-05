@@ -41,6 +41,7 @@ common in plans written by an eager author.
 | `src/rl_core/utils/` | Config, logging, video, plots | The I/O libraries (PyYAML, Matplotlib, moviepy) stay here; `__init__.py` never imports `visualization.py`, so training and the challenges load no Matplotlib (`tests/test_import_footprint.py`) |
 | `src/rl_core/challenges/` | `BenchmarkChallenge`, the challenge registry and `discover_challenges` | `rl_core`; it finds challenge packages by scanning, never by name |
 | `src/rl_<challenge>/` | One environment: wrapper, noise, domain randomization, `make_env` factories, the `BenchmarkChallenge` adapter in `benchmark.py` | `rl_core`; never another challenge, never `src/benchmark.py` |
+| `src/rl_navigation/sim/`, `src/rl_navigation/gym_env.py` | The navigation simulator, and the Gymnasium environment over it, both usable outside this framework (a robot's code, another project) | `sim/`: NumPy and the standard library only. `gym_env.py`: Gymnasium and `sim/` only. Neither imports `rl_core` (`tests/test_import_footprint.py`) |
 | `src/benchmark.py` | The benchmark runner and its command line | `rl_core`; challenges only through `discover_challenges` |
 | `train.py`, `record.py` | Command line: parse, build, call | Everything; they hold no algorithm logic |
 

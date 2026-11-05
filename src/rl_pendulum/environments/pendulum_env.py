@@ -9,10 +9,10 @@ from typing import Any, Unpack
 import numpy as np
 
 from rl_core.environments import (
+    POSITIVE,
     BaseEnvWrapper,
     ObservationOptions,
-    checked_range,
-    non_negative_setting,
+    checked_randomization,
 )
 
 
@@ -78,53 +78,13 @@ class PendulumEnv(BaseEnvWrapper):
 
     @classmethod
     def _checked_setting(cls, name: str, value: Any) -> Any:
-        if name == "action_noise_std":
-            return non_negative_setting(name, value)
         if name == "domain_randomization":
-            return cls._validate_domain_randomization(value)
+            return checked_randomization(
+                value,
+                cls.RANDOMIZABLE_PARAMETERS,
+                dict.fromkeys(cls.RANDOMIZABLE_PARAMETERS.values(), POSITIVE),
+            )
         return super()._checked_setting(name, value)
-
-    @classmethod
-    def _validate_domain_randomization(
-        cls,
-        domain_randomization: Mapping[str, Sequence[float] | tuple[float, float]] | None,
-    ) -> dict[str, tuple[float, float]]:
-        """Validate and normalize domain randomization configuration."""
-        if not domain_randomization:
-            return {}
-        if not isinstance(domain_randomization, Mapping):
-            raise ValueError("domain_randomization must be a mapping of parameter ranges.")
-
-        validated: dict[str, tuple[float, float]] = {}
-        for param, value in domain_randomization.items():
-            param_lower = param.lower()
-            if param_lower not in cls.RANDOMIZABLE_PARAMETERS:
-                supported = sorted(set(cls.RANDOMIZABLE_PARAMETERS.keys()))
-                raise ValueError(
-                    f"Unsupported domain randomization parameter '{param}'. "
-                    f"Supported parameters: {supported}."
-                )
-
-            canon_key = cls.RANDOMIZABLE_PARAMETERS[param_lower]
-            if canon_key in validated:
-                raise ValueError(
-                    f"Domain randomization parameter '{canon_key}' is given twice "
-                    f"(as '{param}' and an earlier name)"
-                )
-            if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-                val_tuple = tuple(value)
-            else:
-                val_tuple = value  # type: ignore[assignment]
-
-            if not isinstance(val_tuple, tuple) or len(val_tuple) != 2:
-                raise ValueError(
-                    f"Domain randomization range for '{param}' must be a 2-element sequence "
-                    f"[min, max], got: {value!r}"
-                )
-
-            validated[canon_key] = checked_range(param, *val_tuple, positive=True)
-
-        return validated
 
     def _apply_domain_randomization(self) -> None:
         """Apply domain randomization to physical environment attributes."""

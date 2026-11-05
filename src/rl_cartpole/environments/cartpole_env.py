@@ -106,10 +106,6 @@ class CartPoleEnv(BaseEnvWrapper):
 
     @classmethod
     def _checked_setting(cls, name: str, value: Any) -> Any:
-        if name == "action_noise_prob":
-            if not (0.0 <= value <= 1.0):
-                raise ValueError(f"action_noise_prob must be in the interval [0, 1], got {value!r}")
-            return float(value)
         if name == "domain_randomization":
             return cls._validate_domain_randomization(value)
         return super()._checked_setting(name, value)
