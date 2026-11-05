@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import Mapping
+from functools import reduce
 from typing import Any, ClassVar
 
 import numpy as np
@@ -304,6 +305,21 @@ class OffPolicyAgent(MidEpisodeUpdates, BaseAgent):
                 np.hypot(first["critic_grad_norm"], second["critic_grad_norm"])
             ),
         }
+
+    def _min_target_q(self, next_obs: Array, actions: Array) -> Array:
+        """The target critics' Q of ``actions`` at ``next_obs``, (B,): ``Q'`` for one critic,
+        ``min(Q1', Q2')`` for twins (each critic of :meth:`_critic_names` through its target)."""
+        networks, target_of = self._networks(), dict(self._target_names())
+        values = [
+            self._critic_forward(next_obs, actions, networks[target_of[name]])[0]
+            for name in self._critic_names()
+        ]
+        return reduce(np.minimum, values)
+
+    def _bootstrapped(self, rewards: Array, terminated: Array, next_values: Array) -> Array:
+        """``r + gamma (1 - terminated) next_values``, (B,): no bootstrap past a terminal state."""
+        not_done = 1.0 - np.asarray(terminated, dtype=np.float64)
+        return np.asarray(rewards, dtype=np.float64) + self.gamma * not_done * next_values
 
     def _apply(self, params: Params, optimizer: Adam, grads: Params) -> None:
         """One Adam step on ``params`` in place."""

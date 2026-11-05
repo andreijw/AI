@@ -12,10 +12,9 @@
 ## Project Standards
 
 Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥1.0**
-· **NumPy** agents, with an optional **PyTorch** backend for DDPG and TD3 only (`backend: torch`; see CONTRIBUTING.md
-"Framework Independence") · optional **Box2D** for LunarLander (`box2d` extra) · optional **onnx** and
-**onnxruntime** for the ONNX export (`onnx` extra) · **pytest** · **Ruff** (line length
-100) · **mypy**.
+· **NumPy** agents, with an optional **PyTorch** backend for DDPG, TD3 and SAC only (`backend: torch`; see
+CONTRIBUTING.md "Framework Independence") · optional **Box2D** for LunarLander (`box2d` extra) · optional **onnx**
+and **onnxruntime** for the ONNX export (`onnx` extra) · **pytest** · **Ruff** (line length 100) · **mypy**.
 
 - **Coding standards** → **[CONTRIBUTING.md](CONTRIBUTING.md)** §1–3.
 - **Feature/bug workflow** → **[CONTRIBUTING.md §4](CONTRIBUTING.md#4-feature--bug-workflow)**. Follow it in order for

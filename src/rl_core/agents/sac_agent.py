@@ -115,6 +115,7 @@ class SACAgent(OffPolicyAgent):
     Defaults are SB3's SAC defaults; ``configs/pendulum_sac.yaml`` is rl-zoo's Pendulum-v1 run.
     """
 
+    BACKENDS: ClassVar[dict[str, str]] = {"torch": "rl_core.agents.torch_sac_agent:TorchSACAgent"}
     DEFAULTS: ClassVar[Mapping[str, Any]] = {
         "hidden_sizes": [256, 256],
         "learning_rate": 3e-4,
@@ -213,11 +214,8 @@ class SACAgent(OffPolicyAgent):
         """``r + gamma (1 - terminated) (min(Q1', Q2')(s', a') - alpha log pi(a'|s'))``, (B,),
         with ``a'`` the online actor's sample at ``s'`` for the noise ``eps_next``."""
         nxt = self._policy(next_obs, eps_next)
-        q1, _ = self._critic_forward(next_obs, nxt.action, self._target_critic)
-        q2, _ = self._critic_forward(next_obs, nxt.action, self._target_critic_2)
-        soft_q = np.minimum(q1, q2) - alpha * nxt.log_prob
-        not_done = 1.0 - np.asarray(terminated, dtype=np.float64)
-        return np.asarray(rewards, dtype=np.float64) + self.gamma * not_done * soft_q
+        soft_q = self._min_target_q(next_obs, nxt.action) - alpha * nxt.log_prob
+        return self._bootstrapped(rewards, terminated, soft_q)
 
     def _actor_loss_and_grads(
         self, obs: Array, eps: Array, alpha: float, sample: PolicySample | None = None

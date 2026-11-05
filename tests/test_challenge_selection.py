@@ -59,7 +59,11 @@ EXPECTED_AGENTS = {
         "sac": SACAgent,
     },
     "lunarlander": {"random": RandomAgent, "dqn": DQNAgent},
-    "lunarlander_continuous": {"random": ContinuousRandomAgent, "td3": TD3Agent},
+    "lunarlander_continuous": {
+        "random": ContinuousRandomAgent,
+        "td3": TD3Agent,
+        "sac": SACAgent,
+    },
 }
 
 ENV_CLASSES = {

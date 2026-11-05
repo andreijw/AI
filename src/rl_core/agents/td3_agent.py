@@ -103,10 +103,7 @@ class TD3Agent(DDPGAgent):
     ) -> Array:
         """``r + gamma (1 - terminated) min(Q1', Q2')`` at the smoothed target actions, (B,)."""
         next_actions = self._target_actions(next_obs, noise)
-        q1, _ = self._critic_forward(next_obs, next_actions, self._target_critic)
-        q2, _ = self._critic_forward(next_obs, next_actions, self._target_critic_2)
-        not_done = 1.0 - np.asarray(terminated, dtype=np.float64)
-        return np.asarray(rewards, dtype=np.float64) + self.gamma * not_done * np.minimum(q1, q2)
+        return self._bootstrapped(rewards, terminated, self._min_target_q(next_obs, next_actions))
 
     # ------------------------------------------------------------------
     # Training

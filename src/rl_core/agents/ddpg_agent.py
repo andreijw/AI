@@ -92,9 +92,7 @@ class DDPGAgent(OffPolicyAgent):
     def _bellman_targets(self, rewards: Array, next_obs: Array, terminated: Array) -> Array:
         """``r + gamma (1 - terminated) Q'(s', mu'(s'))`` from the target networks, shape (B,)."""
         next_actions, _, _ = self._actor_forward(next_obs, self._target_actor)
-        next_q, _ = self._critic_forward(next_obs, next_actions, self._target_critic)
-        not_done = 1.0 - np.asarray(terminated, dtype=np.float64)
-        return np.asarray(rewards, dtype=np.float64) + self.gamma * not_done * next_q
+        return self._bootstrapped(rewards, terminated, self._min_target_q(next_obs, next_actions))
 
     def _actor_loss_and_grads(self, obs: Array) -> tuple[dict[str, float], Params]:
         """
