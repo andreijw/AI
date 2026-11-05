@@ -5,7 +5,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from rl_core.agents import BaseAgent, ContinuousRandomAgent, DQNAgent, RandomAgent, TD3Agent
+from rl_core.agents import (
+    BaseAgent,
+    ContinuousRandomAgent,
+    DQNAgent,
+    RandomAgent,
+    SACAgent,
+    TD3Agent,
+)
 from rl_core.challenges import (
     BenchmarkChallenge,
     ChallengeEnv,
@@ -56,10 +63,12 @@ class LunarLanderContinuousChallenge(BenchmarkChallenge):
     AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {
         "random": ContinuousRandomAgent,
         "td3": TD3Agent,
+        "sac": SACAgent,
     }
     CONFIG_MAP: ClassVar[dict[str, str]] = {
         "random": "lunarlander_continuous_default.yaml",
         "td3": "lunarlander_continuous_td3.yaml",
+        "sac": "lunarlander_continuous_sac.yaml",
     }
 
     @property

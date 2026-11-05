@@ -42,7 +42,7 @@ FACTORIES = {
 
 @pytest.mark.parametrize(
     ("key", "expected_agents"),
-    [("lunarlander", ["dqn", "random"]), ("lunarlander_continuous", ["random", "td3"])],
+    [("lunarlander", ["dqn", "random"]), ("lunarlander_continuous", ["random", "sac", "td3"])],
 )
 def test_lunarlander_challenges_are_discovered_and_selected_by_their_environment(
     key, expected_agents
@@ -146,6 +146,12 @@ def _torch_td3_agent() -> type:
     return TorchTD3Agent
 
 
+def _torch_sac_agent() -> type:
+    from rl_core.agents.torch_sac_agent import TorchSACAgent  # here, not above: torch is optional
+
+    return TorchSACAgent
+
+
 @needs_box2d
 @pytest.mark.parametrize(
     ("key", "agent_type", "expected_class", "action_dim"),
@@ -154,8 +160,15 @@ def _torch_td3_agent() -> type:
         ("lunarlander", "dqn", lambda: DQNAgent, 4),
         ("lunarlander_continuous", "random", lambda: ContinuousRandomAgent, 2),
         pytest.param("lunarlander_continuous", "td3", _torch_td3_agent, 2, marks=needs_torch),
+        pytest.param("lunarlander_continuous", "sac", _torch_sac_agent, 2, marks=needs_torch),
     ],
-    ids=["lunarlander-random", "lunarlander-dqn", "continuous-random", "continuous-td3"],
+    ids=[
+        "lunarlander-random",
+        "lunarlander-dqn",
+        "continuous-random",
+        "continuous-td3",
+        "continuous-sac",
+    ],
 )
 def test_setup_run_builds_each_agent_from_its_committed_config(
     key, agent_type, expected_class, action_dim
@@ -172,12 +185,13 @@ def test_setup_run_builds_each_agent_from_its_committed_config(
 
 
 @needs_box2d
-@pytest.mark.parametrize("agent_type", ["random", "td3"])
+@pytest.mark.parametrize("agent_type", ["random", "td3", "sac"])
 def test_the_continuous_agent_gets_the_environments_bounds_without_changing_the_callers_dict(
     agent_type,
 ):
     """Through agent_config too, since the random agent's default bounds are already [-1, 1] and
-    could not show a challenge that drops them. TD3 here is the NumPy agent (no backend key)."""
+    could not show a challenge that drops them. TD3 and SAC here are the NumPy agents (no backend
+    key)."""
     challenge = LunarLanderContinuousChallenge()
     env = challenge.make_env({"seed": 0}, render_mode=None)
     agent_config = {"seed": 0}

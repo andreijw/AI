@@ -25,6 +25,7 @@ from rl_core.agents import (
     PPOAgent,
     RandomAgent,
     ReinforceAgent,
+    SACAgent,
     TD3Agent,
 )
 from rl_core.seeding import WRAPPER_STREAM, derive_rng
@@ -44,6 +45,7 @@ CONTINUOUS = [
     (ContinuousPPOAgent, {"batch_size": 2}),
     (DDPGAgent, {"batch_size": 2, "learning_starts": 0, "hidden_sizes": [4, 4]}),
     (TD3Agent, {"batch_size": 2, "learning_starts": 0, "hidden_sizes": [4, 4]}),
+    (SACAgent, {"batch_size": 2, "learning_starts": 0, "hidden_sizes": [4, 4]}),
 ]
 # The PyTorch backend, where it is installed.
 CONTINUOUS += torch_backend_cases({"batch_size": 2, "learning_starts": 0, "hidden_sizes": [4, 4]})

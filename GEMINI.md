@@ -33,7 +33,9 @@ To optimize token usage and context window limits:
   * `src/rl_core/agents/`: Base agent interfaces (`BaseAgent`, `ActorCriticBase`, `ContinuousActorCriticBase`),
     discrete agents (`RandomAgent`, `ReinforceAgent`, `ActorCriticAgent`, `PPOAgent`, `DQNAgent`),
     continuous agents (`ContinuousRandomAgent`, `ContinuousActorCriticAgent`, `ContinuousPPOAgent`, `DDPGAgent`,
-    `TD3Agent`),
+    `TD3Agent`, `SACAgent`) and their replay-buffer base `OffPolicyAgent` (`off_policy.py`), the optional
+    PyTorch backends of the last three (`torch_ddpg_agent.py`, `torch_td3_agent.py`, `torch_sac_agent.py`, on
+    `TorchOffPolicyAgent` in `torch_off_policy.py`),
     `ReplayBuffer`, and the shared `mlp.py` (multi-layer networks), `bounds.py` (action bounds), `softmax.py`
     (the discrete policies' numerically stable softmax), `exploration_noise.py` (DDPG's Gaussian and
     Ornstein-Uhlenbeck noise), `observation_normalizer.py` (running observation statistics and `standardize`)

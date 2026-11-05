@@ -119,7 +119,7 @@ when picked.
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 
-- [ ] **SAC and BipedalWalker-v3 (Tier 3)** (picked 2026-11-04)
+- [~] **SAC and BipedalWalker-v3 (Tier 3)** (picked 2026-11-04; PR 3 of 4, the PyTorch SAC and LunarLanderContinuous)
   - **Description**: Soft Actor-Critic (Haarnoja et al. 2018, with the automatic entropy temperature of the
     follow-up paper, as Stable-Baselines3 implements it): a squashed Gaussian actor, twin critics with Polyak
     targets, and a learned temperature against a target entropy of minus the action size. In NumPy and on the

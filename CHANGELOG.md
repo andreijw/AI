@@ -26,6 +26,30 @@ Acrobot-v1) and
   exists; and a `World` that steps the robot with wheel slip. No environment, config or challenge yet. Tests use
   hand-computed distances and arcs; 38 of 38 mutations caught. One robot step with a sonar read runs at about 1,700
   a second on the Jetson's CPU.
+- **SAC on the PyTorch backend, and LunarLanderContinuous SAC** (`feature/torch-sac`; PR 3 of 4 of the roadmap item
+  "SAC and BipedalWalker-v3"): `TorchSACAgent` (`backend: torch`) on a new `TorchOffPolicyAgent` base, which now also
+  carries what `TorchDDPGAgent` and `TorchTD3Agent` shared; each group is clipped on the device exactly when its NumPy
+  Adam clips it. In float64 on the CPU it replays the NumPy golden cases to a relative 1e-9. The NumPy agents' minimum
+  target Q and bootstrapped target moved into `OffPolicyAgent`. `configs/lunarlander_continuous_sac.yaml`: rl-zoo's
+  settings (400×300, learning rate 7.3e-4 held constant, as the agents have no schedule) for 500,000 steps on the
+  GPU. Through the benchmark, seeds 1 to 5: every seed reaches 200 at 79,587 to 244,525 steps (episodes 272 to 523)
+  and holds it, final 100-episode averages 266 to 284, greedy evaluation 282 ± 5, all 5 at 200 or more. TD3's
+  published run reaches 200 at 174,000 to 294,000 steps within 400,000, with greedy evaluation 182 ± 69 (2 of 5).
+  1.6 to 2.3 hours a seed with two or three runs at once on the Jetson's GPU. The published LunarLanderContinuous
+  report has no SAC row yet. Seed 42 was not measured.
+
+- **Soft Actor-Critic** (`feature/sac-agent`; PR 2 of 4 of the roadmap item "SAC and BipedalWalker-v3"): `SACAgent`
+  in NumPy, as Stable-Baselines3 implements it: a squashed Gaussian actor, twin critics with Polyak targets and a
+  learned entropy temperature against a target entropy of minus the action size, with the numerically stable form of
+  the tanh correction. Built on `OffPolicyAgent`; its own random stream for the policy noise
+  (`AGENT_POLICY_NOISE_STREAM`); exports to ONNX and C (the greedy action, tanh of the mean). Gradient checks for the
+  actor, both critics and the temperature, and a float64 step checked against PyTorch autograd in review (actor
+  gradients to 1e-15). `configs/pendulum_sac.yaml`: rl-zoo's Pendulum settings (learning rate 1e-3, SB3's defaults
+  otherwise) for 40,000 steps with 64×64 networks, as DDPG and TD3 here (the maintainer's decision; SB3's 256×256
+  takes about an hour a seed in NumPy and was not measured). Through the benchmark, seeds 1 to 5: all solve -200 at
+  21,800 to 23,200 steps (TD3: 32,600 to 33,400) and hold, final 100-episode averages -135.9 to -163.8, greedy
+  evaluation -157 ± 20 (TD3: -157 ± 24); about 9 minutes a seed. The published Pendulum report has no SAC row yet
+  (the maintainer's decision).
 - **Observation normalisation for DQN, DDPG and TD3** (`feature/replay-obs-normalization`): `normalize_observations`
   is no longer refused for the replay-buffer agents. As Stable-Baselines3 does, the `ReplayBuffer` holds the agent's
   running statistics, stores the raw observations and normalises each sampled batch (observations and next
@@ -44,6 +68,14 @@ Acrobot-v1) and
 
 ### Changed
 
+- **Shared off-policy base for DDPG and TD3** (`feature/off-policy-base`; PR 1 of 4 of the roadmap item "SAC and
+  BipedalWalker-v3"): `OffPolicyAgent` (`rl_core/agents/off_policy.py`) now holds what DDPG and TD3 share and SAC will
+  need: the config keys with per-class defaults, action bounds, the replay buffer, warm-up, update scheduling, the
+  critic step (one critic or twin), Polyak averaging and checkpoints. `DDPGAgent` keeps its noise, actor target and
+  actor loss; `TD3Agent` still extends it. A pure refactor: DDPG and TD3 train bit-for-bit as before, NumPy and
+  PyTorch, shown by new golden cases recorded on the old code (updates during the episode, save, load and continue,
+  and DDPG loading a TD3 checkpoint). A DDPG checkpoint missing a network is now refused with "not a DDPG
+  checkpoint" (a `ValueError`, before a `KeyError`); the checkpoint format is unchanged.
 - **Environment hooks for the navigation challenge** (`feature/navigation-env-hooks`; PR 1 of 5 of the roadmap item
   "Range-sensor navigation environment"): `BaseEnvWrapper._make_env` forwards extra keywords to `gym.make`, for an
   environment with constructor options, and `reset` applies domain randomization before the inner environment's

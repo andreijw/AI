@@ -1,0 +1,48 @@
+# LunarLanderContinuous-v3 SAC Training Configuration
+# rl-baselines3-zoo's SAC settings for LunarLanderContinuous-v3 (hyperparams/sac.yml) at its 400x300 networks and its
+# 500,000 steps, SB3's SAC defaults for the rest, on the PyTorch backend (backend: torch), as
+# configs/lunarlander_continuous_td3.yaml. It needs PyTorch and Box2D (./setup.sh --profile gpu, then
+# .venv-gpu/bin/python train.py ...); CI and .venv do not build it. Its checkpoints are SACAgent's NumPy format.
+# One departure from rl-zoo: its learning rate decays linearly from 7.3e-4 to 0 (lin_7.3e-4); the agents here have no
+# learning-rate schedule, so it stays at 7.3e-4 throughout. Like rl-zoo it updates after every environment step
+# (training.update_every: 1), so training starts at the 10,000th warm-up action. The solve rule is the repo's: a
+# 100-episode training average of 200, exploration included, where rl-zoo reports a greedy evaluation. A cut at the
+# 1000-step limit is stored as non-terminal. Benchmark, seeds 1 to 5 (2026-11-04): all reach 200 at 79,587 to
+# 244,525 steps and hold it; greedy evaluation 282 +/- 5 (CHANGELOG.md, 2026-11-04).
+
+environment:
+  name: "LunarLanderContinuous-v3"
+  render_mode: null
+  max_episode_steps: 1000
+  seed: 42
+
+agent:
+  type: "sac"
+  config:
+    backend: torch             # Gradient steps in PyTorch, as CUDA graphs on the GPU (device: auto)
+    hidden_sizes: [400, 300]   # Actor and both critics' hidden layers, units (rl-zoo)
+    learning_rate: 0.00073     # Adam step size for actor, critics and log temperature; constant (rl-zoo
+                               # starts its linear decay here; see the header)
+    gamma: 0.99                # Discount factor per step: horizon ~100 steps (rl-zoo)
+    tau: 0.01                  # Polyak rate of the target critics per gradient step: half-life ~69 steps (rl-zoo)
+    batch_size: 256            # Mini-batch size, transitions (rl-zoo)
+    buffer_capacity: 1000000   # Replay buffer size, transitions; holds the whole 500,000-step run (rl-zoo)
+    learning_starts: 10000     # Uniform random actions in the bounds before learning (rl-zoo)
+    updates_per_step: 1.0      # Gradient steps per transition (rl-zoo train_freq 1, gradient_steps 1); no cap
+    ent_coef: auto             # Temperature alpha: learned from 1.0 (auto), from x (auto_<x>), or fixed (a number)
+    target_entropy: auto       # Entropy alpha steers towards, nats of the [-1, 1] action: auto = -2 here
+    optimizer: adam
+    seed: 42
+
+training:
+  total_steps: 500000  # Environment steps (rl-zoo n_timesteps 5e5)
+  max_steps_per_episode: 1000  # Must match the environment's limit: the Trainer's default is 500
+  update_every: 1  # Update after every environment step, as rl-zoo (train_freq 1)
+  eval_frequency: 25
+  save_frequency: 50
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true
