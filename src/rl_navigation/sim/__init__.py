@@ -7,6 +7,7 @@ the robot's own code (state estimation, mapping, planning) can use it without ei
 from rl_navigation.sim.geometry import Arena, cast_rays, clearance, occupancy_grid, segment_hits
 from rl_navigation.sim.kinematics import unicycle_step, wrap_angle
 from rl_navigation.sim.layouts import Layout, LayoutParams, generate_layout, path_exists
+from rl_navigation.sim.odometry import WheelOdometry
 from rl_navigation.sim.sensors import RangeSensor, hc_sr04, lidar
 from rl_navigation.sim.world import Motion, World
 
@@ -16,6 +17,7 @@ __all__ = [
     "LayoutParams",
     "Motion",
     "RangeSensor",
+    "WheelOdometry",
     "World",
     "cast_rays",
     "clearance",

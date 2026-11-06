@@ -78,7 +78,8 @@ AI/
 │   │   ├── environments/        # Bipedal walker wrapper (observation noise) and its factory
 │   │   └── benchmark.py         # BipedalWalker benchmark challenge implementation
 │   ├── rl_navigation/           # Navigation-v0 and NavigationContinuous-v0 range-sensor navigation (Phase 8)
-│   │   ├── sim/                 # NumPy-only simulator: arena, ray casting, sensors, layouts, World, renderer
+│   │   ├── sim/                 # NumPy-only simulator: arena, ray casting, sensors, odometry, layouts, World, renderer
+│   │   ├── estimation/          # Pose estimation on a known map (EKF localization); imports only NumPy and sim/
 │   │   ├── gym_env.py           # The Gymnasium environment; imports only Gymnasium and sim/, never rl_core
 │   │   ├── environments/        # Navigation wrapper (noise, domain randomization) and a factory for each id
 │   │   └── benchmark.py         # Both navigation benchmark challenge implementations
@@ -469,6 +470,66 @@ obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 
 `info` holds `is_success`, `collision` and `goal_distance`. The framework's noise and domain randomization live in
 `rl_navigation.environments`, which does import `rl_core`.
+
+#### State estimation
+
+`rl_navigation.estimation` estimates the robot's pose `(x, y, θ)` (metres and radians, in the map's frame) from its
+wheel encoders and range readings on a known map. It is a library for the robot's own program: it imports only NumPy
+and `rl_navigation.sim`, never Gymnasium or `rl_core` (`tests/test_import_footprint.py`), and nothing in training or
+the benchmark calls it. So far it holds an extended Kalman filter, `EkfLocalizer`; a particle filter is to follow
+([`docs/roadmap.md`](docs/roadmap.md), "State estimation").
+
+- **Encoders**: `rl_navigation.sim.WheelOdometry` models them. A reading is a `(2,)` array, the left and the right
+  wheel's travel in metres since the previous reading, with noise variance `k × |travel|` per wheel. Its wheel base
+  (0.2 m) and `k` (2.5e-4 m) are placeholders until they are calibrated on the robot.
+- **Map**: the filter reads the map only through the `RangeMap` protocol (`min_range`, `max_range`, `noise_std` and
+  `expected_ranges(poses)`). `SensorMap(arena, sensor)` is the one for a known `Arena` and a `RangeSensor`.
+- **Loop**: call `predict(wheel_travel)` with each encoder reading, then `update(readings)` with the scan taken at
+  that pose; `pose` and `covariance` hold the estimate. A reading at or beyond `max_range`, at or below `min_range`,
+  or NaN counts as a dropout. `update` returns an `UpdateResult` saying which beams it used, gated as outliers, or
+  left out as nonlinear (across a corner).
+
+In the simulator, `World` stands in for the robot (run from the repository with the package installed):
+
+```python
+import numpy as np
+
+from rl_navigation.estimation import EkfLocalizer, SensorMap
+from rl_navigation.sim import LayoutParams, WheelOdometry, World, generate_layout, hc_sr04
+
+rng = np.random.default_rng(0)
+layout = generate_layout(rng, LayoutParams())  # on the robot: the known map of its room
+sensor, encoders = hc_sr04(), WheelOdometry()  # placeholder noise until calibrated
+world = World(layout.arena, sensor, layout.start, layout.goal)  # stands in for the robot
+ekf = EkfLocalizer(
+    SensorMap(layout.arena, sensor),
+    encoders,
+    pose=layout.start,
+    covariance=np.diag([0.05, 0.05, 0.05]) ** 2,
+)
+readings, _ = world.read_sensors(rng)
+for _ in range(100):
+    v, omega = (0.2, 0.0) if readings.min() > 0.4 else (0.0, 1.0)  # drive, or turn away
+    motion = world.step(v, omega, rng)
+    ekf.predict(encoders.read(motion.v, motion.omega, world.dt, rng))  # (left, right) in metres
+    readings, _ = world.read_sensors(rng)  # metres; max_range or NaN when there is no echo
+    result = ekf.update(readings)
+print(np.round(ekf.pose - world.pose, 3), int(result.used.sum()), "beams used")
+```
+
+It prints an error of at most 2 mm and 6 mrad, with 3 of the 5 sonars used in the last update. On the robot, the
+encoder and sonar drivers replace `encoders.read` and `world.read_sensors`, and the `Arena` is the room's. The filter's
+model breaks at a collision, where the wheels turn while the robot stays put, so its estimate drifts from then on.
+
+Measured over 50 seeded layouts × 600 steps of a wandering robot with the filter's defaults (2026-11-06;
+`TESTING.md` `EST-1`): position RMSE 5.7 mm and heading 10.8 mrad with the HC-SR04 sonars, 1.8 mm and 1.7 mrad with
+a 64-beam lidar; with 30 % of readings dropped, 6.3 mm (sonars) and 2.0 mm (lidar). Dead reckoning on the same
+encoders has a position RMSE of 0.93 m, and 45 of its 50 runs exceed 0.5 m of error at some step. The filter's mean
+NEES is 3.2 to 3.3 and its median 2.4 to 2.5 (3 degrees of freedom); 96 to 97 % of steps lie under 9.35, the
+chi-square 97.5 % point, where a consistent filter puts 97.5 %. Occasional spikes remain: the worst step of any run
+reaches a NEES of about 340 with the sonars (seed 2) and 2,700 with the lidar (seed 30, a start-up transient from a
+first update made 0.04 rad off). In an empty arena the lidar filter's ANEES over 30 runs, 3.05, lies inside the
+95 % band [2.19, 3.94], a loose check that catches only a large miscalibration (CHANGELOG.md, 2026-11-06).
 
 ### Visualization and video recording
 
