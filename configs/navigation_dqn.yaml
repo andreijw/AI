@@ -1,0 +1,56 @@
+# Navigation-v0 Deep Q-Network (DQN) Training Configuration
+# configs/lunarlander_dqn.yaml's settings (rl-baselines3-zoo's "Tuned" DQN, one hidden layer of 256), its measured
+# exploration floor of 0.1 included, with these differences:
+# - epsilon falls over the first 30,000 training actions (10% of the budget; LunarLander 12,000, 4%), about 300
+#   random-length episodes of this environment;
+# - learning starts at 1,000 stored transitions instead of 128, so the first batches draw from about 10 random
+#   episodes rather than from the first one or two;
+# - the update cap is the 400-step episode limit, so one gradient step per transition is never cut.
+# The trainer updates once per episode. The budget is LunarLander's 300,000 steps: a 100,000-step probe on seed 1
+# reached 12% success in planning, well short of PPO.
+# Measured 2026-11-06 through the benchmark on seeds 1 to 5, three runs sharing the CPU; greedy evaluation over 100
+# held-out layouts, goals counted by a scratch harness until PR 5's metric: it does not learn the task. 11% reach the
+# goal (0% on three seeds, 4% and 50% on the others), reward -0.58 ± 2.61, final 100-episode training averages -3.8 to
+# -1.3, against discrete PPO's 88% and 6.75; the greedy policy mostly runs out the 400-step limit (43 to 88% of
+# evaluation episodes; a timeout costs less than a collision), while 53 to 66% of its last 100 training episodes still
+# end in one; the cause is not diagnosed. About 15 minutes a seed (CHANGELOG.md, 2026-11-06; the diagnosis is open in
+# docs/roadmap.md).
+
+environment:
+  name: "Navigation-v0"
+  render_mode: null
+  max_episode_steps: 400
+  seed: 42
+  sensor: "hc_sr04"  # five HC-SR04 sonars; "lidar" for a lidar of lidar_beams beams
+  num_obstacles: 6
+
+agent:
+  type: "dqn"
+  config:
+    optimizer: adam                # rl-zoo / SB3 optimizer
+    learning_rate: 0.00063         # rl-zoo, fixed
+    max_grad_norm: 10.0            # Adam global gradient-norm clip (SB3 default)
+    gamma: 0.99                    # Discount factor (rl-zoo)
+    hidden_dim: 256                # One hidden layer (rl-zoo: [256, 256])
+    buffer_capacity: 50000         # Replay buffer capacity (rl-zoo): about the last 200 episodes
+    batch_size: 128                # Training mini-batch size (rl-zoo)
+    min_buffer_size: 1000          # About 15 random episodes before the first batch (LunarLander: 128)
+    epsilon_start: 1.0             # Initial exploration probability
+    epsilon_end: 0.1               # Exploration floor (rl-zoo; LunarLander held 5 of 5 against 3 of 5 for 0.02)
+    exploration_steps: 30000       # Training actions over which epsilon falls linearly
+    target_update_frequency: 250   # Gradient steps between target syncs (rl-zoo's 250 x 1 update per step)
+    updates_per_step: 1.0          # Gradient steps per transition
+    max_updates_per_call: 400      # The episode limit, so the cap never binds
+    seed: 42                       # Weight initialisation and sampling seed
+
+training:
+  total_steps: 300000  # Environment steps (as LunarLander DQN)
+  max_steps_per_episode: 400
+  eval_frequency: 50
+  save_frequency: 100
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

@@ -16,8 +16,8 @@ The architecture is designed to support:
   Gaussian policies, DDPG and TD3 with deterministic policies, and SAC, for Pendulum; random, PPO and DQN for Acrobot;
   random and DQN for MountainCar; random, DDPG and TD3 with Ornstein-Uhlenbeck exploration noise for
   MountainCarContinuous; random and DQN for LunarLander; random, TD3 and SAC for LunarLanderContinuous; random, SAC
-  and TD3 for BipedalWalker; random only, so far, for the range-sensor navigation tasks Navigation-v0 and
-  NavigationContinuous-v0)
+  and TD3 for BipedalWalker; random, PPO and DQN for the range-sensor navigation task Navigation-v0, and random, PPO
+  and TD3 for NavigationContinuous-v0)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -93,7 +93,7 @@ AI/
 │   ├── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
 │   ├── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 and SAC on PyTorch)
 │   ├── bipedalwalker_*.yaml     # BipedalWalker configs (random baseline, SAC and TD3 on PyTorch)
-│   └── navigation_*.yaml        # Navigation random baselines, discrete and continuous
+│   └── navigation_*.yaml        # Navigation configs (random baselines, PPO and DQN; continuous: PPO and TD3)
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
 ├── export.py                    # Checkpoint to a standalone C header or an ONNX model
@@ -298,6 +298,13 @@ python train.py --config configs/bipedalwalker_default.yaml
 # Navigation random baselines, discrete and continuous (no solve threshold yet; see Range-Sensor Navigation below)
 python train.py --config configs/navigation_default.yaml
 python train.py --config configs/navigation_continuous_default.yaml
+
+# Navigation PPO and DQN (Navigation-v0), PPO and TD3 (NavigationContinuous-v0); about 5 minutes for PPO, 15 for DQN
+# and TD3 a seed with three runs sharing the CPU (DQN does not learn the task; see Range-Sensor Navigation below)
+python train.py --config configs/navigation_ppo.yaml
+python train.py --config configs/navigation_dqn.yaml
+python train.py --config configs/navigation_continuous_ppo.yaml
+python train.py --config configs/navigation_continuous_td3.yaml
 ```
 
 ### Which agents solve which challenge
@@ -439,9 +446,14 @@ its range sensors. Each reset draws a new layout; `reset(options={"layout": layo
   `--record-video` and `record.py` work as for any challenge; `"human"` opens a window through Gymnasium's
   `HumanRendering`, which needs pygame-ce (installed by the `box2d` extra).
 
-The committed configs train the random agent for 40,000 steps; no learning agent and no solve threshold exist yet,
-so the benchmark reports every run as not solved. Its random baseline has not been measured yet. A step with a sonar
-read takes about 0.65 ms and a reset about 20 ms (measured on the Jetson in the design review).
+The benchmark runs `random`, `ppo` and `dqn` on `Navigation-v0` (`--challenge navigation`) and `random`, `ppo` and
+`td3` on `NavigationContinuous-v0` (`--challenge navigation_continuous`), each from its committed config
+(`configs/navigation_*.yaml`). There is no solve threshold yet, so it reports every run as not solved, and it does
+not yet count successes. Measured on seeds 1 to 5 with greedy evaluation over 100 held-out layouts, successes
+counted by a scratch harness (CHANGELOG.md, 2026-11-06): TD3 reaches the goal in 96% of them after 100,000 steps,
+PPO in 88% after 200,000 with either action space, DQN in 11% after 300,000 (it mostly drives until the time limit),
+and the random agent in 1%. A step with a sonar read takes about 0.65 ms and a
+reset about 20 ms (measured on the Jetson in the design review).
 
 The environment does not need the training framework. `rl_navigation.gym_env` imports only Gymnasium and the NumPy
 simulator `rl_navigation.sim`, never `rl_core`, so another project can use it directly:
@@ -1002,9 +1014,12 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 
 ### Next Steps
 
-1. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder), with the SAC and TD3 agents that walk
+1. **Range-sensor navigation**: a solve threshold, a success-rate metric, a curriculum and a robustness sweep for
+   `Navigation-v0` and `NavigationContinuous-v0` (Phase 8 of [`docs/roadmap.md`](docs/roadmap.md)), and a diagnosis
+   of why DQN does not learn there.
+2. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder), with the SAC and TD3 agents that walk
    BipedalWalker-v3 (SAC's greedy evaluation reaches 300 on 5 of 5 seeds, TD3's on 2 of 5).
-2. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
+3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 
 ## Future Enhancements
 

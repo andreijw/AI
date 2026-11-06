@@ -1,0 +1,53 @@
+# NavigationContinuous-v0 TD3 Training Configuration
+# configs/pendulum_td3.yaml's settings (rl-baselines3-zoo's TD3 with SB3's TD3 defaults, NumPy, 64x64 networks)
+# with these differences:
+# - gamma 0.99 instead of rl-zoo's 0.98 for 200-step Pendulum: a 100-step horizon against ~80 steps to a goal;
+# - an update after every environment step (training.update_every: 1, rl-zoo's train_freq 1, as
+#   configs/lunarlander_continuous_td3.yaml), as episodes run up to 400 steps;
+# - 100,000 steps, of which the 10,000 warm-up actions are about 150 random episodes.
+# On the NumPy backend: PyTorch at rl-zoo's 400x300 on the GPU was no faster here (a one-seed
+# 16,000-step probe took 79 s against NumPy's 70 s)
+# and needs .venv-gpu, which CI does not build.
+# Measured 2026-11-06 through the benchmark on seeds 1 to 5, three runs sharing the CPU; greedy evaluation over
+# 100 held-out layouts, goals counted by a scratch harness until PR 5's metric: 96% reach
+# the goal (93 to 100% by seed), reward 8.08 ± 0.38, final 100-episode training averages 7.4 to 8.4; about 15
+# minutes a seed (CHANGELOG.md, 2026-11-06).
+
+environment:
+  name: "NavigationContinuous-v0"
+  render_mode: null
+  max_episode_steps: 400
+  seed: 42
+  sensor: "hc_sr04"  # five HC-SR04 sonars; "lidar" for a lidar of lidar_beams beams
+  num_obstacles: 6
+
+agent:
+  type: "td3"
+  config:
+    hidden_sizes: [64, 64]     # Actor and both critics' hidden layers (rl-zoo: [400, 300]; see the header)
+    learning_rate: 0.001       # Adam step size for actor and critics (rl-zoo)
+    gamma: 0.99                # Discount factor (rl-zoo: 0.98; see the header)
+    tau: 0.005                 # Polyak rate per actor step (every policy_delay gradient steps): half-life ~280 steps
+    batch_size: 256            # Mini-batch size (SB3 TD3 default)
+    buffer_capacity: 200000    # Replay buffer size (rl-zoo buffer_size): the whole run
+    learning_starts: 10000     # Uniform random training actions before learning (rl-zoo)
+    noise_std: 0.1             # Gaussian exploration noise in the scaled [-1, 1] action space (rl-zoo)
+    updates_per_step: 1.0      # Gradient steps per stored transition (rl-zoo train_freq 1, gradient_steps 1)
+    policy_delay: 2            # Gradient steps per actor and target update (SB3 default)
+    target_policy_noise: 0.2   # Std of the target-action smoothing noise, scaled space (SB3 default)
+    target_noise_clip: 0.5     # Bound on that noise, scaled space (SB3 default)
+    optimizer: adam
+    seed: 42
+
+training:
+  total_steps: 100000  # Environment steps
+  max_steps_per_episode: 400
+  update_every: 1  # Update after every environment step (rl-zoo train_freq 1)
+  eval_frequency: 50
+  save_frequency: 100
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

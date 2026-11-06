@@ -97,7 +97,8 @@ To optimize token usage and context window limits:
     It imports Gymnasium and `rl_navigation.sim` only, never `rl_core`, so it works outside this framework.
   * `src/rl_navigation/environments/`: `NavigationEnv`, the framework wrapper shared by both ids (action noise,
     domain randomization of wheel slip, sensor noise, dropout and obstacle count), and a factory for each id.
-  * `src/rl_navigation/benchmark.py`: both navigation benchmark challenge implementations (random agent only).
+  * `src/rl_navigation/benchmark.py`: both navigation benchmark challenge implementations (random, PPO and DQN
+    on `Navigation-v0`; random, PPO and TD3 on `NavigationContinuous-v0`).
 * **`src/rl_core/challenges/`**: The `BenchmarkChallenge` interface, the challenge registry and `discover_challenges`.
 * **`src/benchmark.py`**: The benchmark runner and its command line, for every discovered challenge.
 * **`tests/`** (located at [tests/](tests/)): Pytest unit and integration test suite

@@ -144,8 +144,15 @@ neither Gymnasium nor `rl_core`, and a trained policy reaches the robot through 
 robot needs neither the trainer nor the agents. Step 1 is a full item; steps 2 to 5 are sketches to turn into
 full items when picked.
 
-- [~] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04; PR 3 of 5, the environment and
-  challenges; PR 4 the PPO, DQN and TD3 configs, PR 5 the threshold, curriculum and robustness sweep)
+- [~] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04; PR 4 of 5, the PPO, DQN and
+  TD3 configs; PR 5 the threshold, success-rate metric, curriculum and robustness sweep)
+  - **Progress (PR 4, 2026-11-06)**: TD3 (continuous) and PPO (both ids) reach at least 80 % greedy success on 100
+    held-out layouts on 5 of 5 seeds; DQN does not (0 to 50 %): its greedy policy mostly runs out the clock (a
+    timeout costs less than a collision), cause not diagnosed (CHANGELOG.md, 2026-11-06). Success was counted by a
+    scratch harness; the metric is PR 5. Final 100-episode training averages against the floated
+    threshold 7.0: TD3 5 of 5, discrete PPO 1 of 5, continuous PPO 0 of 5.
+  - [ ] **Before PR 5**: the `training-doctor` skill on navigation DQN, or the maintainer drops DQN from the
+    discrete id.
   - **Description**: A 2D Gymnasium environment and challenge package: a differential-drive robot (unicycle
     kinematics, linear and angular velocity commands, integrated at a fixed time step) in a walled arena with
     static obstacles (circles and axis-aligned boxes), reaching a goal. Its sensor is a configurable set of range

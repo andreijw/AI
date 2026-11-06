@@ -36,6 +36,21 @@ Acrobot-v1) and
   at an iterate and σθ fell to 5.8e-7 rad against a 1.2e-3 rad error; mean NEES was 238 on the lidar and 23,978 on
   the sonars with dropout). The particle filter is PR 2.
 
+- **Learning configs for the navigation challenges** (`feature/navigation-configs`; PR 4 of 5 of the roadmap item
+  "Range-sensor navigation environment"): `configs/navigation_ppo.yaml` and `configs/navigation_dqn.yaml` for
+  `Navigation-v0`, `configs/navigation_continuous_ppo.yaml` and `configs/navigation_continuous_td3.yaml` for
+  `NavigationContinuous-v0` (PPO at SB3's defaults, with an entropy bonus of 0.01 on the discrete id, 200,000 steps;
+  DQN after `lunarlander_dqn.yaml`, 300,000 steps; TD3 after `pendulum_td3.yaml`, NumPy, updating every step, 100,000
+  steps; the maintainer's decisions). Seeds 1 to 5, greedy evaluation over 100 held-out layouts, success counted from
+  `info["is_success"]` by a scratch harness (the metric itself is PR 5): TD3 96 % success (93 to 100 %), greedy reward
+  8.08 ± 0.38, final training average 7.4 to 8.4; continuous PPO 88 % (82 to 91 %), 6.66 ± 0.43, 5.4 to 7.0; discrete
+  PPO 88 % (82 to 97 %), 6.75 ± 0.85, 6.0 to 7.4; DQN 11 % (0 to 50 %), -0.58 ± 2.61, -3.8 to -1.3; random 1 %, about
+  -11. Predicted beforehand: at least 80 % success and a training average of 5.0 on 4 of 5 seeds for every learning
+  agent; held for TD3 and both PPOs (5 of 5), failed for DQN (0 of 5): in greedy evaluation it mostly runs out the
+  400-step limit (43 to 88 % of episodes), while 53 to 66 % of its last 100 training episodes end in a collision; the
+  cause is not diagnosed. A seed took about 5 minutes for PPO, 15 for TD3 and DQN (three at a time, CPU only). No
+  threshold yet (PR 5).
+
 ### Fixed
 
 - **One `box2d-py` version everywhere** (`fix/box2d-shared-version`): a Dependabot bump had moved the `box2d` extra in
