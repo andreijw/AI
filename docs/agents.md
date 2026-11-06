@@ -20,10 +20,10 @@ Terms used throughout:
 | :--- | :--- | :--- | :--- |
 | REINFORCE | discrete | policy, from whole-episode returns | CartPole |
 | Actor-Critic | discrete, continuous | policy and state value | CartPole, Pendulum |
-| PPO | discrete, continuous | policy and state value, clipped reuse of rollouts | CartPole, Pendulum, Acrobot |
-| DQN | discrete | action value, from replay | CartPole, Acrobot, MountainCar, LunarLander |
+| PPO | discrete, continuous | policy and state value, clipped reuse of rollouts | CartPole, Pendulum, Acrobot, Navigation (both) |
+| DQN | discrete | action value, from replay | CartPole, Acrobot, MountainCar, LunarLander, Navigation |
 | DDPG | continuous | deterministic policy and action value, from replay | Pendulum, MountainCarContinuous |
-| TD3 | continuous | as DDPG, twin critics and delayed actor | Pendulum, MountainCarContinuous, LunarLanderContinuous, BipedalWalker |
+| TD3 | continuous | as DDPG, twin critics and delayed actor | Pendulum, MountainCarContinuous, LunarLanderContinuous, BipedalWalker, NavigationContinuous |
 | SAC | continuous | stochastic policy, twin action values and an entropy temperature, from replay | Pendulum, LunarLanderContinuous, BipedalWalker |
 
 ## REINFORCE (`ReinforceAgent`, `src/rl_core/agents/reinforce_agent.py`)
@@ -142,6 +142,11 @@ the partly filled rollout and the annealing counter, so a resumed run continues 
   steps): 5 of 5 solve and 4 hold; greedy evaluation -188 ± 35 (`docs/benchmarks/pendulum_results.md`).
 - Acrobot, `configs/acrobot_ppo.yaml` (rl-zoo's settings, 500,000 steps): 5 of 5 solve and hold, greedy -86 ± 9
   (CHANGELOG.md, 2026-10-22).
+- Navigation, `configs/navigation_ppo.yaml` and `navigation_continuous_ppo.yaml` (SB3's defaults, 2,048-step rollouts,
+  200,000 steps; entropy 0.01 for the five discrete actions, 0.0 continuous): greedy evaluation over 100 held-out
+  layouts reaches the goal 88% of the time with either action space (82 to 97% discrete, 82 to 91% continuous),
+  rewards 6.75 ± 0.85 and 6.66 ± 0.43; about 5 minutes a seed with three runs sharing the CPU. Goals were counted by a
+  scratch harness until PR 5's metric; there is no threshold yet (CHANGELOG.md, 2026-11-06).
 
 **Lessons.**
 
@@ -203,6 +208,11 @@ fresh mini-batch.
   greedy -110 ± 7 (CHANGELOG.md, 2026-11-04). It learns the task but does not hold the threshold reliably.
 - LunarLander (`lunarlander_dqn.yaml`, 300,000 steps, epsilon floor 0.1): reaches 200 and holds it on 5 of seeds 1 to
   5 and 4 of 11 to 15, at 152k to 297k steps (CHANGELOG.md, 2026-10-27).
+- Navigation (`navigation_dqn.yaml`, LunarLander's settings, 300,000 steps): it fails. Greedy evaluation over 100
+  held-out layouts reaches the goal 11% of the time (0% on three seeds, 50% on the best; counted by a scratch
+  harness), reward -0.58 ± 2.61, final training averages -3.8 to -1.3, where PPO reaches 88% with 200,000 steps. The
+  greedy policy mostly drives until the 400-step limit (a timeout costs less than a collision), while most of its
+  training episodes still end in one; the cause is not diagnosed (CHANGELOG.md, 2026-11-06).
 - Double DQN and dueling stay opt-in: neither won on any of the four configs (CHANGELOG.md, 2026-10-29). The
   committed configs barely overestimate (logged mean Q within about 4 of the policy's own discounted return).
 
@@ -242,8 +252,8 @@ PPO train on whole episodes and refuse it; the continuous Actor-Critic accepts i
 
 The floor every learner is compared against: a uniform action (an integer below `action_dim`, or a vector inside
 the action bounds), drawn on their own streams, and no learning (`update` returns `{}`). Floors through the benchmark:
-CartPole about 23, Pendulum -1293, Acrobot -500, MountainCar -200, LunarLander -178 to -194 (`docs/benchmarks/` and
-CHANGELOG.md).
+CartPole about 23, Pendulum -1293, Acrobot -500, MountainCar -200, LunarLander -178 to -194, Navigation about -11
+with 1% of episodes at the goal (`docs/benchmarks/` and CHANGELOG.md).
 
 ## DDPG (`DDPGAgent`, `src/rl_core/agents/ddpg_agent.py`)
 
@@ -319,6 +329,11 @@ replay match DDPG's. One Adam per critic. A TD3 agent refuses a DDPG checkpoint;
   none holds it (final averages 242 to 295), greedy 300.1 ± 12.3 (281.6 to 317.7), 2 of 5 at 300 or more; about 2.1
   hours a seed with three runs sharing the Jetson's GPU (CHANGELOG.md, 2026-11-05;
   `docs/benchmarks/bipedalwalker_results.md`). SAC beats it on every seed (below).
+- NavigationContinuous, `navigation_continuous_td3.yaml` (NumPy, 64×64, 100,000 steps, updates after every step):
+  greedy evaluation over 100 held-out layouts reaches the goal 96% of the time (93 to 100% by seed), reward 8.08 ±
+  0.38, final training averages 7.4 to 8.4, ahead of continuous PPO on every seed with half its steps but about 2.9
+  times its wall time; about 15 minutes a seed with three runs sharing the CPU; goals counted by a scratch harness
+  (CHANGELOG.md, 2026-11-06).
 
 **Lessons.** LunarLanderContinuous needed SB3's update after every environment step (`training.update_every: 1`):
 once per episode it held on 3 of 5 seeds, every step on 5 of 5 (CHANGELOG.md, 2026-10-30; adopted 2026-11-01). TD3

@@ -1,0 +1,47 @@
+# NavigationContinuous-v0 PPO Training Configuration (Continuous actions)
+# The numbers of configs/navigation_ppo.yaml (Stable-Baselines3's PPO defaults) in ContinuousPPOAgent's keys,
+# with SB3's entropy weight of 0.0 and rewards unscaled: per-step rewards are about 0.1 and a collision -10, so
+# the critic needs no Pendulum-style reward_scale. The agent's own defaults supply the rest: Adam with a
+# gradient-norm clip of 0.5, an initial log standard deviation of -0.5 and a mean head scaled by 0.01. The action
+# bounds, [-1, 1] for speed and turn rate, come from the environment.
+# Measured 2026-11-06 through the benchmark on seeds 1 to 5, three runs sharing the CPU; greedy evaluation over
+# 100 held-out layouts, goals counted by a scratch harness until PR 5's metric: 88% reach
+# the goal (82 to 91% by seed), reward 6.66 ± 0.43, final 100-episode training averages 5.4 to 7.0; about 5 minutes
+# a seed (CHANGELOG.md, 2026-11-06).
+
+environment:
+  name: "NavigationContinuous-v0"
+  render_mode: null
+  max_episode_steps: 400
+  seed: 42
+  sensor: "hc_sr04"  # five HC-SR04 sonars; "lidar" for a lidar of lidar_beams beams
+  num_obstacles: 6
+
+agent:
+  type: "ppo"
+  config:
+    learning_rate: 0.0003    # Adam step size at the start (SB3); annealed to 0 over anneal_steps
+    gamma: 0.99              # Discount factor (SB3)
+    gae_lambda: 0.95         # GAE lambda (SB3)
+    hidden_dim: 128          # Shared hidden layer width
+    value_coef: 0.5          # Weight for the critic (value) loss (SB3)
+    entropy_coef: 0.0        # Entropy bonus weight (SB3)
+    clip_epsilon: 0.2        # PPO clip range at the start (SB3); decays with the learning rate
+    reward_scale: 1.0        # Rewards unscaled
+    anneal_steps: 200000     # Learning rate and clip decay to 0 over the whole training budget
+    rollout_steps: 2048      # Transitions buffered, in whole episodes, per update (SB3 n_steps)
+    ppo_epochs: 10           # Passes over each rollout (SB3)
+    batch_size: 64           # Transitions per optimizer step (SB3)
+    seed: 42
+
+training:
+  total_steps: 200000  # Environment steps (as Pendulum PPO); equals anneal_steps
+  max_steps_per_episode: 400
+  eval_frequency: 50
+  save_frequency: 100
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

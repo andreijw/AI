@@ -66,8 +66,12 @@ EXPECTED_AGENTS = {
         "td3": TD3Agent,
         "sac": SACAgent,
     },
-    "navigation": {"random": RandomAgent},
-    "navigation_continuous": {"random": ContinuousRandomAgent},
+    "navigation": {"random": RandomAgent, "ppo": PPOAgent, "dqn": DQNAgent},
+    "navigation_continuous": {
+        "random": ContinuousRandomAgent,
+        "ppo": ContinuousPPOAgent,
+        "td3": TD3Agent,
+    },
     "bipedalwalker": {"random": ContinuousRandomAgent, "sac": SACAgent, "td3": TD3Agent},
 }
 
