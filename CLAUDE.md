@@ -172,7 +172,7 @@ Treat the repository as the source of truth when docs disagree:
   2026-10-18). Continuous Actor-Critic beats the random agent in evaluation since 2026-10-18 but does not solve
   under the 100-episode rule (CHANGELOG.md, 2026-10-18). CartPole PPO does solve CartPole-v1: 5 of 5 seeds within
   200,000 steps, holding on all 5 (TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
-- The `box2d` extra names `box2d-py==2.3.5`, not the `box2d==2.3.10` Gymnasium 1.4's own `box2d` extra pins: that
+- The `box2d` extra names `box2d-py==2.3.8`, not the `box2d==2.3.10` Gymnasium 1.4's own `box2d` extra pins: that
   has no aarch64 build, and `box2d-py` builds on the Jetson with `swig` and `--no-build-isolation` (README,
   LunarLander). Rendering uses `pygame-ce`, as Gymnasium does; never install plain `pygame` beside it.
 - CONTRIBUTING.md §5 and TESTING.md `CKPT-*` describe `.npz` checkpoints; `Trainer` names them

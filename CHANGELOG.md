@@ -36,6 +36,15 @@ Acrobot-v1) and
   at an iterate and σθ fell to 5.8e-7 rad against a 1.2e-3 rad error; mean NEES was 238 on the lidar and 23,978 on
   the sonars with dropout). The particle filter is PR 2.
 
+### Fixed
+
+- **One `box2d-py` version everywhere** (`fix/box2d-shared-version`): a Dependabot bump had moved the `box2d` extra in
+  `pyproject.toml` to `box2d-py==2.3.8` while `./setup.sh`, the install hint, README, TESTING `ENV-6` and CLAUDE.md
+  still built and named 2.3.5, so `./setup.sh` built 2.3.5 and then the extras asked pip for 2.3.8. All now name
+  2.3.8, which builds on the Jetson with the same tools (swig 4.5.1, about 95 s) and plays byte-identical episodes
+  of LunarLander, LunarLanderContinuous and BipedalWalker to 2.3.5 (same random actions, 3 episodes each), so no
+  published result changes. A test holds the extra, `setup.sh` and the hint to one pin.
+
 ## 2026-11-05
 
 ### Added

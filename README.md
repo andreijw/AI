@@ -148,7 +148,7 @@ build-essential python3.12-dev`). `./setup.sh` does it; by hand, inside the virt
 
 ```bash
 pip install swig==4.5.1 "setuptools<85" "wheel<0.49"   # the versions it was verified with
-PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.5
+PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.8
 pip install -e ".[dev,video,box2d,onnx]"
 ```
 
