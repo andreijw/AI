@@ -14,6 +14,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_cartpole.benchmark import CartPoleChallenge  # noqa: E402
+from rl_core.agents import TD3Agent  # noqa: E402
 from rl_core.agents.optim import Adam  # noqa: E402
 from rl_core.challenges import discover_challenges  # noqa: E402
 from rl_core.utils.config import load_config  # noqa: E402
@@ -36,8 +37,12 @@ STEP_BUDGETS = {
     ("lunarlander_continuous", "random"): 50_000,
     ("lunarlander_continuous", "td3"): 400_000,
     ("lunarlander_continuous", "sac"): 500_000,
+    ("navigation", "dqn"): 300_000,
+    ("navigation", "ppo"): 200_000,
     ("navigation", "random"): 40_000,
+    ("navigation_continuous", "ppo"): 200_000,
     ("navigation_continuous", "random"): 40_000,
+    ("navigation_continuous", "td3"): 100_000,
     ("bipedalwalker", "random"): 50_000,
     ("bipedalwalker", "sac"): 500_000,
     ("bipedalwalker", "td3"): 500_000,
@@ -446,3 +451,83 @@ def test_mountaincar_dqn_uses_rl_zoo_settings_with_a_decaying_learning_rate():
     assert (agent.updates_per_step, agent.max_updates_per_call) == (0.5, 100)
     assert agent.anneal_steps == 200_000, "the rate decays over the whole budget"
     assert agent.observation_normalizer is not None, "the config must normalise observations"
+
+
+def _navigation_run(challenge, agent_type):
+    """The committed navigation run for agent_type, and its config's environment section beside the
+    random baseline's: a learning config must train on the task the baseline was measured on."""
+    challenge_cls = discover_challenges()[challenge]
+    env, agent, train_cfg = challenge_cls().setup_run(agent_type, seed=1, episodes=None)
+    env.close()
+
+    def environment(agent_key):
+        path = os.path.join(CONFIGS_DIR, challenge_cls.CONFIG_MAP[agent_key])
+        return load_config(path)["environment"]
+
+    assert environment(agent_type) == environment("random"), "the random baseline's task"
+    assert train_cfg["max_steps_per_episode"] == 400, "the environment's 400-step limit"
+    return agent, train_cfg
+
+
+def test_navigation_ppo_uses_sb3_defaults_with_an_entropy_bonus():
+    """SB3's PPO defaults (Adam 3e-4, clip 0.5 norm, 2048-step rollouts, 10 epochs of 64, gamma
+    0.99, GAE 0.95, clip 0.2) with entropy 0.01 for exploration over five discrete actions, annealed
+    over the whole 200,000-step budget."""
+    agent, train_cfg = _navigation_run("navigation", "ppo")
+    assert isinstance(optimizer(agent), Adam)
+    assert (agent.learning_rate, optimizer(agent).max_grad_norm) == pytest.approx((3e-4, 0.5))
+    assert (agent.rollout_steps, agent.minibatch_size, agent.ppo_epochs) == (2048, 64, 10)
+    assert (agent.gamma, agent.gae_lambda, agent.entropy_coef) == pytest.approx((0.99, 0.95, 0.01))
+    assert (agent.clip_epsilon, agent.value_coef, agent.hidden_dim) == (0.2, 0.5, 128)
+    assert agent.anneal_steps == train_cfg["total_steps"] == 200_000
+
+
+def test_navigation_continuous_ppo_uses_sb3_defaults_and_the_agents_own():
+    """The same SB3 numbers as navigation_ppo.yaml with SB3's entropy 0.0 and rewards unscaled;
+    ContinuousPPOAgent's defaults for the rest (max_grad_norm 0.5, log std -0.5, mean scale 0.01),
+    and the environment's [-1, 1] action bounds from the challenge."""
+    agent, train_cfg = _navigation_run("navigation_continuous", "ppo")
+    assert (agent.learning_rate, agent.max_grad_norm) == pytest.approx((3e-4, 0.5))
+    assert (agent.rollout_steps, agent.batch_size, agent.ppo_epochs) == (2048, 64, 10)
+    assert (agent.gamma, agent.gae_lambda, agent.entropy_coef) == pytest.approx((0.99, 0.95, 0.0))
+    assert (agent.clip_ratio, agent.value_coef, agent.reward_scale) == (0.2, 0.5, 1.0)
+    assert (agent.hidden_dim, agent.mean_init_scale) == (128, 0.01)
+    np.testing.assert_array_equal(weights(agent)["log_std"], [-0.5, -0.5])
+    np.testing.assert_array_equal(agent.action_low, [-1.0, -1.0])
+    np.testing.assert_array_equal(agent.action_high, [1.0, 1.0])
+    assert agent.anneal_steps == train_cfg["total_steps"] == 200_000
+
+
+def test_navigation_dqn_uses_lunarlander_dqn_settings_for_400_step_episodes():
+    """lunarlander_dqn.yaml's rl-zoo settings, its measured exploration floor of 0.1 included, with
+    epsilon falling over the first 30,000 actions, a warm-up of 1,000 transitions (about 15 random
+    episodes, not one), the update cap at the 400-step episode limit and LunarLander's 300,000
+    steps."""
+    agent, train_cfg = _navigation_run("navigation", "dqn")
+    assert isinstance(optimizer(agent), Adam)
+    assert (agent.learning_rate, agent.gamma) == pytest.approx((6.3e-4, 0.99))
+    assert optimizer(agent).max_grad_norm == pytest.approx(10.0)
+    assert (agent.hidden_dim, agent.batch_size, agent.buffer_capacity) == (256, 128, 50_000)
+    assert (agent.min_buffer_size, agent.target_update_frequency) == (1_000, 250)
+    assert (agent.epsilon_start, agent.epsilon_end) == pytest.approx((1.0, 0.1))
+    assert agent.exploration_steps == 30_000
+    assert (agent.updates_per_step, agent.max_updates_per_call) == (1.0, 400)
+    assert train_cfg["total_steps"] == 300_000
+
+
+def test_navigation_continuous_td3_uses_pendulum_td3_settings_in_numpy():
+    """pendulum_td3.yaml's rl-zoo and SB3 settings on the NumPy backend at 64x64, with gamma 0.99
+    for the longer episodes and an update after every step, for 100,000 steps."""
+    agent, train_cfg = _navigation_run("navigation_continuous", "td3")
+    assert type(agent) is TD3Agent, "the NumPy backend: CI builds it without PyTorch"
+    assert agent.hidden_sizes == [64, 64]
+    assert (agent.learning_rate, agent.gamma, agent.tau) == pytest.approx((0.001, 0.99, 0.005))
+    assert (agent.batch_size, agent.learning_starts, agent.buffer_capacity) == (
+        256,
+        10_000,
+        200_000,
+    )
+    assert (agent.noise_std, agent.updates_per_step) == pytest.approx((0.1, 1.0))
+    assert agent.policy_delay == 2
+    assert (agent.target_policy_noise, agent.target_noise_clip) == pytest.approx((0.2, 0.5))
+    assert (train_cfg["update_every"], train_cfg["total_steps"]) == (1, 100_000)

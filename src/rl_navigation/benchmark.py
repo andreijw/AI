@@ -6,7 +6,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from rl_core.agents import BaseAgent, ContinuousRandomAgent, RandomAgent
+from rl_core.agents import (
+    BaseAgent,
+    ContinuousPPOAgent,
+    ContinuousRandomAgent,
+    DQNAgent,
+    PPOAgent,
+    RandomAgent,
+    TD3Agent,
+)
 from rl_core.challenges import (
     BenchmarkChallenge,
     ChallengeEnv,
@@ -26,8 +34,16 @@ DEFAULT_EPISODES = 100
 class NavigationChallenge(BenchmarkChallenge):
     """Navigation-v0: drive to the goal with five discrete actions. No solve threshold yet."""
 
-    AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {"random": RandomAgent}
-    CONFIG_MAP: ClassVar[dict[str, str]] = {"random": "navigation_default.yaml"}
+    AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {
+        "random": RandomAgent,
+        "ppo": PPOAgent,
+        "dqn": DQNAgent,
+    }
+    CONFIG_MAP: ClassVar[dict[str, str]] = {
+        "random": "navigation_default.yaml",
+        "ppo": "navigation_ppo.yaml",
+        "dqn": "navigation_dqn.yaml",
+    }
 
     @property
     def name(self) -> str:
@@ -54,8 +70,16 @@ class NavigationContinuousChallenge(BenchmarkChallenge):
     """NavigationContinuous-v0: the same task with speed and turn rate in [-1, 1]. No solve
     threshold yet."""
 
-    AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {"random": ContinuousRandomAgent}
-    CONFIG_MAP: ClassVar[dict[str, str]] = {"random": "navigation_continuous_default.yaml"}
+    AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {
+        "random": ContinuousRandomAgent,
+        "ppo": ContinuousPPOAgent,
+        "td3": TD3Agent,
+    }
+    CONFIG_MAP: ClassVar[dict[str, str]] = {
+        "random": "navigation_continuous_default.yaml",
+        "ppo": "navigation_continuous_ppo.yaml",
+        "td3": "navigation_continuous_td3.yaml",
+    }
 
     @property
     def name(self) -> str:
