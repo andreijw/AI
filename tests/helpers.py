@@ -203,8 +203,8 @@ needs_torch = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="the config sets backend: torch"
 )
 
-# A Box2D environment (LunarLander) builds only where box2d-py is installed (./setup.sh), never in
-# CI.
+# A Box2D environment (LunarLander, BipedalWalker) builds only where box2d-py is installed
+# (./setup.sh), never in CI.
 needs_box2d = pytest.mark.skipif(
     importlib.util.find_spec("Box2D") is None, reason="Box2D is not installed (./setup.sh)"
 )
@@ -234,11 +234,45 @@ def uses_onnx(item: pytest.Item) -> bool:
 
 def env_marks(environment_id: str) -> list[pytest.MarkDecorator]:
     """The marks a test that builds ``environment_id`` needs: ``needs_box2d`` for Gymnasium's Box2D
-    environments, by their registered entry point, else none."""
-    import gymnasium as gym
+    environments (the rule the wrappers' install hint uses), else none."""
+    from rl_core.environments import uses_box2d
 
-    entry_point = str(gym.spec(environment_id).entry_point)
-    return [needs_box2d] if entry_point.startswith("gymnasium.envs.box2d") else []
+    return [needs_box2d] if uses_box2d(environment_id) else []
+
+
+def _build_challenge_env(challenge_cls: type, **settings: object) -> object:
+    """``challenge_cls``'s wrapper from environment-config ``settings``, without rendering."""
+    return challenge_cls().make_env(settings, render_mode=None)
+
+
+def challenge_env_factories() -> list[object]:
+    """One ``pytest.param`` per registered challenge, with the id of its key and the marks its
+    environment needs (:func:`env_marks`): a factory taking environment-config settings as keywords
+    (``seed``, ``obs_noise_std``, ``frame_stack`` ...) and returning the challenge's wrapper.
+
+    A test parametrized over it covers a new challenge package without being edited."""
+    from functools import partial
+
+    from rl_core.challenges import discover_challenges
+
+    return [
+        pytest.param(partial(_build_challenge_env, cls), marks=env_marks(cls().name), id=key)
+        for key, cls in sorted(discover_challenges().items())
+    ]
+
+
+def torch_td3_agent() -> type:
+    """The PyTorch TD3 class, imported only when called: torch is optional."""
+    from rl_core.agents.torch_td3_agent import TorchTD3Agent
+
+    return TorchTD3Agent
+
+
+def torch_sac_agent() -> type:
+    """The PyTorch SAC class, imported only when called: torch is optional."""
+    from rl_core.agents.torch_sac_agent import TorchSACAgent
+
+    return TorchSACAgent
 
 
 def torch_backend_cases(ddpg_config: Mapping[str, object]) -> list[tuple[type, dict[str, object]]]:

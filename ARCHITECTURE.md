@@ -22,6 +22,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │                                  MountainCarContinuousChallenge  continuous │
 │  rl_lunarlander  LunarLanderEnv  LunarLanderChallenge  discrete; Box2D      │
 │                                  LunarLanderContinuousChallenge  continuous │
+│  rl_bipedalwalker BipedalWalkerEnv BipedalWalkerChallenge continuous; Box2D │
 │                                                                             │
 │  rl_navigation   NavigationEnv   NavigationChallenge   discrete; noise, DR  │
 │                                  NavigationContinuousChallenge  continuous  │
@@ -61,8 +62,9 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 1. **Core Decoupling**: Algorithms and trainers in `rl_core` have zero coupling to specific Gymnasium environments.
 2. **Challenge Isolation**: Challenge-specific environments, physics domain randomizations, and configs reside in
    independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`, `rl_mountaincar`, `rl_lunarlander`,
-   `rl_navigation`). `rl_navigation` (Phase 8) is a library first, in three layers, each importing only the ones
-   below it, so a robot's or another project's code can stop at any layer (`tests/test_import_footprint.py`):
+   `rl_bipedalwalker`, `rl_navigation`). `rl_navigation` (Phase 8) is a library first, in three layers, each importing
+   only the ones below it, so a robot's or another project's code can stop at any layer
+   (`tests/test_import_footprint.py`):
    - `rl_navigation.sim` (`geometry`: `Arena`, batched `cast_rays`, swept-disc `segment_hits`, `clearance`,
      `occupancy_grid`; `kinematics`; `sensors`: `RangeSensor`, `hc_sr04`, `lidar`; `layouts`; `world`: `World`;
      `render`: the arena as an RGB array) imports only NumPy and the standard library, never Gymnasium or `rl_core`.
@@ -144,6 +146,7 @@ flowchart TD
         Acrobot["rl_acrobot: AcrobotEnv (Discrete)"]
         MountainCar["rl_mountaincar: MountainCarEnv (Discrete and Continuous)"]
         LunarLander["rl_lunarlander: LunarLanderEnv (Discrete and Continuous, Box2D)"]
+        BipedalWalker["rl_bipedalwalker: BipedalWalkerEnv (Continuous, Box2D)"]
         Navigation["rl_navigation: NavigationEnv (Discrete and Continuous)"]
     end
 
@@ -193,6 +196,7 @@ flowchart TD
     Acrobot --> EnvBase
     MountainCar --> EnvBase
     LunarLander --> EnvBase
+    BipedalWalker --> EnvBase
     Navigation --> EnvBase
     Navigation --> NavGym
     NavGym --> NavSim
@@ -536,8 +540,10 @@ plots/
      reset only), observation noise, the observation settings (`ObservationOptions`: `frame_stack`, `mask_velocity`,
      `frame_deltas`), episode statistics and `wrap_env`. The
      subclass takes `**observation: Unpack[ObservationOptions]` and passes it to `super().__init__`, lists its
-     velocity entries by environment id in `VELOCITY_INDICES` (`mask_velocity` is refused for an id it does not
-     list), validates its own settings, calls `_make_env()` (extra keywords go to `gym.make`), and overrides
+     velocity entries by environment id in `VELOCITY_INDICES` (`mask_velocity` is refused for an id it does not list),
+     validates its own settings, calls `_make_env()` (extra keywords go to `gym.make`; for one of Gymnasium's Box2D
+     environments, `rl_core.environments.uses_box2d`, it first raises `ImportError` with `BOX2D_INSTALL_HINT`, the
+     install steps, where Box2D is missing, so a Box2D wrapper needs no check of its own), and overrides
      `_prepare_action` (action noise) and `_apply_domain_randomization` (per-episode physics, run before the inner
      reset so it sees the new draw); both default to doing nothing. A setting a curriculum may change between
      episodes is listed in `SCHEDULABLE_SETTINGS` (the base lists `obs_noise_std`) and checked in `_checked_setting`,
@@ -556,7 +562,7 @@ plots/
      `make_env_from_config`, which reads them with `rl_core.utils.config.read_env_settings`: null takes the
      default, and any other setting given a value is rejected rather than ignored. A wrapper with observation
      settings only builds through `rl_core.environments.env_from_config(wrapper, config, ENV_DEFAULTS)` (Acrobot,
-     MountainCar, LunarLander). A vectorized factory only if something uses it (`rl_acrobot` has none).
+     MountainCar, LunarLander, BipedalWalker). A vectorized factory only if something uses it (`rl_acrobot` has none).
    - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`. It
      implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and lists its agents
      in the class variable `AGENT_CLASSES` (agent type to class). The base class's `supported_agents` and `make_agent`
@@ -577,7 +583,9 @@ plots/
 2. Add reference YAML configurations under `configs/<challenge>_<agent>.yaml`.
 3. Add corresponding test suites in `tests/test_<challenge>.py`, and the challenge's rows to the per-challenge
    tables in `tests/test_challenge_selection.py` (`EXPECTED_AGENTS`, `ENV_CLASSES`, `CONFIGURED`) and
-   `tests/test_committed_configs.py` (`STEP_BUDGETS`).
+   `tests/test_committed_configs.py` (`STEP_BUDGETS`); a test there fails while `EXPECTED_AGENTS` or `ENV_CLASSES`
+   misses a registered challenge. The seeding, settings and frame-stack tests cover it without an edit, through
+   `challenge_env_factories()` in `tests/helpers.py`, which also marks a Box2D environment `needs_box2d`.
 
 ### Adding a New Continuous Algorithm
 

@@ -15,8 +15,9 @@ The architecture is designed to support:
 - Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO with
   Gaussian policies, DDPG and TD3 with deterministic policies, and SAC, for Pendulum; random, PPO and DQN for Acrobot;
   random and DQN for MountainCar; random, DDPG and TD3 with Ornstein-Uhlenbeck exploration noise for
-  MountainCarContinuous; random and DQN for LunarLander; random and TD3 for LunarLanderContinuous; random only, so
-  far, for the range-sensor navigation tasks Navigation-v0 and NavigationContinuous-v0)
+  MountainCarContinuous; random and DQN for LunarLander; random, TD3 and SAC for LunarLanderContinuous; random, SAC
+  and TD3 for BipedalWalker; random only, so far, for the range-sensor navigation tasks Navigation-v0 and
+  NavigationContinuous-v0)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -73,6 +74,9 @@ AI/
 │   ├── rl_lunarlander/          # LunarLander-v3 and LunarLanderContinuous-v3 (Box2D) challenges
 │   │   ├── environments/        # Lunar lander wrapper (observation noise) and a factory for each id
 │   │   └── benchmark.py         # Both LunarLander benchmark challenge implementations
+│   ├── rl_bipedalwalker/        # BipedalWalker-v3 (Box2D) four-joint walking challenge
+│   │   ├── environments/        # Bipedal walker wrapper (observation noise) and its factory
+│   │   └── benchmark.py         # BipedalWalker benchmark challenge implementation
 │   ├── rl_navigation/           # Navigation-v0 and NavigationContinuous-v0 range-sensor navigation (Phase 8)
 │   │   ├── sim/                 # NumPy-only simulator: arena, ray casting, sensors, layouts, World, renderer
 │   │   ├── gym_env.py           # The Gymnasium environment; imports only Gymnasium and sim/, never rl_core
@@ -87,6 +91,7 @@ AI/
 │   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
 │   ├── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
 │   ├── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 and SAC on PyTorch)
+│   ├── bipedalwalker_*.yaml     # BipedalWalker configs (random baseline, SAC and TD3 on PyTorch)
 │   └── navigation_*.yaml        # Navigation random baselines, discrete and continuous
 ├── train.py                     # Main training entrypoint
 ├── record.py                    # Checkpoint video recorder
@@ -128,16 +133,17 @@ If script execution is disabled, run it once with `powershell -ExecutionPolicy B
 ./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG, TD3 and SAC backend (backend: torch); ~5 GiB
 ```
 
-Each creates its environment if missing, upgrades its packages and runs the CI checks (`--skip-checks` to skip).
-Both build Box2D for LunarLander first (see below); CI installs neither PyTorch nor Box2D and skips their tests. Both
-profiles, `setup.ps1` and CI's test job install the `onnx` extra (`onnx` and `onnxruntime`) for the ONNX export.
+Each creates its environment if missing, upgrades its packages and runs the CI checks (`--skip-checks` to skip). Both
+build Box2D for LunarLander and BipedalWalker first (see below); CI installs neither PyTorch nor Box2D and skips their
+tests. Both profiles, `setup.ps1` and CI's test job install the `onnx` extra (`onnx` and `onnxruntime`) for the ONNX
+export.
 
 ### LunarLander (Box2D)
 
-LunarLander needs Box2D. Gymnasium's own extra (`pip install "gymnasium[box2d]"`) pins `box2d==2.3.10`, which has
-no build for the Jetson's aarch64, so this project's `box2d` extra names `box2d-py`, which builds from source with
-`swig` (about 90 seconds; it needs a C++ compiler and the Python headers, on Debian and Ubuntu
-`sudo apt install build-essential python3.12-dev`). `./setup.sh` does it; by hand, inside the virtual environment:
+LunarLander and BipedalWalker need Box2D. Gymnasium's own extra (`pip install "gymnasium[box2d]"`) pins `box2d==2.3.10`,
+which has no build for the Jetson's aarch64, so this project's `box2d` extra names `box2d-py`, which builds from source
+with `swig` (about 90 seconds; it needs a C++ compiler and the Python headers, on Debian and Ubuntu `sudo apt install
+build-essential python3.12-dev`). `./setup.sh` does it; by hand, inside the virtual environment:
 
 ```bash
 pip install swig==4.5.1 "setuptools<85" "wheel<0.49"   # the versions it was verified with
@@ -145,8 +151,9 @@ PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-p
 pip install -e ".[dev,video,box2d,onnx]"
 ```
 
-`setup.ps1` does not install it on Windows. Without Box2D the LunarLander challenges are still listed, and building
-their environment fails at once with these steps.
+`setup.ps1` does not install it on Windows. Without Box2D the LunarLander and BipedalWalker challenges are still
+listed, and building their environment fails at once with these steps: `BaseEnvWrapper` checks every Gymnasium Box2D
+environment (`rl_core.environments.uses_box2d`) before `gym.make`, so a new Box2D challenge gets the same message.
 
 ### Manual Setup (any OS)
 
@@ -279,6 +286,14 @@ python train.py --config configs/lunarlander_dqn.yaml
 # LunarLanderContinuous SAC at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu; solves 200)
 .venv-gpu/bin/python train.py --config configs/lunarlander_continuous_sac.yaml
 
+# BipedalWalker random baseline (needs Box2D: see LunarLander above)
+python train.py --config configs/bipedalwalker_default.yaml
+
+# BipedalWalker SAC and TD3 at 400x300 on the PyTorch backend, 500,000 steps each (needs ./setup.sh --profile gpu;
+# about 0.9 and 1.3 hours alone on the Jetson's GPU, estimated; SAC reaches 300 on 4 of 5 seeds, TD3 on 2 of 5)
+.venv-gpu/bin/python train.py --config configs/bipedalwalker_sac.yaml
+.venv-gpu/bin/python train.py --config configs/bipedalwalker_td3.yaml
+
 # Navigation random baselines, discrete and continuous (no solve threshold yet; see Range-Sensor Navigation below)
 python train.py --config configs/navigation_default.yaml
 python train.py --config configs/navigation_continuous_default.yaml
@@ -288,15 +303,16 @@ python train.py --config configs/navigation_continuous_default.yaml
 
 A run solves the challenge when its average training reward over 100 episodes reaches the threshold: 475 for
 CartPole-v1, -200 for Pendulum-v1, -100 for Acrobot-v1, -110 for MountainCar-v0, 90 for MountainCarContinuous-v0, 200
-for LunarLander-v3 and LunarLanderContinuous-v3. It **holds** when the average over its last 100 episodes is still at or
-above the threshold. Each agent trains for a budget of environment steps set against its rl-baselines3-zoo reference
-(see the config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18 (CartPole PPO on
-2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment and named random streams
-([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
+for LunarLander-v3 and LunarLanderContinuous-v3, 300 for BipedalWalker-v3. It **holds** when the average over its last
+100 episodes is still at or above the threshold. Each agent trains for a budget of environment steps set against its
+rl-baselines3-zoo reference (see the config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18
+(CartPole PPO on 2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment and named
+random streams ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md); LunarLanderContinuous TD3 on 2026-11-01 in
-[`docs/benchmarks/lunarlander_continuous_results.md`](docs/benchmarks/lunarlander_continuous_results.md)).
-`train.py` uses seed 42, which was not measured, so a single `train.py` run may land on the unlucky side of these
-numbers:
+[`docs/benchmarks/lunarlander_continuous_results.md`](docs/benchmarks/lunarlander_continuous_results.md); BipedalWalker
+SAC and TD3 on 2026-11-05 in [`docs/benchmarks/bipedalwalker_results.md`](docs/benchmarks/bipedalwalker_results.md)).
+`train.py` uses seed 42, which these benchmarks do not include (BipedalWalker's one seed-42 run is below), so a
+single `train.py` run may land on the unlucky side of these numbers:
 
 | Challenge | Agent | Config | Budget (steps) | Seeds solved | Steps to solve | Held |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -315,6 +331,8 @@ numbers:
 | MountainCarContinuous-v0 | TD3 | `mountaincar_continuous_td3.yaml` (rl-zoo settings, OU noise, 400×300 networks, PyTorch backend); CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 37k to 70k | 5 of 5 |
 | LunarLander-v3 | DQN | `lunarlander_dqn.yaml` (rl-zoo settings, one hidden layer of 256, epsilon floor 0.1); seeds 1 to 5, which chose the floor; held-out seeds 11 to 15: 5 of 5 reach (166k to 297k), 4 of 5 hold; CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 152k to 228k | 5 of 5 |
 | LunarLanderContinuous-v3 | TD3 | `lunarlander_continuous_td3.yaml` (rl-zoo settings, 400×300 networks, updates after every step, PyTorch backend); CHANGELOG.md, 2026-11-01; held-out seeds 11 to 15: 5 of 5 reach and hold, CHANGELOG.md, 2026-10-30 | 400,000 | 5 of 5 | 174k to 294k | 5 of 5 |
+| BipedalWalker-v3 | SAC | `bipedalwalker_sac.yaml` (rl-zoo settings without gSDE, 400×300 networks, PyTorch backend); CHANGELOG.md, 2026-11-05 | 500,000 | 4 of 5 | 210k to 387k | 1 of 5 |
+| BipedalWalker-v3 | TD3 | `bipedalwalker_td3.yaml` (rl-zoo settings, 400×300 networks, updates after every step, PyTorch backend, half rl-zoo's budget); CHANGELOG.md, 2026-11-05 | 500,000 | 2 of 5 | 399k to 425k | 0 of 5 |
 
 CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
 47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
@@ -356,6 +374,16 @@ Greedy evaluation still varies by seed: 58 to 251 on seeds 1 to 5 (mean 182 ± 6
 seed takes about 54 minutes alone on the Jetson's GPU (CHANGELOG.md, 2026-11-01). Before that change the config
 updated after each episode, and held 200 on 3 and 4 of 5 seeds (CHANGELOG.md, 2026-10-28 and 2026-10-30). The random
 agent's final averages are -214 to -228.
+BipedalWalker SAC and TD3 both train rl-zoo's 400×300 networks on the PyTorch backend for 500,000 steps, so they need
+`.venv-gpu`; SAC explores without rl-zoo's gSDE, and TD3 gets half rl-zoo's 1,000,000 steps so the two share a budget
+(the configs' headers list the departures). SAC's greedy evaluation is 324.4 ± 1.9 (321.3 to 326.9), at 300 or more
+on 5 of 5 seeds, though its training average, exploration included, holds 300 only on seed 1 (final averages 251 to
+307). TD3's greedy evaluation is 300.1 ± 12.3 (281.6 to 317.7), at 300 or more on 2 of 5, and its final training
+averages are 242 to 295. SAC's evaluation beats TD3's on all 5 paired seeds. With three seeds sharing the Jetson's GPU
+a seed took about 1.7 hours for SAC and 2.1 hours for TD3; one alone takes about 0.9 and 1.3 hours, estimated from a
+13,000-step probe rather than a full run (CHANGELOG.md, 2026-11-05). Seed 42, which `train.py` uses, was trained once
+with SAC: its final 100-episode average is 302.4 after 636 episodes (500,412 steps, 4,752 seconds). The random agent's
+final averages are -99 to -101.
 
 ### Run any agent from one base config (quick overrides)
 
@@ -380,11 +408,11 @@ python train.py --config configs/cartpole_default.yaml --agent-type dqn --num-ep
 ```
 
 The challenge comes from the config's `environment.name`, which must be a registered challenge's environment id
-exactly (`Acrobot-v1`, `CartPole-v1`, `LunarLander-v3`, `LunarLanderContinuous-v3`, `MountainCar-v0`,
-`MountainCarContinuous-v0`, `Navigation-v0`, `NavigationContinuous-v0` or `Pendulum-v1`); any other name is an error
-that lists the options. `--challenge acrobot`, `cartpole`, `lunarlander`, `lunarlander_continuous`, `mountaincar`,
-`mountaincar_continuous`, `navigation`, `navigation_continuous` or `pendulum` must agree with that name, and is
-required for a config that has no `environment.name`.
+exactly (`Acrobot-v1`, `BipedalWalker-v3`, `CartPole-v1`, `LunarLander-v3`, `LunarLanderContinuous-v3`,
+`MountainCar-v0`, `MountainCarContinuous-v0`, `Navigation-v0`, `NavigationContinuous-v0` or `Pendulum-v1`); any other
+name is an error that lists the options. `--challenge acrobot`, `bipedalwalker`, `cartpole`, `lunarlander`,
+`lunarlander_continuous`, `mountaincar`, `mountaincar_continuous`, `navigation`, `navigation_continuous` or `pendulum`
+must agree with that name, and is required for a config that has no `environment.name`.
 An agent the challenge does not support (for example `--agent-type dqn` on Pendulum) is rejected before training.
 
 ### Range-Sensor Navigation
@@ -828,9 +856,10 @@ Workflows are automatically synchronized from `.github/workflows` by
 ### Environment Wrapper
 
 The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment, `PendulumEnv` wraps Pendulum-v1, `AcrobotEnv`
-wraps Acrobot-v1, `MountainCarEnv` wraps MountainCar-v0 and MountainCarContinuous-v0 and `LunarLanderEnv` wraps
-LunarLander-v3 and LunarLanderContinuous-v3 (observation noise only for those three), and `NavigationEnv` wraps this
-project's Navigation-v0 and NavigationContinuous-v0 (Range-Sensor Navigation below). All six subclass
+wraps Acrobot-v1, `MountainCarEnv` wraps MountainCar-v0 and MountainCarContinuous-v0, `LunarLanderEnv` wraps
+LunarLander-v3 and LunarLanderContinuous-v3 and `BipedalWalkerEnv` wraps BipedalWalker-v3 (observation noise only for
+those four), and `NavigationEnv` wraps this project's Navigation-v0 and NavigationContinuous-v0 (Range-Sensor
+Navigation below). All seven subclass
 `rl_core.environments.BaseEnvWrapper`, which owns seeding, observation noise and episode statistics. They provide:
 
 - Episode tracking and statistics
@@ -881,7 +910,7 @@ Implemented agents (in `src/rl_core/agents/`; how each one works, its update and
     and target updates (`configs/pendulum_td3.yaml`)
   - `SACAgent`: Soft Actor-Critic: a squashed Gaussian actor, twin critics with Polyak targets and a learned
     entropy temperature (`ent_coef`, `target_entropy`; `configs/pendulum_sac.yaml`, and on the PyTorch backend
-    `configs/lunarlander_continuous_sac.yaml`)
+    `configs/lunarlander_continuous_sac.yaml` and `configs/bipedalwalker_sac.yaml`)
 - **Optional PyTorch backend**: `TorchDDPGAgent`, `TorchTD3Agent` and `TorchSACAgent` train DDPG's, TD3's and SAC's
   gradient steps in PyTorch, on the GPU as CUDA graphs, and keep everything else, acting included, in NumPy. Add
   `backend: torch` to a DDPG, TD3 or SAC config's `agent.config` (optional: `device: auto|cpu|cuda`,
@@ -912,10 +941,9 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 
 ### Next Steps
 
-1. **BipedalWalker**: the BipedalWalker-v3 challenge with SAC against TD3 (the rest of the Phase 7 SAC item; SAC
-   on the PyTorch backend solves LunarLanderContinuous on 5 of 5 seeds).
-2. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder).
-3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
+1. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder), with the SAC and TD3 agents that walk
+   BipedalWalker-v3 (SAC's greedy evaluation reaches 300 on 5 of 5 seeds, TD3's on 2 of 5).
+2. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
 
 ## Future Enhancements
 

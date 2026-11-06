@@ -77,6 +77,10 @@ To optimize token usage and context window limits:
   * `src/rl_lunarlander/environments/`: lunar lander wrapper (observation noise only), shared by both ids, and a
     factory for each.
   * `src/rl_lunarlander/benchmark.py`: both LunarLander benchmark challenge implementations.
+* **`src/rl_bipedalwalker/`**: BipedalWalker-v3 four-joint walking challenge (random, SAC and TD3), which needs
+  Box2D as LunarLander does.
+  * `src/rl_bipedalwalker/environments/`: bipedal walker wrapper (observation noise only) and its factory.
+  * `src/rl_bipedalwalker/benchmark.py`: BipedalWalker benchmark challenge implementation.
 * **`src/rl_navigation/`**: Navigation-v0 (discrete) and NavigationContinuous-v0 range-sensor navigation challenges
   (Phase 8); `__init__.py` imports nothing, so each layer below can be imported without the ones above it.
   * `src/rl_navigation/sim/`: the simulator, NumPy and the standard library only (never Gymnasium or `rl_core`):
@@ -162,7 +166,7 @@ Run these commands in the root workspace directory:
 ./setup.sh
 
 # Any OS: install dependencies in editable development mode inside an activated venv
-# (LunarLander's Box2D needs the extra steps in README, LunarLander)
+# (LunarLander's and BipedalWalker's Box2D needs the extra steps in README, LunarLander)
 pip install -e ".[dev,video,onnx]"
 ```
 

@@ -1,0 +1,57 @@
+# BipedalWalker-v3 SAC Training Configuration
+# rl-baselines3-zoo's tuned SAC settings for BipedalWalker-v3 (hyperparams/sac.yml at commit 61956d9) at its 400x300
+# networks and its 500,000 steps, SB3's SAC defaults for the rest, on the PyTorch backend (backend: torch), as
+# configs/lunarlander_continuous_sac.yaml. It needs PyTorch and Box2D (./setup.sh --profile gpu, then
+# .venv-gpu/bin/python train.py ...); CI and .venv do not build it. Its checkpoints are SACAgent's NumPy format.
+# Departures from rl-zoo:
+# - No gSDE. rl-zoo explores with generalized state-dependent noise (use_sde, log_std_init -3, use_expln); the agents
+#   here sample independent Gaussian noise at every step, so it is dropped (the maintainer's decision, 2026-11-05).
+#   rl-zoo has not published this combination, so its result (297.7 +/- 33.1, greedy) is not a target for this one.
+# - Updates in bursts of 64, counted per episode. rl-zoo takes 64 gradient steps every 64 environment steps (train_freq
+#   64, gradient_steps 64). Here training.update_every: 64 hands the agent the last 64 transitions for 64 gradient
+#   steps (updates_per_step 1.0), counting from the start of each episode, and the episode's end hands over whatever
+#   is left; it is still one gradient step per transition.
+# - The solve rule is the repo's: a 100-episode training average of 300, exploration included, where rl-zoo reports a
+#   greedy evaluation.
+# A fall (or leaving the left edge) is stored as terminal; a cut at the 1600-step limit is stored as non-terminal.
+# The learning rate is constant, as in rl-zoo's entry.
+# Measured 2026-11-05 on the Jetson's GPU, seeds 1 to 5 (docs/benchmarks/bipedalwalker_results.md): 4 of 5 reach a
+# 100-episode training average of 300 (mean 307,090 steps; not seed 3) and 1 of 5 holds it (final averages 251 to
+# 307); greedy evaluation 324.4 +/- 1.9, all 5 at 300 or more, above TD3's on every seed. About 1.7 h a seed with three
+# runs sharing the GPU (about 0.9 h alone, estimated).
+
+environment:
+  name: "BipedalWalker-v3"
+  render_mode: null
+  max_episode_steps: 1600
+  seed: 42
+
+agent:
+  type: "sac"
+  config:
+    backend: torch             # Gradient steps in PyTorch, as CUDA graphs on the GPU (device: auto)
+    hidden_sizes: [400, 300]   # Actor and both critics' hidden layers, units (rl-zoo)
+    learning_rate: 0.00073     # Adam step size for actor, critics and log temperature; constant (rl-zoo)
+    gamma: 0.98                # Discount factor per step: horizon ~50 steps (rl-zoo)
+    tau: 0.02                  # Polyak rate of the target critics per gradient step: half-life ~35 steps (rl-zoo)
+    batch_size: 256            # Mini-batch size, transitions (rl-zoo)
+    buffer_capacity: 300000    # Replay buffer size, transitions: the last 60% of the run (rl-zoo)
+    learning_starts: 10000     # Uniform random actions in the bounds before learning (rl-zoo)
+    updates_per_step: 1.0      # Gradient steps per transition (rl-zoo gradient_steps 64 per train_freq 64); no cap
+    ent_coef: auto             # Temperature alpha: learned from 1.0 (auto), from x (auto_<x>), or fixed (a number)
+    target_entropy: auto       # Entropy alpha steers towards, nats of the [-1, 1] action: auto = -4 here
+    optimizer: adam
+    seed: 42
+
+training:
+  total_steps: 500000  # Environment steps (rl-zoo n_timesteps 5e5)
+  max_steps_per_episode: 1600  # Must match the environment's limit: the Trainer's default is 500
+  update_every: 64  # Hand over 64 transitions at a time, as rl-zoo trains every 64 steps (see the header)
+  eval_frequency: 100
+  save_frequency: 100
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

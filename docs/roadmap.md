@@ -10,10 +10,10 @@ an item that is done moves there, condensed, in the hand-off commit that complet
 ## Upcoming Milestones
 
 Order (the maintainer's decision, 2026-11-04): the repo is the foundation for robotics work, so Phase 8 (Robot
-Navigation) leads. Its first item, the range-sensor navigation environment, and Phase 7's SAC and BipedalWalker
-item run in parallel (separate worktrees; one is mostly code, the other mostly GPU time), then Phase 8 continues in
-order. The Training and Code Health items are picked as they become useful (parallel environments before a PPO
-comparison on BipedalWalker or navigation).
+Navigation) leads. Its first item, the range-sensor navigation environment, ran in parallel with Phase 7's SAC and
+BipedalWalker item (done; CHANGELOG.md, 2026-11-05), and Phase 8 continues in order. The
+Training and Code Health items are picked as they become useful (parallel environments before a PPO comparison on
+BipedalWalker or navigation).
 
 ### Workflow Tooling
 
@@ -58,6 +58,11 @@ an item.
   2026-11-04). Untried: rl-zoo's 8 parallel environments, which wait on the Training item "Parallel environments
   for the on-policy agents"; and gSDE exploration (its PPO version is in `~/rl-experiments/item5/` on the
   development machine).
+- [ ] **SAC's BipedalWalker training average does not hold**: `configs/bipedalwalker_sac.yaml` solved 300 on 4
+  of seeds 1 to 5 within 500,000 steps but held on 1 (final 100-episode averages 251 to 307), while every seed's
+  greedy evaluation was 321 to 327 (CHANGELOG.md, 2026-11-05). The training average includes exploration noise.
+  Untried: rl-zoo's gSDE exploration (`use_sde`, `log_std_init: -3`), which its recipe uses on this environment and
+  this framework lacks (dropped from the item by the maintainer, 2026-11-05); TD3 at rl-zoo's 1,000,000 steps.
 - [ ] **Why Pendulum PPO collapses with observation normalisation**: with `normalize_observations: true`
   `configs/pendulum_ppo.yaml` held -200 on 2 of seeds 1 to 5 against 4; seed 5 reached -187 by episode 310 and slid
   to about -1000 by episode 900 with the entropy steady and a small value loss, while the learning rate annealed
@@ -119,31 +124,9 @@ when picked.
   - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
     examined by the diagnosis above.
 
-- [~] **SAC and BipedalWalker-v3 (Tier 3)** (picked 2026-11-04; PR 3 of 4, the PyTorch SAC and LunarLanderContinuous)
-  - **Description**: Soft Actor-Critic (Haarnoja et al. 2018, with the automatic entropy temperature of the
-    follow-up paper, as Stable-Baselines3 implements it): a squashed Gaussian actor, twin critics with Polyak
-    targets, and a learned temperature against a target entropy of minus the action size. In NumPy and on the
-    PyTorch backend, as TD3 is (CHANGELOG.md, 2026-10-27). SAC is the second agent with twin critics and a replay
-    buffer, so it is the trigger for a shared off-policy base class with DDPG and TD3. Then a `bipedalwalker`
-    challenge (BipedalWalker-v3, `box2d` extra, 1,600-step episodes, threshold 300) with a SAC config translated
-    from rl-baselines3-zoo's, checked in Context7 and the zoo's `hyperparams/sac.yml` when planned.
-  - **Acceptance criteria**: the SAC loss, the entropy temperature's update and the tanh log-probability
-    correction pass finite-difference gradient checks and hand-computed values; the float64 PyTorch agent trains
-    exactly as the NumPy one (as TD3's parity tests do); on Pendulum-v1 and LunarLanderContinuous-v3 a SAC config
-    reaches the threshold on seeds 1 to 5 before BipedalWalker is tried; BipedalWalker is measured on seeds 1 to 5
-    against TD3 on the same budget, with the time a seed takes reported; `record.py` and the ONNX and C export
-    work for the SAC actor (its deterministic action, tanh of the mean).
-  - **Known edge cases**: the log-probability of an action squashed to ±1 (the correction's log of 1 - tanh²
-    needs the numerically stable form); the temperature's log parameter running away when the target entropy is
-    unreachable; BipedalWalker's -100 on a fall, which is a true termination, against the 1,600-step time limit,
-    which bootstraps; a seed taking hours, so the runs go in the background with the per-seed curves under
-    `~/rl-experiments/`.
-  - **Out of scope**: BipedalWalkerHardcore; MuJoCo (needs the `mujoco` dependency, the maintainer's decision);
-    n-step returns; PPO on BipedalWalker until parallel environments exist (Training).
-
 - [ ] **MuJoCo Tasks (Tier 3)**
-  - **Description**: Hopper and HalfCheetah after BipedalWalker, with the SAC and TD3 agents above; needs the
-    `mujoco` package (a new dependency, the maintainer's decision).
+  - **Description**: Hopper and HalfCheetah, with the SAC and TD3 agents (BipedalWalker: CHANGELOG.md,
+    2026-11-05); needs the `mujoco` package (a new dependency, the maintainer's decision).
 
 - [ ] **Learning from Pixels (Tier 4)**
   - **Description**: CarRacing or Atari. Needs convolutional networks and a GPU; not practical in pure NumPy.

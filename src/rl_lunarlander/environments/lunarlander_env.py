@@ -2,19 +2,10 @@
 
 from __future__ import annotations
 
-import importlib.util
 from types import MappingProxyType
 from typing import Unpack
 
 from rl_core.environments import BaseEnvWrapper, ObservationOptions
-
-# Gymnasium's own hint (pip install "gymnasium[box2d]") pins box2d==2.3.10, which has no build for
-# the Jetson's aarch64; box2d-py builds from source with swig (README, LunarLander).
-BOX2D_INSTALL_HINT = (
-    "LunarLander needs Box2D: run ./setup.sh, or install it by hand into the virtual environment "
-    "with `pip install swig==4.5.1 'setuptools<85' 'wheel<0.49'` and then `PATH=<venv>/bin:$PATH "
-    "pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.5` (README, LunarLander)"
-)
 
 
 class LunarLanderEnv(BaseEnvWrapper):
@@ -59,11 +50,10 @@ class LunarLanderEnv(BaseEnvWrapper):
                 :class:`rl_core.environments.BaseEnvWrapper`.
 
         Raises:
-            ImportError: If Box2D is not installed, naming how to install it here.
+            ImportError: If Box2D is not installed, naming how to install it here
+                (:class:`rl_core.environments.BaseEnvWrapper` checks).
         """
         super().__init__(
             env_name, render_mode, max_episode_steps, seed, obs_noise_std, **observation
         )
-        if importlib.util.find_spec("Box2D") is None:
-            raise ImportError(BOX2D_INSTALL_HINT)
         self._make_env()

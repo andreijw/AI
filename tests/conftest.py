@@ -9,11 +9,12 @@ from tests.helpers import FAKE_PACKAGE_PREFIX, uses_onnx
 
 
 def pytest_collection_modifyitems(items):
-    """Run the tests that need onnxruntime after all the others. Importing it starts a thread that
-    lives as long as the process, and a test that forks afterwards (an async vector environment)
-    could deadlock in the child (Python warns "This process ... is multi-threaded, use of fork() may
-    lead to deadlocks")."""
-    items.sort(key=uses_onnx)  # stable: the order within each group is kept
+    """Run the tests that start a thread for the rest of the process after all the others: those
+    that render through pygame (they use ``clear_sdl``; SDL starts a native thread), then those that
+    need onnxruntime (importing it starts one). A test that forks afterwards (an async vector
+    environment) could deadlock in the child (Python warns "This process ... is multi-threaded, use
+    of fork() may lead to deadlocks")."""
+    items.sort(key=lambda item: (uses_onnx(item), "clear_sdl" in item.fixturenames))  # stable sort
 
 
 @pytest.fixture(autouse=True)

@@ -23,7 +23,14 @@ from rl_lunarlander.environments import (
     make_continuous_env_from_config,
     make_env_from_config,
 )
-from tests.helpers import minimal_config, needs_box2d, needs_torch, run_main
+from tests.helpers import (
+    minimal_config,
+    needs_box2d,
+    needs_torch,
+    run_main,
+    torch_sac_agent,
+    torch_td3_agent,
+)
 
 CHALLENGES = {
     "lunarlander": (LunarLanderChallenge, "LunarLander-v3"),
@@ -140,18 +147,6 @@ def test_observation_noise_is_applied(key):
 # ---------------------------------------------------------------------------
 
 
-def _torch_td3_agent() -> type:
-    from rl_core.agents.torch_td3_agent import TorchTD3Agent  # here, not above: torch is optional
-
-    return TorchTD3Agent
-
-
-def _torch_sac_agent() -> type:
-    from rl_core.agents.torch_sac_agent import TorchSACAgent  # here, not above: torch is optional
-
-    return TorchSACAgent
-
-
 @needs_box2d
 @pytest.mark.parametrize(
     ("key", "agent_type", "expected_class", "action_dim"),
@@ -159,8 +154,8 @@ def _torch_sac_agent() -> type:
         ("lunarlander", "random", lambda: RandomAgent, 4),
         ("lunarlander", "dqn", lambda: DQNAgent, 4),
         ("lunarlander_continuous", "random", lambda: ContinuousRandomAgent, 2),
-        pytest.param("lunarlander_continuous", "td3", _torch_td3_agent, 2, marks=needs_torch),
-        pytest.param("lunarlander_continuous", "sac", _torch_sac_agent, 2, marks=needs_torch),
+        pytest.param("lunarlander_continuous", "td3", torch_td3_agent, 2, marks=needs_torch),
+        pytest.param("lunarlander_continuous", "sac", torch_sac_agent, 2, marks=needs_torch),
     ],
     ids=[
         "lunarlander-random",

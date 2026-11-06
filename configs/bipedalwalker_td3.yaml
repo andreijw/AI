@@ -1,0 +1,56 @@
+# BipedalWalker-v3 TD3 Training Configuration
+# rl-baselines3-zoo's TD3 settings for BipedalWalker-v3 (hyperparams/td3.yml at commit 61956d9) at its 400x300
+# networks, SB3's TD3 defaults for the rest, on the PyTorch backend (backend: torch), as
+# configs/lunarlander_continuous_td3.yaml. It needs PyTorch and Box2D (./setup.sh --profile gpu, then
+# .venv-gpu/bin/python train.py ...); CI and .venv do not build it. Its checkpoints are TD3Agent's NumPy format.
+# Departures from rl-zoo:
+# - 500,000 steps, the budget of configs/bipedalwalker_sac.yaml, so the two compare on the same budget; rl-zoo trains
+#   TD3 for 1e6 (306.0 +/- 56.9, greedy) (the maintainer's decision, 2026-11-05).
+# - The solve rule is the repo's: a 100-episode training average of 300, exploration noise included, where rl-zoo
+#   reports a greedy evaluation.
+# Like rl-zoo it updates after every environment step (training.update_every: 1), so training starts at the 10,000th
+# warm-up action. A fall (or leaving the left edge) is stored as terminal; a cut at the 1600-step limit is stored as
+# non-terminal.
+# Measured 2026-11-05 on the Jetson's GPU, seeds 1 to 5 (docs/benchmarks/bipedalwalker_results.md): 2 of 5 reach a
+# 100-episode training average of 300 (seeds 3 and 4, mean 411,898 steps) and none holds it (final averages 242 to
+# 295); greedy evaluation 300.1 +/- 12.3, 2 of 5 at 300 or more. About 2.1 h a seed with three runs sharing the GPU
+# (about 1.3 h alone, estimated).
+
+environment:
+  name: "BipedalWalker-v3"
+  render_mode: null
+  max_episode_steps: 1600
+  seed: 42
+
+agent:
+  type: "td3"
+  config:
+    backend: torch                   # Gradient steps in PyTorch, as CUDA graphs on the GPU (device: auto)
+    hidden_sizes: [400, 300]         # Actor and both critics' hidden layers (rl-zoo)
+    learning_rate: 0.001             # Adam step size for actor and critics (rl-zoo)
+    gamma: 0.98                      # Discount factor (rl-zoo)
+    tau: 0.005                       # Polyak rate per actor step (every policy_delay gradient steps; SB3 default)
+    batch_size: 256                  # Mini-batch size (SB3 default)
+    buffer_capacity: 200000          # Replay buffer size: the last 40% of the run (rl-zoo)
+    learning_starts: 10000           # Uniform random actions in the bounds before learning (rl-zoo)
+    noise_type: gaussian             # Exploration noise (rl-zoo: normal)
+    noise_std: 0.1                   # Std in the [-1, 1] action space (rl-zoo)
+    updates_per_step: 1.0            # Gradient steps per transition (rl-zoo train_freq 1, gradient_steps 1); no cap
+    policy_delay: 2                  # Gradient steps per actor and target update (SB3 default)
+    target_policy_noise: 0.2         # Std of the target-action smoothing noise, [-1, 1] space (SB3 default)
+    target_noise_clip: 0.5           # Bound on that noise (SB3 default)
+    optimizer: adam
+    seed: 42
+
+training:
+  total_steps: 500000  # Environment steps (rl-zoo: 1e6); the same budget as SAC (see the header)
+  max_steps_per_episode: 1600  # Must match the environment's limit: the Trainer's default is 500
+  update_every: 1  # Update after every environment step, as rl-zoo (train_freq 1)
+  eval_frequency: 100
+  save_frequency: 100
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+logging:
+  level: "INFO"
+  log_metrics: true

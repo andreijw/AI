@@ -22,11 +22,14 @@ PENDULUM_DR = {"l": [0.8, 1.2], "g": [9.0, 10.5]}
 
 
 def _wrapper_classes():
-    """Every challenge's wrapper, LunarLander's included where Box2D is not installed: the class
-    imports without it."""
+    """Every challenge's wrapper, the Box2D ones (LunarLander, BipedalWalker) included where Box2D
+    is not installed: their classes import without it."""
     classes = [CartPoleEnv, PendulumEnv, AcrobotEnv, MountainCarEnv, NavigationEnv]
-    module = importlib.import_module("rl_lunarlander.environments.lunarlander_env")
-    return classes + [module.LunarLanderEnv]
+    box2d = [
+        importlib.import_module("rl_lunarlander.environments.lunarlander_env").LunarLanderEnv,
+        importlib.import_module("rl_bipedalwalker.environments.bipedalwalker_env").BipedalWalkerEnv,
+    ]
+    return classes + box2d
 
 
 def _cartpole(**settings):

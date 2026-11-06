@@ -38,6 +38,9 @@ STEP_BUDGETS = {
     ("lunarlander_continuous", "sac"): 500_000,
     ("navigation", "random"): 40_000,
     ("navigation_continuous", "random"): 40_000,
+    ("bipedalwalker", "random"): 50_000,
+    ("bipedalwalker", "sac"): 500_000,
+    ("bipedalwalker", "td3"): 500_000,
     ("cartpole", "reinforce"): 500_000,
     ("cartpole", "actor_critic"): 500_000,
     ("cartpole", "ppo"): 200_000,
@@ -264,6 +267,81 @@ def test_lunarlander_continuous_sac_uses_rl_zoo_settings_on_the_torch_backend():
     assert limits == (1000, 1000)
     assert config["training"]["total_steps"] == 500_000
     assert config["training"].get("update_every") == 1, "SB3 updates after every step"
+
+
+def _bipedalwalker_config(agent_type: str) -> dict:
+    """The committed BipedalWalker config for ``agent_type``, read from the file: CI checks it
+    without PyTorch or Box2D, which it needs."""
+    config = load_config(os.path.join(CONFIGS_DIR, f"bipedalwalker_{agent_type}.yaml"))
+    assert config["agent"]["type"] == agent_type
+    assert config["environment"]["name"] == "BipedalWalker-v3"
+    return config
+
+
+@pytest.mark.parametrize("agent_type", ["default", "sac", "td3"])
+def test_bipedalwalker_episodes_run_to_gymnasiums_1600_step_limit(agent_type):
+    """BipedalWalker-v3 cuts an episode at 1600 steps. The Trainer's own cut defaults to 500,
+    which would end every episode of a walker that does not fall at a third of its length (and
+    evaluation episodes too), so each config sets both limits to 1600."""
+    config = load_config(os.path.join(CONFIGS_DIR, f"bipedalwalker_{agent_type}.yaml"))
+    limits = (
+        config["training"]["max_steps_per_episode"],
+        config["environment"]["max_episode_steps"],
+    )
+    assert limits == (1600, 1600), "the trainer's and the environment's limits should be 1600"
+
+
+def test_bipedalwalker_sac_uses_rl_zoo_settings_without_gsde():
+    """rl-zoo's tuned SAC for BipedalWalker-v3 (hyperparams/sac.yml) on the PyTorch backend: lr
+    7.3e-4 (constant, as rl-zoo), buffer 300,000, γ 0.98, τ 0.02, 64 gradient steps every 64
+    environment steps (train_freq 64, gradient_steps 64), 10,000 warm-up steps, 500,000 steps.
+    rl-zoo's gSDE (use_sde, log_std_init -3, use_expln) has no counterpart here: the maintainer
+    dropped it (2026-11-05)."""
+    config = _bipedalwalker_config("sac")
+    agent = config["agent"]["config"]
+    assert agent["backend"] == "torch"
+    assert agent["hidden_sizes"] == [400, 300]
+    assert (agent["learning_rate"], agent["gamma"], agent["tau"]) == pytest.approx(
+        (7.3e-4, 0.98, 0.02)
+    )
+    assert (agent["batch_size"], agent["learning_starts"], agent["buffer_capacity"]) == (
+        256,
+        10_000,
+        300_000,
+    )
+    assert agent["updates_per_step"] == 1.0 and "max_updates_per_call" not in agent
+    assert (agent["ent_coef"], agent["target_entropy"]) == ("auto", "auto")
+    assert "max_grad_norm" not in agent, "SB3's SAC clips no gradient"
+    assert config["training"]["update_every"] == 64, (
+        "rl-zoo trains every 64 steps with 64 gradient steps (train_freq 64, gradient_steps 64)"
+    )
+    assert config["training"]["total_steps"] == 500_000
+    assert config["training"]["eval_frequency"] == 100
+
+
+def test_bipedalwalker_td3_uses_rl_zoo_settings_on_the_sac_budget():
+    """rl-zoo's TD3 for BipedalWalker-v3 (hyperparams/td3.yml) with SB3's TD3 defaults, on the
+    PyTorch backend, one gradient step after every environment step; 500,000 steps, the SAC
+    budget, where rl-zoo trains 1e6 (the maintainer's decision, 2026-11-05)."""
+    config = _bipedalwalker_config("td3")
+    agent = config["agent"]["config"]
+    assert agent["backend"] == "torch"
+    assert agent["hidden_sizes"] == [400, 300]
+    assert (agent["learning_rate"], agent["gamma"], agent["tau"]) == pytest.approx(
+        (0.001, 0.98, 0.005)
+    )
+    assert (agent["batch_size"], agent["learning_starts"], agent["buffer_capacity"]) == (
+        256,
+        10_000,
+        200_000,
+    )
+    assert (agent["noise_type"], agent["noise_std"]) == ("gaussian", pytest.approx(0.1))
+    assert agent["updates_per_step"] == 1.0 and "max_updates_per_call" not in agent
+    assert agent["policy_delay"] == 2
+    assert (agent["target_policy_noise"], agent["target_noise_clip"]) == pytest.approx((0.2, 0.5))
+    assert config["training"]["update_every"] == 1, "rl-zoo trains after every step (train_freq 1)"
+    assert config["training"]["total_steps"] == 500_000
+    assert config["training"]["eval_frequency"] == 100
 
 
 def test_pendulum_sac_uses_rl_zoos_settings_for_40000_steps():

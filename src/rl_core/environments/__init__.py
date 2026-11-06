@@ -9,6 +9,7 @@ from .base_env import (
     checked_randomization,
     checked_range,
     non_negative_setting,
+    uses_box2d,
 )
 from .factory import env_from_config
 from .observation import OBSERVATION_DEFAULTS, ObservationOptions
@@ -25,4 +26,5 @@ __all__ = [
     "checked_range",
     "env_from_config",
     "non_negative_setting",
+    "uses_box2d",
 ]

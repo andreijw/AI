@@ -13,8 +13,9 @@
 
 Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥1.0**
 · **NumPy** agents, with an optional **PyTorch** backend for DDPG, TD3 and SAC only (`backend: torch`; see
-CONTRIBUTING.md "Framework Independence") · optional **Box2D** for LunarLander (`box2d` extra) · optional **onnx**
-and **onnxruntime** for the ONNX export (`onnx` extra) · **pytest** · **Ruff** (line length 100) · **mypy**.
+CONTRIBUTING.md "Framework Independence") · optional **Box2D** for LunarLander and BipedalWalker (`box2d` extra) ·
+optional **onnx** and **onnxruntime** for the ONNX export (`onnx` extra) · **pytest** · **Ruff** (line length 100)
+· **mypy**.
 
 - **Coding standards** → **[CONTRIBUTING.md](CONTRIBUTING.md)** §1–3.
 - **Feature/bug workflow** → **[CONTRIBUTING.md §4](CONTRIBUTING.md#4-feature--bug-workflow)**. Follow it in order for
@@ -102,7 +103,8 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
   2026-10-27). The C export tests (`needs_cc`) skip on Windows and where no `CC`, `cc`, `gcc` or `clang` is found;
   CI's Linux runner has gcc, and `test_ci_has_a_c_compiler` fails there if it ever does not. CI's test job installs
   the `onnx` extra (maintainer's decision, 2026-11-02), so the ONNX tests (`needs_onnx`) run there.
-  `tests/conftest.py` runs them after every other test: importing onnxruntime starts a thread, and a fork after it
+  `tests/conftest.py` runs them after every other test, and the tests that render through pygame (fixture
+  `clear_sdl`) just before them: importing onnxruntime or starting SDL starts a native thread, and a fork after it
   (an async vector environment) may deadlock.
 
 ## Tool Mapping (GEMINI.md → Claude Code)

@@ -27,7 +27,7 @@ from rl_mountaincar.environments import (
 from rl_mountaincar.environments import make_env_from_config as mountaincar_from_config
 from rl_pendulum.environments import make_env_from_config as pendulum_from_config
 from rl_pendulum.environments import make_vec_env_from_config as pendulum_vec_from_config
-from tests.helpers import env_marks, minimal_config, run_main
+from tests.helpers import challenge_env_factories, env_marks, minimal_config, run_main
 
 
 def _obs(*values: float) -> np.ndarray:
@@ -271,7 +271,8 @@ def test_differenced_space_holds_what_the_differences_return():
 
 # --- The environment wrappers -------------------------------------------------------------------
 
-# Each challenge's config factory, environment id and velocity entries in Gymnasium's layout.
+# Each challenge's config factory, environment id and velocity entries in Gymnasium's layout (a
+# challenge whose wrapper lists none refuses mask_velocity, as BipedalWalker's does).
 WRAPPER_CASES = [
     pytest.param(cartpole_from_config, "CartPole-v1", (1, 3), id="cartpole"),
     pytest.param(pendulum_from_config, "Pendulum-v1", (2,), id="pendulum"),
@@ -333,10 +334,11 @@ def test_mask_velocity_zeroes_exactly_the_velocity_entries(from_config, env_id, 
         masked.close()
 
 
-@pytest.mark.parametrize(("from_config", "env_id", "velocity"), WRAPPER_CASES)
-def test_frame_stack_stacks_the_observations_of_every_challenge(from_config, env_id, velocity):
-    plain = from_config({"name": env_id, "seed": 4})
-    stacked = from_config({"name": env_id, "seed": 4, "frame_stack": 3})
+@pytest.mark.parametrize("make_env", challenge_env_factories())
+def test_frame_stack_stacks_the_observations_of_every_challenge(make_env):
+    plain = make_env(seed=4)
+    stacked = make_env(seed=4, frame_stack=3)
+    env_id = plain.env_name
     try:
         d = plain.observation_space.shape[0]
         assert gym.spaces.flatdim(stacked.observation_space) == 3 * d, (
