@@ -121,6 +121,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Unused imports in __init__.py files
+# Matrices keep the Kalman filter's names (F, G, H, P, Q, R, K, S), as in the literature.
+"src/rl_navigation/estimation/*.py" = ["N803", "N806"]
+"tests/test_{ekf_localization,kalman}.py" = ["N806"]
 
 [tool.bandit]
 exclude_dirs = ["/tests", "/test"]

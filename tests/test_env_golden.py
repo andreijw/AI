@@ -6,8 +6,11 @@ arrays recorded before the wrappers' settings became changeable between episodes
 work): CartPole with observation noise, action flips and all four randomized parameters (CartPole
 draws them in a fixed order whatever the mapping's order); Pendulum with observation and action
 noise and its randomization keys out of order and under their long names (Pendulum draws in the
-mapping's order, so this case guards the order of draws). Each case plays three seeded episodes with a fixed
-action sequence and records every observation, reward and the physics drawn for each episode.
+mapping's order, so this case guards the order of draws); and the continuous navigation
+environment with action noise and randomized slip, sensor noise and dropout (recorded on 2026-11-06
+before the state-estimation work, which must leave the simulator's draws alone). Each case plays
+three seeded episodes with a fixed action sequence and records every observation, reward and the
+physics drawn for each episode.
 
 Numbers agree to a relative 1e-12, as in tests/test_dqn_golden.py: the file was recorded on one
 machine (aarch64). On the recording machine, ENV_GOLDEN_EXACT=1 demands every array bit for bit.
@@ -24,6 +27,7 @@ import numpy as np
 import pytest
 
 from rl_cartpole.environments.cartpole_env import CartPoleEnv
+from rl_navigation.environments.navigation_env import NavigationEnv
 from rl_pendulum.environments.pendulum_env import PendulumEnv
 
 GOLDEN = Path(__file__).parent / "data" / "env_wrapper_trajectories.npz"
@@ -34,6 +38,7 @@ EPISODES, STEPS = 3, 40
 
 CARTPOLE_PHYSICS = ("gravity", "masscart", "masspole", "length", "total_mass", "polemass_length")
 PENDULUM_PHYSICS = ("g", "m", "l")
+NAVIGATION_PHYSICS = ("wheel_slip", "sensor_noise_std", "dropout_prob")
 
 
 def _cartpole():
@@ -61,7 +66,25 @@ def _pendulum():
     return env, (lambda t: np.array([np.sin(t / 3.0) * 1.5], dtype=np.float32)), PENDULUM_PHYSICS
 
 
-CASES = {"cartpole": _cartpole, "pendulum": _pendulum}
+def _navigation():
+    env = NavigationEnv(
+        "NavigationContinuous-v0",
+        seed=3,
+        action_noise_std=0.1,
+        domain_randomization={
+            "wheel_slip": [0.0, 0.3],
+            "sensor_noise_std": [0.0, 0.03],
+            "dropout_prob": [0.0, 0.1],
+        },
+    )
+    return (
+        env,
+        (lambda t: np.array([0.8, np.sin(t / 4.0)], dtype=np.float32)),
+        NAVIGATION_PHYSICS,
+    )
+
+
+CASES = {"cartpole": _cartpole, "pendulum": _pendulum, "navigation": _navigation}
 
 
 def _outputs(name):
@@ -119,6 +142,10 @@ def test_the_recorded_cases_draw_new_physics_each_episode():
     """Without this the file could not notice randomization that stopped drawing."""
     with np.load(GOLDEN) as golden:
         assert {key.split("/")[0] for key in golden.files} == set(CASES)
-        for name, randomized in (("cartpole", slice(0, 4)), ("pendulum", slice(0, 3))):
+        for name, randomized in (
+            ("cartpole", slice(0, 4)),
+            ("pendulum", slice(0, 3)),
+            ("navigation", slice(0, 3)),
+        ):
             physics = golden[f"{name}/physics"][:, randomized]
             assert len(np.unique(physics, axis=0)) == EPISODES, f"{name} repeated its physics"

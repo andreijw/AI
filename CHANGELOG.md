@@ -12,6 +12,30 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-06
+
+### Added
+
+- **Wheel odometry and EKF localization** (`feature/state-estimation`; PR 1 of 3 of the roadmap item "State
+  estimation"): `rl_navigation.sim.WheelOdometry` reads each wheel's travel with noise whose variance grows with
+  the distance rolled (placeholder wheel base 0.2 m and k = 2.5e-4 m until the robot is calibrated, the
+  maintainer's decision), and `rl_navigation.estimation.EkfLocalizer` tracks the pose from it and from HC-SR04 or
+  lidar ranges on a known map, through a `RangeMap` protocol (`SensorMap` for the simulator's arena now, a grid
+  later). The update is an iterated EKF (up to 3 guarded Gauss–Newton steps) in Joseph form, with a
+  finite-difference Jacobian, a linearity check that drops beams across a corner (at every iterate), max-range,
+  min-range and NaN readings as dropouts, and a 3σ gate. It imports only NumPy and the simulator, for the robot.
+  Over 50 seeded layouts × 600 steps at the filter's defaults: position RMSE 5.7 mm (HC-SR04) and 1.8 mm (64-beam
+  lidar), 6.3 and 2.0 mm with 30 % dropout, against 0.93 m for dead reckoning on the same encoders (45 of 50 runs
+  whose error exceeded 0.5 m at some step). NEES (3 degrees of freedom): mean 3.2 to 3.3, median 2.4 to 2.5, and 96
+  to 97 % of steps under the chi-square 97.5 % point 9.35 (97.5 % expected), with occasional spikes (the worst step
+  of any run about 340 on the sonars, seed 2, and 2,700 on the lidar, seed 30, a start-up transient). In an empty
+  arena the lidar filter's ANEES is 3.05, inside the 95 % band [2.19, 3.94], a loose check that catches a filter
+  told the encoders are four times quieter (6.66) but not one told they are half as noisy (3.84). A navigation
+  golden test shows the environment unchanged. Found and fixed before review: iterates skipped the linearity check,
+  so a beam across a corner collapsed the heading variance (lidar seed 18, step 96: a corner gave dh/dθ = -17,938
+  at an iterate and σθ fell to 5.8e-7 rad against a 1.2e-3 rad error; mean NEES was 238 on the lidar and 23,978 on
+  the sonars with dropout). The particle filter is PR 2.
+
 ## 2026-11-05
 
 ### Added

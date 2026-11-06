@@ -172,11 +172,59 @@ full items when picked.
   - **Out of scope**: maps given to the agent, moving obstacles, 3D, odometry drift (step 2), real hardware
     (step 5), and a physics engine (kinematics only).
 
-- [ ] **State estimation**
-  - **Description**: A Kalman filter and an extended Kalman filter for the robot's pose from wheel odometry and range
-    readings, then a particle filter (Monte Carlo localization) on a known map, in the step 1 simulator with
-    odometry noise added. Judged by the pose error against ground truth over many seeded runs, with and without
-    sensor dropouts.
+- [~] **State estimation (`rl_navigation.estimation`)** (picked 2026-11-06; PR 1 of 3, wheel odometry and EKF
+  localization; PR 2 Monte Carlo localization; PR 3 the comparison report, its CLI, and any hooks the maintainer
+  picks)
+  - **Description**: The robot's pose `(x, y, θ)` is estimated from wheel odometry and range readings on a known
+    map, in the step 1 simulator with odometry noise added.
+    - **Odometry.** The simulator gets a wheel-encoder model, `WheelOdometry`. Each step it gives the left and
+      right wheel travel, with noise whose variance grows with the distance each wheel rolls (Siegwart,
+      Nourbakhsh and Scaramuzza, *Introduction to Autonomous Mobile Robots*, 2nd ed., §5.2.4). That is what the
+      real base's encoders measure.
+    - **EKF.** An extended Kalman filter predicts with this model on the exact unicycle arc. It corrects with
+      HC-SR04 or lidar ranges, expected from a map through a small `RangeMap` protocol: `Arena` with a
+      `RangeSensor` now, an occupancy grid at step 3. Its update is iterated (Gauss–Newton, guarded) and in
+      Joseph form. The Kalman update it calls is the linear Kalman filter, tested on its own.
+    - **MCL.** A particle filter (Monte Carlo localization) on the same map adds global localization and recovery
+      from a kidnapping, which the EKF cannot do.
+    - **Library.** Both are a library a robot program calls (`predict(wheel_travel)`, `update(readings)`, `pose`,
+      `covariance`). Both import only NumPy and `rl_navigation.sim`.
+    - **Judged by** the simulator's true pose over many seeded runs, with and without sensor dropouts, against
+      dead reckoning on the same odometry.
+  - **Acceptance criteria**:
+    - Predict values and their Jacobians match hand computation and central differences.
+    - The measurement Jacobian matches analytic values for a beam on a wall and on a circle.
+    - The Joseph form keeps `P` positive-definite where the standard form gives 0.
+    - A stationary robot converges.
+    - An all-dropout scan or an all-NaN scan changes nothing.
+    - An outlier is gated out.
+    - In an empty 4 × 4 m arena with the lidar, the ANEES averaged over 30 seeded runs × 100 steps lies in the
+      χ²(90)/30 95 % band [2.19, 3.94]. With the filter's process noise a quarter of the true one,
+      it lies above 3.94 (halved, it measured 3.84, inside the band).
+    - Over seeded layouts, a function reports for each preset, with and without 30 % dropout: position and
+      heading RMSE, mean NEES, beams used, and the lost count. The EKF beats dead reckoning on every row.
+    - MCL localizes globally and recovers from a kidnapping on a set share of seeded layouts.
+    - A seeded navigation-environment trajectory is unchanged (golden test).
+    - `rl_navigation.estimation` imports neither Gymnasium nor `rl_core` (subprocess test).
+    - There are TESTING rows for the evaluation.
+  - **Known edge cases**:
+    - A dropout, a NaN from a driver and "nothing within range" are indistinguishable for the EKF, and all count
+      as dropouts.
+    - Readings clipped at `min_range`.
+    - Beams near a corner or at a circle's edge, where the expected range jumps.
+    - A probe pose past a wall, which casts `inf`.
+    - Beams with no wall in range.
+    - A stationary robot, which has zero process noise: its covariance keeps shrinking, so after a bump of more
+      than about 3 cm every beam is gated and the EKF never recovers (PR 1 review, 2026-11-06). PR 3 decides
+      between a process-noise floor, re-initialisation after several all-gated scans, and leaving it to MCL.
+    - The heading wrapping at ±π.
+    - The `sinc` derivative near Δθ = 0.
+    - A whole scan gated out, which loses the track.
+    - An iterate leaving the linear region.
+    - A collision, where the wheels turn while the robot stays put. Runs end at a collision.
+    - Symmetric arenas, which give MCL several clusters.
+  - **Out of scope**: SLAM and unknown maps (step 3), systematic odometry error and its calibration (UMBmark, step
+    5), an IMU, a UKF, moving obstacles, ROS 2, and hardware.
 
 - [ ] **Occupancy-grid mapping and SLAM**
   - **Description**: Occupancy-grid mapping from range readings with known poses (log-odds, an inverse sensor

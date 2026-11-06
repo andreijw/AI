@@ -85,9 +85,14 @@ To optimize token usage and context window limits:
   (Phase 8); `__init__.py` imports nothing, so each layer below can be imported without the ones above it.
   * `src/rl_navigation/sim/`: the simulator, NumPy and the standard library only (never Gymnasium or `rl_core`):
     `geometry.py` (arena, batched ray casting, swept-disc collision, occupancy grid), `kinematics.py` (unicycle),
-    `sensors.py` (range sensors, `hc_sr04` and `lidar` presets), `layouts.py` (random layouts with a reachable
-    goal), `world.py` (`World`: pose, motion with wheel slip, collision, goal, sensors) and `render.py` (the arena
-    as an RGB array).
+    `sensors.py` (range sensors, `hc_sr04` and `lidar` presets), `odometry.py` (`WheelOdometry`: noisy left and
+    right wheel travel), `layouts.py` (random layouts with a reachable goal), `world.py` (`World`: pose, motion
+    with wheel slip, collision, goal, sensors) and `render.py` (the arena as an RGB array).
+  * `src/rl_navigation/estimation/`: pose estimation on a known map for the robot's own program, NumPy and
+    `rl_navigation.sim` only (never Gymnasium, `gym_env` or `rl_core`): `maps.py` (the `RangeMap` protocol and
+    `SensorMap`), `kalman.py` (the Kalman update in Joseph form), `ekf.py` (`EkfLocalizer`, iterated EKF
+    localization) and `evaluation.py` (`run_trial` and `summarize`: seeded trials against the true pose). No
+    environment or benchmark uses it.
   * `src/rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.
     It imports Gymnasium and `rl_navigation.sim` only, never `rl_core`, so it works outside this framework.
   * `src/rl_navigation/environments/`: `NavigationEnv`, the framework wrapper shared by both ids (action noise,
