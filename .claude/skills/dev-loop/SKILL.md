@@ -48,7 +48,9 @@ Every command below is written `python -m …`. `python` means the virtual envir
 
 Read `docs/roadmap.md` (it holds only open work) and the newest entries in `CHANGELOG.md` for what just
 landed. Offer two or three options with a recommendation and the reason, including what
-each one touches. Wait for the pick.
+each one touches, and say which of them can run together (see "Working in parallel"): by default propose a
+batch of two or three independent items rather than one. Wait for the pick. When the maintainer leaves the
+choice to you ("as you see fit"), pick the batch yourself and say why.
 
 ### 2. Roadmap item
 
@@ -198,8 +200,29 @@ hand-off with the command for the maintainer to run.
 
 ## Working in parallel
 
-The maintainer wants the loop to go faster where the work allows it (2026-11-04). The touchpoints do not
-change: one pick, one plan approval and one commit per item, batched when several items run together.
+The maintainer wants the loop to go faster where the work allows it (2026-11-04), and parallel is the
+default whenever it is possible and a good idea (2026-11-06). The touchpoints do not change: one pick, one
+plan approval and one commit per item, batched when several items run together.
+
+**Run items together when they do not collide.** Before starting work, ask of the open items:
+
+- **Do they touch different code?** Two items that edit the same module, config or test file wait for each
+  other; `CHANGELOG.md` and `docs/roadmap.md` do not count (you write them at hand-off).
+- **Do they need different resources?** Pair a compute-bound item (a multi-hour experiment) with a code-bound
+  one (a new library module, a fix, docs), so the cores stay busy without the experiment slowing down. Two
+  experiments together must still fit in 3 runs at once.
+- **Does one need the other's result?** Then it waits, or is stacked on the other's branch (as the Box2D pin
+  fix sat on #184, 2026-11-06), and its PR opens after the first merges.
+
+Run in parallel when all three allow it; say in the proposal what runs together and why, and what waits and
+why. Keep doing so inside each item: while an experiment runs, plan or implement the next item, run doc-sync,
+or review; a small fix found on the way (a version mismatch, a stale comment) gets its own branch and PR
+instead of waiting or riding along. Do not parallelise for its own sake: one small item, steps that need the
+previous step's output, or work the maintainer must decide first stay sequential.
+
+**Keep the planner on its item.** The agent that planned an item knows its probes and trade-offs; send the
+architect's findings back to it for revision, and after approval have it implement the plan (SendMessage),
+rather than briefing a fresh agent from scratch.
 
 **Subagents are your call.** Spawn them when the work splits into parts that do not depend on each other:
 the plan review and the PR review (always, as above), two or more roadmap items picked together (one agent
