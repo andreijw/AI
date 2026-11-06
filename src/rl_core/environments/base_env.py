@@ -1,6 +1,7 @@
 """The behaviour every challenge's environment wrapper shares: seeding, observation noise and episode
 statistics around a Gymnasium environment."""
 
+import importlib.util
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -27,6 +28,15 @@ from .observation import (
     mask_entries,
     masked_space,
     stacked_space,
+)
+
+# How to install Box2D here. Gymnasium's own hint (pip install "gymnasium[box2d]") pins
+# box2d==2.3.10, which has no build for the Jetson's aarch64; box2d-py builds from source with swig
+# (README, LunarLander).
+BOX2D_INSTALL_HINT = (
+    "{env_name} needs Box2D: run ./setup.sh, or install it by hand into the virtual environment "
+    "with `pip install swig==4.5.1 'setuptools<85' 'wheel<0.49'` and then `PATH=<venv>/bin:$PATH "
+    "pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.5` (README, LunarLander)"
 )
 
 # Checkpoint keys of an environment's generators: the wrapper's noise stream and Gymnasium's
@@ -61,6 +71,24 @@ def non_negative_setting(name: str, value: Any) -> float:
     if not np.isfinite(value) or value < 0.0:
         raise ValueError(f"{name} must be a finite, non-negative number, got {value!r}")
     return float(value)
+
+
+def uses_box2d(env_name: str) -> bool:
+    """Whether ``env_name`` is one of Gymnasium's Box2D environments, by its registered entry
+    point. Reading the registry imports nothing, so this works where Box2D is not installed. An id
+    the registry does not know (``gym.make`` also takes "module:Env-vN") is left to ``gym.make``."""
+    try:
+        spec = gym.spec(env_name)
+    except gym.error.Error:
+        return False
+    return str(spec.entry_point).startswith("gymnasium.envs.box2d")
+
+
+def _require_box2d_for(env_name: str) -> None:
+    """Raise :data:`BOX2D_INSTALL_HINT` for ``env_name`` if it needs Box2D (:func:`uses_box2d`)
+    and Box2D is not installed, before ``gym.make`` would fail with Gymnasium's own hint."""
+    if uses_box2d(env_name) and importlib.util.find_spec("Box2D") is None:
+        raise ImportError(BOX2D_INSTALL_HINT.format(env_name=env_name))
 
 
 class BaseEnvWrapper:
@@ -223,7 +251,12 @@ class BaseEnvWrapper:
 
         Args:
             **make_kwargs: Extra keyword arguments for ``gym.make``, for an environment that takes
-                constructor options beyond the render mode and the step limit."""
+                constructor options beyond the render mode and the step limit.
+
+        Raises:
+            ImportError: If the environment is one of Gymnasium's Box2D ones and Box2D is not
+                installed, naming how to install it here."""
+        _require_box2d_for(self.env_name)
         self._scheduled = tuple(n for n in self.SCHEDULABLE_SETTINGS if getattr(self, n))
         self.env = gym.make(
             self.env_name,

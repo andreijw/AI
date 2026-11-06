@@ -10,45 +10,17 @@ import gymnasium as gym
 import numpy as np
 import pytest
 
-from rl_acrobot.environments import AcrobotEnv
 from rl_cartpole.environments import CartPoleEnv
 from rl_cartpole.environments import make_vec_env as make_cartpole_vec_env
 from rl_core.agents import BaseAgent
 from rl_core.seeding import derive_rng
 from rl_core.training import Trainer
-from rl_lunarlander.environments import LunarLanderEnv
-from rl_mountaincar.environments import MountainCarEnv
-from rl_navigation.environments import NavigationEnv
 from rl_pendulum.environments import PendulumEnv
-from tests.helpers import env_marks
+from tests.helpers import challenge_env_factories
 
-
-def lunarlander_continuous_env(**kwargs) -> LunarLanderEnv:
-    """The LunarLander wrapper on LunarLanderContinuous-v3."""
-    return LunarLanderEnv(env_name="LunarLanderContinuous-v3", **kwargs)
-
-
-def navigation_continuous_env(**kwargs) -> NavigationEnv:
-    """The navigation wrapper on NavigationContinuous-v0."""
-    return NavigationEnv(env_name="NavigationContinuous-v0", **kwargs)
-
-
-# Each wrapper's constructor (or a factory taking the same keywords), marked as its environment
-# needs: the Box2D ones build only where box2d-py is installed.
-ENV_CLASSES = [
-    CartPoleEnv,
-    PendulumEnv,
-    AcrobotEnv,
-    MountainCarEnv,
-    pytest.param(LunarLanderEnv, marks=env_marks("LunarLander-v3"), id="LunarLanderEnv"),
-    pytest.param(
-        lunarlander_continuous_env,
-        marks=env_marks("LunarLanderContinuous-v3"),
-        id="LunarLanderContinuous",
-    ),
-    NavigationEnv,
-    pytest.param(navigation_continuous_env, id="NavigationContinuous"),
-]
+# Each challenge's wrapper factory, taking environment-config settings as keywords, marked as its
+# environment needs: the Box2D ones build only where box2d-py is installed.
+ENV_FACTORIES = challenge_env_factories()
 GRAVITY_RANGE = {CartPoleEnv: ("gravity", (5.0, 15.0)), PendulumEnv: ("g", (5.0, 15.0))}
 SEED = 42
 NOISE_STD = 0.1
@@ -93,22 +65,22 @@ def _base_gravity(env) -> float:
     return float(base.gravity if hasattr(base, "gravity") else base.g)
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
-def test_seeded_env_starts_each_episode_from_a_different_state(env_cls):
+@pytest.mark.parametrize("make_env", ENV_FACTORIES)
+def test_seeded_env_starts_each_episode_from_a_different_state(make_env):
     """Consecutive resets of a seeded environment give different start states."""
-    env = env_cls(seed=SEED)
+    env = make_env(seed=SEED)
     try:
         observations = _reset_observations(env)
     finally:
         env.close()
 
-    assert _all_differ(observations), f"A seeded {env_cls.__name__} replayed a start state."
+    assert _all_differ(observations), f"A seeded {type(env).__name__} replayed a start state."
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
-def test_two_envs_with_the_same_seed_agree_episode_by_episode(env_cls):
+@pytest.mark.parametrize("make_env", ENV_FACTORIES)
+def test_two_envs_with_the_same_seed_agree_episode_by_episode(make_env):
     """The sequence of episodes is reproducible from the constructor seed."""
-    first, second = env_cls(seed=SEED), env_cls(seed=SEED)
+    first, second = make_env(seed=SEED), make_env(seed=SEED)
     try:
         seen_first, seen_second = _play(first), _play(second)
     finally:
@@ -120,11 +92,11 @@ def test_two_envs_with_the_same_seed_agree_episode_by_episode(env_cls):
         np.testing.assert_array_equal(a, b, err_msg=f"Same-seed runs diverged at step {index}.")
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
-def test_seed_zero_is_a_seed_like_any_other(env_cls):
+@pytest.mark.parametrize("make_env", ENV_FACTORIES)
+def test_seed_zero_is_a_seed_like_any_other(make_env):
     """Zero is falsy but is a real seed, both in the constructor and passed to reset()."""
-    first, second = env_cls(seed=0), env_cls(seed=0)
-    other = env_cls(seed=SEED)
+    first, second = make_env(seed=0), make_env(seed=0)
+    other = make_env(seed=SEED)
     try:
         seen_first, seen_second = _reset_observations(first), _reset_observations(second)
         restarted = other.reset(seed=0)[0].copy()
@@ -139,17 +111,17 @@ def test_seed_zero_is_a_seed_like_any_other(env_cls):
     np.testing.assert_array_equal(restarted, seen_first[0])
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
-def test_invalid_seed_is_rejected_at_construction(env_cls):
+@pytest.mark.parametrize("make_env", ENV_FACTORIES)
+def test_invalid_seed_is_rejected_at_construction(make_env):
     """A seed that is not a non-negative integer fails before any environment is created."""
     with pytest.raises(ValueError, match="seed"):
-        env_cls(seed=-1)
+        make_env(seed=-1)
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
-def test_different_seeds_give_different_first_states(env_cls):
+@pytest.mark.parametrize("make_env", ENV_FACTORIES)
+def test_different_seeds_give_different_first_states(make_env):
     """The constructor seed is actually applied on the first reset."""
-    first, second = env_cls(seed=1), env_cls(seed=2)
+    first, second = make_env(seed=1), make_env(seed=2)
     try:
         obs_first, obs_second = first.reset()[0], second.reset()[0]
     finally:
@@ -159,10 +131,10 @@ def test_different_seeds_give_different_first_states(env_cls):
     assert not np.array_equal(obs_first, obs_second)
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
-def test_explicit_seed_restarts_the_sequence_including_noise(env_cls):
+@pytest.mark.parametrize("make_env", ENV_FACTORIES)
+def test_explicit_seed_restarts_the_sequence_including_noise(make_env):
     """reset(seed=s) restarts the start states and the wrapper's noise stream, at any time."""
-    env = env_cls(seed=SEED, obs_noise_std=NOISE_STD)
+    env = make_env(seed=SEED, obs_noise_std=NOISE_STD)
     try:
         first_start = env.reset(seed=5)[0].copy()
         first_follow_up = env.reset()[0].copy()
@@ -179,11 +151,11 @@ def test_explicit_seed_restarts_the_sequence_including_noise(env_cls):
     assert not np.array_equal(first_start, first_follow_up)
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
-def test_observation_noise_continues_across_episodes(env_cls):
+@pytest.mark.parametrize("make_env", ENV_FACTORIES)
+def test_observation_noise_continues_across_episodes(make_env):
     """Noise is drawn afresh each episode, and reproducibly for the same seed."""
-    clean = env_cls(seed=SEED)
-    noisy, noisy_twin = (env_cls(seed=SEED, obs_noise_std=NOISE_STD) for _ in range(2))
+    clean = make_env(seed=SEED)
+    noisy, noisy_twin = (make_env(seed=SEED, obs_noise_std=NOISE_STD) for _ in range(2))
     try:
         clean_obs = _reset_observations(clean)
         noisy_obs = _reset_observations(noisy)
@@ -206,11 +178,11 @@ def test_observation_noise_continues_across_episodes(env_cls):
         np.testing.assert_array_equal(a, b)
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
-def test_wrapper_noise_stream_is_separate_from_the_base_environment(env_cls):
+@pytest.mark.parametrize("make_env", ENV_FACTORIES)
+def test_wrapper_noise_stream_is_separate_from_the_base_environment(make_env):
     """The wrapper must not reuse the very numbers that produced the start state."""
-    clean = env_cls(seed=SEED)
-    noisy = env_cls(seed=SEED, obs_noise_std=NOISE_STD)
+    clean = make_env(seed=SEED)
+    noisy = make_env(seed=SEED, obs_noise_std=NOISE_STD)
     try:
         clean_obs, noisy_obs = clean.reset()[0], noisy.reset()[0]
     finally:
@@ -244,10 +216,10 @@ def test_domain_randomization_resamples_each_episode(env_cls):
     assert gravity_first == gravity_second
 
 
-@pytest.mark.parametrize("env_cls", ENV_CLASSES)
-def test_unseeded_env_still_gives_different_start_states(env_cls):
+@pytest.mark.parametrize("make_env", ENV_FACTORIES)
+def test_unseeded_env_still_gives_different_start_states(make_env):
     """Without a seed, consecutive resets differ, as they always have."""
-    env = env_cls(seed=None)
+    env = make_env(seed=None)
     try:
         observations = _reset_observations(env)
     finally:

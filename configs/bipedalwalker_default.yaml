@@ -1,0 +1,33 @@
+# BipedalWalker-v3 Random Baseline Configuration
+# BipedalWalker-v3: 24 observations (hull angle, angular velocity and speeds, hip and knee angles and speeds, two leg
+# contacts, ten lidar distances), four joint torques in [-1, 1], a reward of about 300 for walking the whole course
+# less a small torque cost, -100 for a fall (hull on the ground) or leaving the left edge, 1,600-step limit. Solved at
+# a 100-episode training average of 300 (Gymnasium's reward_threshold). Needs Box2D: ./setup.sh builds it (README,
+# LunarLander).
+
+# Environment settings
+environment:
+  name: "BipedalWalker-v3"
+  render_mode: null  # Set to 'human' for visualization
+  max_episode_steps: 1600
+  seed: 42
+
+# Agent settings
+agent:
+  type: "random"  # Options: "random"
+  config:
+    seed: 42  # Makes the random torques reproducible; the bounds come from the environment
+
+# Training settings
+training:
+  total_steps: 50000  # Environment steps (random baseline: about 95 episodes of about 530 steps on seed 1)
+  max_steps_per_episode: 1600  # Must match the environment's limit: the Trainer's default is 500
+  eval_frequency: 50  # Evaluate every N episodes
+  save_frequency: 100  # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+
+# Logging settings
+logging:
+  level: "INFO"
+  log_metrics: true

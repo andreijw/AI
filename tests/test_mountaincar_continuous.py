@@ -17,7 +17,7 @@ from rl_mountaincar.environments import (
     make_env_from_config,
 )
 from tests.agent_internals import exploration_generator, set_counters
-from tests.helpers import minimal_config, needs_torch, run_main
+from tests.helpers import minimal_config, needs_torch, run_main, torch_td3_agent
 
 
 def test_mountaincar_continuous_env_takes_a_bounded_force_and_charges_for_it():
@@ -60,18 +60,12 @@ def test_mountaincar_continuous_challenge_is_discovered_and_selected_by_its_envi
     assert challenge.supported_agents == ["ddpg", "random", "td3"]
 
 
-def _torch_td3_agent() -> type:
-    from rl_core.agents.torch_td3_agent import TorchTD3Agent  # here, not above: torch is optional
-
-    return TorchTD3Agent
-
-
 @pytest.mark.parametrize(
     ("agent_type", "expected_class"),
     [
         ("random", lambda: ContinuousRandomAgent),
         ("ddpg", lambda: DDPGAgent),
-        pytest.param("td3", _torch_td3_agent, marks=needs_torch),
+        pytest.param("td3", torch_td3_agent, marks=needs_torch),
     ],
     ids=["random", "ddpg", "td3"],
 )

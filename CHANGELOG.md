@@ -16,6 +16,21 @@ Acrobot-v1) and
 
 ### Added
 
+- **The BipedalWalker-v3 challenge, measured with SAC and TD3** (`feature/bipedalwalker-sac`; PR 4 of 4, which
+  completes the roadmap item "SAC and BipedalWalker-v3"): challenge `bipedalwalker` (package `rl_bipedalwalker`,
+  `box2d` extra, 1,600-step episodes, threshold 300) with `configs/bipedalwalker_sac.yaml` and
+  `configs/bipedalwalker_td3.yaml` (`backend: torch`, 500,000 steps each, translated from rl-baselines3-zoo at
+  `61956d9`; SAC without gSDE, and TD3 at half the zoo's 1,000,000 steps, the maintainer's decisions) and
+  `configs/bipedalwalker_default.yaml` (random, 50,000 steps). Seeds 1 to 5 on the Jetson's GPU, three runs at a
+  time (`docs/benchmarks/bipedalwalker_results.md`): SAC solved on 4 of 5 (mean 307,090 steps) and held on 1, and
+  its greedy evaluation was 324.4 ± 1.9 (321 to 327, all 5 at 300 or more); TD3 solved on 2 and held on none, with
+  greedy evaluation 300.1 ± 12.3 (2 of 5 at 300). SAC's greedy evaluation beat TD3's on all 5 paired seeds. A seed
+  took 6,029 s for SAC and 7,458 s for TD3 with three sharing the machine. Random: -98.8. Predicted beforehand: SAC
+  solving on 0 to 2 of 5 (wrong; it solved on 4) and SAC ahead of TD3 on 4 of 5 seeds (right; 5 of 5). A `train.py`
+  SAC run on seed 42 (final 100-episode training average 302.4) recorded at 325.2 over 3 episodes, and its actor
+  exports to C and ONNX (1,993 observations, 0 mismatches). Why the training average does not hold is parked in the
+  roadmap.
+
 - **The navigation environment and challenges** (`feature/navigation-env`; PR 3 of 5 of the roadmap item
   "Range-sensor navigation environment"): Gymnasium ids `Navigation-v0` (five actions: forward, two arcs, two spins)
   and `NavigationContinuous-v0` (linear speed 0 to 0.5 m/s, no reverse, and turn rate up to 2 rad/s, clipped), 400
@@ -34,6 +49,13 @@ Acrobot-v1) and
 
 ### Changed
 
+- **One Box2D check for every Box2D environment** (`feature/bipedalwalker-sac`): `BaseEnvWrapper._make_env`
+  recognises Gymnasium's Box2D environments by their registered entry point (`uses_box2d`) and, without Box2D,
+  stops with the install hint naming the environment and `./setup.sh`; LunarLander's own check is gone. The
+  seeding, settings and frame-stack tests build one environment per discovered challenge
+  (`challenge_env_factories` in `tests/helpers.py`), so a new challenge is covered without editing them. The
+  pygame-rendering tests now run after the others (before the ONNX tests), since SDL starts a thread and a later
+  fork could deadlock.
 - **One domain-randomization check for every wrapper** (`feature/navigation-env`): `checked_randomization` and
   `ParameterBounds` in `rl_core.environments` check a randomization table against per-parameter bounds; Pendulum
   uses it (its tests unchanged) and the navigation wrapper does, while CartPole keeps its own. The

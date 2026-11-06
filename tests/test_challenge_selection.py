@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import rl_acrobot.environments.acrobot_env as acrobot_env_module
+import rl_bipedalwalker.environments.bipedalwalker_env as bipedalwalker_env_module
 import rl_cartpole.environments.cartpole_env as cartpole_env_module
 import rl_lunarlander.environments.lunarlander_env as lunarlander_env_module
 import rl_mountaincar.environments.mountaincar_env as mountaincar_env_module
@@ -67,6 +68,7 @@ EXPECTED_AGENTS = {
     },
     "navigation": {"random": RandomAgent},
     "navigation_continuous": {"random": ContinuousRandomAgent},
+    "bipedalwalker": {"random": ContinuousRandomAgent, "sac": SACAgent, "td3": TD3Agent},
 }
 
 ENV_CLASSES = {
@@ -79,7 +81,20 @@ ENV_CLASSES = {
     "lunarlander_continuous": lunarlander_env_module.LunarLanderEnv,
     "navigation": navigation_env_module.NavigationEnv,
     "navigation_continuous": navigation_env_module.NavigationEnv,
+    "bipedalwalker": bipedalwalker_env_module.BipedalWalkerEnv,
 }
+
+
+def test_the_tables_here_list_exactly_the_registered_challenges():
+    """EXPECTED_AGENTS is the golden copy of each challenge's agents: a challenge package added
+    without its rows here (or a row left for a removed one) fails, rather than going untested."""
+    registered = set(discover_challenges())
+    assert set(EXPECTED_AGENTS) == registered, (
+        "EXPECTED_AGENTS should list every registered challenge and nothing else"
+    )
+    assert set(ENV_CLASSES) == registered, (
+        "ENV_CLASSES should list every registered challenge and nothing else"
+    )
 
 
 def _building(key: str, *values: str) -> Any:

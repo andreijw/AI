@@ -6,11 +6,13 @@ checks the contract a challenge wrapper builds on: the action hook, the order of
 observation noise and the defaults a subclass need not override.
 """
 
+import sys
+
 import gymnasium as gym
 import numpy as np
 import pytest
 
-from rl_core.environments import BaseEnvWrapper, checked_range
+from rl_core.environments import BaseEnvWrapper, checked_range, uses_box2d
 from rl_core.seeding import WRAPPER_STREAM, derive_rng
 
 
@@ -196,3 +198,38 @@ def test_extra_make_keywords_reach_gym_make():
     assert default.env.unwrapped.option == "default"
     custom.close()
     default.close()
+
+
+class _Box2DPlain(BaseEnvWrapper):
+    """A wrapper on one of Gymnasium's Box2D environments that overrides nothing else."""
+
+    def __init__(self, env_name):
+        super().__init__(env_name, None, 5, 0, 0.0)
+        self._make_env()
+
+
+@pytest.mark.parametrize("env_name", ["LunarLander-v3", "BipedalWalker-v3", "CarRacing-v3"])
+def test_without_box2d_a_box2d_environment_names_it_and_this_projects_install(
+    monkeypatch, env_name
+):
+    """Any wrapper on a Box2D environment, by its registered entry point, gets the hint that
+    works on the Jetson (./setup.sh builds box2d-py), not Gymnasium's own."""
+    monkeypatch.setitem(sys.modules, "Box2D", None)  # import Box2D now fails, installed or not
+    with pytest.raises(ImportError, match=rf"^{env_name} needs Box2D: run \./setup\.sh.*box2d-py"):
+        _Box2DPlain(env_name)
+
+
+def test_an_id_the_registry_does_not_know_is_left_to_gym_make():
+    """``gym.make`` also takes "module:Env-vN" ids; the Box2D check must not refuse what it would
+    accept, nor turn its own error into a different one."""
+    assert uses_box2d("gymnasium.envs.box2d:LunarLander-v3") is False
+    assert uses_box2d("NoSuchEnv-v0") is False
+
+
+def test_without_box2d_an_environment_that_does_not_use_it_still_builds(monkeypatch):
+    monkeypatch.setitem(sys.modules, "Box2D", None)
+    env = _Plain(seed=0)
+    try:
+        assert env.reset()[0].shape == (4,), "CartPole needs no Box2D"
+    finally:
+        env.close()

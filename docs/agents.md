@@ -7,10 +7,10 @@ its section, in the same pull request (the `doc-sync` skill).
 
 Terms used throughout:
 
-- **Solved** means the training reward averaged over 100 consecutive episodes reached the challenge's threshold
-  (475 on CartPole-v1, -200 on Pendulum-v1, -100 on Acrobot-v1, -110 on MountainCar-v0, 200 on LunarLander, 90 on
-  MountainCarContinuous); **held** means the last 100 episodes still average at or above it. **Greedy evaluation**
-  plays the policy without exploration on a separate environment.
+- **Solved** means the training reward averaged over 100 consecutive episodes reached the challenge's threshold (475 on
+  CartPole-v1, -200 on Pendulum-v1, -100 on Acrobot-v1, -110 on MountainCar-v0, 200 on LunarLander, 90 on
+  MountainCarContinuous, 300 on BipedalWalker); **held** means the last 100 episodes still average at or above it.
+  **Greedy evaluation** plays the policy without exploration on a separate environment.
 - **Terminated** is a true end (the pole fell, the lander crashed); **truncated** is a time-limit cut. A value target
   bootstraps from the next state after a cut and not after a termination, unless a section says otherwise.
 - Results come from `src/benchmark.py` on seeds 1 to 5 unless they say otherwise; the dated `(CHANGELOG.md, <date>)`
@@ -23,8 +23,8 @@ Terms used throughout:
 | PPO | discrete, continuous | policy and state value, clipped reuse of rollouts | CartPole, Pendulum, Acrobot |
 | DQN | discrete | action value, from replay | CartPole, Acrobot, MountainCar, LunarLander |
 | DDPG | continuous | deterministic policy and action value, from replay | Pendulum, MountainCarContinuous |
-| TD3 | continuous | as DDPG, twin critics and delayed actor | Pendulum, MountainCarContinuous, LunarLanderContinuous |
-| SAC | continuous | stochastic policy, twin action values and an entropy temperature, from replay | Pendulum |
+| TD3 | continuous | as DDPG, twin critics and delayed actor | Pendulum, MountainCarContinuous, LunarLanderContinuous, BipedalWalker |
+| SAC | continuous | stochastic policy, twin action values and an entropy temperature, from replay | Pendulum, LunarLanderContinuous, BipedalWalker |
 
 ## REINFORCE (`ReinforceAgent`, `src/rl_core/agents/reinforce_agent.py`)
 
@@ -314,6 +314,11 @@ replay match DDPG's. One Adam per critic. A TD3 agent refuses a DDPG checkpoint;
 - LunarLanderContinuous, `lunarlander_continuous_td3.yaml` (400×300, PyTorch backend, 400,000 steps, updates after
   every step): 5 of 5 reach 200 and hold, final averages 202 to 248, greedy 182 ± 69; 53 to 54 minutes a seed
   (CHANGELOG.md, 2026-11-01).
+- BipedalWalker, `bipedalwalker_td3.yaml` (400×300, PyTorch backend, 500,000 steps, half rl-zoo's 1,000,000 so it
+  shares SAC's budget, updates after every step): 2 of 5 reach 300 (seeds 3 and 4, at 425,277 and 398,519 steps),
+  none holds it (final averages 242 to 295), greedy 300.1 ± 12.3 (281.6 to 317.7), 2 of 5 at 300 or more; about 2.1
+  hours a seed with three runs sharing the Jetson's GPU (CHANGELOG.md, 2026-11-05;
+  `docs/benchmarks/bipedalwalker_results.md`). SAC beats it on every seed (below).
 
 **Lessons.** LunarLanderContinuous needed SB3's update after every environment step (`training.update_every: 1`):
 once per episode it held on 3 of 5 seeds, every step on 5 of 5 (CHANGELOG.md, 2026-10-30; adopted 2026-11-01). TD3
@@ -352,7 +357,10 @@ in the environment's scale, not SB3's [-1, 1]; training starts once the buffer c
 returns, learning-rate schedules, `target_update_interval` other than 1. `backend: torch` runs the step in PyTorch
 (`TorchSACAgent`; see the PyTorch backend below), as `configs/lunarlander_continuous_sac.yaml` does: rl-zoo's
 LunarLanderContinuous settings (400×300, learning rate 7.3e-4 held constant where rl-zoo decays it linearly, `tau`
-0.01, 10,000 warm-up actions, 500,000 steps, updates after every step).
+0.01, 10,000 warm-up actions, 500,000 steps, updates after every step), and `configs/bipedalwalker_sac.yaml`:
+rl-zoo's BipedalWalker settings (400×300, learning rate 7.3e-4, `gamma` 0.98, `tau` 0.02, 300,000-transition buffer,
+10,000 warm-up actions, 500,000 steps) without its gSDE exploration, updating in bursts of 64 gradient steps every 64
+transitions (`training.update_every: 64`) as rl-zoo's `train_freq` 64 does.
 
 **What was measured.**
 
@@ -362,9 +370,22 @@ LunarLanderContinuous settings (400×300, learning rate 7.3e-4 held constant whe
   gradient step). TD3's committed 64×64 config solves at 32,600 to 33,400 steps with the same greedy score.
 - At SB3's 256×256 a gradient step takes about 88 ms (TD3 at that width with `policy_delay` 1: 73 ms), about an hour
   a seed in NumPy; not measured for learning.
+- LunarLanderContinuous, `lunarlander_continuous_sac.yaml` (PyTorch backend): see the PyTorch backend below.
+- BipedalWalker, `bipedalwalker_sac.yaml` (400×300, PyTorch backend, 500,000 steps), 2026-11-05: 4 of 5 reach 300 at
+  210,235 to 387,254 steps (mean 307,090; seed 3 does not), 1 of 5 holds it (seed 1, final 306.8; the others end at
+  251 to 287); greedy evaluation 324.4 ± 1.9 (321.3 to 326.9), all 5 at 300 or more, above TD3's on every paired seed
+  (TD3 on the same budget: 300.1 ± 12.3, 2 of 5). About 1.7 hours a seed with three runs sharing the Jetson's GPU
+  (alone about 0.9 hours, estimated from a 13,000-step probe) (CHANGELOG.md, 2026-11-05;
+  `docs/benchmarks/bipedalwalker_results.md`). Seed 42 through `train.py` ends at a 100-episode average of 302.4; its
+  `agent_episode_630.pt` walks the course in `record.py` at 325.2 ± 0.2 and exports to C and ONNX within 0.5 of the
+  tolerance on 1,993 observations.
 
 **Lessons.** The plan's 30 ms a step, scaled from TD3 at 400×300, was three times too low: a SAC step runs eight
-forward and five backward passes, all of them every step. Time a short run before planning a sweep.
+forward and five backward passes, all of them every step. Time a short run before planning a sweep. On
+BipedalWalker the 100-episode training average and the greedy evaluation part: seeds whose greedy policy scores
+above 320 (10 episodes) end their training average at 251 to 287. Exploration noise is the likely cause, not yet
+tested (roadmap, parked ideas). Read the greedy evaluation beside the solve and hold counts before calling a run a
+failure.
 
 ## The PyTorch backend (`TorchDDPGAgent`, `TorchTD3Agent`, `TorchSACAgent`)
 
