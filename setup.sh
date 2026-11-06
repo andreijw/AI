@@ -3,12 +3,13 @@
 #
 # Profiles:
 #   cpu (default)  .venv      .[dev,video,box2d,onnx]         No PyTorch: the default environment for every tool.
-#   gpu            .venv-gpu  .[dev,video,torch,box2d,onnx]   Adds PyTorch for the optional DDPG and TD3 backend
+#   gpu            .venv-gpu  .[dev,video,torch,box2d,onnx]   Adds PyTorch for the optional DDPG, TD3 and SAC backend
 #                                                             (backend: torch) and its tests; from PyTorch's CUDA
 #                                                             13.2 index, which drives the Jetson's GPU
 #                                                             (docs/pytorch_jetson_timing.md). About 5 GiB.
-# Both build Box2D for LunarLander first (box2d-py from source with swig, about 90 s; needs a C++ compiler and the
-# Python headers). CI installs neither PyTorch nor Box2D, and skips their tests; it installs the onnx extra.
+# Both build Box2D for LunarLander and BipedalWalker first (box2d-py from source with swig, about 95 s; needs a
+# C++ compiler and the Python headers). CI installs neither PyTorch nor Box2D, and skips their tests; it installs
+# the onnx extra.
 #
 # Usage: ./setup.sh [--profile cpu|gpu] [--skip-checks]
 # An existing environment is reused and its packages upgraded. Then the CI checks run (unless --skip-checks).
@@ -44,11 +45,11 @@ version="$("$python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 "$venv/bin/python" -m pip install --upgrade pip
 # Box2D before the extras: Gymnasium's box2d extra pins box2d==2.3.10, which has no aarch64 build, so the
 # box2d extra names box2d-py, which builds from source with swig; pip's isolated build cannot see swig.
-# Build tools at the versions box2d-py 2.3.5 (a 2018 setup.py) was verified with on 2026-10-27; --no-binary keeps
+# Build tools at the versions box2d-py 2.3.8 was verified with on 2026-11-06 (2.3.5 on 2026-10-27); --no-binary keeps
 # it on the reviewed source release.
 "$venv/bin/python" -m pip install swig==4.5.1 "setuptools<85" "wheel<0.49"
 if ! PATH="$PWD/$venv/bin:$PATH" "$venv/bin/python" -m pip install --no-build-isolation --no-binary box2d-py \
-        box2d-py==2.3.5; then
+        box2d-py==2.3.8; then
     echo "Building box2d-py failed: it needs a C++ compiler and the Python 3.12 headers" \
         "(Debian/Ubuntu: sudo apt install build-essential python3.12-dev)." >&2
     exit 1
