@@ -41,7 +41,7 @@ video = [
 torch = [
     "torch>=2.14",
 ]
-# LunarLander (Box2D). Gymnasium's own box2d extra pins box2d==2.3.10, which has no aarch64 build;
+# LunarLander and BipedalWalker (Box2D). Gymnasium's own box2d extra pins box2d==2.3.10, which has no aarch64 build;
 # box2d-py builds from source with swig, which pip's isolated build cannot find, so install it first
 # as ./setup.sh does (README, LunarLander). Rendering uses pygame-ce, as Gymnasium does.
 box2d = [
