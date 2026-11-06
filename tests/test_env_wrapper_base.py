@@ -233,3 +233,26 @@ def test_without_box2d_an_environment_that_does_not_use_it_still_builds(monkeypa
         assert env.reset()[0].shape == (4,), "CartPole needs no Box2D"
     finally:
         env.close()
+
+
+def test_the_box2d_install_hint_setup_and_the_extra_name_one_box2d_py_version():
+    """pyproject's ``box2d`` extra, the version ./setup.sh builds and the hint's manual command must
+    agree: setup.sh installs the extras after building Box2D, so a different pin there makes pip
+    replace the build. (A Dependabot bump of the extra alone left them apart, 2026-11.)"""
+    import re
+    import tomllib
+    from pathlib import Path
+
+    from rl_core.environments.base_env import BOX2D_INSTALL_HINT
+
+    root = Path(__file__).resolve().parents[1]
+    extra = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    (pin,) = [
+        dep
+        for dep in extra["project"]["optional-dependencies"]["box2d"]
+        if dep.startswith("box2d-py")
+    ]
+    assert re.fullmatch(r"box2d-py==[\d.]+", pin), "an exact pin"
+    built = re.findall(r"box2d-py==[\d.]+", (root / "setup.sh").read_text(encoding="utf-8"))
+    assert built == [pin], "setup.sh builds exactly the extra's version"
+    assert re.findall(r"box2d-py==[\d.]+", BOX2D_INSTALL_HINT) == [pin]
