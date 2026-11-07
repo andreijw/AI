@@ -79,7 +79,7 @@ AI/
 │   │   └── benchmark.py         # BipedalWalker benchmark challenge implementation
 │   ├── rl_navigation/           # Navigation-v0 and NavigationContinuous-v0 range-sensor navigation (Phase 8)
 │   │   ├── sim/                 # NumPy-only simulator: arena, ray casting, sensors, odometry, layouts, World, renderer
-│   │   ├── estimation/          # Pose estimation on a known map (EKF localization); imports only NumPy and sim/
+│   │   ├── estimation/          # Pose estimation on a known map (EKF, Monte Carlo); imports only NumPy and sim/
 │   │   ├── gym_env.py           # The Gymnasium environment; imports only Gymnasium and sim/, never rl_core
 │   │   ├── environments/        # Navigation wrapper (noise, domain randomization) and a factory for each id
 │   │   └── benchmark.py         # Both navigation benchmark challenge implementations
@@ -476,14 +476,18 @@ obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 `rl_navigation.estimation` estimates the robot's pose `(x, y, θ)` (metres and radians, in the map's frame) from its
 wheel encoders and range readings on a known map. It is a library for the robot's own program: it imports only NumPy
 and `rl_navigation.sim`, never Gymnasium or `rl_core` (`tests/test_import_footprint.py`), and nothing in training or
-the benchmark calls it. So far it holds an extended Kalman filter, `EkfLocalizer`; a particle filter is to follow
-([`docs/roadmap.md`](docs/roadmap.md), "State estimation").
+the benchmark calls it. It holds two filters with the same calls: an extended Kalman filter, `EkfLocalizer`, which
+tracks a pose it is given at the start, and a particle filter, `MclLocalizer` (Monte Carlo localization), which can
+also start from anywhere and recover from a kidnapping (the robot carried elsewhere without being told), as the EKF
+cannot ([`docs/roadmap.md`](docs/roadmap.md), "State estimation").
 
 - **Encoders**: `rl_navigation.sim.WheelOdometry` models them. A reading is a `(2,)` array, the left and the right
   wheel's travel in metres since the previous reading, with noise variance `k × |travel|` per wheel. Its wheel base
   (0.2 m) and `k` (2.5e-4 m) are placeholders until they are calibrated on the robot.
-- **Map**: the filter reads the map only through the `RangeMap` protocol (`min_range`, `max_range`, `noise_std` and
-  `expected_ranges(poses)`). `SensorMap(arena, sensor)` is the one for a known `Arena` and a `RangeSensor`.
+- **Map**: the EKF reads the map only through the `RangeMap` protocol (`min_range`, `max_range`, `noise_std` and
+  `expected_ranges(poses)`), and the particle filter only through `ParticleMap`, which extends it with
+  `num_readings`, `bounds`, `free` and `expected_beam_ranges`. `SensorMap(arena, sensor)` provides both for a known
+  `Arena` and a `RangeSensor`.
 - **Loop**: call `predict(wheel_travel)` with each encoder reading, then `update(readings)` with the scan taken at
   that pose; `pose` and `covariance` hold the estimate. A reading at or beyond `max_range`, at or below `min_range`,
   or NaN counts as a dropout. `update` returns an `UpdateResult` saying which beams it used, gated as outliers, or
@@ -530,6 +534,27 @@ chi-square 97.5 % point, where a consistent filter puts 97.5 %. Occasional spike
 reaches a NEES of about 340 with the sonars (seed 2) and 2,700 with the lidar (seed 30, a start-up transient from a
 first update made 0.04 rad off). In an empty arena the lidar filter's ANEES over 30 runs, 3.05, lies inside the
 95 % band [2.19, 3.94], a loose check that catches only a large miscalibration (CHANGELOG.md, 2026-11-06).
+
+**Monte Carlo localization.** `MclLocalizer(range_map, odometry, pose=None, covariance=None, *, rng, settings)` takes
+the same `predict(wheel_travel)` and `update(readings)` and exposes `pose`, `covariance`, `particles`, `weights` and
+`cluster_weight`. Give it `pose` and `covariance` to start near a known pose, or leave them out to start with the
+particles spread over the free space. It is augmented MCL (Thrun, Burgard and Fox, *Probabilistic Robotics*, Tables
+8.2 and 8.3, with the low-variance resampler of Table 4.4) with a cut-down beam model: when the likelihood falls
+against its long-run average, a share of the particles is redrawn over the free space, which is how it recovers from a
+kidnapping. One deviation from Table 8.3: the particles injected on the previous scan are left out of that average,
+since counted in they drag it down and keep injecting more for about 1000 scans after the robot is found; what remains
+after a disturbance is about 1 % of the particles injected per scan, and a resampling on every scan, until the
+long-run average catches up (about 700 scans, 70 s at 10 Hz, after a 10 cm bump with 300 particles).
+`MclSettings` (frozen) holds the knobs; the defaults are 2000 particles, 16 beams per scan and a `model_std` of
+0.15 m. At the defaults on one Jetson core a lidar step costs about 45 ms for the filter alone and 50 ms with the
+simulator, and an HC-SR04 step about 65 ms with the simulator (about 120 ms with `max_beams=64`, every lidar beam),
+so size `num_particles` and `max_beams` to the robot's control rate. `update`
+returns an `MclUpdate`; its `used` marks the beams in the likelihood, so it is not comparable with the EKF's
+`UpdateResult.used`. The reported `covariance` is conservative: `model_std` widens the cloud. Known limitation: in a
+symmetric arena, resampling collapses one of the mirror-image hypotheses within 1 to 3 scans, so `cluster_weight` ends
+near 1 and cannot flag the ambiguity. Its evaluation (global localization and recovery from a kidnapping at step 300,
+over fresh seeds 101 to 150) is `TESTING.md` `EST-2`; `evaluation.ekf()` and `evaluation.mcl()` build either filter
+for `run_trial(make_localizer=...)`.
 
 ### Visualization and video recording
 

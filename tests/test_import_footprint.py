@@ -163,7 +163,8 @@ def test_navigation_estimation_imports_only_the_simulator():
     rl_navigation: not the Gymnasium layer, not the challenge's environments. A fresh process."""
     code = (
         "import sys; sys.path.insert(0, 'src'); "
-        "import rl_navigation.estimation, rl_navigation.estimation.evaluation; "
+        "import rl_navigation.estimation, rl_navigation.estimation.evaluation, "
+        "rl_navigation.estimation.mcl; "
         "print(sorted(m for m in sys.modules if m.startswith('rl_navigation.') "
         "and m.split('.')[1] not in ('sim', 'estimation')))"
     )

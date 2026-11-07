@@ -182,6 +182,12 @@ full items when picked.
 - [~] **State estimation (`rl_navigation.estimation`)** (picked 2026-11-06; PR 1 of 3, wheel odometry and EKF
   localization; PR 2 Monte Carlo localization; PR 3 the comparison report, its CLI, and any hooks the maintainer
   picks)
+  - **Progress (PR 2, 2026-11-07)**: `MclLocalizer` (augmented MCL) localizes globally and recovers from a
+    kidnapping: lidar 96 % and 96 to 98 % on fresh seeds 101 to 150 against the 70 % gate (CHANGELOG.md,
+    2026-11-07). Left for PR 3: the comparison report and CLI; the EKF's stationary-robot case (MCL recovers from a
+    10 cm bump of a still robot, so "leave it to MCL" is now an option); MCL's covariance is 3 to 5 times too wide
+    (mean NEES 0.57 to 0.94); in a symmetric arena resampling keeps only one mirror hypothesis, so `cluster_weight`
+    cannot flag the ambiguity; the median time to localize was not measured.
   - **Description**: The robot's pose `(x, y, θ)` is estimated from wheel odometry and range readings on a known
     map, in the step 1 simulator with odometry noise added.
     - **Odometry.** The simulator gets a wheel-encoder model, `WheelOdometry`. Each step it gives the left and
@@ -210,7 +216,8 @@ full items when picked.
       it lies above 3.94 (halved, it measured 3.84, inside the band).
     - Over seeded layouts, a function reports for each preset, with and without 30 % dropout: position and
       heading RMSE, mean NEES, beams used, and the lost count. The EKF beats dead reckoning on every row.
-    - MCL localizes globally and recovers from a kidnapping on a set share of seeded layouts.
+    - MCL localizes globally and recovers from a kidnapping on a set share of seeded layouts (met in PR 2: at least
+      70 % on the lidar rows, the maintainer's gate).
     - A seeded navigation-environment trajectory is unchanged (golden test).
     - `rl_navigation.estimation` imports neither Gymnasium nor `rl_core` (subprocess test).
     - There are TESTING rows for the evaluation.
