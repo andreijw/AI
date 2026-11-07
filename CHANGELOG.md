@@ -47,6 +47,22 @@ Acrobot-v1) and
   decisions) so "continue" or a new session resumes from one read. CLAUDE.md lists Context7 IDs for
   Stable-Baselines3, PyTorch, ONNX Runtime (Python) and ROS 2.
 
+### Fixed
+
+- **Navigation DQN learns the task** (`fix/navigation-dqn-huber`; the roadmap's "Before PR 5" check on the item
+  "Range-sensor navigation environment"): `DQNAgent` gains an opt-in Huber TD loss (`td_loss: huber`, `huber_delta`
+  default 1.0; PyTorch's `huber_loss(delta)`, which at 1.0 is SB3's smooth-L1), and `configs/navigation_dqn.yaml`
+  uses it with `anneal_steps: 300000`, the learning rate decaying to 0 over the budget. Squared error stays the
+  default, bit-identical (golden test). The training-doctor (2026-11-06) found two stacked causes: the squared-error
+  loss let rare collisions (-10, about 200 times the step reward's std) dominate the gradient, overestimating Q (12
+  to 18 where no return exceeds about 10) so the robot parked and dithered; and a fixed rate on action gaps of
+  about 0.07 kept flipping the greedy policy. Double DQN, dueling and an epsilon floor of 0.02 did not help (seed
+  1). Seeds 1 to 5, 300,000 steps, final weights, greedy evaluation on 100 held-out layouts: 95, 96, 89, 96 and 96 %
+  at the goal (94 %; seeds 3 and 5 were not used to choose the fix), against 0 to 50 % before, PPO's 88 % and TD3's
+  96 %; eval reward 7.76 ± 0.49, final 100-episode training averages 7.0 to 8.2, mean Q about 3.3, no non-finite
+  update. Each change alone falls short on the same seeds: Huber with a fixed rate 0 to 18 % (mean 4 %), squared
+  error with the decaying rate 14 to 86 % (mean 64 %).
+
 ## 2026-11-06
 
 ### Added

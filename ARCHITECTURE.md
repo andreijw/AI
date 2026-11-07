@@ -283,6 +283,8 @@ classDiagram
         +int anneal_steps
         +bool double_q
         +bool dueling
+        +str td_loss
+        +float|None huber_delta
         +select_action(obs, training) int
         +update(batch) dict
     }
