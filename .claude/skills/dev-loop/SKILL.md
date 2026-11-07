@@ -236,8 +236,10 @@ as a peer, since it sees only your prompt:
 - what it must not touch: `CHANGELOG.md` and `docs/roadmap.md` (you write them for every item at hand-off,
   so parallel branches do not conflict), the maintainer's `checkpoints/`, `logs/`, `videos/` and `plots/`, and
   `git commit`;
-- no training run longer than a few minutes unless you scheduled it: the machine has 6 cores, so keep at most
-  3 runs going at once across all agents, each with `OPENBLAS_NUM_THREADS=1`.
+- no training run longer than a few minutes unless you scheduled it. Submit long runs to the run queue
+  (`.claude/skills/experiment-runner/scripts/run_queue.py submit ...`, see `experiment-runner`) instead of
+  asking for a go: the machine has 6 cores, and the queue enforces at most 3 runs at once across all agents,
+  each with `OPENBLAS_NUM_THREADS=1`. Never stop a run with `pkill -f`; use `run_queue.py cancel`.
 
 **The PR stage splits the same way.** Once the code passes the tests, run in parallel:
 
@@ -258,6 +260,28 @@ confidently as its findings.
 Claude Code runs one only on an explicit request ("use a workflow"). When a batch would gain from one (three
 or more independent items, or a review or experiment fan-out with a verify step for each finding or arm),
 say so in the plan with the rough number of agents and why, and run it only once the maintainer says to.
+
+## Status file for resuming
+
+After a `/clear` or in a new session, "continue" must not mean digging through old transcripts. Keep
+`~/rl-experiments/STATUS.md` (outside the repo, so nothing is committed; create it if it is missing)
+current at every touchpoint and whenever an agent or a long run starts or ends. It is a pointer list, not
+a log: replace lines, do not append.
+**"Continue", or a new session, starts by reading `STATUS.md` and `run_queue.py status`.**
+
+```markdown
+# Status (updated 2026-11-07 14:05)
+
+## Items
+- <item>: stage <proposed|plan|review|approved|implementing|gates|hand-off|PR #n>;
+  worktree <path>, branch <branch>
+## Agents
+- <agent name>: <what it is doing>, on <item>
+## Jobs (from `run_queue.py status`)
+- <job id> <name> <state>: results <file>
+## Waiting on the maintainer
+- <decision, with the item it blocks>
+```
 
 ## Honesty in the hand-off
 

@@ -67,9 +67,10 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 - **A smoke run is not evidence of learning.** Report which config, how many episodes and how many seeds; say
   "not verified" for anything not run.
 - Shared tooling: gradient checks in `tests/helpers.py` (`assert_gradients_match`), agent internals for maths
-  tests in `tests/agent_internals.py` and `tests/trainer_internals.py` (tests touch no private attribute elsewhere),
-  the mutation runner in `.claude/skills/test-crafter/scripts/`, and a Markdown line-length check in
-  `.claude/skills/doc-sync/scripts/`.
+  tests in `tests/agent_internals.py` and `tests/trainer_internals.py` (tests touch no private attribute
+  elsewhere), the mutation runner in `.claude/skills/test-crafter/scripts/`, a Markdown line-length check in
+  `.claude/skills/doc-sync/scripts/`, and the run queue in `.claude/skills/experiment-runner/scripts/run_queue.py`
+  (submit, status, wait, cancel and prune long runs; it holds the 3-run cap across agents).
 - When a review or a bug teaches a lesson worth keeping, put it where it will be applied: a rule in
   `.brooks-lint.yaml`, or a line in the relevant skill.
 
@@ -133,7 +134,7 @@ eternal-descent repo). Setup and troubleshooting:
 
 | Server | Use it when |
 | :--- | :--- |
-| `context7` | Version-correct library docs. Library IDs: Gymnasium `/websites/gymnasium_farama`, NumPy `/websites/numpy_doc_stable`, pytest `/pytest-dev/pytest`, Ruff `/websites/astral_sh_ruff`, mypy `/websites/mypy_readthedocs_io_en_stable`, Matplotlib `/websites/matplotlib_stable`. For anything else, call `resolve-library-id` first |
+| `context7` | Version-correct library docs. Library IDs: Gymnasium `/websites/gymnasium_farama`, NumPy `/websites/numpy_doc_stable`, pytest `/pytest-dev/pytest`, Ruff `/websites/astral_sh_ruff`, mypy `/websites/mypy_readthedocs_io_en_stable`, Matplotlib `/websites/matplotlib_stable`, Stable-Baselines3 `/dlr-rm/stable-baselines3` (the reference for rl-zoo defaults and the SB3 loss/target conventions the configs cite), PyTorch `/websites/pytorch` (the torch backend), ONNX Runtime Python `/websites/onnxruntime_ai_api_python` (the ONNX export), ROS 2 `/ros2/ros2_documentation` (the hardware step). For anything else, call `resolve-library-id` first |
 | `memory` (user scope) | Cross-session notes; not a source of truth for API details |
 
 ### MCP Safety Rules

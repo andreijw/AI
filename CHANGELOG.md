@@ -12,6 +12,23 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-07
+
+### Added
+
+- **Machine-wide run queue and a resume file for the dev team** (`chore/run-queue-and-status`): a stdlib job queue,
+  `.claude/skills/experiment-runner/scripts/run_queue.py` (`submit`, `run`, `status`, `wait`, `cancel`, `prune`),
+  holds every agent to 3 training runs at once on the Jetson (`RL_QUEUE_SLOTS`). Each job runs with one BLAS
+  thread in its own process group, with the submitter's environment minus secret-looking names (`KEY`, `TOKEN`,
+  `SECRET` and similar; `--env` passes one on purpose), and is cancelled by its stored group, never by a name
+  pattern, after `pkill -f` killed its own calling shell twice. A worker holds `worker.lock` for its life and is
+  started by `submit`, `wait` or `status`; records are written atomically with mode 0600, a job runs at most once
+  even if its worker dies mid-launch, keeps its slot while any process of its group lives, and has its real exit
+  code recorded by a wrapper. 72 tests (about 26 s) and 44 of 44 mutations killed, after three review rounds. The
+  `dev-loop` skill now keeps `~/rl-experiments/STATUS.md` (items, worktrees, running agents and jobs, pending
+  decisions) so "continue" or a new session resumes from one read. CLAUDE.md lists Context7 IDs for
+  Stable-Baselines3, PyTorch, ONNX Runtime (Python) and ROS 2.
+
 ## 2026-11-06
 
 ### Added
