@@ -1,5 +1,7 @@
 """DQN rejects invalid settings at construction, and warm-up reports no loss (CHANGELOG.md, 2026-10-19)."""
 
+import re
+
 import numpy as np
 import pytest
 
@@ -223,3 +225,41 @@ def test_a_checkpoint_from_the_other_network_is_rejected_and_changes_nothing(
 
     assert_weights_unchanged(target, before, "after a rejected load")
     assert len(target.replay_buffer) == buffered, "A rejected load must leave the buffer alone."
+
+
+# ---------------------------------------------------------------------------
+# td_loss and huber_delta
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad", ["hubr", None, 1, True])
+def test_td_loss_must_be_mse_or_huber(bad):
+    with pytest.raises(ValueError, match="td_loss"):
+        _agent(td_loss=bad)
+
+
+@pytest.mark.parametrize("bad", [0, -1, float("nan"), float("inf"), True, "1"])
+def test_huber_delta_must_be_a_positive_finite_number(bad):
+    with pytest.raises(ValueError, match=r"huber_delta.*" + re.escape(repr(bad))):
+        _agent(td_loss="huber", huber_delta=bad)
+
+
+@pytest.mark.parametrize("config", [{"huber_delta": 1.0}, {"huber_delta": None},
+                                    {"td_loss": "mse", "huber_delta": 1.0}])  # fmt: skip
+def test_huber_delta_without_the_huber_loss_is_refused(config):
+    """A delta that would do nothing is a mistyped setting, as an ou_* key without OU noise is."""
+    with pytest.raises(ValueError, match="huber_delta.*td_loss: huber"):
+        _agent(**config)
+
+
+def test_td_loss_is_case_insensitive():
+    assert _agent(td_loss="HUBER").td_loss == "huber", "td_loss is read case-insensitively"
+
+
+def test_huber_delta_defaults_to_one():
+    assert _agent(td_loss="huber").huber_delta == 1.0, "SB3's smooth-L1 delta is the default"
+
+
+def test_the_default_td_loss_is_squared_error_without_a_delta():
+    agent = _agent()
+    assert (agent.td_loss, agent.huber_delta) == ("mse", None), "MSE is the default, with no delta"

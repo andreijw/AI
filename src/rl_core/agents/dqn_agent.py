@@ -28,6 +28,30 @@ def _optional_real(config: dict[str, Any], key: str) -> float | None:
 
 _VALUE_STREAM = ("W1_value", "b1_value", "W2_value", "b2_value")
 
+TD_LOSSES = ("mse", "huber")
+
+
+def _td_loss_terms(
+    td_error: npt.NDArray[np.float64], huber_delta: float | None
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """
+    Per-sample TD loss and its derivative with respect to Q(s, a), for errors ``e = Q(s, a) − y``.
+
+    Squared error (``huber_delta`` None): ``½e²`` and ``e``. Huber (PyTorch's ``huber_loss(delta)``,
+    equal to SB3's ``smooth_l1_loss`` at delta 1): ``½e²`` for ``|e| ≤ δ``, else ``δ(|e| − ½δ)``, and
+    ``clip(e, −δ, δ)``. Inside δ both are the squared error and its slope exactly (factor 1).
+
+    Returns:
+        Tuple of (loss terms, slopes), each of the shape of ``td_error``.
+    """
+    squared = 0.5 * (td_error**2)
+    if huber_delta is None:
+        return squared, td_error
+    magnitude = np.abs(td_error)
+    linear = huber_delta * (magnitude - 0.5 * huber_delta)
+    terms = np.where(magnitude <= huber_delta, squared, linear)
+    return terms, np.clip(td_error, -huber_delta, huber_delta)
+
 
 class DQNAgent(MidEpisodeUpdates, BaseAgent):
     """
@@ -36,6 +60,7 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
     Approximates state-action values Q(s, a) using a multi-layer perceptron.
     Trained via off-policy Bellman temporal-difference error minimization:
         L = 0.5 * (Q_online(s, a) - (r + (1 - done) * γ * max_a' Q_target(s', a')))^2
+    or, with ``td_loss: huber``, the Huber loss of the same error.
 
     Features:
     * Separate online and target Q-networks for stable gradient updates.
@@ -50,6 +75,10 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
       observation; there the convolutional features) and nothing else. With one action, Q = V.
       Greedy actions equal those of A alone; the targets do not. Off by default; a checkpoint
       only loads into an agent with the same setting.
+    * Optional Huber TD loss (``td_loss: huber``, ``huber_delta`` δ, default 1.0; squared error
+      ``mse`` by default): ``½e²`` for ``|e| ≤ δ`` and ``δ(|e| − ½δ)`` beyond, so a rare large TD
+      error pulls with at most δ. PyTorch's ``huber_loss(delta)``, SB3's DQN loss at δ 1. The loss
+      is a setting, not state: a checkpoint loads under either.
     * Epsilon-greedy action selection, decayed once per update call (``epsilon_decay``) or
       linearly per training action (``exploration_steps``).
     * Bootstrapping through time-limit cuts: only a true termination ends the Bellman target.
@@ -97,6 +126,7 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
         self.updates_per_step: float | None = _optional_real(config, "updates_per_step")
         self.max_updates_per_call: int = positive_int(config, "max_updates_per_call", 64)
         self.anneal_steps: int | None = anneal_steps_from_config(config)
+        self.td_loss, self.huber_delta = self._read_td_loss(config)
         self._validate_dims(observation_dim, action_dim)
         self._validate_rates()
         self._validate_buffer_and_optimizer(config)
@@ -224,6 +254,37 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
                 "(linear per training action), not both"
             )
         return value
+
+    @staticmethod
+    def _read_td_loss(config: dict[str, Any]) -> tuple[str, float | None]:
+        """
+        Read ``td_loss`` ("mse" by default, or "huber") and ``huber_delta`` (Huber only, default 1.0).
+
+        Returns:
+            Tuple of (td_loss, huber_delta), the delta None for the squared error.
+
+        Raises:
+            ValueError: For an unknown ``td_loss``, a ``huber_delta`` that is not a positive finite
+                number, or a ``huber_delta`` key without ``td_loss: huber``.
+        """
+        raw = config.get("td_loss", "mse")
+        td_loss = raw.lower() if isinstance(raw, str) else raw
+        if td_loss not in TD_LOSSES:
+            raise ValueError(f"td_loss must be one of {TD_LOSSES}, got {raw!r}")
+        if td_loss != "huber":
+            if "huber_delta" in config:
+                raise ValueError(
+                    f"huber_delta is set ({config['huber_delta']!r}), but it needs td_loss: huber"
+                )
+            return td_loss, None
+        delta = _optional_real(config, "huber_delta")
+        if delta is None:
+            return td_loss, 1.0
+        if not (np.isfinite(delta) and delta > 0.0):
+            raise ValueError(
+                f"huber_delta must be a positive finite number, got {config['huber_delta']!r}"
+            )
+        return td_loss, delta
 
     def _parameter_names(self) -> tuple[str, ...]:
         """The online network's parameter names; each is stored as ``_<name>``, its target copy as
@@ -459,7 +520,8 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
         """
         Compute the TD loss and its gradients for one mini-batch, changing no state.
 
-        The loss is ``mean(½·(Q(s, a) − y)²)`` over the mini-batch, for the online network.
+        The loss is ``mean(½·(Q(s, a) − y)²)`` over the mini-batch, for the online network, or
+        with ``td_loss: huber`` the mean Huber loss of the same errors (:func:`_td_loss_terms`).
         The targets ``y`` are held constant when differentiating.
 
         Args:
@@ -479,13 +541,14 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
         q_vals, h, h_v = self._q_and_hidden(obs, target=False)
         pred_q = q_vals[np.arange(b_size), actions]
 
-        # TD error and MSE loss: 0.5 * (pred_q - targets)^2
+        # TD error, the per-sample loss and its slope dL_i/dQ(s_i, a_i)
         td_error = pred_q - targets
-        loss = float(np.mean(0.5 * (td_error**2)))
+        terms, slope = _td_loss_terms(td_error, self.huber_delta)
+        loss = float(np.mean(terms))
 
         # Backward pass
         d_q = np.zeros_like(q_vals)
-        d_q[np.arange(b_size), actions] = td_error
+        d_q[np.arange(b_size), actions] = slope
         value_grads = {}
         if h_v is not None:
             # Q_j = V + A_j - mean(A): dV sums d_q over the actions, dA_k = d_q_k - mean(d_q).
@@ -591,7 +654,8 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
         counter is left as it is, Adam starts from zero moments, the buffer is emptied, and with
         ``exploration_steps`` the exploration step is rebuilt from the saved epsilon so that
         exploration does not restart. Without the transitions-trained counter the learning-rate
-        decay starts again from the full rate.
+        decay starts again from the full rate. The TD loss is not saved: a checkpoint loads under
+        either ``td_loss``.
 
         Raises:
             ValueError: If the checkpoint's network is dueling and this agent's is not, or the

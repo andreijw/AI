@@ -300,7 +300,7 @@ python train.py --config configs/navigation_default.yaml
 python train.py --config configs/navigation_continuous_default.yaml
 
 # Navigation PPO and DQN (Navigation-v0), PPO and TD3 (NavigationContinuous-v0); about 5 minutes for PPO, 15 for DQN
-# and TD3 a seed with three runs sharing the CPU (DQN does not learn the task; see Range-Sensor Navigation below)
+# and TD3 a seed with three runs sharing the CPU (DQN's result: see Range-Sensor Navigation below)
 python train.py --config configs/navigation_ppo.yaml
 python train.py --config configs/navigation_dqn.yaml
 python train.py --config configs/navigation_continuous_ppo.yaml
@@ -451,7 +451,8 @@ The benchmark runs `random`, `ppo` and `dqn` on `Navigation-v0` (`--challenge na
 (`configs/navigation_*.yaml`). There is no solve threshold yet, so it reports every run as not solved, and it does
 not yet count successes. Measured on seeds 1 to 5 with greedy evaluation over 100 held-out layouts, successes
 counted by a scratch harness (CHANGELOG.md, 2026-11-06): TD3 reaches the goal in 96% of them after 100,000 steps,
-PPO in 88% after 200,000 with either action space, DQN in 11% after 300,000 (it mostly drives until the time limit),
+PPO in 88% after 200,000 with either action space, DQN in 94% after 300,000 (with squared error and a
+fixed rate it reached 11%; `td_loss: huber` and a decaying rate are the fix),
 and the random agent in 1%. A step with a sonar read takes about 0.65 ms and a
 reset about 20 ms (measured on the Jetson in the design review).
 
@@ -996,7 +997,7 @@ Implemented agents (in `src/rl_core/agents/`; how each one works, its update and
   - `ActorCriticAgent`: Advantage Actor-Critic (A2C) policy + value network agent
   - `PPOAgent`: Clipped-policy Proximal Policy Optimization agent
   - `DQNAgent`: Deep Q-Network with replay buffer and target network; double DQN targets (`double_q: true`) and a
-    dueling network (`dueling: true`) are opt-in
+    dueling network (`dueling: true`) and a Huber TD loss (`td_loss: huber`) are opt-in
 - **Continuous Control Agents**:
   - `ContinuousRandomAgent`: Uniform random continuous torque baseline policy
   - `ContinuousActorCriticAgent`: Continuous Gaussian policy A2C with state-value critic
@@ -1040,8 +1041,7 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 ### Next Steps
 
 1. **Range-sensor navigation**: a solve threshold, a success-rate metric, a curriculum and a robustness sweep for
-   `Navigation-v0` and `NavigationContinuous-v0` (Phase 8 of [`docs/roadmap.md`](docs/roadmap.md)), and a diagnosis
-   of why DQN does not learn there.
+   `Navigation-v0` and `NavigationContinuous-v0` (Phase 8 of [`docs/roadmap.md`](docs/roadmap.md)).
 2. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder), with the SAC and TD3 agents that walk
    BipedalWalker-v3 (SAC's greedy evaluation reaches 300 on 5 of 5 seeds, TD3's on 2 of 5).
 3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.

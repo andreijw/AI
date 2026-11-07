@@ -171,10 +171,13 @@ weights being trained) keep that regression stable. It acts epsilon-greedily on 
 y = r + gamma * (1 - terminated) * max_a' Q_target(s', a')                     (default)
 y = r + gamma * (1 - terminated) * Q_target(s', argmax_a' Q_online(s', a'))    (double_q: true)
 L = mean_B( 0.5 * (Q_online(s, a) - y)^2 )                                     (y held constant)
+L = mean_B( h(Q_online(s, a) - y) )                                            (td_loss: huber)
+h(e) = 0.5 * e^2 if |e| <= delta, else delta * (|e| - 0.5 * delta)   (gradient: clip(e, -delta, delta))
 ```
 
-Only a true termination stops the bootstrap: a time-limit cut is stored as not terminal. The loss is squared error,
-not SB3's Huber. The trainer calls `update` once per episode (or every `training.update_every` steps, below). Each
+Only a true termination stops the bootstrap: a time-limit cut is stored as not terminal. The loss is squared error
+by default; `td_loss: huber` switches to the Huber loss (below). The trainer calls `update` once per episode (or
+every `training.update_every` steps, below). Each
 call stores the new transitions and, once the buffer holds `min_buffer_size`, takes one gradient step, or
 `max(1, int(n_stored * updates_per_step))` capped at `max_updates_per_call` (64) with `updates_per_step`, each on a
 fresh mini-batch.
@@ -188,10 +191,13 @@ fresh mini-batch.
 - Exploration, two exclusive schedules: `exploration_steps` (epsilon falls linearly per training action, from
   `epsilon_start` 1.0 to `epsilon_end` 0.02) or `epsilon_decay` (0.995, multiplied once per `update` call that
   trained, so once per episode). Evaluation is greedy and leaves epsilon alone.
-- Opt-in options: `double_q` (targets above); `dueling` (a second `hidden_dim` value stream on the observation and
-  `Q = V + A - mean_a A`, Wang et al. 2016; twice the hidden units, the same depth); `normalize_observations` (the
-  buffer stores raw observations and normalises each sampled batch with the current statistics); `anneal_steps`
-  (the step size decays linearly to 0 over that many transitions).
+- Opt-in options: `td_loss: huber` with `huber_delta` (default 1.0; must be finite and positive, and is refused
+  without `td_loss: huber`): the Huber loss above, PyTorch's `huber_loss(delta)`, which at delta 1 equals SB3's
+  `smooth_l1_loss`, the loss SB3 and rl-zoo use; the logged `loss` is then the Huber value, and a squared-error
+  checkpoint loads into a Huber agent; `double_q` (targets above); `dueling` (a second `hidden_dim` value stream on
+  the observation and `Q = V + A - mean_a A`, Wang et al. 2016; twice the hidden units, the same depth);
+  `normalize_observations` (the buffer stores raw observations and normalises each sampled batch with the current
+  statistics); `anneal_steps` (the step size decays linearly to 0 over that many transitions).
 - Optimizer: plain SGD with an element-wise clip (`grad_clip_value` 10.0) by default; every committed config uses
   `optimizer: adam` with a global-norm clip (`max_grad_norm` 10.0).
 - Checkpoint: both networks, epsilon and the step counters, the optimizer state, the replay buffer and every
@@ -208,11 +214,18 @@ fresh mini-batch.
   greedy -110 ± 7 (CHANGELOG.md, 2026-11-04). It learns the task but does not hold the threshold reliably.
 - LunarLander (`lunarlander_dqn.yaml`, 300,000 steps, epsilon floor 0.1): reaches 200 and holds it on 5 of seeds 1 to
   5 and 4 of 11 to 15, at 152k to 297k steps (CHANGELOG.md, 2026-10-27).
-- Navigation (`navigation_dqn.yaml`, LunarLander's settings, 300,000 steps): it fails. Greedy evaluation over 100
-  held-out layouts reaches the goal 11% of the time (0% on three seeds, 50% on the best; counted by a scratch
-  harness), reward -0.58 ± 2.61, final training averages -3.8 to -1.3, where PPO reaches 88% with 200,000 steps. The
-  greedy policy mostly drives until the 400-step limit (a timeout costs less than a collision), while most of its
-  training episodes still end in one; the cause is not diagnosed (CHANGELOG.md, 2026-11-06).
+- Navigation (`navigation_dqn.yaml`, LunarLander's settings, 300,000 steps): with squared error and a fixed rate it
+  failed (2026-11-06): greedy evaluation over 100 held-out layouts reached the goal 11% of the time (0% on three
+  seeds, 50% on the best; counted by a scratch harness), reward -0.58 ± 2.61, where PPO reaches 88% with 200,000
+  steps; the greedy policy mostly drove until the 400-step limit. The training-doctor (2026-11-06) found two stacked
+  causes. First, the squared-error loss: a collision (-10) is about 200 times a step's reward std (0.046), so the
+  rare collisions dominated the gradient, Q was overestimated (mean Q 12 to 18 where no return exceeds about 10) and
+  the robot parked and dithered until the timeout. Second, a fixed learning rate on tiny action gaps (about 0.07):
+  the greedy policy kept flipping. The fix is `td_loss: huber` with `anneal_steps: 300000` (the rate decays to 0
+  over the whole budget). Result on seeds 1 to 5: 94% at the goal over 100 held-out layouts (89 to 96% by seed),
+  against 0 to 50% before; each change alone falls short (Huber with a fixed rate 0 to 18%, mean 4%; squared error
+  with the decaying rate 14 to 86%, mean 64%). Double DQN, dueling and an epsilon floor of 0.02 did not help
+  (seed 1) (CHANGELOG.md, 2026-11-07).
 - Double DQN and dueling stay opt-in: neither won on any of the four configs (CHANGELOG.md, 2026-10-29). The
   committed configs barely overestimate (logged mean Q within about 4 of the policy's own discounted return).
 
@@ -224,6 +237,10 @@ fresh mini-batch.
   `exploration_steps`.
 - A small buffer forgets (2026-10-25): on MountainCar a 10,000-transition buffer holds about 85 episodes, and a good
   greedy policy found mid-run drifted away; 100,000 helped the training average.
+- Huber helps when one rare reward is far larger than the typical step reward (Navigation's -10 collision against a
+  0.046 step std); on MountainCar, where every step pays -1, it was among the add-ons that did not help (2026-10-23).
+  Pair it with learning-rate annealing when the gaps between actions' values are small, or the greedy policy keeps
+  flipping.
 - Plausible add-ons often lose against a tuned config: n-step returns, two layers, Huber loss and scaled inputs
   on MountainCar (2026-10-23), prioritised replay on MountainCar and LunarLander (2026-10-27, 2026-11-04). Compare
   paired by seed, then confirm on held-out seeds.

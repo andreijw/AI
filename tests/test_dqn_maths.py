@@ -550,3 +550,142 @@ def test_dueling_with_adam_steps_every_online_parameter():
     after = weights(agent)
     for name in dqn_online_weights(agent):
         assert not np.array_equal(after[name], before[name]), f"Adam did not step {name}."
+
+
+# ---------------------------------------------------------------------------
+# Huber TD loss (td_loss: huber; PyTorch's huber_loss(delta), SB3's smooth_l1_loss at delta 1)
+# ---------------------------------------------------------------------------
+
+
+def _huber_fixture(dueling: bool, delta: float):
+    """An agent, a batch and targets whose TD errors sit on both sides of delta, each at least
+    0.1 * delta from the kink at |e| = delta."""
+    agent = _agent(td_loss="huber", huber_delta=delta, dueling=dueling)
+    rng = np.random.default_rng(3)
+    observations = rng.standard_normal((8, OBS_DIM))
+    actions = rng.integers(0, ACTION_DIM, size=8)
+    predicted = q_values(agent, observations)[np.arange(8), actions]
+    offsets = delta * np.array([0.2, -0.5, 0.7, -0.1, 1.5, -2.0, 4.0, -9.0])  # the TD errors
+    return agent, observations, actions, predicted - offsets
+
+
+@pytest.mark.parametrize("dueling", [False, True])
+@pytest.mark.parametrize("delta", [1.0, 0.3])
+def test_huber_gradients_match_finite_differences(dueling, delta):
+    agent, observations, actions, targets = _huber_fixture(dueling, delta)
+    current = weights(agent)
+    margin = 100 * EPS * max(1.0, float(np.abs(observations).max()))
+    streams = (("W1", "b1"), ("W1_value", "b1_value")) if dueling else (("W1", "b1"),)
+    for weight, bias in streams:
+        pre_activation = observations @ current[weight] + current[bias]
+        assert np.abs(pre_activation).min() > margin, f"A {weight} unit sits on the ReLU kink."
+        active = pre_activation > 0
+        assert active.any() and not active.all(), f"{weight} needs active and inactive units."
+
+    _, grads = loss_and_grads(agent, observations, actions, targets)
+
+    assert set(grads) == set(dqn_online_weights(agent)), "Every parameter needs a gradient."
+    assert_gradients_match(
+        lambda: loss_and_grads(agent, observations, actions, targets)[0]["loss"],
+        gradient_check_parameters(agent)[0],
+        grads,
+    )
+
+
+def test_huber_loss_and_head_gradients_match_hand_computation():
+    agent = _zero_trunk(
+        _agent(td_loss="huber", huber_delta=1.0),
+        online_bias=[1.0, 3.0, -5.0],
+        target_bias=[0, 0, 0],
+    )
+    observations = _batch()["observations"][:3]
+    actions = np.array([0, 1, 1])
+    targets = np.array([4.0, 2.5, 1.0])
+
+    components, grads = loss_and_grads(agent, observations, actions, targets)
+
+    # Q(s, a) = [1, 3, 3]; TD errors e = [-3, 0.5, 2].
+    # Huber: |e| <= 1 gives 0.5 e^2, beyond it |e| - 0.5: loss = mean([2.5, 0.125, 1.5]) = 1.375.
+    assert components["loss"] == pytest.approx(1.375, rel=1e-12)
+    # dL/dQ(s, a) = clip(e, -1, 1) / B = [-1, 0.5, 1] / 3; b2 sums them by action:
+    # action 0: -1/3, action 1: (0.5 + 1)/3 = 1/2, action 2: 0. Squared error would give
+    # [-3, 2.5, 0] / 3 = [-1, 5/6, 0]: the small error keeps MSE's slope, the large ones are clipped.
+    np.testing.assert_allclose(grads["b2"], [-1.0 / 3.0, 0.5, 0.0], rtol=1e-12, atol=1e-15)
+    assert not np.allclose(grads["b2"], [-1.0, 5.0 / 6.0, 0.0]), "Huber must clip the large errors."
+
+
+@pytest.mark.parametrize("delta", [1.0, 0.3])
+def test_huber_loss_and_slope_are_continuous_at_the_kink(delta):
+    """At |e| = delta both branches give 0.5 * delta^2 and slope +-delta, and just either side of it
+    the loss differs by no more than the slope allows: a wrong offset in the linear branch breaks it."""
+    agent = _zero_trunk(
+        _agent(td_loss="huber", huber_delta=delta),
+        online_bias=[0.0, 0.0, 0.0],
+        target_bias=[0, 0, 0],
+    )
+    observations = _batch()["observations"][:1]
+    action = np.array([1])
+
+    def loss_and_slope(error: float) -> tuple[float, float]:
+        components, grads = loss_and_grads(agent, observations, action, np.array([-error]))
+        return components["loss"], float(grads["b2"][1])  # Q = 0, so e = -target
+
+    for sign in (1.0, -1.0):
+        at, slope = loss_and_slope(sign * delta)
+        assert at == pytest.approx(0.5 * delta**2, rel=1e-12), "Huber at |e| = delta is delta^2/2"
+        assert slope == pytest.approx(sign * delta, rel=1e-12), (
+            "the slope at |e| = delta is +-delta"
+        )
+        for step in (1e-7, -1e-7):
+            near, _ = loss_and_slope(sign * delta * (1.0 + step))
+            assert abs(near - at) <= 1.01 * delta * delta * abs(step), "the loss jumps at the kink"
+
+
+def test_huber_with_a_delta_beyond_every_error_is_squared_error_exactly():
+    """Inside delta, huber_loss(delta) is 0.5 e^2 with MSE's own slope (factor 1, not 1/delta as
+    smooth_l1_loss(beta) would give). Exact equality holds because the Huber inner branch computes
+    ``0.5 * (td_error**2)`` with the same operations, in the same order, as the squared error."""
+    rng = np.random.default_rng(11)
+    observations = rng.standard_normal((N_STEPS, OBS_DIM))
+    actions = rng.integers(0, ACTION_DIM, size=N_STEPS)
+    targets = rng.normal(size=N_STEPS) * 3.0
+    squared = loss_and_grads(_agent(), observations, actions, targets)
+    huber = loss_and_grads(_agent(td_loss="huber", huber_delta=1e6), observations, actions, targets)
+
+    assert huber[0] == squared[0], "Every error is inside delta: the loss must be MSE's."
+    for name, gradient in squared[1].items():
+        np.testing.assert_array_equal(huber[1][name], gradient, err_msg=f"{name} differs from MSE.")
+
+
+def test_explicit_mse_is_the_default_exactly():
+    batch = _batch()
+    targets = np.array([1.5, -0.5, 2.0, 0.0, 1.0, -1.0])
+    default = loss_and_grads(_agent(), batch["observations"], batch["actions"], targets)
+    explicit = loss_and_grads(
+        _agent(td_loss="mse"), batch["observations"], batch["actions"], targets
+    )
+
+    assert explicit[0] == default[0]
+    for name, gradient in default[1].items():
+        np.testing.assert_array_equal(explicit[1][name], gradient, err_msg=f"{name} differs.")
+
+
+def test_huber_moves_q_less_towards_an_outlier_target_and_its_loss_falls():
+    """One sample's target is 50 above its Q: squared error lets it pull the network far harder."""
+    batch = _batch()
+    observations, actions = batch["observations"], batch["actions"]
+    targets = q_values(_agent(), observations)[np.arange(N_STEPS), actions] + 0.1
+    targets[2] += 50.0
+    moved, losses = {}, []
+    for loss in ("mse", "huber"):
+        agent = _agent(td_loss=loss, learning_rate=0.01, grad_clip_value=1e6)
+        before = q_values(agent, observations)[2, actions[2]]
+        for _ in range(5):
+            components, grads = loss_and_grads(agent, observations, actions, targets)
+            if loss == "huber":
+                losses.append(components["loss"])
+            apply_gradients(agent, grads)
+        moved[loss] = q_values(agent, observations)[2, actions[2]] - before
+
+    assert 0.0 < moved["huber"] < 0.5 * moved["mse"], f"Huber must damp the outlier: {moved}"
+    assert all(b < a for a, b in zip(losses, losses[1:], strict=False)), f"Loss rose: {losses}"

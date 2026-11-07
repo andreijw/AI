@@ -502,7 +502,8 @@ def test_navigation_dqn_uses_lunarlander_dqn_settings_for_400_step_episodes():
     """lunarlander_dqn.yaml's rl-zoo settings, its measured exploration floor of 0.1 included, with
     epsilon falling over the first 30,000 actions, a warm-up of 1,000 transitions (about 15 random
     episodes, not one), the update cap at the 400-step episode limit and LunarLander's 300,000
-    steps."""
+    steps; and the fix for the training-doctor diagnosis of 2026-11-06: rl-zoo's Huber TD loss
+    (SB3's smooth-L1, delta 1) and a learning rate decaying to zero over the whole budget."""
     agent, train_cfg = _navigation_run("navigation", "dqn")
     assert isinstance(optimizer(agent), Adam)
     assert (agent.learning_rate, agent.gamma) == pytest.approx((6.3e-4, 0.99))
@@ -512,7 +513,8 @@ def test_navigation_dqn_uses_lunarlander_dqn_settings_for_400_step_episodes():
     assert (agent.epsilon_start, agent.epsilon_end) == pytest.approx((1.0, 0.1))
     assert agent.exploration_steps == 30_000
     assert (agent.updates_per_step, agent.max_updates_per_call) == (1.0, 400)
-    assert train_cfg["total_steps"] == 300_000
+    assert (agent.td_loss, agent.huber_delta) == ("huber", 1.0)
+    assert agent.anneal_steps == train_cfg["total_steps"] == 300_000
 
 
 def test_navigation_continuous_td3_uses_pendulum_td3_settings_in_numpy():

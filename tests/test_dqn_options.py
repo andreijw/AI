@@ -339,3 +339,17 @@ def test_an_adam_checkpoint_loads_into_an_sgd_agent(tmp_path):
     agent = _agent()
     agent.load(path)
     assert_same_weights(agent, source, rtol=0.0)
+
+
+@pytest.mark.parametrize("dueling", [False, True])
+@pytest.mark.parametrize(("saved", "loaded"), [("mse", "huber"), ("huber", "mse")])
+def test_a_checkpoint_loads_under_the_other_td_loss(tmp_path, saved, loaded, dueling):
+    """The TD loss is a setting, like double_q, and holds no state: a checkpoint loads under either."""
+    path = str(tmp_path / f"{saved}.pt")
+    source = _trained({**RESUMABLE, "td_loss": saved, "dueling": dueling})
+    source.save(path)
+    agent = _agent(**RESUMABLE, td_loss=loaded, dueling=dueling)
+    agent.load(path)
+    assert_same_weights(agent, source, rtol=0.0)
+    assert agent.epsilon == source.epsilon, "epsilon must be restored whatever the loss"
+    assert counters(agent) == counters(source), "the counters must be restored whatever the loss"
