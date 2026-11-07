@@ -70,15 +70,18 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
      `layouts`; `world`: `World`; `render`: the arena as an RGB array) imports only NumPy and the standard library,
      never Gymnasium or `rl_core`.
    - `rl_navigation.estimation` is the robot's own code beside the Gymnasium layer, not under it: pose estimation on
-     a known map (`ekf`: `EkfLocalizer`; `kalman`: `kalman_update` in Joseph form; `evaluation`: seeded trials
-     against the simulator's true pose). It imports NumPy and `rl_navigation.sim` only, never `gym_env`, the
-     framework's layer, Gymnasium or `rl_core`, and nothing outside it calls it: no environment, wrapper or benchmark
-     challenge (the maintainer's decision, 2026-11-06). Its seam to the map is the `RangeMap` protocol in `maps`
-     (`min_range`, `max_range`, `noise_std`, and `expected_ranges` from `(P, 3)` poses to `(P, N)` ranges, `inf`
-     where a beam meets nothing). `SensorMap` implements it with the simulator's ray casts on a known `Arena`; an
-     occupancy grid (Phase 8, step 3) is meant to plug in the same way, so the filters never name the map's type.
-     The encoders are a simulator object, `WheelOdometry`, which the filter also uses as its motion model; it draws
-     from its own generator, so adding it changed no seeded trajectory of the environment (`tests/test_env_golden.py`).
+     a known map (`ekf`: `EkfLocalizer`; `kalman`: `kalman_update` in Joseph form; `mcl`: `MclLocalizer`, augmented
+     Monte Carlo localization with its pure resampling and likelihood functions; `evaluation`: seeded trials with
+     either filter, optionally with a kidnapping, against the simulator's true pose). It imports NumPy and
+     `rl_navigation.sim` only, never `gym_env`, the framework's layer, Gymnasium or `rl_core`, and nothing outside
+     it calls it: no environment, wrapper or benchmark challenge (the maintainer's decision, 2026-11-06). Its seam
+     to the map is the `RangeMap` protocol in `maps` (`min_range`, `max_range`, `noise_std`, and `expected_ranges`
+     from `(P, 3)` poses to `(P, N)` ranges, `inf` where a beam meets nothing); the particle filter asks for
+     `ParticleMap`, a `RangeMap` that also gives `num_readings`, `bounds`, `free` and `expected_beam_ranges`.
+     `SensorMap` implements both with the simulator's ray casts on a known `Arena`; an occupancy grid (Phase 8, step
+     3) is meant to plug in the same way, so the filters never name the map's type. The encoders are a simulator
+     object, `WheelOdometry`, which the filter also uses as its motion model; it draws from its own generator, so
+     adding it changed no seeded trajectory of the environment (`tests/test_env_golden.py`).
    - `rl_navigation.gym_env` (`NavigationGymEnv`) is the Gymnasium environment over the simulator, and importing it
      registers `Navigation-v0` and `NavigationContinuous-v0`. It imports Gymnasium and `rl_navigation.sim` only, so
      `import rl_navigation.gym_env; gym.make("NavigationContinuous-v0")` works without the training framework.
@@ -164,7 +167,7 @@ flowchart TD
     subgraph Libraries ["Libraries (no rl_core)"]
         NavGym["rl_navigation.gym_env: Navigation-v0, NavigationContinuous-v0 (Gymnasium + sim only)"]
         NavSim["rl_navigation.sim: NumPy simulator (arena, ray casting, sensors, odometry, layouts, World, render)"]
-        NavEst["rl_navigation.estimation: EkfLocalizer over a RangeMap (NumPy + sim only)"]
+        NavEst["rl_navigation.estimation: EkfLocalizer and MclLocalizer over a RangeMap (NumPy + sim only)"]
     end
 
     subgraph Core ["rl_core Framework"]

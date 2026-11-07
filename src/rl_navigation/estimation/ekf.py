@@ -36,7 +36,8 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from rl_navigation.estimation.kalman import kalman_update, symmetrized
-from rl_navigation.estimation.maps import RangeMap
+from rl_navigation.estimation.maps import RangeMap, usable_readings
+from rl_navigation.estimation.poses import checked_start, checked_wheel_travel, pose_difference
 from rl_navigation.sim.geometry import FloatArray
 from rl_navigation.sim.kinematics import unicycle_step, wrap_angle
 from rl_navigation.sim.odometry import WheelOdometry
@@ -51,14 +52,6 @@ CENSOR_MARGIN_STDS = 3.0
 
 # +-1 along each pose axis in turn: (x+, x-, y+, y-, theta+, theta-).
 _SIGNED_AXES = np.repeat(np.eye(3), 2, axis=0) * np.tile([1.0, -1.0], 3)[:, None]
-
-
-def pose_difference(poses: ArrayLike, reference: ArrayLike) -> FloatArray:
-    """``poses - reference`` for ``(..., 3)`` poses, the heading difference wrapped to
-    ``[-pi, pi)``: the error between two poses either side of +-pi is small, as it should be."""
-    difference = np.asarray(poses, dtype=np.float64) - np.asarray(reference, dtype=np.float64)
-    difference[..., 2] = wrap_angle(difference[..., 2])
-    return difference
 
 
 def motion_jacobians(
@@ -210,20 +203,7 @@ class EkfLocalizer:
         linearity_tol: float | None = None,
         gate: float = 9.0,
     ) -> None:
-        pose = np.array(pose, dtype=np.float64)
-        covariance = np.array(covariance, dtype=np.float64)
-        if pose.shape != (3,) or not np.isfinite(pose).all():
-            raise ValueError(f"EkfLocalizer pose must be 3 finite values, got {pose.tolist()}.")
-        if covariance.shape != (3, 3) or not np.isfinite(covariance).all():
-            raise ValueError(
-                f"EkfLocalizer covariance must be a finite 3 x 3 matrix, got shape {covariance.shape}."
-            )
-        if not np.allclose(covariance, covariance.T, rtol=1e-12, atol=0.0):
-            raise ValueError("EkfLocalizer covariance must be symmetric.")
-        try:
-            np.linalg.cholesky(covariance)
-        except np.linalg.LinAlgError as error:
-            raise ValueError("EkfLocalizer covariance must be positive-definite.") from error
+        pose, covariance = checked_start(pose, covariance, "EkfLocalizer")
         if not range_map.noise_std > 0.0:
             raise ValueError(
                 f"EkfLocalizer needs a sensor with positive range noise_std, got "
@@ -239,8 +219,6 @@ class EkfLocalizer:
             isinstance(iterations, int | np.integer) and iterations >= 1
         ):
             raise ValueError(f"EkfLocalizer iterations must be at least 1, got {iterations}.")
-        if not -np.pi <= pose[2] < np.pi:  # keep an in-range heading exactly as given
-            pose[2] = wrap_angle(pose[2])
         self.range_map = range_map
         self.odometry = odometry
         self.iterations = int(iterations)
@@ -274,12 +252,7 @@ class EkfLocalizer:
         Raises:
             ValueError: ``wheel_travel`` is not two finite numbers.
         """
-        travel = np.asarray(wheel_travel, dtype=np.float64)
-        if travel.shape != (2,) or not np.isfinite(travel).all():
-            raise ValueError(
-                f"EkfLocalizer.predict needs wheel_travel of two finite values (left, right) in "
-                f"metres, got {travel.tolist()}."
-            )
+        travel = checked_wheel_travel(wheel_travel, "EkfLocalizer.predict")
         distance, turn = self.odometry.increments(travel)
         F, G = motion_jacobians(self._pose, distance, turn)
         GA = G @ self.odometry.increments_jacobian()
@@ -316,8 +289,7 @@ class EkfLocalizer:
             )
         sigma2 = rmap.noise_std**2
         candidates = (  # NaN compares False, so a NaN reading is never a candidate
-            (z > rmap.min_range)
-            & (z < rmap.max_range)
+            usable_readings(z, rmap)
             & ~lin.nonlinear
             & (
                 np.where(lin.nonlinear, np.inf, lin.h)

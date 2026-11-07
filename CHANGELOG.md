@@ -16,6 +16,24 @@ Acrobot-v1) and
 
 ### Added
 
+- **Monte Carlo localization** (`feature/state-estimation-mcl`; PR 2 of 3 of the roadmap item "State
+  estimation"): `rl_navigation.estimation.MclLocalizer`, augmented MCL (Thrun, Burgard and Fox, Tables 8.2, 8.3
+  and 4.4) with a cut-down beam model, has the EKF's `predict` / `update` / `pose` / `covariance` contract and adds
+  what the EKF cannot do: start with no known pose and recover after the robot is carried elsewhere. It reports the
+  heaviest particle cluster and its weight share (`cluster_weight`), keeps particles that would hit an obstacle in
+  place, and imports only NumPy and the simulator. One deviation from Table 8.3: particles injected on the previous
+  scan are left out of the recovery average, because injection otherwise sustains itself for about 100 s after a
+  disturbance (an averages reset instead cut recovery from 9 to 5 of 10 seeds). The map seam gains a
+  `ParticleMap` protocol; the evaluation gains an `ekf()` / `mcl()` localizer factory, a kidnapping at a chosen
+  step and `summarize_localization`; EKF results are bit-identical. At the defaults (2000 particles, 16 beams,
+  `model_std` 0.15; about 50 ms a step with the simulator on one Jetson core), tuned on seeds 1 to 80 and judged
+  once on seeds 101 to 150, 600 steps with a kidnapping at step 300: the lidar localized globally in 96 % of layouts
+  and recovered in 96 % (98 % with 30 % dropout), against the maintainer's 70 % gate; the HC-SR04 80 to 88 % and 86
+  to 94 % (ungated).
+  Tracking from a known start: position RMSE 7 mm (lidar) and 12 to 13 mm (HC-SR04), pooled over every step,
+  against 0.80 m for dead reckoning, no lost run, mean NEES 0.57 to 0.94, so the reported covariance is
+  conservative (TESTING.md `EST-2`).
+
 - **Machine-wide run queue and a resume file for the dev team** (`chore/run-queue-and-status`): a stdlib job queue,
   `.claude/skills/experiment-runner/scripts/run_queue.py` (`submit`, `run`, `status`, `wait`, `cancel`, `prune`),
   holds every agent to 3 training runs at once on the Jetson (`RL_QUEUE_SLOTS`). Each job runs with one BLAS
