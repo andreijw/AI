@@ -16,6 +16,19 @@ Acrobot-v1) and
 
 ### Added
 
+- **Success-rate metric** (`feature/navigation-solve-metric`; PR 5a of 6 of the roadmap item "Range-sensor
+  navigation environment"): an episode's success is `info["is_success"]` at its last step (the Gymnasium and SB3
+  Monitor convention), unknown when that step lacks the key, and a rate is reported only when every episode in its
+  window is known. `Trainer.evaluate()` reports `success_rate`, the metrics log `success_rate` over its 10
+  episodes, `train()` `final_success_rate` over the last 100; the benchmark adds `eval_success_rate` and
+  `final_success_rate` (over `--window`) and an "Eval Success" column; `robustness.py` adds a "Success" column and
+  labels its threshold column "Reward ≥ <threshold>". `Trainer.evaluate_episodes` returns `EpisodeResult`s. The
+  trainer file gains an optional `episode_successes` array: old files resume (earlier outcomes unknown), files with
+  it are refused by older code, as with `curriculum`. Challenges that never set `is_success` (every one but
+  navigation) give unchanged output, pinned by exact-key tests on a real `Trainer` and the benchmark
+  characterization files. Code only: no result was rerun, and the navigation success figures quoted elsewhere still
+  come from the scratch harness until PR 5b.
+
 - **Monte Carlo localization** (`feature/state-estimation-mcl`; PR 2 of 3 of the roadmap item "State
   estimation"): `rl_navigation.estimation.MclLocalizer`, augmented MCL (Thrun, Burgard and Fox, Tables 8.2, 8.3
   and 4.4) with a cut-down beam model, has the EKF's `predict` / `update` / `pose` / `covariance` contract and adds

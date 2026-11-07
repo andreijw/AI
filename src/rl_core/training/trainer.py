@@ -4,7 +4,8 @@ import logging
 import math
 import os
 import warnings
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import gymnasium as gym
@@ -27,6 +28,42 @@ _logger = logging.getLogger(__name__)
 
 # Episodes between periodic metric records; also the window their averages cover.
 _LOG_INTERVAL = 10
+
+
+@dataclass(frozen=True)
+class EpisodeResult:
+    """
+    One played episode: its total reward, its steps, and whether it succeeded.
+
+    ``success`` is ``info["is_success"]`` from the episode's last step, the Gymnasium and SB3
+    convention, or None when that step's ``info`` has no such key: an environment that never
+    reports success, or one that reports it only on the ending step for an episode
+    ``max_steps_per_episode`` cut short.
+    """
+
+    reward: float
+    length: int
+    success: bool | None
+
+
+def success_rate(successes: Sequence[bool | None]) -> float | None:
+    """The share of ``successes`` that are True; None if there are none or any is unknown."""
+    if not successes or any(success is None for success in successes):
+        return None
+    return sum(bool(success) for success in successes) / len(successes)
+
+
+def known_successes(successes: Sequence[bool | None]) -> list[bool] | None:
+    """``successes`` as bools when every one is known (see :func:`success_rate`), else None."""
+    if success_rate(successes) is None:
+        return None
+    return [bool(success) for success in successes]
+
+
+def _success_field(name: str, successes: Sequence[bool | None]) -> dict[str, float]:
+    """``{name: rate}`` when the success rate of ``successes`` is known, else nothing."""
+    rate = success_rate(successes)
+    return {} if rate is None else {name: rate}
 
 
 class Trainer:
@@ -141,6 +178,8 @@ class Trainer:
         # Metrics tracking
         self.episode_rewards: list[float] = []
         self.episode_lengths: list[int] = []
+        # Each training episode's EpisodeResult.success.
+        self.episode_successes: list[bool | None] = []
 
         # Training progress, read by env wrappers such as TrainingVideoRecorder.
         # current_episode is the 1-based training episode in progress (0 before training).
@@ -323,10 +362,12 @@ class Trainer:
             self.current_episode = episode + 1
             if self.curriculum is not None:
                 self._start_curriculum_episode()
-            episode_reward, episode_length = self._run_episode(training=True)
+            played = self._run_episode(training=True)
+            episode_reward, episode_length = played.reward, played.length
 
             self.episode_rewards.append(episode_reward)
             self.episode_lengths.append(episode_length)
+            self.episode_successes.append(played.success)
             self.total_steps_trained += episode_length
             if self.curriculum is not None and self.curriculum.record(episode_reward):
                 self._log_info(
@@ -349,6 +390,7 @@ class Trainer:
                         "episode": episode + 1,
                         "avg_reward": avg_reward,
                         "avg_length": avg_length,
+                        **_success_field("success_rate", self.episode_successes[-_LOG_INTERVAL:]),
                         **((self.curriculum and self.curriculum.played_metrics()) or {}),
                         **self._drain_update_metrics(),
                     }
@@ -373,6 +415,7 @@ class Trainer:
             "avg_reward": np.mean(self.episode_rewards),
             "avg_length": np.mean(self.episode_lengths),
             "final_avg_reward": np.mean(self.episode_rewards[-100:]),
+            **_success_field("final_success_rate", self.episode_successes[-100:]),
         }
         if self.curriculum is not None:
             stats["curriculum_difficulty"] = self._end_curriculum()
@@ -409,7 +452,7 @@ class Trainer:
 
     def _run_episode(
         self, training: bool = True, env: Any | None = None, reset_seed: int | None = None
-    ) -> tuple[float, int]:
+    ) -> EpisodeResult:
         """
         Run a single episode.
 
@@ -419,7 +462,7 @@ class Trainer:
             reset_seed: Seed for the episode's reset, or None to continue the env's sequence
 
         Returns:
-            Tuple of (episode_reward, episode_length)
+            The episode's reward, length and success (see :class:`EpisodeResult`)
         """
         env = self.env if env is None else env
         raw_obs, _ = env.reset(seed=reset_seed) if reset_seed is not None else env.reset()
@@ -428,6 +471,7 @@ class Trainer:
         obs = self.agent.normalize_observation(raw_obs, training=training)
         episode_reward = 0.0
         episode_length = 0
+        success: bool | None = None
 
         # Transitions not yet handed to the agent: the whole episode, or with update_every the
         # steps since the last update. Each keeps the raw observations too, for an agent whose
@@ -447,6 +491,7 @@ class Trainer:
 
             episode_reward += float(reward)
             episode_length += 1
+            success = bool(info["is_success"]) if "is_success" in info else None
             obs, raw_obs = next_obs, raw_next
             # The step that ends the episode goes with the final update below.
             last = done or episode_length >= self.max_steps_per_episode
@@ -458,7 +503,7 @@ class Trainer:
             self._update_agent(transitions)
             self.agent.end_episode()
 
-        return episode_reward, episode_length
+        return EpisodeResult(episode_reward, episode_length, success)
 
     def _update_agent(
         self, transitions: list[tuple[Any, Any, Any, Any, bool, bool, Any, Any]]
@@ -496,20 +541,22 @@ class Trainer:
             num_episodes: Number of episodes to evaluate over
 
         Returns:
-            Dictionary of evaluation metrics
+            Dictionary of evaluation metrics, with ``success_rate`` when every episode reported
+            its success (see :class:`EpisodeResult`)
         """
         episodes = self.evaluate_episodes(num_episodes)
-        eval_rewards = [reward for reward, _ in episodes]
-        eval_lengths = [length for _, length in episodes]
+        eval_rewards = [episode.reward for episode in episodes]
+        eval_lengths = [episode.length for episode in episodes]
         return {
             "mean_reward": float(np.mean(eval_rewards)),
             "std_reward": float(np.std(eval_rewards)),
             "mean_length": float(np.mean(eval_lengths)),
+            **_success_field("success_rate", [episode.success for episode in episodes]),
         }
 
-    def evaluate_episodes(self, num_episodes: int) -> list[tuple[float, int]]:
+    def evaluate_episodes(self, num_episodes: int) -> list[EpisodeResult]:
         """
-        Each greedy episode's reward and length, played as :meth:`evaluate` plays them.
+        Each greedy episode's reward, length and success, played as :meth:`evaluate` plays them.
 
         Args:
             num_episodes: Number of episodes to play
@@ -574,6 +621,7 @@ class Trainer:
             eval_seed=self.eval_seed,
             env_state=self.env.rng_state() if isinstance(self.env, ResumableEnv) else {},
             curriculum=None if self.curriculum is None else self.curriculum.spec(),
+            episode_successes=known_successes(self.episode_successes),
         )
 
     def resume(self, agent_checkpoint: str) -> None:
@@ -602,6 +650,13 @@ class Trainer:
             self.env.set_rng_state(state.env_state)
         self.episode_rewards = list(state.episode_rewards)
         self.episode_lengths = list(state.episode_lengths)
+        # A run that did not save its successes (not all known, or from before the metric) resumes
+        # with them unknown, so no rate covers those episodes.
+        self.episode_successes = (
+            list(state.episode_successes)
+            if state.episode_successes is not None
+            else [None] * len(self.episode_rewards)
+        )
         self.total_steps_trained = state.total_steps_trained
         self.current_episode = len(self.episode_rewards)
         self._update_metric_window = {k: list(v) for k, v in state.update_metric_window.items()}

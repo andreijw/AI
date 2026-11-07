@@ -563,9 +563,88 @@ class ScriptedTrainer:
     def train(self) -> None:
         self.episode_rewards = [self.OUTCOMES[self.seed][0]] * self.num_episodes
         self.episode_lengths = [1] * self.num_episodes
+        self.episode_successes: list[bool | None] = [None] * self.num_episodes
 
     def evaluate(self, num_episodes: int) -> dict[str, float]:
         return {"mean_reward": self.OUTCOMES[self.seed][1]}
+
+
+class SuccessScriptedTrainer(ScriptedTrainer):
+    """A ScriptedTrainer on an environment that reports success: training succeeds in every
+    episode but the first, and evaluation in a share set by the seed."""
+
+    EVAL_SUCCESS = {1: 0.5, 2: 1.0, 3: 0.0}
+
+    def train(self) -> None:
+        super().train()
+        self.episode_successes = [False] + [True] * (self.num_episodes - 1)
+
+    def evaluate(self, num_episodes: int) -> dict[str, float]:
+        return {**super().evaluate(num_episodes), "success_rate": self.EVAL_SUCCESS[self.seed]}
+
+
+def _success_run(tmp_path, monkeypatch, trainer, window):
+    import benchmark
+
+    monkeypatch.setattr(benchmark, "Trainer", trainer)
+    report = tmp_path / "success.md"
+    res = BenchmarkRunner(PerAgentBudgetChallenge()).run(
+        settings=BenchmarkSettings(
+            agents=("long",),
+            seeds=(1, 2, 3),
+            window=window,
+            eval_episodes=1,
+            output_dir=str(tmp_path / "success"),
+        ),
+        report_path=str(report),
+        save_plot=False,
+    )
+    return res, report.read_text(encoding="utf-8")
+
+
+def test_runner_records_success_rates_over_the_solve_window(tmp_path, monkeypatch):
+    res, md = _success_run(tmp_path, monkeypatch, SuccessScriptedTrainer, window=2)
+    runs = res["results"]["long"]
+    episodes = runs[0]["total_episodes"]
+    assert episodes > 2, "the run is longer than the window, so the window matters"
+    assert [r["eval_success_rate"] for r in runs] == [0.5, 1.0, 0.0]
+    assert [r["final_success_rate"] for r in runs] == [1.0] * 3, (
+        "the training rate covers the last --window episodes, not the whole run"
+    )
+    stats = res["summary"]["long"]
+    assert stats["mean_eval_success_rate"] == pytest.approx(0.5)
+    assert stats["mean_final_success_rate"] == pytest.approx(1.0)
+    with open(res["metrics_json"]) as f:
+        assert json.load(f)["detailed_runs"]["long"][1]["eval_success_rate"] == 1.0
+    lines = md.splitlines()
+    header = next(i for i, line in enumerate(lines) if line.endswith(" Eval Success |"))
+    agent_row = next(line for line in lines[header + 2 :] if "long" in line)
+    assert agent_row.endswith("| 50% |"), "the Eval Success cell gives the mean success rate"
+
+
+class PartlySuccessScriptedTrainer(SuccessScriptedTrainer):
+    """Seed 3's evaluation reports no success rate."""
+
+    def evaluate(self, num_episodes: int) -> dict[str, float]:
+        stats = super().evaluate(num_episodes)
+        if self.seed == 3:
+            del stats["success_rate"]
+        return stats
+
+
+def test_runner_gives_no_mean_success_when_a_run_lacks_one(tmp_path, monkeypatch):
+    res, md = _success_run(tmp_path, monkeypatch, PartlySuccessScriptedTrainer, window=2)
+    runs, stats = res["results"]["long"], res["summary"]["long"]
+    assert "eval_success_rate" not in runs[2], "seed 3 reported no evaluation success"
+    assert "mean_eval_success_rate" not in stats, "a mean over some of the runs would mislead"
+    assert stats["mean_final_success_rate"] == pytest.approx(1.0)
+
+
+def test_runner_without_success_writes_no_success_field(tmp_path, monkeypatch):
+    res, md = _success_run(tmp_path, monkeypatch, ScriptedTrainer, window=2)
+    run, stats = res["results"]["long"][0], res["summary"]["long"]
+    assert not any("success" in key for key in (*run, *stats)), "no success field appears"
+    assert "Success" not in md
 
 
 def test_runner_reports_evaluation_successes_separately(tmp_path, monkeypatch):

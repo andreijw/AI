@@ -154,7 +154,8 @@ python $Q prune [--older-than 7]            # move finished records older than 7
 | `summary.<agent>.solve_rate` | Fraction of seeds whose rolling training average reached the challenge's `solve_threshold` |
 | `summary.<agent>.avg_solved_episode` | Mean first episode at which that happened, over the seeds that solved |
 | `summary.<agent>.eval_threshold_rate` | Fraction of seeds whose final evaluation reached the threshold (not a solve) |
-| `detailed_runs.<agent>[i]` | One seed: `eval_mean_reward`, `final_rolling_avg`, `solved_episode`, `solved_step`, `is_solved`, `held`, `eval_reached_threshold`, `total_episodes`, `total_steps`, `window`, `duration` |
+| `summary.<agent>.mean_eval_success_rate`, `mean_final_success_rate` | Mean share of evaluation episodes, and of the last `window` training episodes, that ended in `info["is_success"]`; present only when every run of the agent reports it |
+| `detailed_runs.<agent>[i]` | One seed: `eval_mean_reward`, `final_rolling_avg`, `solved_episode`, `solved_step`, `is_solved`, `held`, `eval_reached_threshold`, `total_episodes`, `total_steps`, `window`, `duration`, and `eval_success_rate`, `final_success_rate` when the environment reports success |
 | `metadata.episodes`, `steps`, `budgets_per_agent`, `episodes_per_agent` | The `--episodes` / `--steps` overrides (`null` without one), each agent's budget and unit, and the mean episodes each trained |
 
 Read the per-seed rows, not only the mean. Things to look for:

@@ -449,18 +449,31 @@ replay-buffer agents (DQN, DDPG, TD3, SAC) the trainer's batch also carries `raw
 `raw_next_observations`: the `ReplayBuffer` holds the agent's statistics, stores the raw observations and normalises
 each sampled batch with the statistics as they are then, as SB3 does, so no stored input goes stale. Beside it the
 trainer writes `trainer_episode_<n>.npz` (episode and step counts, reward and length histories, the update-metric
-window, the evaluation seed and, for an environment that implements `rl_core.environments.ResumableEnv`, its
-generators) as a `TrainerState` that also records the agent file's SHA-256, both files through
-`rl_core.training.checkpoints.write_atomically`; `Trainer.resume` (`train.py --resume`) reads both, so a resumed
-run ends exactly as an uninterrupted one. With a curriculum (`rl_core.training.curriculum.CurriculumScheduler`,
-built from `environment.curriculum` by `curriculum_from_config` in `train.py` and through the challenge's
-`setup_curriculum` in the benchmark), the trainer calls the training environment's `apply_settings` with the
-scheduler's settings before each training episode and records the episode's reward with it after; the trainer file
-holds the curriculum as JSON, and `resume` refuses a different one and replays the saved rewards to reach the same
-difficulty. A curriculum needs the evaluation environment, which stays at the target. Without an evaluation
-environment (direct `Trainer` callers and tests) evaluation runs on the training environment. `record.py` passes its
-playback environment as the evaluation environment with the same seed, so a playback shows the training run's
-evaluation start states.
+window, the evaluation seed, each episode's success when every one is known and, for an environment that implements
+`rl_core.environments.ResumableEnv`, its generators) as a `TrainerState` that also records the agent file's SHA-256,
+both files through `rl_core.training.checkpoints.write_atomically`; `Trainer.resume` (`train.py --resume`) reads both,
+so a resumed run ends exactly as an uninterrupted one. With a curriculum
+(`rl_core.training.curriculum.CurriculumScheduler`, built from `environment.curriculum` by `curriculum_from_config` in
+`train.py` and through the challenge's `setup_curriculum` in the benchmark), the trainer calls the training
+environment's `apply_settings` with the scheduler's settings before each training episode and records the episode's
+reward with it after; the trainer file holds the curriculum as JSON, and `resume` refuses a different one and replays
+the saved rewards to reach the same difficulty. A curriculum needs the evaluation environment, which stays at the
+target. Without an evaluation environment (direct `Trainer` callers and tests) evaluation runs on the training
+environment. `record.py` passes its playback environment as the evaluation environment with the same seed, so a
+playback shows the training run's evaluation start states.
+
+`Trainer._run_episode` returns a frozen `EpisodeResult(reward, length, success)`, and the public
+`Trainer.evaluate_episodes` returns a list of them (`evaluate` averages them). An episode's `success` is
+`bool(info["is_success"])` from its last step, the Gymnasium and SB3 Monitor convention, or None when that step's `info`
+lacks the key. A rate (`trainer.success_rate`) exists only when every episode in its window is known: `evaluate` gains
+`success_rate`, the periodic metrics log gains `success_rate` over its 10 episodes, and `train` gains
+`final_success_rate` over the last 100. A challenge whose environment never sets the key produces none of these. The
+trainer file's optional `episode_successes` key (one bool per episode) is written only when every outcome is known;
+an older trainer file loads with its earlier episodes unknown, but code from before the key refuses a file that has it,
+as it does one with `curriculum`. The benchmark's run record gains `eval_success_rate` and `final_success_rate` (over
+`--window`) when known, its summary `mean_eval_success_rate` and `mean_final_success_rate` only when every run has them,
+and its report an "Eval Success" column only when runs report success. The robustness report gains a "Success" column
+likewise; its threshold column is "Reward ≥ <threshold>", a per-episode reward share, not success.
 
 ```mermaid
 sequenceDiagram

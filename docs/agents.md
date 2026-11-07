@@ -146,7 +146,7 @@ the partly filled rollout and the annealing counter, so a resumed run continues 
   200,000 steps; entropy 0.01 for the five discrete actions, 0.0 continuous): greedy evaluation over 100 held-out
   layouts reaches the goal 88% of the time with either action space (82 to 97% discrete, 82 to 91% continuous),
   rewards 6.75 ± 0.85 and 6.66 ± 0.43; about 5 minutes a seed with three runs sharing the CPU. Goals were counted by a
-  scratch harness until PR 5's metric; there is no threshold yet (CHANGELOG.md, 2026-11-06).
+  scratch harness, before the success-rate metric; there is no threshold yet (CHANGELOG.md, 2026-11-06).
 
 **Lessons.**
 

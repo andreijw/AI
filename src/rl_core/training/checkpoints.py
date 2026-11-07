@@ -107,6 +107,9 @@ class TrainerState:
     env_state: dict[str, np.ndarray] = field(default_factory=dict)
     # The run's curriculum (CurriculumScheduler.spec()), or None for a run without one.
     curriculum: str | None = None
+    # Each episode's success (EpisodeResult.success), saved only when every one is known; None
+    # for a run whose environment did not report them all, and for files from before the metric.
+    episode_successes: list[bool] | None = None
 
     def to_arrays(self) -> dict[str, Any]:
         """The state as ``.npz`` arrays."""
@@ -127,6 +130,8 @@ class TrainerState:
             arrays["eval_seed"] = np.array(self.eval_seed)
         if self.curriculum is not None:
             arrays["curriculum"] = np.array(self.curriculum)
+        if self.episode_successes is not None:
+            arrays["episode_successes"] = np.array(self.episode_successes, dtype=np.bool_)
         clashing = sorted(arrays.keys() & self.env_state.keys())
         if clashing:
             raise ValueError(
@@ -162,6 +167,7 @@ class TrainerState:
             eval_seed=_optional_integer(data, "eval_seed"),
             env_state={k: np.asarray(data[k]) for k in data if k not in _KNOWN},
             curriculum=_text(data, "curriculum") if "curriculum" in data else None,
+            episode_successes=_successes(data) if "episode_successes" in data else None,
         )
         match = _AGENT_NAME.match(name)
         episodes = int(match.group(1)) if match else -1
@@ -171,6 +177,11 @@ class TrainerState:
             raise ValueError(
                 f"episode_rewards and episode_lengths hold {len(state.episode_rewards)} and "
                 f"{len(state.episode_lengths)} episodes; {name} was saved after {episodes}"
+            )
+        if state.episode_successes is not None and len(state.episode_successes) != episodes:
+            raise ValueError(
+                f"episode_successes holds {len(state.episode_successes)} episodes; {name} was "
+                f"saved after {episodes}"
             )
         if state.eval_seed is not None and state.eval_seed < 0:
             raise ValueError(f"eval_seed must be non-negative, got {state.eval_seed}")
@@ -203,7 +214,7 @@ _REQUIRED = (
     "update_metric_window",
     "non_finite_metrics_seen",
 )
-_KNOWN = (*_REQUIRED, "first_non_finite_episode", "eval_seed", "curriculum")
+_KNOWN = (*_REQUIRED, "first_non_finite_episode", "eval_seed", "curriculum", "episode_successes")
 
 
 def _scalar(data: Mapping[str, Any], key: str) -> Any:
@@ -239,6 +250,18 @@ def _history(data: Mapping[str, Any], key: str, kind: Any) -> np.ndarray:
     if value.dtype == np.bool_ or not np.issubdtype(value.dtype, kind) or value.dtype.kind == "c":
         raise ValueError(f"{key} must hold {kind.__name__} values, got dtype {value.dtype}")
     return value
+
+
+def _successes(data: Mapping[str, Any]) -> list[bool]:
+    """``episode_successes``: one bool per episode (``_history`` refuses bool, so its own check)."""
+    value = np.asarray(data["episode_successes"])
+    if value.ndim != 1:
+        raise ValueError(
+            f"episode_successes must be one value per episode, got shape {value.shape}"
+        )
+    if value.dtype != np.bool_:
+        raise ValueError(f"episode_successes must hold bool values, got dtype {value.dtype}")
+    return [bool(v) for v in value]
 
 
 def _json(data: Mapping[str, Any], key: str) -> Any:
