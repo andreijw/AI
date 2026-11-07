@@ -70,7 +70,7 @@ Time a short run first (one seed, a twentieth of the episodes) and scale up. Epi
 CartPole agent improves, so expect the full run to cost more than the linear estimate.
 
 - Up to a couple of minutes: run it in the foreground.
-- Longer: run it in the background and carry on with work that does not depend on it. Anything longer than
+- Longer: submit it to the run queue (below) and carry on with work that does not depend on it. Anything longer than
   an hour writes its driver, per-seed curves and results under `~/rl-experiments/<item>/`, not the session
   scratch directory under `/tmp`: a reboot on 2026-10-30 wiped `/tmp`, taking a night's runs and the
   baseline curves they were to be compared with. Run it from a frozen worktree
@@ -78,6 +78,68 @@ CartPole agent improves, so expect the full run to cost more than the linear est
   seed imports the code when it starts, so later seeds would otherwise train on half-written changes.
 - More than about half an hour in total, or anything that would occupy the machine while the maintainer is
   using it: say what you want to run and why, and ask.
+
+## Running through the queue
+
+The machine has 6 cores shared by every agent, and the rule is at most 3 training or evaluation processes
+at once across all of them, each with `OPENBLAS_NUM_THREADS=1`. The queue enforces it; do not poll `ps` or
+ask the coordinator for a go. It is `scripts/run_queue.py` in this skill's folder (standard library only;
+state in `~/rl-experiments/.queue/`, override with `RL_QUEUE_DIR`; cap 3, override with `RL_QUEUE_SLOTS`;
+workers and `wait` look at the queue every second, `RL_QUEUE_POLL` changes that):
+
+```bash
+Q=.claude/skills/experiment-runner/scripts/run_queue.py
+python $Q submit --name ppo-s1 --item <roadmap-item> --cwd <worktree> --log <results>/ppo-s1.log \
+    --env PYTHONPATH=<worktree>/src -- /data/AI/.venv/bin/python src/benchmark.py \
+    --challenge cartpole ... --output-dir <results>
+python $Q status [--item <roadmap-item>]    # one line per job: state, pid, exit code, log
+python $Q wait --item <roadmap-item>        # blocks; run it in the background to be told once
+python $Q cancel <id>                       # or --item <roadmap-item>
+python $Q prune [--older-than 7]            # move finished records older than 7 days to done/
+```
+
+- **Environment.** A job runs with exactly the environment of the shell that submitted it (stored in its
+  record), minus secret-looking names, plus any `--env K=V`, with the three single-thread variables
+  (`OPENBLAS_`, `OMP_`, `MKL_NUM_THREADS=1`) forced. The worker's environment is not used, so another
+  agent's `PYTHONPATH` cannot leak into your job: submit from your worktree's shell with
+  `PYTHONPATH=<worktree>/src` set. Variables whose names contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD`,
+  `PASSWD`, `CREDENTIAL`, `AUTH` or `COOKIE` (any case) are left out of the record and so out of the job;
+  pass one on purpose with `--env NAME=value`. The queue directory is owner-only and records are created
+  0600. Use an absolute interpreter (`/data/AI/.venv/bin/python`) in the command, since `PATH` lookup is
+  the submitter's and a bare `python` may be another interpreter. `submit` exits 2 if `--cwd` is not a
+  directory or the `--log` folder cannot be created.
+- **Jobs and workers.** `submit` queues the job and starts a detached worker if nobody holds
+  `<queue>/worker.lock`; `wait` and `status` do the same when jobs are queued (`--no-worker` stops `submit`
+  doing so). The worker's output is in `<queue>/worker.log`. There is one worker at a time, and it exits
+  when the queue is empty. `run_queue.py run` by hand (alias `worker`) does the same, and exits at once if
+  a worker is already running. Queued jobs start oldest first, whenever fewer than the cap hold a slot.
+  A job holds its slot from `starting` until its process group is gone, even if the wrapper process (the
+  pid in `status`) is killed; `status` shows both `pid` and `pgid`.
+- **`wait`** exits 0 when every selected job is `done`, and 1 if any failed, was cancelled or vanished
+  (its record is gone; a record that `prune` moved to `done/` still counts as it was); 2 if nothing
+  matches. Submit the whole sweep, then `wait` in the background so you are told once, instead of polling.
+- **`cancel`** marks a queued job cancelled at once. For a running job it signals the job's stored process
+  group (SIGTERM, then SIGKILL after 3 seconds) and marks it cancelled only once every process in the
+  group is gone; until then it keeps its slot, shown as `running*` in `status`. It leaves finished jobs
+  alone, and exits 1 if nothing matches or a group would not die. A child that calls `setsid` leaves the
+  group and escapes both `cancel` and the slot count. `status` shows `running(orphan)` when the wrapper pid
+  is dead but the job's group lives; `cancel` kills the group and so frees an orphan's slot. A wrapper
+  killed by a signal leaves `error="wrapper killed ...; job exit unknown"`.
+- **Stale records.** A job whose process, worker and process group are all gone (compared by pid and
+  process start time, so a reused pid does not count) is closed on the next `status`, `wait`, `cancel` or
+  worker pass: with the real exit code if the job had finished (each job runs through a wrapper that
+  records it), else `failed` with the error `lost`. A job whose worker died between recording `starting`
+  and recording `running` is adopted as `running` if its wrapper's pid file names a live process (so it
+  keeps its slot and its real exit code is recorded), else closed as `lost` after 5 seconds; it is never
+  re-run. A group id whose pid now belongs to an unrelated process (different start time) is not the
+  job's. A record that is not valid JSON, has the wrong shape or types (or a NUL byte in argv or env), or
+  whose id differs from its file name is moved to `<name>.corrupt` with a note on stderr; one with an
+  unknown record version (`"v"`) is skipped with a note.
+- **Never stop runs with `pkill -f <pattern>` or `kill` by pattern.** The pattern appears in the calling
+  shell's own command line and kills it (it did, twice). Use `cancel`, which signals the stored process group.
+- Result files (JSON lines) are resumable, so a rerun silently continues a stale partial file. Before
+  rerunning a sweep, move the old results aside (`mv results.jsonl results.jsonl.stale-<date>`), unless
+  resuming is what you want.
 
 ## 4. Read the result
 

@@ -1121,6 +1121,7 @@ the project checks only.
 | `tests/trainer_internals.py` | The same for `Trainer`: its metrics-record dispatch; all else goes through `train()` and `evaluate()` |
 | `.claude/skills/test-crafter/scripts/mutation_check.py` | Applies small breaks from a JSON list, reports which tests notice, restores the files |
 | `.claude/skills/doc-sync/scripts/check_md_width.py` | Checks the Markdown line-length rule on machines without Node |
+| `.claude/skills/experiment-runner/scripts/run_queue.py` | Machine-wide job queue: `submit`, `run`, `status`, `wait`, `cancel`, `prune`; keeps at most 3 training runs going across all agents |
 | `src/benchmark.py --output-dir … --report …` | Seeded experiment sweeps that leave `docs/benchmarks/` and saved runs alone |
 
 ### Skill Setup
