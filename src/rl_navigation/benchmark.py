@@ -29,10 +29,15 @@ from rl_navigation.gym_env import CONTINUOUS_ID, DISCRETE_ID
 # random-agent budget.
 DEFAULT_EPISODES = 100
 
+# The training average over the solve window (100 episodes) that solves either id, the maintainer's
+# choice (2026-11-07): about 90 % of training episodes at the goal with exploration on. The reward
+# has no goal bonus (progress, a step cost and the collision penalty), so it also rewards speed.
+SOLVE_THRESHOLD = 7.0
+
 
 @register_challenge
 class NavigationChallenge(BenchmarkChallenge):
-    """Navigation-v0: drive to the goal with five discrete actions. No solve threshold yet."""
+    """Navigation-v0: drive to the goal with five discrete actions."""
 
     AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {
         "random": RandomAgent,
@@ -55,7 +60,7 @@ class NavigationChallenge(BenchmarkChallenge):
 
     @property
     def solve_threshold(self) -> float | None:
-        return None
+        return SOLVE_THRESHOLD
 
     @property
     def default_episodes(self) -> int:
@@ -67,8 +72,7 @@ class NavigationChallenge(BenchmarkChallenge):
 
 @register_challenge
 class NavigationContinuousChallenge(BenchmarkChallenge):
-    """NavigationContinuous-v0: the same task with speed and turn rate in [-1, 1]. No solve
-    threshold yet."""
+    """NavigationContinuous-v0: the same task with speed and turn rate in [-1, 1]."""
 
     AGENT_CLASSES: ClassVar[dict[str, type[BaseAgent]]] = {
         "random": ContinuousRandomAgent,
@@ -91,7 +95,7 @@ class NavigationContinuousChallenge(BenchmarkChallenge):
 
     @property
     def solve_threshold(self) -> float | None:
-        return None
+        return SOLVE_THRESHOLD
 
     @property
     def default_episodes(self) -> int:

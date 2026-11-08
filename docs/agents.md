@@ -145,8 +145,9 @@ the partly filled rollout and the annealing counter, so a resumed run continues 
 - Navigation, `configs/navigation_ppo.yaml` and `navigation_continuous_ppo.yaml` (SB3's defaults, 2,048-step rollouts,
   200,000 steps; entropy 0.01 for the five discrete actions, 0.0 continuous): greedy evaluation over 100 held-out
   layouts reaches the goal 88% of the time with either action space (82 to 97% discrete, 82 to 91% continuous),
-  rewards 6.75 ± 0.85 and 6.66 ± 0.43; about 5 minutes a seed with three runs sharing the CPU. Goals were counted by a
-  scratch harness, before the success-rate metric; there is no threshold yet (CHANGELOG.md, 2026-11-06).
+  rewards 6.75 ± 0.85 and 6.66 ± 0.43; about 5 minutes a seed with three runs sharing the CPU. Against the 7.0
+  threshold both solve on 5 of 5 seeds but hold it on 1 (discrete) and 0 (continuous) (2026-11-07,
+  `docs/benchmarks/navigation_results.md` and `navigation_continuous_results.md`).
 
 **Lessons.**
 
@@ -225,7 +226,8 @@ fresh mini-batch.
   over the whole budget). Result on seeds 1 to 5: 94% at the goal over 100 held-out layouts (89 to 96% by seed),
   against 0 to 50% before; each change alone falls short (Huber with a fixed rate 0 to 18%, mean 4%; squared error
   with the decaying rate 14 to 86%, mean 64%). Double DQN, dueling and an epsilon floor of 0.02 did not help
-  (seed 1) (CHANGELOG.md, 2026-11-07).
+  (seed 1) (CHANGELOG.md, 2026-11-07). It solves and holds the 7.0 threshold on 5 of 5 seeds
+  (`docs/benchmarks/navigation_results.md`).
 - Double DQN and dueling stay opt-in: neither won on any of the four configs (CHANGELOG.md, 2026-10-29). The
   committed configs barely overestimate (logged mean Q within about 4 of the policy's own discounted return).
 
@@ -349,8 +351,9 @@ replay match DDPG's. One Adam per critic. A TD3 agent refuses a DDPG checkpoint;
 - NavigationContinuous, `navigation_continuous_td3.yaml` (NumPy, 64×64, 100,000 steps, updates after every step):
   greedy evaluation over 100 held-out layouts reaches the goal 96% of the time (93 to 100% by seed), reward 8.08 ±
   0.38, final training averages 7.4 to 8.4, ahead of continuous PPO on every seed with half its steps but about 2.9
-  times its wall time; about 15 minutes a seed with three runs sharing the CPU; goals counted by a scratch harness
-  (CHANGELOG.md, 2026-11-06).
+  times its wall time; about 15 minutes a seed with three runs sharing the CPU; solves and holds the 7.0 threshold on
+  5 of 5 seeds (2026-11-07, `docs/benchmarks/navigation_continuous_results.md`). Its success stays at 87 to 98% with
+  sensor noise from none to 0.4 m and dropout from none to 40% (TESTING.md `ROB-2`, seeds 42, 1, 2).
 
 **Lessons.** LunarLanderContinuous needed SB3's update after every environment step (`training.update_every: 1`):
 once per episode it held on 3 of 5 seeds, every step on 5 of 5 (CHANGELOG.md, 2026-10-30; adopted 2026-11-01). TD3

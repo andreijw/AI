@@ -8,10 +8,10 @@
 # On the NumPy backend: PyTorch at rl-zoo's 400x300 on the GPU was no faster here (a one-seed
 # 16,000-step probe took 79 s against NumPy's 70 s)
 # and needs .venv-gpu, which CI does not build.
-# Measured 2026-11-06 through the benchmark on seeds 1 to 5, three runs sharing the CPU; greedy evaluation over
-# 100 held-out layouts, goals counted by a scratch harness until PR 5's metric: 96% reach
-# the goal (93 to 100% by seed), reward 8.08 ± 0.38, final 100-episode training averages 7.4 to 8.4; about 15
-# minutes a seed (CHANGELOG.md, 2026-11-06).
+# Measured 2026-11-07 through the benchmark on seeds 1 to 5, three runs sharing the CPU; greedy evaluation over
+# 100 held-out layouts: 96% reach the goal (93 to 100% by seed), reward 8.08 ± 0.38, final 100-episode training
+# averages 7.4 to 8.4; solves the 7.0 threshold on 5 of 5 seeds and holds it on 5; about 15 minutes a seed
+# (docs/benchmarks/navigation_continuous_results.md).
 
 environment:
   name: "NavigationContinuous-v0"

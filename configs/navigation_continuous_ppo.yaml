@@ -4,10 +4,10 @@
 # the critic needs no Pendulum-style reward_scale. The agent's own defaults supply the rest: Adam with a
 # gradient-norm clip of 0.5, an initial log standard deviation of -0.5 and a mean head scaled by 0.01. The action
 # bounds, [-1, 1] for speed and turn rate, come from the environment.
-# Measured 2026-11-06 through the benchmark on seeds 1 to 5, three runs sharing the CPU; greedy evaluation over
-# 100 held-out layouts, goals counted by a scratch harness until PR 5's metric: 88% reach
-# the goal (82 to 91% by seed), reward 6.66 ± 0.43, final 100-episode training averages 5.4 to 7.0; about 5 minutes
-# a seed (CHANGELOG.md, 2026-11-06).
+# Measured 2026-11-07 through the benchmark on seeds 1 to 5, three runs sharing the CPU; greedy evaluation over
+# 100 held-out layouts: 88% reach the goal (82 to 91% by seed), reward 6.66 ± 0.43, final 100-episode training
+# averages 5.4 to 7.0; solves the 7.0 threshold on 5 of 5 seeds and holds it on none; about 5 minutes a seed
+# (docs/benchmarks/navigation_continuous_results.md).
 
 environment:
   name: "NavigationContinuous-v0"

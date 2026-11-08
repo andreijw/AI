@@ -4,10 +4,10 @@
 # one departure: an entropy bonus of 0.01 (rl-baselines3-zoo's LunarLander-v3 PPO) for exploration over the five
 # actions. A rollout of 2048 transitions holds about 20 whole episodes. Learning rate and clip decay to 0 over
 # the 200,000-step budget, as CartPole and Pendulum PPO.
-# Measured 2026-11-06 through the benchmark on seeds 1 to 5, three runs sharing the CPU; greedy evaluation over
-# 100 held-out layouts, goals counted by a scratch harness until PR 5's metric: 88% reach
-# the goal (82 to 97% by seed), reward 6.75 ± 0.85, final 100-episode training averages 6.0 to 7.4; about 5 minutes
-# a seed (CHANGELOG.md, 2026-11-06).
+# Measured 2026-11-07 through the benchmark on seeds 1 to 5, three runs sharing the CPU; greedy evaluation over
+# 100 held-out layouts: 88% reach the goal (82 to 97% by seed), reward 6.75 ± 0.85, final 100-episode training
+# averages 6.0 to 7.4; solves the 7.0 threshold on 5 of 5 seeds and holds it on 1; about 5 minutes a seed
+# (docs/benchmarks/navigation_results.md).
 
 environment:
   name: "Navigation-v0"

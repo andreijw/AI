@@ -19,6 +19,7 @@
 # Huber with the decaying rate 98, 96 and 94% on seeds 1, 2 and 4; the decaying rate alone 77% on seed 1; double
 # DQN, dueling and an epsilon floor of 0.02 failed on seed 1. This config's result on seeds 1 to 5 through the
 # benchmark (2026-11-07, final weights, 100 held-out layouts): 94% at the goal, 89 to 96% by seed.
+# Against the 7.0 threshold it solves and holds on 5 of 5 seeds (docs/benchmarks/navigation_results.md).
 
 environment:
   name: "Navigation-v0"

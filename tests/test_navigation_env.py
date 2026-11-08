@@ -690,9 +690,10 @@ def test_each_factory_refuses_the_other_ids_action_noise(factory, setting):
         factory({setting: 0.1})
 
 
-def test_the_challenges_have_no_solve_threshold_yet():
+def test_both_challenges_are_solved_at_a_training_average_of_seven():
+    """The maintainer's threshold (2026-11-07): about 90 % of training episodes at the goal."""
     for challenge in (NavigationChallenge(), NavigationContinuousChallenge()):
-        assert challenge.solve_threshold is None
+        assert challenge.solve_threshold == 7.0, f"{challenge.name} is solved at 7.0"
 
 
 def test_the_continuous_random_agent_gets_the_action_bounds():
