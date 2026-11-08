@@ -68,7 +68,7 @@ def _range_note(curriculum, difficulty):
     )
 
 
-def _row(row: RobustnessRow, threshold):
+def _row(row: RobustnessRow, threshold, with_success):
     if row.setting is None:
         setting, value, status, trained = "nominal (the target)", "–", "–", "–"
     else:
@@ -78,15 +78,22 @@ def _row(row: RobustnessRow, threshold):
         trained = f"{low:g}" if low == high else f"{low:g} to {high:g}"
     solved = row.solved_fraction(threshold)
     solved_text = "N/A" if solved is None else f"{solved * 100:.0f}%"
-    return (
+    line = (
         f"| {setting} | {value} | {status} | {trained} | {row.mean_reward:.1f} | "
         f"±{row.std_reward:.1f} | {row.mean_length:.1f} | {solved_text} |"
     )
+    if with_success:
+        rate = row.success_rate
+        line += " N/A |" if rate is None else f" {rate * 100:.0f}% |"
+    return line
 
 
 def render_report(rows, *, title, header, threshold):
-    """The Markdown report: what was played, then one table row per perturbation."""
+    """The Markdown report: what was played, then one table row per perturbation. The threshold
+    column is the share of episodes whose reward reached it; a Success column, the share that
+    succeeded, is added when the environment reports success."""
     threshold_text = "N/A" if threshold is None else f"{threshold:g}"
+    with_success = any(row.success_rate is not None for row in rows)
     return "\n".join(
         [
             f"# {title}",
@@ -97,9 +104,10 @@ def render_report(rows, *, title, header, threshold):
             "seed. Noise draws are not paired once a pinned parameter adds a draw at each reset.",
             "",
             f"| Setting | Value | Trained On | Training Range | Mean Reward | Reward Std "
-            f"| Mean Length | ≥ {threshold_text} |",
-            "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
-            *(_row(row, threshold) for row in rows),
+            f"| Mean Length | Reward ≥ {threshold_text} |" + (" Success |" if with_success else ""),
+            "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |"
+            + (" :---: |" if with_success else ""),
+            *(_row(row, threshold, with_success) for row in rows),
             "",
         ]
     )

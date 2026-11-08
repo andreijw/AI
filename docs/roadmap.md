@@ -144,12 +144,17 @@ neither Gymnasium nor `rl_core`, and a trained policy reaches the robot through 
 robot needs neither the trainer nor the agents. Step 1 is a full item; steps 2 to 5 are sketches to turn into
 full items when picked.
 
-- [~] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04; PR 4 of 5, the PPO, DQN and
-  TD3 configs; PR 5 the threshold, success-rate metric, curriculum and robustness sweep)
+- [~] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04; PR 5a of 6, the success-rate
+  metric; PR 5b the solve threshold, the benchmark, curriculum and robustness runs, and the published reports; the
+  maintainer split PR 5 on 2026-11-07)
+  - **Progress (PR 5a, 2026-11-07)**: the benchmark, `Trainer.evaluate()`, the metrics log and the robustness report
+    count successes from `info["is_success"]` (CHANGELOG.md, 2026-11-07). The maintainer set the solve threshold at
+    7.0 on the training reward, with success reported beside it and not gating; PR 5b sets it and reruns the
+    benchmark (seeds 1 to 5), a sensor-noise and dropout sweep of TD3 and DQN, and an optional TD3 curriculum.
   - **Progress (PR 4, 2026-11-06)**: TD3 (continuous) and PPO (both ids) reach at least 80 % greedy success on 100
     held-out layouts on 5 of 5 seeds; DQN did not (0 to 50 %) until the training-doctor fix of 2026-11-07 (Huber TD
     loss and a decaying learning rate): now 89 to 96 % on 5 of 5 (CHANGELOG.md, 2026-11-07). Success was counted by
-    a scratch harness; the metric is PR 5. Final 100-episode training averages against the floated
+    a scratch harness, before PR 5a's metric. Final 100-episode training averages against the floated
     threshold 7.0: TD3 5 of 5, discrete PPO 1 of 5, continuous PPO 0 of 5.
   - **Description**: A 2D Gymnasium environment and challenge package: a differential-drive robot (unicycle
     kinematics, linear and angular velocity commands, integrated at a fixed time step) in a walled arena with

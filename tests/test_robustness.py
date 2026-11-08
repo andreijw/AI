@@ -2,6 +2,7 @@
 (``rl_core.training.robustness``, ``Trainer.evaluate_episodes`` and robustness.py)."""
 
 import hashlib
+import importlib
 import os
 import re
 
@@ -360,6 +361,29 @@ def test_the_nominal_row_has_no_setting_and_no_range():
     assert row.in_range is None
 
 
+@pytest.mark.parametrize(
+    ("successes", "expected"),
+    [((True, False, True, True), 0.75), (None, None)],
+    ids=["reported", "not-reported"],
+)
+def test_a_row_gives_the_share_of_episodes_that_succeeded(successes, expected):
+    row = RobustnessRow("length", 1.0, (0.5, 0.5), (1.0,) * 4, (1,) * 4, successes)
+    assert row.success_rate == expected
+
+
+def _report(successes):
+    rows = [RobustnessRow(None, None, None, (9.0, -1.0), (50, 20), successes)]
+    module = importlib.import_module("robustness")
+    return module.render_report(rows, title="t", header=[], threshold=7.0)
+
+
+def test_the_report_has_a_success_column_only_when_episodes_report_success():
+    with_success, without = _report((True, False)), _report(None)
+    assert "| Success |" in with_success and "| 50% |" in with_success
+    assert "Success" not in without, "an environment without is_success gets no column"
+    assert "Reward ≥ 7" in without, "the threshold column counts rewards, not successes"
+
+
 def _cartpole_config(**environment):
     return {
         "environment": {"name": "CartPole-v1", "max_episode_steps": 50, "seed": 5, **environment},
@@ -435,9 +459,10 @@ def test_evaluate_episodes_returns_each_episode_that_evaluate_averages():
     finally:
         env.close()
     assert len(episodes) == 4
-    rewards = [reward for reward, _ in episodes]
+    rewards = [episode.reward for episode in episodes]
     assert stats["mean_reward"] == pytest.approx(np.mean(rewards))
-    assert stats["mean_length"] == pytest.approx(np.mean([length for _, length in episodes]))
+    assert stats["mean_length"] == pytest.approx(np.mean([e.length for e in episodes]))
+    assert {e.success for e in episodes} == {None}, "CartPole reports no success"
 
 
 # ---------------------------------------------------------------------------
@@ -607,3 +632,24 @@ def test_cli_refuses_a_config_without_the_checkpoints_curriculum(tmp_path, monke
         )  # fmt: skip
     assert "trained with a different curriculum" in capsys.readouterr().err
     assert not evaluated, "nothing is evaluated for the wrong config"
+
+
+def test_rows_on_an_environment_reporting_success_carry_each_episodes_outcome():
+    from rl_navigation.benchmark import NavigationChallenge
+
+    challenge = NavigationChallenge()
+    config = {
+        "environment": {"name": "Navigation-v0", "seed": 3, "max_episode_steps": 30},
+        "training": {"max_steps_per_episode": 30},
+    }
+    env = challenge.make_env(config["environment"], render_mode=None)
+    try:
+        agent = challenge.make_agent("random", {"seed": 3}, env)
+    finally:
+        env.close()
+    rows = robustness_rows(
+        challenge, config, agent, [Perturbation("sensor_noise_std", 0.1)], episodes=3, eval_seed=5
+    )
+    for row in rows:
+        assert row.successes is not None and len(row.successes) == 3, "one outcome per episode"
+        assert all(isinstance(s, bool) for s in row.successes)

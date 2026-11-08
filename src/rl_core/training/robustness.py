@@ -25,7 +25,7 @@ from ..agents.base_agent import BaseAgent
 from ..challenges.challenge import BenchmarkChallenge
 from .checkpoints import read_trainer_state, trainer_state_path
 from .curriculum import CurriculumScheduler, interpolate, require_schedulable
-from .trainer import Trainer
+from .trainer import Trainer, known_successes, success_rate
 
 _RANDOMIZATION = "domain_randomization"
 _SWEEP_FORM = "a sweep is SETTING=V1,V2,... with finite numbers"
@@ -43,7 +43,8 @@ class Perturbation:
 class RobustnessRow:
     """
     The greedy episodes of one perturbation. The nominal row, the config's own target, has no
-    ``setting``, ``value`` or ``trained_range``.
+    ``setting``, ``value`` or ``trained_range``. ``successes`` holds each episode's success, or is
+    None when the environment does not report them all.
     """
 
     setting: str | None
@@ -51,6 +52,7 @@ class RobustnessRow:
     trained_range: tuple[float, float] | None
     rewards: tuple[float, ...]
     lengths: tuple[int, ...]
+    successes: tuple[bool, ...] | None = None
 
     @property
     def in_range(self) -> bool | None:
@@ -71,6 +73,11 @@ class RobustnessRow:
     @property
     def mean_length(self) -> float:
         return float(np.mean(self.lengths))
+
+    @property
+    def success_rate(self) -> float | None:
+        """The share of episodes that succeeded; None when success is not reported."""
+        return None if self.successes is None else success_rate(self.successes)
 
     def solved_fraction(self, threshold: float | None) -> float | None:
         """The share of episodes whose reward reached ``threshold``; None without one."""
@@ -294,13 +301,15 @@ def robustness_rows(
             played = trainer.evaluate_episodes(episodes)
         finally:
             env.close()
+        successes = known_successes([episode.success for episode in played])
         rows.append(
             RobustnessRow(
                 setting,
                 value,
                 trained,
-                tuple(float(reward) for reward, _ in played),
-                tuple(int(length) for _, length in played),
+                tuple(float(episode.reward) for episode in played),
+                tuple(int(episode.length) for episode in played),
+                None if successes is None else tuple(successes),
             )
         )
     return rows

@@ -448,11 +448,12 @@ its range sensors. Each reset draws a new layout; `reset(options={"layout": layo
 
 The benchmark runs `random`, `ppo` and `dqn` on `Navigation-v0` (`--challenge navigation`) and `random`, `ppo` and
 `td3` on `NavigationContinuous-v0` (`--challenge navigation_continuous`), each from its committed config
-(`configs/navigation_*.yaml`). There is no solve threshold yet, so it reports every run as not solved, and it does
-not yet count successes. Measured on seeds 1 to 5 with greedy evaluation over 100 held-out layouts, successes
-counted by a scratch harness (CHANGELOG.md, 2026-11-06): TD3 reaches the goal in 96% of them after 100,000 steps,
-PPO in 88% after 200,000 with either action space, DQN in 94% after 300,000 (with squared error and a
-fixed rate it reached 11%; `td_loss: huber` and a decaying rate are the fix),
+(`configs/navigation_*.yaml`). There is no solve threshold yet, so it reports every run as not solved; it does count
+successes (`info["is_success"]` of an episode's last step): the training log, the evaluation, the Markdown report's
+"Eval Success" column and the JSON carry the rate. Measured on seeds 1 to 5 with greedy evaluation over 100 held-out
+layouts, successes counted by a scratch harness before the metric existed (CHANGELOG.md, 2026-11-06): TD3 reaches
+the goal in 96% of them after 100,000 steps, PPO in 88% after 200,000 with either action space, DQN in 94% after 300,000
+(with squared error and a fixed rate it reached 11%; `td_loss: huber` and a decaying rate are the fix),
 and the random agent in 1%. A step with a sonar read takes about 0.65 ms and a
 reset about 20 ms (measured on the Jetson in the design review).
 
@@ -835,9 +836,10 @@ Each row says whether the value is inside the range the agent trained on: the co
 or from the curriculum's start to the difficulty the run reached, replayed from the trainer file beside the
 checkpoint (the configured start to target when there is none). A config whose curriculum differs from the one in
 the trainer file, or that has none where the run had one, is refused, as a resume refuses it. The table gives mean
-and spread of the greedy reward, mean length and the share of episodes at or above the solve threshold. It is
-printed; `--report` also writes it as Markdown, and nothing is written without it. A checkpoint from the PyTorch
-backend loads into the NumPy agent, so no PyTorch is needed.
+and spread of the greedy reward, mean length, the share of episodes whose reward reached the solve threshold (the
+"Reward ≥ threshold" column) and, for an environment that reports `is_success` (Navigation), the share that succeeded
+("Success"). It is printed; `--report` also writes it as Markdown, and nothing is written without it. A checkpoint
+from the PyTorch backend loads into the NumPy agent, so no PyTorch is needed.
 
 ## Development
 
@@ -1040,7 +1042,7 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 
 ### Next Steps
 
-1. **Range-sensor navigation**: a solve threshold, a success-rate metric, a curriculum and a robustness sweep for
+1. **Range-sensor navigation**: a solve threshold, a curriculum and a robustness sweep for
    `Navigation-v0` and `NavigationContinuous-v0` (Phase 8 of [`docs/roadmap.md`](docs/roadmap.md)).
 2. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder), with the SAC and TD3 agents that walk
    BipedalWalker-v3 (SAC's greedy evaluation reaches 300 on 5 of 5 seeds, TD3's on 2 of 5).

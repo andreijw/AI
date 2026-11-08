@@ -30,7 +30,7 @@ from rl_core.challenges import (
 )
 from rl_core.seeding import eval_seed_for
 from rl_core.training.budget import apply_budget_override, budget_of
-from rl_core.training.trainer import Trainer
+from rl_core.training.trainer import Trainer, success_rate
 from rl_core.utils.smoothing import rolling_average
 
 # ---------------------------------------------------------------------------
@@ -119,6 +119,19 @@ def classify_run(
     }
 
 
+def success_fields(
+    eval_success: float | None, episode_successes: list[bool | None], window: int
+) -> dict[str, float]:
+    """
+    A run record's success rates, for an environment that reports success: ``eval_success_rate``
+    over the final evaluation and ``final_success_rate`` over the last ``window`` training
+    episodes, the window of the solve rule and of held. Each is left out when unknown.
+    """
+    fields = {"eval_success_rate": eval_success}
+    fields["final_success_rate"] = success_rate(episode_successes[-window:])
+    return {name: float(rate) for name, rate in fields.items() if rate is not None}
+
+
 def summarise_runs(
     results: dict[str, list[dict[str, Any]]], budgets: dict[str, tuple[int, str]]
 ) -> dict[str, dict[str, Any]]:
@@ -157,6 +170,9 @@ def summarise_runs(
             "eval_threshold_rate": float(len(eval_reached) / len(runs)),
             "runs": len(runs),
         }
+        for field in ("eval_success_rate", "final_success_rate"):
+            if all(field in r for r in runs):
+                summary[agent_type][f"mean_{field}"] = float(np.mean([r[field] for r in runs]))
     return summary
 
 
@@ -394,9 +410,11 @@ class BenchmarkRunner:
 
             eval_stats = trainer.evaluate(num_episodes=settings.eval_episodes)
             eval_mean = float(eval_stats.get("mean_reward", 0.0))
+            eval_success = eval_stats.get("success_rate")
 
             episode_rewards = [float(r) for r in trainer.episode_rewards]
             episode_lengths = [int(n) for n in trainer.episode_lengths]
+            episode_successes = list(trainer.episode_successes)
         finally:
             env.close()
             if eval_env is not None:
@@ -405,6 +423,7 @@ class BenchmarkRunner:
         result = self._run_record(
             seed, duration, eval_mean, episode_rewards, episode_lengths, settings.window
         )
+        result.update(success_fields(eval_success, episode_successes, settings.window))
         return SeedRun(
             result,
             episode_rewards,
@@ -596,19 +615,23 @@ class BenchmarkRunner:
 
 
 def _report_table(agents: list[str], summary: dict[str, dict[str, Any]]) -> list[str]:
-    """The Performance Summary section: one row per agent, in the order they ran."""
+    """The Performance Summary section: one row per agent, in the order they ran, with an Eval
+    Success column (the mean of the runs' evaluation success rates) when the runs report one."""
+    with_success = any("mean_eval_success_rate" in summary[agent] for agent in agents)
     return [
         "",
         "## Performance Summary",
         "",
         "| Algorithm | Budget | Episodes | Mean Eval Reward | Reward Std | Solve Rate "
-        "| Avg Solve Episode | Avg Steps to Solve | Held | Eval ≥ Threshold | Mean Time (s) |",
-        "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
-        *(_report_row(agent_type, summary[agent_type]) for agent_type in agents),
+        "| Avg Solve Episode | Avg Steps to Solve | Held | Eval ≥ Threshold | Mean Time (s) |"
+        + (" Eval Success |" if with_success else ""),
+        "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |"
+        + (" :---: |" if with_success else ""),
+        *(_report_row(agent_type, summary[agent_type], with_success) for agent_type in agents),
     ]
 
 
-def _report_row(agent_type: str, stats: dict[str, Any]) -> str:
+def _report_row(agent_type: str, stats: dict[str, Any], with_success: bool) -> str:
     solve_pct = f"{stats['solve_rate'] * 100:.0f}%"
     eval_pct = f"{stats['eval_threshold_rate'] * 100:.0f}%"
     held_pct = f"{stats['held_rate'] * 100:.0f}%"
@@ -618,12 +641,16 @@ def _report_row(agent_type: str, stats: dict[str, Any]) -> str:
     avg_steps = (
         f"{stats['avg_solved_step']:,.0f}" if stats["avg_solved_step"] is not None else "N/A"
     )
-    return (
+    row = (
         f"| **{agent_type}** | {stats['budget']} {stats['budget_unit']} | "
         f"{stats['episodes']:.0f} | {stats['mean_eval_reward']:.1f} | "
         f"±{stats['std_eval_reward']:.1f} | {solve_pct} | {avg_solve} | {avg_steps} | "
         f"{held_pct} | {eval_pct} | {stats['mean_duration']:.2f}s |"
     )
+    if with_success:
+        rate = stats.get("mean_eval_success_rate")
+        row += " N/A |" if rate is None else f" {rate * 100:.0f}% |"
+    return row
 
 
 def _report_curricula(curricula: dict[str, str]) -> list[str]:
