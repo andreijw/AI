@@ -295,7 +295,7 @@ python train.py --config configs/bipedalwalker_default.yaml
 .venv-gpu/bin/python train.py --config configs/bipedalwalker_sac.yaml
 .venv-gpu/bin/python train.py --config configs/bipedalwalker_td3.yaml
 
-# Navigation random baselines, discrete and continuous (no solve threshold yet; see Range-Sensor Navigation below)
+# Navigation random baselines, discrete and continuous (threshold 7.0, far above random; see Range-Sensor Navigation)
 python train.py --config configs/navigation_default.yaml
 python train.py --config configs/navigation_continuous_default.yaml
 
@@ -311,14 +311,17 @@ python train.py --config configs/navigation_continuous_td3.yaml
 
 A run solves the challenge when its average training reward over 100 episodes reaches the threshold: 475 for
 CartPole-v1, -200 for Pendulum-v1, -100 for Acrobot-v1, -110 for MountainCar-v0, 90 for MountainCarContinuous-v0, 200
-for LunarLander-v3 and LunarLanderContinuous-v3, 300 for BipedalWalker-v3. It **holds** when the average over its last
+for LunarLander-v3 and LunarLanderContinuous-v3, 300 for BipedalWalker-v3, 7 for Navigation-v0 and
+NavigationContinuous-v0. It **holds** when the average over its last
 100 episodes is still at or above the threshold. Each agent trains for a budget of environment steps set against its
 rl-baselines3-zoo reference (see the config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18
 (CartPole PPO on 2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment and named
 random streams ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md); LunarLanderContinuous TD3 on 2026-11-01 in
 [`docs/benchmarks/lunarlander_continuous_results.md`](docs/benchmarks/lunarlander_continuous_results.md); BipedalWalker
-SAC and TD3 on 2026-11-05 in [`docs/benchmarks/bipedalwalker_results.md`](docs/benchmarks/bipedalwalker_results.md)).
+SAC and TD3 on 2026-11-05 in [`docs/benchmarks/bipedalwalker_results.md`](docs/benchmarks/bipedalwalker_results.md);
+navigation on 2026-11-07 in [`docs/benchmarks/navigation_results.md`](docs/benchmarks/navigation_results.md) and
+[`docs/benchmarks/navigation_continuous_results.md`](docs/benchmarks/navigation_continuous_results.md)).
 `train.py` uses seed 42, which these benchmarks do not include (BipedalWalker's one seed-42 run is below), so a
 single `train.py` run may land on the unlucky side of these numbers:
 
@@ -448,14 +451,20 @@ its range sensors. Each reset draws a new layout; `reset(options={"layout": layo
 
 The benchmark runs `random`, `ppo` and `dqn` on `Navigation-v0` (`--challenge navigation`) and `random`, `ppo` and
 `td3` on `NavigationContinuous-v0` (`--challenge navigation_continuous`), each from its committed config
-(`configs/navigation_*.yaml`). There is no solve threshold yet, so it reports every run as not solved; it does count
-successes (`info["is_success"]` of an episode's last step): the training log, the evaluation, the Markdown report's
-"Eval Success" column and the JSON carry the rate. Measured on seeds 1 to 5 with greedy evaluation over 100 held-out
-layouts, successes counted by a scratch harness before the metric existed (CHANGELOG.md, 2026-11-06): TD3 reaches
-the goal in 96% of them after 100,000 steps, PPO in 88% after 200,000 with either action space, DQN in 94% after 300,000
-(with squared error and a fixed rate it reached 11%; `td_loss: huber` and a decaying rate are the fix),
-and the random agent in 1%. A step with a sonar read takes about 0.65 ms and a
-reset about 20 ms (measured on the Jetson in the design review).
+(`configs/navigation_*.yaml`). Both ids are solved when the training average over 100 episodes reaches 7.0, which
+is about 90% of training episodes at the goal (the maintainer's choice, 2026-11-07); the reward has no goal bonus, so
+the threshold also asks for short trips. It also counts successes (`info["is_success"]` of an episode's last step):
+the training log, the evaluation, the Markdown report's "Eval Success" column and the JSON carry the rate. Measured on
+seeds 1 to 5 with greedy evaluation over 100 held-out layouts (2026-11-07,
+[`docs/benchmarks/navigation_results.md`](docs/benchmarks/navigation_results.md) and
+[`docs/benchmarks/navigation_continuous_results.md`](docs/benchmarks/navigation_continuous_results.md)): TD3 reaches
+the goal in 96% of them after 100,000 steps and holds the threshold on 5 of 5 seeds, DQN 94% after 300,000 (5 of 5;
+with squared error and a fixed rate it reached 11%; `td_loss: huber` and a decaying rate are the fix), PPO 88% after
+200,000 with either action space (it reaches 7.0 on every seed but holds it on 1 of 5 discrete and 0 of 5
+continuous), and the random agent 1%. A sweep over sensor noise and dropout (TESTING.md `ROB-2`, three TD3 seeds) kept
+success between 87 and 98% on every row, from no noise to 0.4 m and from no dropout to 40% (one DQN seed fell to
+82% at dropout 0.4), and a domain-randomization curriculum did not make TD3 more robust. A step with a sonar read
+takes about 0.65 ms and a reset about 20 ms (measured on the Jetson in the design review).
 
 The environment does not need the training framework. `rl_navigation.gym_env` imports only Gymnasium and the NumPy
 simulator `rl_navigation.sim`, never `rl_core`, so another project can use it directly:
@@ -1042,8 +1051,8 @@ speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch
 
 ### Next Steps
 
-1. **Range-sensor navigation**: a solve threshold, a curriculum and a robustness sweep for
-   `Navigation-v0` and `NavigationContinuous-v0` (Phase 8 of [`docs/roadmap.md`](docs/roadmap.md)).
+1. **Robot navigation stack**: state estimation, mapping and planning on the range-sensor navigation simulator, then
+   the policy on the Jetson robot (Phase 8 of [`docs/roadmap.md`](docs/roadmap.md)).
 2. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder), with the SAC and TD3 agents that walk
    BipedalWalker-v3 (SAC's greedy evaluation reaches 300 on 5 of 5 seeds, TD3's on 2 of 5).
 3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.

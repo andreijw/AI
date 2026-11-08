@@ -29,6 +29,21 @@ Acrobot-v1) and
   characterization files. Code only: no result was rerun, and the navigation success figures quoted elsewhere still
   come from the scratch harness until PR 5b.
 
+- **Navigation solve threshold, benchmark and robustness results** (`feature/navigation-solve-threshold`; PR 5b
+  of 6, the last, of the roadmap item "Range-sensor navigation environment"; stacked on PR 5a): both navigation
+  challenges solve at a training reward of 7.0 (`SOLVE_THRESHOLD`, the maintainer's decision; roughly 90 % training
+  success, and with no goal bonus it also rewards speed), with success reported beside it and not gating. New
+  reports `docs/benchmarks/navigation_results.md` and `navigation_continuous_results.md` (seeds 1 to 5, 100 greedy
+  evaluation episodes): TD3 solved and held 5 of 5, eval reward 8.08 ± 0.38, eval success 96.4 %; DQN 5 and 5, 7.76
+  ± 0.49, 94.4 %; discrete PPO solved 5, held 1, 6.75 ± 0.85, 88.4 %; continuous PPO solved 5, held 0, 6.66 ±
+  0.43, 87.6 %; random 0, about 1 %. Every per-seed eval reward and success matched the earlier scratch harness
+  exactly (for DQN, whose per-seed rewards were not kept, success per seed and the reward mean and
+  range). Robustness (`ROB-2`, TD3 seeds 42, 1 and 2, 200 episodes a row): success stays at 87 to 98 % on every
+  row up to sensor noise 0.4 and dropout 0.4; DQN seed 42 falls to 82 % at dropout 0.4. Two predictions written
+  before the runs failed: dropout 0.2 did not cost TD3 10 points (it gained 2.3), and a domain-randomization
+  curriculum (noise to [0, 0.2], dropout to [0, 0.3]) did not make TD3 more robust (85.3 % against 91.7 % at
+  dropout 0.4, 3 seeds), so no curriculum config is committed. New TESTING rows `TR-36`, `BM-13` and `ROB-2`.
+
 - **Monte Carlo localization** (`feature/state-estimation-mcl`; PR 2 of 3 of the roadmap item "State
   estimation"): `rl_navigation.estimation.MclLocalizer`, augmented MCL (Thrun, Burgard and Fox, Tables 8.2, 8.3
   and 4.4) with a cut-down beam model, has the EKF's `predict` / `update` / `pose` / `covariance` contract and adds

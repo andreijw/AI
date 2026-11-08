@@ -1,5 +1,5 @@
 # Navigation-v0 Default / Random Agent Configuration (Discrete actions)
-# The random baseline the learning agents are measured against. No solve threshold yet.
+# The random baseline the learning agents are measured against (the solve threshold is 7.0).
 
 environment:
   name: "Navigation-v0"

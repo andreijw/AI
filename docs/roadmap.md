@@ -10,8 +10,8 @@ an item that is done moves there, condensed, in the hand-off commit that complet
 ## Upcoming Milestones
 
 Order (the maintainer's decision, 2026-11-04): the repo is the foundation for robotics work, so Phase 8 (Robot
-Navigation) leads. Its first item, the range-sensor navigation environment, ran in parallel with Phase 7's SAC and
-BipedalWalker item (done; CHANGELOG.md, 2026-11-05), and Phase 8 continues in order. The
+Navigation) leads. Its first item, the range-sensor navigation environment (done; CHANGELOG.md, 2026-11-07), ran in
+parallel with Phase 7's SAC and BipedalWalker item (done; CHANGELOG.md, 2026-11-05), and Phase 8 continues in order. The
 Training and Code Health items are picked as they become useful (parallel environments before a PPO comparison on
 BipedalWalker or navigation).
 
@@ -20,6 +20,16 @@ BipedalWalker or navigation).
 No open items.
 
 ### Training
+
+- [ ] **A final checkpoint at the end of `train.py`** (found in navigation PR 5, 2026-11-07)
+  - **Description**: `Trainer` saves every `save_frequency` episodes and not at the end of training, so the newest
+    checkpoint can be up to `save_frequency - 1` episodes older than the final weights. The navigation robustness
+    sweep (TESTING.md `ROB-2`) ran on such checkpoints. Save once more when training ends, unless that episode was
+    just saved.
+  - **Acceptance criteria**: after `train()`, the newest agent and trainer files hold the final weights and episode
+    count; `--resume` from them continues as from a periodic save; a run whose last episode is a multiple of
+    `save_frequency` writes no duplicate.
+  - **Out of scope**: changing `save_frequency` in committed configs.
 
 - [ ] **Parallel environments for the on-policy agents** (added by the maintainer, 2026-11-04)
   - **Description**: The `Trainer` steps one environment, one episode at a time. rl-zoo's A2C collects from 8
@@ -141,46 +151,8 @@ piece is tested against the simulator's ground truth, so the real robot later me
 right in simulation. The goal is a navigation library other projects import (the maintainer, 2026-11-04: a
 Jetson robot built on it): `rl_navigation.sim` and the later estimation, mapping and planning modules import
 neither Gymnasium nor `rl_core`, and a trained policy reaches the robot through the ONNX or C export, so the
-robot needs neither the trainer nor the agents. Step 1 is a full item; steps 2 to 5 are sketches to turn into
-full items when picked.
-
-- [~] **Range-sensor navigation environment (`rl_navigation`)** (picked 2026-11-04; PR 5a of 6, the success-rate
-  metric; PR 5b the solve threshold, the benchmark, curriculum and robustness runs, and the published reports; the
-  maintainer split PR 5 on 2026-11-07)
-  - **Progress (PR 5a, 2026-11-07)**: the benchmark, `Trainer.evaluate()`, the metrics log and the robustness report
-    count successes from `info["is_success"]` (CHANGELOG.md, 2026-11-07). The maintainer set the solve threshold at
-    7.0 on the training reward, with success reported beside it and not gating; PR 5b sets it and reruns the
-    benchmark (seeds 1 to 5), a sensor-noise and dropout sweep of TD3 and DQN, and an optional TD3 curriculum.
-  - **Progress (PR 4, 2026-11-06)**: TD3 (continuous) and PPO (both ids) reach at least 80 % greedy success on 100
-    held-out layouts on 5 of 5 seeds; DQN did not (0 to 50 %) until the training-doctor fix of 2026-11-07 (Huber TD
-    loss and a decaying learning rate): now 89 to 96 % on 5 of 5 (CHANGELOG.md, 2026-11-07). Success was counted by
-    a scratch harness, before PR 5a's metric. Final 100-episode training averages against the floated
-    threshold 7.0: TD3 5 of 5, discrete PPO 1 of 5, continuous PPO 0 of 5.
-  - **Description**: A 2D Gymnasium environment and challenge package: a differential-drive robot (unicycle
-    kinematics, linear and angular velocity commands, integrated at a fixed time step) in a walled arena with
-    static obstacles (circles and axis-aligned boxes), reaching a goal. Its sensor is a configurable set of range
-    beams ray-cast in NumPy. One preset models the HC-SR04 (about 2 cm to 4 m, a cone of about 15°, approximated
-    by several rays whose minimum is the reading, Gaussian range noise and dropouts that read as maximum range),
-    with the figures checked against the datasheet when planned; another models a 2D lidar (many narrow beams,
-    the count and range set by the config). The observation is the readings, the goal's distance and bearing in
-    the robot's frame and the last command; actions are continuous (linear and angular velocity) with a discrete
-    variant for DQN. The reward is progress towards the goal, a collision penalty and a small cost per step; a
-    collision or reaching the goal terminates, the time limit truncates. Obstacle layouts are drawn per episode
-    from the seed. The existing wrappers and tools apply: observation and action noise, frame stacking (the
-    sensor sees only a slice of the world), domain randomization (sensor noise, wheel slip, obstacle count) as
-    schedulable settings for the curriculum, the robustness benchmark, `record.py` and the benchmark.
-  - **Acceptance criteria**: `gymnasium.utils.env_checker.check_env` passes; the same seed gives the same layout,
-    readings and trajectory; unit tests with hand-computed values for a beam meeting a wall, a circle and a box
-    corner at a known distance, the cone minimum, the range limits, the dropout rate over many seeded draws, one
-    kinematics step, and collision against each obstacle kind; an `rgb_array` render for `record.py`; the random
-    agent's score and committed PPO and TD3 configs measured on seeds 1 to 5 against a solve threshold the
-    maintainer sets; TESTING rows for training, recording and the robustness sweep over sensor noise.
-  - **Known edge cases**: a spawn or a goal inside an obstacle, or a goal with no free path (layouts are
-    rejected and redrawn, a bounded number of times); a beam parallel to a wall or grazing a circle; a reading at
-    exactly the minimum or maximum range; a fast robot passing through a thin wall in one step (collision is
-    checked along the swept segment); angles wrapping at ±π.
-  - **Out of scope**: maps given to the agent, moving obstacles, 3D, odometry drift (step 2), real hardware
-    (step 5), and a physics engine (kinematics only).
+robot needs neither the trainer nor the agents. Step 1, the navigation environment, is done (CHANGELOG.md,
+2026-11-04 to 2026-11-07); step 2 is in progress, and steps 3 to 5 are sketches to turn into full items when picked.
 
 - [~] **State estimation (`rl_navigation.estimation`)** (picked 2026-11-06; PR 1 of 3, wheel odometry and EKF
   localization; PR 2 Monte Carlo localization; PR 3 the comparison report, its CLI, and any hooks the maintainer
