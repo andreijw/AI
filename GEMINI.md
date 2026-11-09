@@ -91,9 +91,11 @@ To optimize token usage and context window limits:
   * `src/rl_navigation/estimation/`: pose estimation on a known map for the robot's own program, NumPy and
     `rl_navigation.sim` only (never Gymnasium, `gym_env` or `rl_core`): `maps.py` (the `RangeMap` and `ParticleMap`
     protocols and `SensorMap`), `kalman.py` (the Kalman update in Joseph form), `ekf.py` (`EkfLocalizer`, iterated
-    EKF localization), `mcl.py` (`MclLocalizer`, augmented Monte Carlo localization) and `evaluation.py`
+    EKF localization), `mcl.py` (`MclLocalizer`, augmented Monte Carlo localization), `evaluation.py`
     (`run_trial`, `summarize` and `summarize_localization`: seeded trials of either filter against the true pose,
-    with an optional kidnapping). No environment or benchmark uses it.
+    with an optional kidnapping) and `comparison.py` (the EKF against MCL on the same seeds: a Markdown report and the
+    `python -m rl_navigation.estimation.comparison` command; not imported by the package). No environment or
+    benchmark challenge uses it.
   * `src/rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.
     It imports Gymnasium and `rl_navigation.sim` only, never `rl_core`, so it works outside this framework.
   * `src/rl_navigation/environments/`: `NavigationEnv`, the framework wrapper shared by both ids (action noise,

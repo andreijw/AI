@@ -12,6 +12,34 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-09
+
+### Added
+
+- **EKF against MCL: the comparison report and its command line** (`feature/localization-comparison`; PR 3b, the
+  last of the roadmap item "State estimation", which is now complete):
+  - **`rl_navigation.estimation.comparison`** runs the EKF, MCL and dead reckoning on the same seeded trials and
+    prints a Markdown report (`python -m rl_navigation.estimation.comparison`). `--records` saves each trial as it
+    finishes, so a rerun of the same command resumes, and `--from-records` merges jobs run apart. It writes no file
+    without `--report`, and the package does not import it.
+  - **Report** (`docs/benchmarks/localization_results.md`; TESTING.md `EST-3`): seeds 101 to 150, 600 steps, both
+    sensors with their own dropout and with 30 %, MCL with the fitted per-sensor covariance scales. MCL's localized
+    and recovered shares equal `EST-2`'s exactly (lidar 96 % and 96 %, 96 % and 98 %; HC-SR04 80 % and 94 %, 88 %
+    and 86 %).
+  - **Tracking from the noisy start.** The EKF is more accurate: lidar position RMSE 1.8 to 2.1 mm against MCL's
+    7.0 mm, HC-SR04 6.8 mm against 11.8 mm with its own dropout. The exception is the HC-SR04 at 30 % dropout,
+    where one of 50 EKF runs is lost (row RMSE 0.33 m, mean NEES 279) and MCL holds 13.2 mm. Over all steps, MCL's
+    scaled mean NEES is 2.94 to 3.28 and its per-axis ratios 0.95 to 1.15.
+  - **Global start and kidnapping.** The EKF recovers from the kidnapping in 10 to 18 % of runs, MCL in 86 to 98 %.
+    MCL's median steps to localize from anywhere are 0 for the lidar (the first scan already places it within
+    0.2 m and 0.2 rad, since each estimate is taken after that step's update) and 2.5 and 5.5 for the HC-SR04; to
+    recover, 21 to 21.5 steps (lidar) and 39 to 55 (HC-SR04). Over all kidnapped runs, the share of post-kidnap
+    steps that are confidently wrong (error over 0.5 m and NEES over 9.35; for the EKF, also no reset in the last
+    20 scans) is 11.8 to 12.7 % for MCL on the lidar, 28.1 to 28.4 % on the HC-SR04, and 23.9 to 32.1 % for the
+    EKF.
+  - **Cost.** MCL takes 37 to 51 ms a step against the EKF's 2 to 3 ms (Jetson, one BLAS thread, two jobs at once).
+  - The report's prose wraps at 120 characters, as markdownlint requires.
+
 ## 2026-11-08
 
 ### Added
@@ -47,6 +75,7 @@ Acrobot-v1) and
     - Mean ANEES after scaling is 2.77 to 3.11, against 0.56 to 0.91 unscaled (both from step 50; EST-2's 0.57 to
       0.94 counts every step).
   - TESTING.md `EST-1` and `EST-2`.
+
 ### Changed
 
 - **A final checkpoint at the end of training** (`fix/final-checkpoint`; the roadmap item found in navigation PR 5):

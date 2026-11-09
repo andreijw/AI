@@ -138,6 +138,8 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.estimation.kalman",
         "rl_navigation.estimation.ekf",
         "rl_navigation.estimation.evaluation",
+        "rl_navigation.estimation.mcl",
+        "rl_navigation.estimation.comparison",
     ],
 )
 def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
@@ -164,7 +166,7 @@ def test_navigation_estimation_imports_only_the_simulator():
     code = (
         "import sys; sys.path.insert(0, 'src'); "
         "import rl_navigation.estimation, rl_navigation.estimation.evaluation, "
-        "rl_navigation.estimation.mcl; "
+        "rl_navigation.estimation.mcl, rl_navigation.estimation.comparison; "
         "print(sorted(m for m in sys.modules if m.startswith('rl_navigation.') "
         "and m.split('.')[1] not in ('sim', 'estimation')))"
     )
@@ -225,3 +227,19 @@ def test_importing_rl_navigation_loads_none_of_its_subpackages():
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "[]", f"import rl_navigation loaded {result.stdout.strip()}."
+
+
+def test_the_estimation_package_does_not_import_the_comparison():
+    """The comparison report is a tool, not part of the library a robot imports. A fresh
+    process."""
+    code = (
+        "import sys; sys.path.insert(0, 'src'); import rl_navigation.estimation; "
+        "print('rl_navigation.estimation.comparison' in sys.modules)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False", (
+        "rl_navigation/estimation/__init__.py imported the comparison module"
+    )
