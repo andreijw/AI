@@ -616,3 +616,28 @@ def test_the_benchmark_report_names_the_agents_that_trained_through_a_curriculum
 
 def test_the_benchmark_report_says_nothing_of_a_curriculum_without_one(tmp_path):
     assert "curriculum" not in _benchmark(tmp_path, {"random": _PLAIN_CONFIG})
+
+
+def test_the_final_checkpoint_is_saved_before_the_difficulty_warning(tmp_path):
+    """A run ending below the target difficulty saves its last episode, then warns."""
+    order = []
+
+    class _Ordered(_Logger):
+        def info(self, message):
+            order.append(message)
+
+        def warning(self, message):
+            order.append(message)
+
+    env, eval_env = _cartpole(), _cartpole()
+    try:
+        trainer = _trainer(env, eval_env, LINEAR, tmp_path, num_episodes=3, save_frequency=100)
+        trainer.logger = _Ordered()
+        trainer.save_final = True
+        trainer.train()
+    finally:
+        env.close()
+        eval_env.close()
+    saved = next(i for i, m in enumerate(order) if "agent_episode_3" in m)
+    warned = next(i for i, m in enumerate(order) if "Training ended at curriculum" in m)
+    assert saved < warned, order

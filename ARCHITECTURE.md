@@ -452,7 +452,11 @@ trainer writes `trainer_episode_<n>.npz` (episode and step counts, reward and le
 window, the evaluation seed, each episode's success when every one is known and, for an environment that implements
 `rl_core.environments.ResumableEnv`, its generators) as a `TrainerState` that also records the agent file's SHA-256,
 both files through `rl_core.training.checkpoints.write_atomically`; `Trainer.resume` (`train.py --resume`) reads both,
-so a resumed run ends exactly as an uninterrupted one. With a curriculum
+so a resumed run ends exactly as an uninterrupted one. The trainer saves every `save_frequency` episodes and, when
+built with `save_final=True` (only `train.py` does; the benchmark, `record.py` and `robustness.py` do not), once after
+the last episode (not when that episode was just saved or the call trained none), so the newest checkpoint holds the
+final weights; an interrupted or failed run saves no more.
+With a curriculum
 (`rl_core.training.curriculum.CurriculumScheduler`, built from `environment.curriculum` by `curriculum_from_config` in
 `train.py` and through the challenge's `setup_curriculum` in the benchmark), the trainer calls the training
 environment's `apply_settings` with the scheduler's settings before each training episode and records the episode's
@@ -513,6 +517,9 @@ sequenceDiagram
             Agent->>Disk: write agent_episode_<n>.pt
             Trainer->>Disk: write trainer_episode_<n>.npz (counters, histories, env generators)
         end
+    end
+    opt Final Checkpoint (train.py only, last episode not just saved)
+        Trainer->>Disk: write agent_episode_<n>.pt and trainer_episode_<n>.npz
     end
     Trainer-->>User: training_summary_dict
 ```

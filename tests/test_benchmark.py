@@ -911,3 +911,24 @@ def test_load_run_config_applies_a_step_budget(tmp_path):
     assert challenge.load_run_config("random", 1, None, steps=50)["training"]["total_steps"] == 50
     by_episodes = challenge.load_run_config("random", 1, 3)["training"]
     assert by_episodes["num_episodes"] == 3 and "total_steps" not in by_episodes
+
+
+def test_a_benchmark_run_writes_no_checkpoints(tmp_path, monkeypatch):
+    """The committed configs name a checkpoint_dir; the benchmark must not fill it."""
+    monkeypatch.chdir(tmp_path)
+    repo_configs = os.path.join(os.path.dirname(__file__), "..", "configs")
+    run_benchmark(
+        challenge_name="cartpole",
+        config_dir=repo_configs,
+        settings=BenchmarkSettings(
+            agents=("random", "dqn"),
+            seeds=(1,),
+            episodes=3,
+            eval_episodes=1,
+            output_dir=str(tmp_path / "out"),
+        ),  # fmt: skip
+        report_path=str(tmp_path / "report.md"),
+        save_plot=False,
+    )
+    assert not (tmp_path / "checkpoints").exists()
+    assert not [p for p in tmp_path.rglob("*") if p.name.startswith(("agent_episode_", "trainer_"))]

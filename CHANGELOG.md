@@ -12,6 +12,24 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-08
+
+### Changed
+
+- **A final checkpoint at the end of training** (`fix/final-checkpoint`; the roadmap item found in navigation PR 5):
+  `Trainer.train()` saves the agent and trainer files once more at the last episode, so the newest
+  `agent_episode_<n>.pt` holds the final weights instead of weights up to `save_frequency - 1` episodes older. Only
+  `train.py` asks for it (`Trainer(..., save_final=True)`, a constructor argument, not a config key), and it saves
+  only when this call trained at least one episode that was not just saved, so a resume whose budget is already met
+  writes nothing. The benchmark, `record.py`, `robustness.py` and other trainers write nothing new: the first design
+  keyed the save on a configured `checkpoint_dir`, which the review found would have made every benchmark run write
+  `./checkpoints`, since nearly every committed config names one.
+  An interrupted or failed run saves nothing extra (the maintainer's decision: its state can be mid-episode). The
+  file format is unchanged and resuming from a final file equals an uninterrupted run (tested). Every `train.py` run
+  now leaves one extra checkpoint pair unless it ended on a multiple of `save_frequency`; for the replay-buffer agents
+  (DQN, DDPG, TD3, SAC) it holds the buffer and can be hundreds of MB, for example BipedalWalker SAC and TD3 (the
+  maintainer accepted the disk cost). TESTING.md `CKPT-5`.
+
 ## 2026-11-07
 
 ### Added

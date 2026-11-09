@@ -63,6 +63,7 @@ def _trainer(agent_cls, config, make_env, dims, directory, logger=None, eval_see
         logger=_RecordingLogger() if logger is None else logger,
         eval_env=make_env(),
         eval_seed=eval_seed,
+        save_final=True,
     )
 
 
@@ -605,3 +606,129 @@ def test_the_trainer_file_is_named_after_the_agent_checkpoint(name, expected, tm
     from rl_core.training.checkpoints import trainer_state_path
 
     assert trainer_state_path(str(tmp_path / name)) == str(tmp_path / expected)
+
+
+# ---------------------------------------------------------------------------
+# The final checkpoint: the newest files hold the final weights and episode count
+# ---------------------------------------------------------------------------
+
+
+def _names(directory):
+    return sorted(os.listdir(directory))
+
+
+def _pair(n):
+    return [f"agent_episode_{n}.pt", f"trainer_episode_{n}.npz"]
+
+
+def test_a_run_ending_between_periodic_saves_also_saves_its_last_episode(tmp_path):
+    cls, config = _named("RandomAgent")
+    _trainer(cls, config, _cartpole, (4, 2), tmp_path, num_episodes=7).train()
+    assert _names(tmp_path) == sorted(_pair(5) + _pair(7))
+
+
+def test_a_run_ending_on_a_periodic_save_writes_it_once(tmp_path):
+    cls, config = _named("RandomAgent")
+    logger = _RecordingLogger()
+    _trainer(cls, config, _cartpole, (4, 2), tmp_path, logger=logger, num_episodes=10).train()
+    saves = [line for line in logger.lines if line.startswith("Checkpoint saved to")]
+    assert [os.path.basename(line.split()[-1]) for line in saves] == [
+        "agent_episode_5.pt",
+        "agent_episode_10.pt",
+    ]
+
+
+def test_a_run_shorter_than_save_frequency_saves_its_last_episode(tmp_path):
+    cls, config = _named("RandomAgent")
+    _trainer(cls, config, _cartpole, (4, 2), tmp_path, num_episodes=3).train()
+    assert _names(tmp_path) == sorted(_pair(3))
+
+
+def test_a_step_budget_saves_the_episode_that_crossed_it(tmp_path):
+    cls, config = _named("RandomAgent")
+    trainer = _trainer(cls, config, _cartpole, (4, 2), tmp_path, total_steps=100)
+    trainer.train()
+    n = len(trainer.episode_rewards)
+    assert n % 5 != 0, "the test needs a run that does not end on a periodic save"
+    with np.load(tmp_path / f"trainer_episode_{n}.npz") as state:
+        assert int(state["total_steps_trained"]) == trainer.total_steps_trained
+        assert len(state["episode_rewards"]) == n
+
+
+def test_resuming_from_a_final_checkpoint_matches_an_uninterrupted_run(tmp_path):
+    cls, config = _named("PPOAgent")
+    _trainer(cls, config, _cartpole, (4, 2), tmp_path / "full", num_episodes=10).train()
+    _trainer(cls, config, _cartpole, (4, 2), tmp_path / "split", num_episodes=7).train()
+    resumed = _trainer(cls, config, _cartpole, (4, 2), tmp_path / "split", num_episodes=10)
+    resumed.resume(str(tmp_path / "split" / "agent_episode_7.pt"))
+    resumed.train()
+    for name in _pair(10):
+        _assert_same_file(tmp_path / "full" / name, tmp_path / "split" / name)
+
+
+def test_resuming_with_the_budget_already_met_writes_nothing(tmp_path):
+    cls, config = _named("RandomAgent")
+    _trainer(cls, config, _cartpole, (4, 2), tmp_path, num_episodes=7).train()
+    before = {name: (tmp_path / name).read_bytes() for name in _names(tmp_path)}
+    mtimes = {name: os.path.getmtime(tmp_path / name) for name in before}
+    resumed = _trainer(cls, config, _cartpole, (4, 2), tmp_path, num_episodes=7)
+    resumed.resume(str(tmp_path / "agent_episode_7.pt"))
+    resumed.train()
+    assert {n: (tmp_path / n).read_bytes() for n in _names(tmp_path)} == before
+    assert {n: os.path.getmtime(tmp_path / n) for n in before} == mtimes
+
+
+class _Interrupted(RandomAgent):
+    """Fails in the seventh training episode (``episodes`` is the trainer's list of finished ones)."""
+
+    def __init__(self, error, episodes):
+        super().__init__(4, 2, {})
+        self.error, self.episodes = error, episodes
+
+    def select_action(self, *args, **kwargs):
+        if len(self.episodes) >= 6:
+            raise self.error
+        return super().select_action(*args, **kwargs)
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt(), RuntimeError("boom")])
+def test_an_interrupted_or_failed_run_saves_only_its_periodic_checkpoints(tmp_path, error):
+    trainer = _trainer(RandomAgent, {}, _cartpole, (4, 2), tmp_path, num_episodes=20)
+    trainer.agent = _Interrupted(error, trainer.episode_rewards)
+    with pytest.raises(type(error)):
+        trainer.train()
+    assert _names(tmp_path) == sorted(_pair(5))
+
+
+def test_the_final_checkpoint_is_saved_before_training_is_reported_complete(tmp_path):
+    cls, config = _named("RandomAgent")
+    logger = _RecordingLogger()
+    trainer = _trainer(cls, config, _cartpole, (4, 2), tmp_path, logger=logger, num_episodes=7)
+    trainer.train()
+    saved = [i for i, line in enumerate(logger.lines) if "agent_episode_7" in line]
+    done = logger.lines.index("Training complete!")
+    assert saved and saved[0] < done, logger.lines
+
+
+def test_a_trainer_not_asked_to_save_a_final_checkpoint_writes_none(tmp_path):
+    """The benchmark's shape: a config naming a checkpoint_dir, periodic saves switched off."""
+    cls, config = _named("RandomAgent")
+    trainer = Trainer(
+        env=_cartpole(),
+        agent=cls(4, 2, dict(config)),
+        config={
+            "max_steps_per_episode": EPISODE_STEPS,
+            "num_episodes": 3,
+            "save_frequency": 999999,
+            "eval_frequency": 100,
+            "checkpoint_dir": str(tmp_path / "ckpt"),
+        },  # fmt: skip
+    )
+    trainer.train()
+    assert os.listdir(tmp_path) == []
+
+
+def test_save_final_must_be_a_bool():
+    cls, config = _named("RandomAgent")
+    with pytest.raises(ValueError, match="save_final must be a bool"):
+        Trainer(env=_cartpole(), agent=cls(4, 2, dict(config)), config={}, save_final=1)  # type: ignore[arg-type]

@@ -82,6 +82,8 @@ class Trainer:
         eval_env: gym.Env | Any | None = None,
         eval_seed: int | None = None,
         curriculum: CurriculumScheduler | None = None,
+        *,
+        save_final: bool = False,
     ):
         """
         Initialize the trainer.
@@ -100,6 +102,10 @@ class Trainer:
             curriculum: Settings for ``env`` before each training episode, from easy to the
                 target ``eval_env`` was built with (see ``rl_core.training.curriculum``). Without
                 one the training environment's settings are never touched.
+            save_final: Whether ``train()`` saves a checkpoint after its last episode (see
+                ``train``). Only ``train.py`` asks for it; the benchmark, ``record.py`` and other
+                callers of a config that names a ``checkpoint_dir`` do not write checkpoints they
+                never asked for.
 
         Raises:
             ValueError: If ``eval_env`` is given without a non-negative integer ``eval_seed``, or
@@ -136,6 +142,9 @@ class Trainer:
         self.max_steps_per_episode = self._get_int_config("max_steps_per_episode", 500)
         self.eval_frequency = self._get_int_config("eval_frequency", 100)
         self.save_frequency = self._get_int_config("save_frequency", 100)
+        if not isinstance(save_final, bool):
+            raise ValueError(f"save_final must be a bool, got {save_final!r}")
+        self.save_final = save_final
         self.checkpoint_dir = config.get("checkpoint_dir", "./checkpoints")
         # Step budget: when set, train until this many environment steps (finishing the episode that
         # crosses it) and ignore num_episodes. Evaluation episodes do not count.
@@ -342,9 +351,15 @@ class Trainer:
         """
         Run the training loop.
 
+        Saves a checkpoint every ``save_frequency`` episodes and, when the trainer was built with
+        ``save_final=True`` (as ``train.py`` does), once more after the last episode so the newest
+        files hold the final weights, unless that episode was just saved or this call trained none
+        (a resume with the budget met). An interrupted or failed run saves nothing more.
+
         Returns:
             Dictionary of training statistics
         """
+        start = len(self.episode_rewards)
         budget = (
             f"{self.total_steps} environment steps"
             if self.total_steps is not None
@@ -407,6 +422,7 @@ class Trainer:
             if (episode + 1) % self.save_frequency == 0:
                 self._save_checkpoint(episode + 1)
 
+        self._save_final_checkpoint(start)
         self._log_info("Training complete!")
 
         stats = {
@@ -420,6 +436,13 @@ class Trainer:
         if self.curriculum is not None:
             stats["curriculum_difficulty"] = self._end_curriculum()
         return stats
+
+    def _save_final_checkpoint(self, start: int) -> None:
+        """Save the last episode when ``save_final`` is set, this call trained (``start`` is the
+        episodes done before it) and the loop did not just save that episode."""
+        done = len(self.episode_rewards)
+        if self.save_final and done > start and done % self.save_frequency != 0:
+            self._save_checkpoint(done)
 
     def _start_curriculum_episode(self) -> None:
         """Give the training environment the curriculum's settings for the next episode."""

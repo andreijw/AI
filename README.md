@@ -577,12 +577,15 @@ outputs; copy its folders first to keep a run. Logs in `logs/` are timestamped p
 
 ### Resuming a run
 
-Every checkpoint is two files: `agent_episode_<n>.pt` (the agent, its optimizer state, generators and any replay
-buffer) and `trainer_episode_<n>.npz` beside it (the episode and step counts, reward history, evaluation seed and
-the training environment's generators, the curriculum if any, and a hash of the agent file, so a mismatched pair is
-refused). Resuming
-from one continues the run so that it ends exactly as it would have without the stop; the budget counts what was
-already trained, and checkpoint numbering continues:
+`train.py` saves a checkpoint every `save_frequency` episodes and once more after its last episode, so the newest
+checkpoint holds the final weights (an interrupted run keeps only the periodic ones; the
+benchmark writes none). Every
+checkpoint is two files: `agent_episode_<n>.pt` (the agent, its optimizer state, generators and any replay buffer) and
+`trainer_episode_<n>.npz` beside it (the episode and step counts, reward history, evaluation seed and the training
+environment's generators, the curriculum if any, and a hash of the agent file, so a mismatched pair is refused).
+Resuming from one continues the run so that it ends exactly as it would have without the stop; the budget counts what
+was already trained, and checkpoint numbering continues (a run ending on a multiple of `save_frequency` writes no
+extra file, and resuming with the budget already met writes none):
 
 ```bash
 python train.py --config configs/cartpole_ppo.yaml --resume checkpoints/cartpole/ppo/agent_episode_300.pt
