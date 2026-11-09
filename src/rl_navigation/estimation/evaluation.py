@@ -113,8 +113,19 @@ class LocalizerFactory(Protocol):
     ) -> Localizer: ...
 
 
-def ekf(iterations: int = 3, linearity_tol: float | None = None) -> LocalizerFactory:
-    """A factory of :class:`EkfLocalizer` started at the trial's noisy start and covariance."""
+def ekf(
+    iterations: int = 3,
+    linearity_tol: float | None = None,
+    *,
+    reset_after: int | None = 3,
+    min_candidates: int = 2,
+    reset_std: tuple[float, float, float] = (0.2, 0.2, 0.1),
+    reset_window: int = 20,
+) -> LocalizerFactory:
+    """A factory of :class:`EkfLocalizer` started at the trial's noisy start and covariance.
+
+    The keyword arguments are the filter's still-robot reset (see :class:`EkfLocalizer`).
+    """
 
     def make(
         *,
@@ -132,6 +143,10 @@ def ekf(iterations: int = 3, linearity_tol: float | None = None) -> LocalizerFac
             covariance,
             iterations=iterations,
             linearity_tol=linearity_tol,
+            reset_after=reset_after,
+            min_candidates=min_candidates,
+            reset_std=reset_std,
+            reset_window=reset_window,
         )
 
     return make

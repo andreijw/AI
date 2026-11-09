@@ -58,3 +58,16 @@ def checked_wheel_travel(wheel_travel: ArrayLike, owner: str) -> FloatArray:
             f"{travel.tolist()}."
         )
     return travel
+
+
+def checked_axis_values(values: ArrayLike, owner: str, name: str) -> FloatArray:
+    """``(3,)`` float64 values, one per pose axis ``(x, y, theta)``, each finite and positive.
+
+    Raises:
+        ValueError: Not 3 finite positive values; the message starts with ``owner`` and names
+            ``name``.
+    """
+    checked = np.array(values, dtype=np.float64)
+    if checked.shape != (3,) or not (np.isfinite(checked).all() and (checked > 0).all()):
+        raise ValueError(f"{owner} {name} must be 3 positive values (x, y, theta), got {values!r}.")
+    return checked

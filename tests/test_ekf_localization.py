@@ -374,6 +374,15 @@ def test_a_scan_of_the_wrong_length_is_refused():
         ([1.0, 1.0, 0.0], np.eye(3), {"linearity_window": -1.0}),
         ([1.0, 1.0, 0.0], np.eye(3), {"linearity_tol": 0.0}),
         ([1.0, 1.0, 0.0], np.eye(3), {"gate": 0.0}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"reset_after": 0}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"reset_after": True}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"reset_after": 2.5}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"min_candidates": 0}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"reset_window": 0}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"reset_std": (0.2, 0.2)}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"reset_std": (0.2, 0.0, 0.1)}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"reset_std": (0.2, -0.2, 0.1)}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"reset_std": (0.2, np.nan, 0.1)}),
     ],
 )
 def test_invalid_filter_settings_are_refused(pose, covariance, kwargs):
@@ -554,3 +563,163 @@ def test_a_beam_lost_at_an_iterate_is_reported_and_the_rest_iterate_on():
     assert result.iterations >= 2, f"Beam 0 should keep iterating: {result}"
     np.testing.assert_array_equal(result.used, [True, False])
     np.testing.assert_array_equal(result.nonlinear, [False, True])
+
+
+# The still-robot reset --------------------------------------------------------------------------
+
+STILL_P0 = np.diag([1e-4, 1e-4, 1e-4])
+SETTLE_SCANS = 50
+
+
+def _bumped_still_robot(sensor, bump, scans_after, **kwargs):
+    """A still robot scanned SETTLE_SCANS times at TRUTH, then bumped by ``bump`` without the
+    encoders noticing and scanned ``scans_after`` more times. Returns the filter, the bumped
+    truth, and each post-bump update's result with the ``recent_resets`` that followed it."""
+    ekf = _ekf(SensorMap(ROOM, sensor), TRUTH, STILL_P0, **kwargs)
+    bumped = TRUTH + np.asarray(bump, dtype=float)
+    after = []
+    for step in range(SETTLE_SCANS + scans_after):
+        ekf.predict([0.0, 0.0])
+        result = ekf.update(_scan(sensor, TRUTH if step < SETTLE_SCANS else bumped, seed=step))
+        if step >= SETTLE_SCANS:
+            after.append((result, ekf.recent_resets))
+    return ekf, bumped, after
+
+
+def _pose_error(estimate, truth):
+    error = estimate - truth
+    return float(np.hypot(error[0], error[1])), abs(float(wrap_angle(error[2])))
+
+
+@pytest.mark.parametrize("make_sensor", [lidar, hc_sr04])
+def test_a_bumped_still_robot_recovers_by_resetting(make_sensor):
+    """Bumped 0.1 m sideways after its covariance has collapsed, every beam is gated; the reset
+    re-opens the covariance and the scans pull the estimate back within 20 scans."""
+    ekf, bumped, after = _bumped_still_robot(make_sensor(), [0.0, 0.1, 0.0], scans_after=20)
+    position, heading = _pose_error(ekf.pose, bumped)
+    assert position < 0.01 and heading < 0.01, (
+        f"20 scans after a 0.1 m bump the estimate should be within 1 cm and 0.01 rad, ended "
+        f"{position:.4f} m and {heading:.4f} rad off."
+    )
+    assert any(result.reset for result, _ in after), "Recovering should have taken a reset."
+
+
+def test_without_the_reset_a_bumped_still_robot_stays_lost():
+    """``reset_after=None`` keeps the old behaviour: every beam gated, the estimate unmoved."""
+    ekf, bumped, after = _bumped_still_robot(
+        lidar(), [0.0, 0.1, 0.0], scans_after=20, reset_after=None
+    )
+    position, _ = _pose_error(ekf.pose, bumped)
+    assert position > 0.09, f"Without the reset the 0.1 m error should stay; it is {position:.4f}."
+    assert not any(result.reset for result, _ in after), "A disabled reset should never fire."
+    assert ekf.recent_resets == 0, "A disabled reset should count no resets."
+
+
+def _wall_scans(estimate_offset_x):
+    """The five sonars facing the wall x = 5 from x = 4 (``_facing_wall``), and a filter whose
+    estimate is ``estimate_offset_x`` metres off in x; the readings the estimate expects."""
+    range_map, truth, readings = _facing_wall()
+    estimate = truth + [estimate_offset_x, 0.0, 0.0]
+    expected = hc_sr04().true_ranges(Arena(5.0, 5.0), estimate)[0]
+    return range_map, estimate, readings, expected
+
+
+def test_the_reset_fires_on_the_third_consecutive_counting_scan():
+    """A scan counts when it has at least 2 candidate beams and at least half are gated.
+
+    ``half`` has 2 candidates, 1 gated (true readings) and 1 used (the readings the estimate
+    expects): the boundary of both rules. ``clean`` uses every beam; ``single`` has 1 candidate,
+    gated. Each non-counting scan restarts the count."""
+    range_map, estimate, gated_readings, expected = _wall_scans(0.06)
+    nan = np.full(5, np.nan)
+    half, single = nan.copy(), nan.copy()
+    half[1], half[2] = gated_readings[1], expected[2]
+    single[2] = gated_readings[2]
+    scans = {"half": half, "clean": expected, "single": single, "gated": gated_readings}
+    ekf = _ekf(range_map, estimate, np.diag([0.01**2, 0.01**2, 0.005**2]))
+    sequence = ["half", "half", "clean", "half", "half", "single", "half", "half", "half"]
+    fired = []
+    for name in sequence:
+        result = ekf.update(scans[name])
+        if name == "half":
+            assert result.gated.sum() == 1 and result.used.sum() == 1, (
+                f"The half scan should gate one beam and use one: {result}"
+            )
+        if name == "single":
+            assert result.gated.sum() == 1 and not result.used.any(), f"Single: {result}"
+        fired.append(result.reset)
+    assert fired == [False] * 8 + [True], (
+        f"Only the 9th scan, the third counting one after the single, should reset: {fired}"
+    )
+
+
+def test_a_mostly_used_scan_does_not_count():
+    """Five candidates with two gated is under half: no reset however often it repeats."""
+    range_map, estimate, gated_readings, expected = _wall_scans(0.06)
+    scan = expected.copy()
+    scan[:2] = gated_readings[:2]
+    ekf = _ekf(range_map, estimate, np.diag([0.01**2, 0.01**2, 0.005**2]))
+    results = [ekf.update(scan) for _ in range(6)]
+    assert all(r.gated.sum() == 2 and r.used.sum() == 3 for r in results), results[0]
+    assert not any(r.reset for r in results), "Two gated of five should never reset."
+
+
+def test_a_reset_fires_when_every_beam_is_gated():
+    """The all-gated scan leaves the update early; the reset is counted there too."""
+    range_map, estimate, gated_readings, _ = _wall_scans(0.06)
+    P0 = np.diag([0.01**2, 0.01**2, 0.005**2])
+    ekf = _ekf(range_map, estimate, P0)
+    results = [ekf.update(gated_readings) for _ in range(3)]
+    assert all(r.gated.all() and not r.used.any() for r in results), results[-1]
+    assert [r.reset for r in results] == [False, False, True], [r.reset for r in results]
+    np.testing.assert_array_equal(ekf.pose, estimate, err_msg="A reset should not move the pose.")
+    np.testing.assert_array_equal(
+        np.diag(ekf.covariance), [0.2**2, 0.2**2, 0.1**2], err_msg="The default reset_std."
+    )
+
+
+def test_the_reset_raises_the_diagonal_to_a_floor_once():
+    """P[i, i] <- max(P[i, i], reset_std[i]^2): x and theta are raised, the larger y kept, the
+    off-diagonals untouched; a second reset with the variances at the floor changes nothing.
+
+    The estimate is 0.8 m off, 4 floor deviations, so the scans stay gated after a reset."""
+    range_map, estimate, gated_readings, _ = _wall_scans(-0.8)
+    P0 = np.array([[1e-4, 2e-5, 0.0], [2e-5, 1e-4, 0.0], [0.0, 0.0, 2.5e-5]])
+    ekf = _ekf(range_map, estimate, P0, reset_std=(0.2, 0.005, 0.1))
+    results = [ekf.update(gated_readings) for _ in range(6)]
+    assert all(not r.used.any() for r in results), "The scans should stay gated after a reset."
+    assert [r.reset for r in results] == [False, False, True] * 2, [r.reset for r in results]
+    expected = P0.copy()
+    expected[0, 0], expected[2, 2] = 0.2**2, 0.1**2  # y's 1e-4 exceeds 0.005^2 and is kept
+    np.testing.assert_array_equal(
+        ekf.covariance, expected, err_msg="Two resets should raise the diagonal to the floor once."
+    )
+
+
+def test_recent_resets_stay_up_while_lost_and_fall_after_a_recovery():
+    """A 1.5 m bump cannot be recovered: the filter keeps resetting, and ``recent_resets`` (the
+    resets in the last 20 scans) stays at 2 or more once the first window has filled. A 0.1 m
+    bump is recovered on one reset, and the count is back to 0 once it leaves the window."""
+    _, _, lost = _bumped_still_robot(lidar(), [1.5, 0.0, 0.0], scans_after=100)
+    held = [count for _, count in lost[20:]]
+    assert min(held) >= 2, f"Lost, recent_resets should hold at 2 or more: {held}"
+    _, _, recovered = _bumped_still_robot(lidar(), [0.0, 0.1, 0.0], scans_after=40)
+    counts = [count for _, count in recovered]
+    assert max(counts) >= 1 and counts[-1] == 0, (
+        f"Recovered, recent_resets should rise and return to 0: {counts}"
+    )
+
+
+def test_one_outlier_beam_does_not_reset():
+    """One of 64 lidar beams reading 0.3 m for 10 scans is gated each time, but one gated beam of
+    64 is far from half: no reset."""
+    sensor = lidar()
+    ekf = _ekf(SensorMap(ROOM, sensor), TRUTH, STILL_P0)
+    results = []
+    for step in range(10):
+        ekf.predict([0.0, 0.0])
+        readings = _scan(sensor, TRUTH, seed=step)
+        readings[10] = 0.3
+        results.append(ekf.update(readings))
+    assert all(r.gated[10] for r in results), "The 0.3 m reading should be gated."
+    assert not any(r.reset for r in results) and ekf.recent_resets == 0, "One outlier: no reset."

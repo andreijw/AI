@@ -44,10 +44,12 @@ and find the robot again after it is carried elsewhere (a kidnapping).
 - **Estimate.** :func:`heaviest_cluster`: the pose and covariance of the heaviest cluster of
   particles, and the cluster's share of the weight. The covariance is conservative: ``model_std``
   widens the likelihood, so the cloud, and with it the covariance, is wider than the pose error
-  (``EST-2`` in TESTING.md: mean tracking NEES 0.57 to 0.94 over seeds 101 to 150, both sensors,
-  their own and 30 % dropout, against 3 for a consistent filter). A symmetric arena could give
-  clusters of similar weight, but resampling collapses all but one within a few scans, so the
-  share then ends near 1 whichever mirror pose survived.
+  (``EST-2`` in TESTING.md: mean tracking NEES 0.57 to 0.94 over all steps of seeds 101 to 150,
+  both sensors, their own and 30 % dropout, against 3 for a consistent filter).
+  ``MclSettings.covariance_scale`` corrects it per axis, with fitted values per sensor; the default
+  leaves it unscaled. A symmetric arena could give clusters of similar weight, but resampling
+  collapses all but one within a few scans, so the share then ends near 1 whichever mirror pose
+  survived.
 
 Frames and units are the EKF's: the pose ``(x, y, theta)`` is the robot's centre in the map's
 frame, metres and radians, ``theta`` in ``[-pi, pi)``, and a scan passed to
@@ -62,7 +64,12 @@ from numpy.typing import ArrayLike, NDArray
 
 from rl_navigation.estimation.kalman import symmetrized
 from rl_navigation.estimation.maps import ParticleMap, RangeMap, usable_readings
-from rl_navigation.estimation.poses import checked_start, checked_wheel_travel, pose_difference
+from rl_navigation.estimation.poses import (
+    checked_axis_values,
+    checked_start,
+    checked_wheel_travel,
+    pose_difference,
+)
 from rl_navigation.sim.geometry import FloatArray
 from rl_navigation.sim.kinematics import unicycle_step, wrap_angle
 from rl_navigation.sim.odometry import WheelOdometry
@@ -103,6 +110,21 @@ class MclSettings:
         alpha_fast: Rate of the fast average, at most 1.
         roughening: Standard deviations ``(x, y, theta)`` of the jitter after resampling, metres and
             radians, each > 0; also added to the reported covariance.
+        covariance_scale: Per-axis factors ``d = (d_x, d_y, d_theta)``, each > 0, applied to the
+            reported covariance as ``D^1/2 C D^1/2`` with ``D = diag(d)``: each variance times its
+            factor, each covariance times the root of both. The cluster's covariance overstates the
+            error (mean NEES 0.57 to 0.94 over all steps; a consistent estimate gives 3), and by a
+            different amount per axis, so one scalar cannot correct it. The default ``(1, 1, 1)``
+            reports the cluster's covariance unchanged (conservative, and one default would mislead
+            the other sensor). Fitted on seeds 1 to 20 (tracking, first 50 steps skipped, ``d_i`` =
+            mean ``e_i^2 / P_ii``): lidar ``(0.130, 0.124, 0.308)``, HC-SR04 ``(0.174, 0.180,
+            0.525)``. Judged on seeds 101 to 150 (``EST-2`` in TESTING.md): per-axis ``e_i^2 / (d_i
+            P_ii)`` within [0.5, 2.0] on all four rows (0.92 to 1.06); the share of steps whose
+            50-run ANEES lies in [2.36, 3.72] passes the 85 % gate on three rows (lidar 93.1 % and
+            91.3 %, HC-SR04 with 30 % dropout 87.1 %) and fails on HC-SR04 with its own dropout
+            (82.5 %). A fitted scale holds only for the settings it was fitted with (2000 particles,
+            16 beams, ``model_std`` 0.15) and only while the filter is localized: it means nothing
+            while the filter is lost, and MCL's NEES has a heavier tail than chi-square(3).
 
     Raises:
         ValueError: A setting out of range.
@@ -117,6 +139,7 @@ class MclSettings:
     alpha_slow: float = 0.001
     alpha_fast: float = 0.1
     roughening: tuple[float, float, float] = (0.005, 0.005, 0.005)
+    covariance_scale: tuple[float, float, float] = (1.0, 1.0, 1.0)
 
     def __post_init__(self) -> None:
         for name in ("num_particles", "max_beams"):
@@ -136,14 +159,8 @@ class MclSettings:
         for name, valid, wanted in checks:
             if not valid:
                 raise ValueError(f"MclSettings {name} must be {wanted}, got {getattr(self, name)}.")
-        roughening = np.asarray(self.roughening, dtype=np.float64)
-        if roughening.shape != (3,) or not (
-            np.isfinite(roughening).all() and (roughening > 0).all()
-        ):
-            raise ValueError(
-                f"MclSettings roughening must be 3 positive values (x, y, theta), got "
-                f"{self.roughening}."
-            )
+        for name in ("roughening", "covariance_scale"):
+            checked_axis_values(getattr(self, name), "MclSettings", name)
 
 
 @dataclass(frozen=True)
@@ -467,8 +484,11 @@ class MclLocalizer:
 
     @property
     def covariance(self) -> FloatArray:
-        """The ``(3, 3)`` covariance of the heaviest cluster, plus the roughening kernel (a copy)."""
-        return self._cluster()[1].copy()
+        """The ``(3, 3)`` covariance of the heaviest cluster, plus the roughening kernel, scaled by
+        ``settings.covariance_scale`` (a copy)."""
+        root = np.sqrt(np.asarray(self.settings.covariance_scale, dtype=np.float64))
+        scaled: FloatArray = self._cluster()[1] * np.outer(root, root)
+        return scaled
 
     @property
     def cluster_weight(self) -> float:

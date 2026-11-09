@@ -29,6 +29,7 @@ passed to :meth:`EkfLocalizer.update` is taken at the pose reached by the last
 :meth:`EkfLocalizer.predict`.
 """
 
+from collections import deque
 from dataclasses import dataclass
 from typing import NamedTuple
 
@@ -37,7 +38,12 @@ from numpy.typing import ArrayLike, NDArray
 
 from rl_navigation.estimation.kalman import kalman_update, symmetrized
 from rl_navigation.estimation.maps import RangeMap, usable_readings
-from rl_navigation.estimation.poses import checked_start, checked_wheel_travel, pose_difference
+from rl_navigation.estimation.poses import (
+    checked_axis_values,
+    checked_start,
+    checked_wheel_travel,
+    pose_difference,
+)
 from rl_navigation.sim.geometry import FloatArray
 from rl_navigation.sim.kinematics import unicycle_step, wrap_angle
 from rl_navigation.sim.odometry import WheelOdometry
@@ -159,6 +165,8 @@ class UpdateResult:
         nis: Normalised innovation squared of the used beams at the first linearization (0 when
             none was used).
         iterations: Accepted iterations (0 when no beam was used).
+        reset: Whether this scan completed ``reset_after`` consecutive mostly gated scans and
+            raised the covariance (see :class:`EkfLocalizer`).
     """
 
     used: NDArray[np.bool_]
@@ -166,10 +174,30 @@ class UpdateResult:
     nonlinear: NDArray[np.bool_]
     nis: float
     iterations: int
+    reset: bool = False
 
 
 class EkfLocalizer:
     """The robot's pose and its covariance, from wheel odometry and range scans on a known map.
+
+    **The reset.** A still robot's covariance collapses to a fraction of a millimetre; bumped a
+    few centimetres, every beam then fails the gate and the filter never moves again. A scan
+    *counts* when it has at least ``min_candidates`` candidate beams (used after the last
+    iteration, or gated) and at least half of them are gated. After ``reset_after``
+    consecutive counting scans the filter raises each variance to at least ``reset_std**2``
+    (``P[i, i] <- max(P[i, i], reset_std[i]^2)``, off-diagonals kept), and the count starts
+    again. The floor is idempotent, so a filter that
+    keeps resetting does not grow ``P`` without bound. :attr:`recent_resets` counts the resets
+    in the last ``reset_window`` scans: **2 or more means the filter is lost** (it keeps
+    resetting and cannot find a pose that explains the scans), 0 that the last reset, if any,
+    recovered it.
+
+    Limits: in a symmetric room a reset can lock onto a pose that explains the scans as well as
+    the true one (a 90 degree alias of a square room); its covariance shrinks again and
+    :attr:`recent_resets` falls to 0, so the filter is wrong and quiet. The particle filter has
+    the same limit. A reset needs gated beams: a heading bump of 0.3 rad on the HC-SR04's five
+    sonars fires none, because its beams leave the linearity window and are marked
+    ``nonlinear``, which are not candidates.
 
     Args:
         range_map: The known map seen through the robot's range sensor; its ``noise_std`` is the
@@ -184,6 +212,13 @@ class EkfLocalizer:
         linearity_tol: Largest departure from linear, metres; None uses ``sigma_r``.
         gate: A beam with ``innovation^2 / (H P H^T + sigma_r^2)`` at or above this is an outlier
             (9: three standard deviations).
+        reset_after: Consecutive counting scans that trigger the reset (at least 1); None
+            disables it.
+        min_candidates: Fewest candidate beams for a scan to count (at least 1). Two keeps a
+            sonar scan with dropouts, one beam of one gated, from counting.
+        reset_std: ``(3,)`` positive floor of the standard deviations ``(x, y, theta)`` after a
+            reset, metres and radians.
+        reset_window: Scans over which :attr:`recent_resets` counts (at least 1).
 
     Raises:
         ValueError: A pose or covariance of the wrong shape or not finite, a covariance that is
@@ -202,6 +237,10 @@ class EkfLocalizer:
         linearity_window: float = 0.03,
         linearity_tol: float | None = None,
         gate: float = 9.0,
+        reset_after: int | None = 3,
+        min_candidates: int = 2,
+        reset_std: ArrayLike = (0.2, 0.2, 0.1),
+        reset_window: int = 20,
     ) -> None:
         pose, covariance = checked_start(pose, covariance, "EkfLocalizer")
         if not range_map.noise_std > 0.0:
@@ -215,10 +254,24 @@ class EkfLocalizer:
         for name, value in settings.items():
             if not value > 0.0:
                 raise ValueError(f"EkfLocalizer {name} must be positive, got {value}.")
-        if isinstance(iterations, bool) or not (
-            isinstance(iterations, int | np.integer) and iterations >= 1
-        ):
-            raise ValueError(f"EkfLocalizer iterations must be at least 1, got {iterations}.")
+        whole_numbers = {
+            "iterations": iterations,
+            "min_candidates": min_candidates,
+            "reset_window": reset_window,
+        }
+        if reset_after is not None:
+            whole_numbers["reset_after"] = reset_after
+        for name, value in whole_numbers.items():
+            if isinstance(value, bool) or not (isinstance(value, int | np.integer) and value >= 1):
+                raise ValueError(
+                    f"EkfLocalizer {name} must be an integer of at least 1, got {value}."
+                )
+        self.reset_std = checked_axis_values(reset_std, "EkfLocalizer", "reset_std")
+        self.reset_after = None if reset_after is None else int(reset_after)
+        self.min_candidates = int(min_candidates)
+        self.reset_window = int(reset_window)
+        self._counting_scans = 0
+        self._recent: deque[bool] = deque(maxlen=self.reset_window)
         self.range_map = range_map
         self.odometry = odometry
         self.iterations = int(iterations)
@@ -238,6 +291,29 @@ class EkfLocalizer:
     def covariance(self) -> FloatArray:
         """A copy of the ``(3, 3)`` pose covariance."""
         return self._covariance.copy()
+
+    @property
+    def recent_resets(self) -> int:
+        """Resets within the last ``reset_window`` scans; 2 or more means the filter is lost."""
+        return sum(self._recent)
+
+    def _counted_reset(self, used: NDArray[np.bool_], gated: NDArray[np.bool_]) -> bool:
+        """Count this scan toward the reset and apply the floor if it completes the run."""
+        if self.reset_after is None:
+            return False
+        num_gated = int(np.count_nonzero(gated))
+        candidates = int(np.count_nonzero(used)) + num_gated
+        counts = candidates >= self.min_candidates and 2 * num_gated >= candidates
+        self._counting_scans = self._counting_scans + 1 if counts else 0
+        reset = self._counting_scans >= self.reset_after
+        if reset:
+            self._counting_scans = 0
+            covariance = self._covariance.copy()
+            diagonal = np.diag_indices(3)
+            covariance[diagonal] = np.maximum(covariance[diagonal], self.reset_std**2)
+            self._covariance = covariance
+        self._recent.append(reset)
+        return reset
 
     def predict(self, wheel_travel: ArrayLike) -> None:
         """Move the estimate by one encoder reading and grow its covariance.
@@ -266,7 +342,8 @@ class EkfLocalizer:
         A reading is unused when it is not finite (a driver's NaN is a dropout), at or beyond
         ``max_range`` (no echo), at or below ``min_range`` (clipped), when its expected range is
         within ``3 sigma_r`` of ``max_range``, when its beam is not linear, or when the gate
-        rejects it. With nothing used the pose and covariance are left exactly as they were.
+        rejects it. With nothing used the pose and covariance are left exactly as they were,
+        unless the scan completes a reset, which raises the covariance's diagonal.
 
         Args:
             readings: ``(N,)`` scan in the sensor's mount order, metres.
@@ -302,7 +379,9 @@ class EkfLocalizer:
         gated = candidates & (innovation**2 >= self.gate * variance)
         used = candidates & ~gated
         if not used.any():
-            return UpdateResult(used, gated, lin.nonlinear, 0.0, 0)
+            return UpdateResult(
+                used, gated, lin.nonlinear, 0.0, 0, self._counted_reset(used, gated)
+            )
         x0, P0 = self._pose, self._covariance
         H_i, innovation_i = H[used], innovation[used]
         nis = float(
@@ -334,4 +413,11 @@ class EkfLocalizer:
                 break
             H_i, innovation_i = relinearized.H[active], z[active] - relinearized.h[active]
         self._pose, self._covariance = x_i, P_i
-        return UpdateResult(final, gated, lin.nonlinear | (used & ~final), nis, accepted)
+        return UpdateResult(
+            final,
+            gated,
+            lin.nonlinear | (used & ~final),
+            nis,
+            accepted,
+            self._counted_reset(final, gated),
+        )
