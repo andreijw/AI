@@ -588,6 +588,14 @@ in only 10 to 18 % of runs against MCL's 86 to 98 %, at about 2 to 3 ms a step a
 dropout the HC-SR04's EKF loses one run of 50 where MCL does not. The module is a desk tool and
 `rl_navigation.estimation` does not import it.
 
+**Watching one trial.** `python -m rl_navigation.localization_video --seed 101 --mcl-scale 0.130 0.124 0.308 --output
+<scratch>/seed101.mp4` writes one seeded lidar trial as a video: the true robot, its scan and path, MCL's particles
+and estimate from a global start, and the EKF's estimate from the noisy start, each with its 2σ position ellipse,
+with a kidnapping at step 300 (`--kidnap-at none` for none). Both filters run on the same trajectory
+(`rl_navigation.estimation.recording`, painted with NumPy at 160 pixels per metre). `--stills` saves chosen frames as
+PNGs; `--output` is required and never overwritten. The MP4 needs the `video` extra; `TESTING.md` `EST-4` says what
+to look for.
+
 ### Visualization and video recording
 
 Outputs are partitioned into per-challenge and per-agent folders so runs never overwrite one another:

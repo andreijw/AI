@@ -219,3 +219,21 @@ def test_range_sensor_rejects_a_fractional_ray_count_and_a_negative_mount_radius
 def test_lidar_needs_at_least_one_beam():
     with pytest.raises(ValueError, match="num_beams"):
         lidar(num_beams=0)
+
+
+def test_beams_run_from_each_mount_to_the_point_it_read():
+    """Mounts at 0 and 90 degrees, 0.1 m out, from (1, 2) facing +x: the first starts at
+    (1.1, 2) and reads 1 m to (2.1, 2), the second starts at (1, 2.1) and reads 0.5 m to
+    (1, 2.6)."""
+    sensor = RangeSensor(mount_angles=[0.0, math.pi / 2], mount_radius=0.1)
+    beams = sensor.beams([1.0, 2.0, 0.0], [1.0, 0.5])
+    np.testing.assert_allclose(
+        beams, [[[1.1, 2.0], [2.1, 2.0]], [[1.0, 2.1], [1.0, 2.6]]], atol=1e-12
+    )
+
+
+def test_beams_turn_with_the_heading_and_draw_a_dropout_at_full_range():
+    """A centre lidar beam facing ahead from a robot heading +y reads max_range when lost."""
+    sensor = lidar(num_beams=1, max_range=4.0)
+    beams = sensor.beams([1.0, 0.5, math.pi / 2], [sensor.max_range])
+    np.testing.assert_allclose(beams, [[[1.0, 0.5], [1.0, 4.5]]], atol=1e-12)

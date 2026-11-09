@@ -116,6 +116,25 @@ class RangeSensor:
             ranges = cast_rays(arena, origins.reshape(-1, 2), angles)
         return ranges.reshape(len(poses), self.num_readings, -1).min(axis=-1)
 
+    def beams(self, pose: ArrayLike, readings: ArrayLike) -> FloatArray:
+        """Each mount's beam as a segment from the mount to the point it read, for drawing.
+
+        Args:
+            pose: ``(3,)`` robot pose ``(x, y, theta)``.
+            readings: ``(N,)`` a scan from :meth:`read`; a dropout reads ``max_range`` and is
+                drawn at full length.
+
+        Returns:
+            ``(N, 2, 2)``: for each mount, its position and the point ``readings`` metres along
+            its direction.
+        """
+        x, y, theta = np.asarray(pose, dtype=np.float64)
+        angles = theta + self.mount_angles
+        directions = np.stack([np.cos(angles), np.sin(angles)], axis=1)
+        mounts = np.array([x, y]) + self.mount_radius * directions
+        ranges = np.asarray(readings, dtype=np.float64).reshape(-1, 1)
+        return np.stack([mounts, mounts + ranges * directions], axis=1)
+
     def read(
         self,
         arena: Arena,

@@ -154,6 +154,9 @@ steps 3 to 5 are sketches to turn into full items when picked.
     whose beams turn nonlinear rather than gated, fires none.
   - **MCL's covariance scale for the HC-SR04 with its own dropout** fails the ANEES-band gate on seeds 101 to 150
     (82.5 % against 85 %); the default scale stays (1, 1, 1).
+  - **The EKF's reset does not hold after a kidnapping.** On seed 101 (lidar, `EST-4`) the reset fires every three or
+    four scans, and the next scan's update collapses the covariance back to a few millimetres round a wrong pose,
+    which may be why the EKF recovers in only 10 to 18 % of `EST-3`'s runs. Not investigated.
   - **The EKF's lost HC-SR04 run at 30 % dropout** (one of 50 in `EST-3`, mean NEES 279 for the row): not diagnosed.
   - **Out of scope**: SLAM and unknown maps (step 3), odometry calibration (step 5).
 

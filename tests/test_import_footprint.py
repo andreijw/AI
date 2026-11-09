@@ -140,6 +140,8 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.estimation.evaluation",
         "rl_navigation.estimation.mcl",
         "rl_navigation.estimation.comparison",
+        "rl_navigation.estimation.recording",
+        "rl_navigation.localization_video",
     ],
 )
 def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
@@ -166,7 +168,8 @@ def test_navigation_estimation_imports_only_the_simulator():
     code = (
         "import sys; sys.path.insert(0, 'src'); "
         "import rl_navigation.estimation, rl_navigation.estimation.evaluation, "
-        "rl_navigation.estimation.mcl, rl_navigation.estimation.comparison; "
+        "rl_navigation.estimation.mcl, rl_navigation.estimation.comparison, "
+        "rl_navigation.estimation.recording; "
         "print(sorted(m for m in sys.modules if m.startswith('rl_navigation.') "
         "and m.split('.')[1] not in ('sim', 'estimation')))"
     )
@@ -229,17 +232,39 @@ def test_importing_rl_navigation_loads_none_of_its_subpackages():
     assert result.stdout.strip() == "[]", f"import rl_navigation loaded {result.stdout.strip()}."
 
 
-def test_the_estimation_package_does_not_import_the_comparison():
-    """The comparison report is a tool, not part of the library a robot imports. A fresh
-    process."""
+@pytest.mark.parametrize("tool", ["comparison", "recording"])
+def test_the_estimation_package_does_not_import_its_desk_tools(tool):
+    """The comparison report and the recording are tools, not part of the library a robot
+    imports. A fresh process."""
     code = (
         "import sys; sys.path.insert(0, 'src'); import rl_navigation.estimation; "
-        "print('rl_navigation.estimation.comparison' in sys.modules)"
+        f"print('rl_navigation.estimation.{tool}' in sys.modules)"
     )
     result = subprocess.run(
         [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "False", (
-        "rl_navigation/estimation/__init__.py imported the comparison module"
+        f"rl_navigation/estimation/__init__.py imported the {tool} module"
     )
+
+
+VIDEO_STACK = ("matplotlib", "imageio_ffmpeg")
+
+
+@pytest.mark.parametrize(
+    "module", ["rl_navigation.estimation.recording", "rl_navigation.localization_video"]
+)
+def test_the_localization_recording_loads_no_plotting_or_video_stack(module):
+    """The recording paints with NumPy; the command line loads matplotlib and imageio-ffmpeg only
+    when it writes stills or the MP4. A fresh process."""
+    code = (
+        "import sys; sys.path.insert(0, 'src'); "
+        f"import {module}; "
+        f"print(sorted(m for m in sys.modules if m.split('.')[0] in {VIDEO_STACK!r})[:5])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", f"Importing {module} loaded {result.stdout.strip()}."
