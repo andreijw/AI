@@ -38,7 +38,7 @@ training:
   total_steps: 100000  # Environment steps (rl-zoo)
   max_steps_per_episode: 500
   eval_frequency: 50             # Evaluate every N episodes
-  save_frequency: 100            # Save checkpoint every N episodes
+  save_frequency: 100            # Save checkpoint every N episodes (train.py also after the last)
   checkpoint_dir: "./checkpoints"
   log_dir: "./logs"
 

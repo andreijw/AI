@@ -20,7 +20,7 @@ training:
   total_steps: 50000  # Environment steps (random baseline: sets only its length)
   max_steps_per_episode: 500
   eval_frequency: 20  # Evaluate every N episodes
-  save_frequency: 50  # Save checkpoint every N episodes
+  save_frequency: 50  # Save checkpoint every N episodes (train.py also after the last)
   checkpoint_dir: "./checkpoints"
   log_dir: "./logs"
 
