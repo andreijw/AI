@@ -67,16 +67,19 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    (`tests/test_import_footprint.py`):
    - `rl_navigation.sim` (`geometry`: `Arena`, batched `cast_rays`, swept-disc `segment_hits`, `clearance`,
      `occupancy_grid`; `kinematics`; `sensors`: `RangeSensor`, `hc_sr04`, `lidar`; `odometry`: `WheelOdometry`;
-     `layouts`; `world`: `World`; `render`: the arena as an RGB array) imports only NumPy and the standard library,
+     `layouts`; `world`: `World`; `render`: the arena as an RGB array, `RangeSensor.beams` drawn over it, and overlay
+     painters for points, paths and pose markers) imports only NumPy and the standard library,
      never Gymnasium or `rl_core`.
    - `rl_navigation.estimation` is the robot's own code beside the Gymnasium layer, not under it: pose estimation on a
      known map (`ekf`: `EkfLocalizer`; `kalman`: `kalman_update` in Joseph form; `mcl`: `MclLocalizer`, augmented Monte
      Carlo localization with its pure resampling and likelihood functions; `evaluation`: seeded trials with either
      filter, optionally with a kidnapping, against the simulator's true pose; `comparison`: the EKF and MCL on the same
-     seeds as a Markdown report and a command line, a desk tool that the package's `__init__` does not import). It
-     imports NumPy and `rl_navigation.sim` only, never `gym_env`, the framework's layer, Gymnasium or `rl_core`, and
-     nothing outside it calls it: no environment, wrapper or benchmark challenge (the maintainer's decision,
-     2026-11-06). Its seam to the map is the `RangeMap` protocol in `maps` (`min_range`, `max_range`, `noise_std`, and
+     seeds as a Markdown report and a command line, a desk tool that the package's `__init__` does not import;
+     `recording`: snapshots of both filters on one seeded trial and the frames painted from them, another desk tool the
+     package does not import; the `rl_navigation.localization_video` command, outside the package, writes them to an
+     MP4). It imports NumPy and `rl_navigation.sim` only, never `gym_env`, the framework's layer, Gymnasium or
+     `rl_core`, and no environment, wrapper or benchmark challenge calls it (the maintainer's decision, 2026-11-06).
+     Its seam to the map is the `RangeMap` protocol in `maps` (`min_range`, `max_range`, `noise_std`, and
      `expected_ranges` from `(P, 3)` poses to `(P, N)` ranges, `inf` where a beam meets nothing); the particle filter
      asks for `ParticleMap`, a `RangeMap` that also gives `num_readings`, `bounds`, `free` and `expected_beam_ranges`.
      `SensorMap` implements both with the simulator's ray casts on a known `Arena`; an occupancy grid (Phase 8, step 3)

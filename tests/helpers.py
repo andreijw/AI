@@ -227,6 +227,14 @@ needs_onnx = pytest.mark.skipif(
 )
 
 
+# Writing an MP4 needs imageio-ffmpeg, from the video extra (pip install -e ".[video]"); CI does not
+# install it.
+needs_video = pytest.mark.skipif(
+    importlib.util.find_spec("imageio_ffmpeg") is None,
+    reason='the video extra is not installed (pip install -e ".[video]")',
+)
+
+
 def uses_onnx(item: pytest.Item) -> bool:
     """Whether a collected test is marked ``needs_onnx``."""
     return any(m.kwargs.get("reason") == NEEDS_ONNX_REASON for m in item.iter_markers("skipif"))

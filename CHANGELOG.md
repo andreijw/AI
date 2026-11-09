@@ -16,6 +16,20 @@ Acrobot-v1) and
 
 ### Added
 
+- **Localization on video** (`feature/localization-recording`; stacked on `feature/localization-comparison`):
+  - `python -m rl_navigation.localization_video` writes one seeded trial as an MP4 (and PNG stills with
+    `--stills`): the true robot, its scan and path, MCL's particles and estimate from a global start, and the EKF's
+    estimate from the noisy start, each with its 2σ position ellipse, and a kidnapping at step 300 by default.
+    `--output` is required and never overwritten; the MP4 needs the `video` extra (TESTING.md `EST-4`).
+  - Frames come from the same `run_trial` trials the comparison measures (`rl_navigation.estimation.recording`,
+    NumPy only): the EKF and MCL trials of one seed share their trajectory and scans, which the recorder checks.
+    New NumPy painters in `rl_navigation.sim.render` (`paint_points`, `paint_path`, `paint_pose`), and the beam
+    geometry moved from the navigation environment to `RangeSensor.beams` (its frames unchanged).
+  - Seed 101, lidar: MCL re-localizes 16 steps (1.6 s) after the kidnapping; the EKF does not. Its reset fires
+    every three or four scans and the next scan collapses it back to a few millimetres round a wrong pose, so its
+    ellipse flickers between about 0.4 m and a few millimetres while it stays lost. 601 frames in about 55 s on the
+    Jetson.
+
 - **EKF against MCL: the comparison report and its command line** (`feature/localization-comparison`; PR 3b, the
   last of the roadmap item "State estimation", which is now complete):
   - **`rl_navigation.estimation.comparison`** runs the EKF, MCL and dead reckoning on the same seeded trials and

@@ -87,15 +87,19 @@ To optimize token usage and context window limits:
     `geometry.py` (arena, batched ray casting, swept-disc collision, occupancy grid), `kinematics.py` (unicycle),
     `sensors.py` (range sensors, `hc_sr04` and `lidar` presets), `odometry.py` (`WheelOdometry`: noisy left and
     right wheel travel), `layouts.py` (random layouts with a reachable goal), `world.py` (`World`: pose, motion
-    with wheel slip, collision, goal, sensors) and `render.py` (the arena as an RGB array).
+    with wheel slip, collision, goal, sensors) and `render.py` (the arena as an RGB array, and the overlay painters
+    `paint_points`, `paint_path` and `paint_pose`).
   * `src/rl_navigation/estimation/`: pose estimation on a known map for the robot's own program, NumPy and
     `rl_navigation.sim` only (never Gymnasium, `gym_env` or `rl_core`): `maps.py` (the `RangeMap` and `ParticleMap`
     protocols and `SensorMap`), `kalman.py` (the Kalman update in Joseph form), `ekf.py` (`EkfLocalizer`, iterated
     EKF localization), `mcl.py` (`MclLocalizer`, augmented Monte Carlo localization), `evaluation.py`
     (`run_trial`, `summarize` and `summarize_localization`: seeded trials of either filter against the true pose,
     with an optional kidnapping) and `comparison.py` (the EKF against MCL on the same seeds: a Markdown report and the
-    `python -m rl_navigation.estimation.comparison` command; not imported by the package). No environment or
-    benchmark challenge uses it.
+    `python -m rl_navigation.estimation.comparison` command; not imported by the package) and `recording.py` (snapshots
+    of the EKF and MCL on one seeded trial and the frames painted from them; not imported by the package). No
+    environment or benchmark challenge uses it.
+  * `src/rl_navigation/localization_video.py`: `python -m rl_navigation.localization_video`, which writes a
+    `recording` to an MP4 (imageio-ffmpeg, the `video` extra) and PNG stills (matplotlib); never overwrites a file.
   * `src/rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.
     It imports Gymnasium and `rl_navigation.sim` only, never `rl_core`, so it works outside this framework.
   * `src/rl_navigation/environments/`: `NavigationEnv`, the framework wrapper shared by both ids (action noise,

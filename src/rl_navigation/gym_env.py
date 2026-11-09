@@ -289,11 +289,7 @@ class NavigationGymEnv(gym.Env[NDArray[np.float32], Any]):
     def _beams(self) -> NDArray[np.float64]:
         """``(N, 2, 2)``: each mount's position and the point it last read."""
         assert self.world is not None
-        x, y, theta = self.world.pose
-        angles = theta + self.sensor.mount_angles
-        directions = np.stack([np.cos(angles), np.sin(angles)], axis=1)
-        mounts = np.array([x, y]) + self.sensor.mount_radius * directions
-        return np.stack([mounts, mounts + self._readings[:, None] * directions], axis=1)
+        return self.sensor.beams(self.world.pose, self._readings)
 
     def render(self) -> NDArray[np.uint8] | None:
         """The current frame as ``(rows, cols, 3)`` uint8 at 80 pixels per metre, or None
