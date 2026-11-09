@@ -18,6 +18,10 @@ The architecture is designed to support:
   MountainCarContinuous; random and DQN for LunarLander; random, TD3 and SAC for LunarLanderContinuous; random, SAC
   and TD3 for BipedalWalker; random, PPO and DQN for the range-sensor navigation task Navigation-v0, and random, PPO
   and TD3 for NavigationContinuous-v0)
+- Robot state estimation on a known map (`rl_navigation.estimation`, NumPy only, meant to run on the robot): wheel
+  odometry, an extended Kalman filter and Monte Carlo localization with global start and kidnapping recovery, an
+  EKF-against-MCL report ([`docs/benchmarks/localization_results.md`](docs/benchmarks/localization_results.md)), and
+  a video of one localization trial (see State estimation below)
 - Easy experimentation with different configurations
 - Clean separation between environments, agents, and training pipelines
 - Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
@@ -79,7 +83,9 @@ AI/
 │   │   └── benchmark.py         # BipedalWalker benchmark challenge implementation
 │   ├── rl_navigation/           # Navigation-v0 and NavigationContinuous-v0 range-sensor navigation (Phase 8)
 │   │   ├── sim/                 # NumPy-only simulator: arena, ray casting, sensors, odometry, layouts, World, renderer
-│   │   ├── estimation/          # Pose estimation on a known map (EKF, Monte Carlo); imports only NumPy and sim/
+│   │   ├── estimation/          # Pose estimation on a known map (EKF, Monte Carlo), the comparison report and
+│   │   │                        # the trial recorder; imports only NumPy and sim/
+│   │   ├── localization_video.py # Writes one localization trial as an MP4 and PNG stills (needs the video extra)
 │   │   ├── gym_env.py           # The Gymnasium environment; imports only Gymnasium and sim/, never rl_core
 │   │   ├── environments/        # Navigation wrapper (noise, domain randomization) and a factory for each id
 │   │   └── benchmark.py         # Both navigation benchmark challenge implementations
@@ -690,6 +696,10 @@ python train.py --record-video --video-every 25
 
 Every recorded episode is rendered and encoded frame by frame, so small intervals slow training
 down (recording all 1000 random-agent episodes takes ~6 minutes instead of ~8 seconds).
+
+The localization video (`python -m rl_navigation.localization_video`, see State estimation) does not record an
+agent: it takes a required `--output` path and never writes into `videos/` on its own. Recordings kept by hand go in
+`videos/navigation/localization/`, git-ignored like the rest of `videos/`.
 
 ### Record a Trained Agent
 
