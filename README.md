@@ -490,8 +490,8 @@ and `rl_navigation.sim`, never Gymnasium or `rl_core` (`tests/test_import_footpr
 the benchmark calls it. It holds two filters with the same calls: an extended Kalman filter, `EkfLocalizer`, which
 tracks a pose it is given at the start, and a particle filter, `MclLocalizer` (Monte Carlo localization), which can
 also start from anywhere and recover from a kidnapping (the robot carried elsewhere without being told), as the EKF
-cannot, though the EKF recovers from a small bump while standing still (below;
-[`docs/roadmap.md`](docs/roadmap.md), "State estimation").
+cannot, though the EKF recovers from a small bump while standing still (below; [`CHANGELOG.md`](CHANGELOG.md),
+2026-11-06 to 2026-11-09, and the open item "State estimation follow-ups" in [`docs/roadmap.md`](docs/roadmap.md)).
 
 - **Encoders**: `rl_navigation.sim.WheelOdometry` models them. A reading is a `(2,)` array, the left and the right
   wheel's travel in metres since the previous reading, with noise variance `k × |travel|` per wheel. Its wheel base
@@ -575,6 +575,18 @@ symmetric arena, resampling collapses one of the mirror-image hypotheses within 
 near 1 and cannot flag the ambiguity. Its evaluation (global localization and recovery from a kidnapping at step 300,
 over fresh seeds 101 to 150) is `TESTING.md` `EST-2`; `evaluation.ekf()` and `evaluation.mcl()` build either filter
 for `run_trial(make_localizer=...)`.
+
+**EKF against MCL.** `python -m rl_navigation.estimation.comparison` runs both filters on the same seeded trials
+(each sensor, with its own dropout and with 30 %) and prints a Markdown report: tracking accuracy and consistency
+(position and heading RMSE, NEES, per-axis error against the reported variance), then a global start and a kidnapping
+at step 300 (shares localized and recovered, steps to get there, and how often a filter is confidently wrong). It saves
+one record per trial with `--records`, so an interrupted run resumes and jobs run apart merge with `--from-records`; it
+writes no file unless `--report` is given. Run with the `TESTING.md` `EST-3` settings (seeds 101 to 150, 600 steps; the
+report is [`docs/benchmarks/localization_results.md`](docs/benchmarks/localization_results.md)), the EKF tracks more
+accurately from the noisy start (lidar position RMSE about 2 mm against MCL's 7 mm) but recovers from the kidnapping
+in only 10 to 18 % of runs against MCL's 86 to 98 %, at about 2 to 3 ms a step against MCL's 37 to 51 ms; with 30 %
+dropout the HC-SR04's EKF loses one run of 50 where MCL does not. The module is a desk tool and
+`rl_navigation.estimation` does not import it.
 
 ### Visualization and video recording
 

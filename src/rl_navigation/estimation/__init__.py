@@ -3,6 +3,9 @@ with an extended Kalman filter (``EkfLocalizer``) or a particle filter (``MclLoc
 
 Imports only NumPy and ``rl_navigation.sim``, so it runs on the robot without Gymnasium or the
 training framework.
+
+``rl_navigation.estimation.comparison`` (the EKF against MCL as a report and a command line) is a tool for
+the desk and is deliberately not imported here.
 """
 
 from rl_navigation.estimation.ekf import (
