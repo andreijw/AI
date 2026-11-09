@@ -155,14 +155,22 @@ robot needs neither the trainer nor the agents. Step 1, the navigation environme
 2026-11-04 to 2026-11-07); step 2 is in progress, and steps 3 to 5 are sketches to turn into full items when picked.
 
 - [~] **State estimation (`rl_navigation.estimation`)** (picked 2026-11-06; PR 1 of 3, wheel odometry and EKF
-  localization; PR 2 Monte Carlo localization; PR 3 the comparison report, its CLI, and any hooks the maintainer
-  picks)
+  localization; PR 2 Monte Carlo localization; PR 3a the EKF's still-robot reset and MCL's covariance scale;
+  PR 3b the comparison report and its CLI)
   - **Progress (PR 2, 2026-11-07)**: `MclLocalizer` (augmented MCL) localizes globally and recovers from a
     kidnapping: lidar 96 % and 96 to 98 % on fresh seeds 101 to 150 against the 70 % gate (CHANGELOG.md,
     2026-11-07). Left for PR 3: the comparison report and CLI; the EKF's stationary-robot case (MCL recovers from a
     10 cm bump of a still robot, so "leave it to MCL" is now an option); MCL's covariance is 3 to 5 times too wide
     (mean NEES 0.57 to 0.94); in a symmetric arena resampling keeps only one mirror hypothesis, so `cluster_weight`
     cannot flag the ambiguity; the median time to localize was not measured.
+  - **Progress (PR 3a, 2026-11-08)**: the EKF resets its covariance floor after 3 scans with at least half their
+    beams gated, so a still robot recovers from a small bump (lidar to below 1 mm from 30 cm or 0.3 rad); EST-1
+    re-run with it (one false alarm in 200 runs). `MclSettings.covariance_scale` corrects MCL's covariance per axis;
+    the default stays 1.0 and fitted per-sensor values pass the per-axis gate on seeds 101 to 150, HC-SR04 with its
+    own dropout failing the ANEES-band gate (82.5 % against 85 %) (CHANGELOG.md, 2026-11-08). Left for PR 3b: the
+    comparison report and CLI, and the median time to localize. Left as follow-ups: the symmetric-arena ambiguity
+    (both filters; with the reset, a 1.5 rad bump settled the lidar EKF on the square room's alias), and a reset trigger
+    for scans whose beams are mostly nonlinear (an HC-SR04 bump of 0.3 rad fires none).
   - **Description**: The robot's pose `(x, y, θ)` is estimated from wheel odometry and range readings on a known
     map, in the step 1 simulator with odometry noise added.
     - **Odometry.** The simulator gets a wheel-encoder model, `WheelOdometry`. Each step it gives the left and
@@ -204,8 +212,9 @@ robot needs neither the trainer nor the agents. Step 1, the navigation environme
     - A probe pose past a wall, which casts `inf`.
     - Beams with no wall in range.
     - A stationary robot, which has zero process noise: its covariance keeps shrinking, so after a bump of more
-      than about 3 cm every beam is gated and the EKF never recovers (PR 1 review, 2026-11-06). PR 3 decides
-      between a process-noise floor, re-initialisation after several all-gated scans, and leaving it to MCL.
+      than about 3 cm every beam is gated and the EKF never recovered (PR 1 review, 2026-11-06). PR 3a adds a
+      reset after 3 mostly gated scans (the maintainer's choice over a process-noise floor or leaving it to MCL,
+      2026-11-08).
     - The heading wrapping at ±π.
     - The `sinc` derivative near Δθ = 0.
     - A whole scan gated out, which loses the track.

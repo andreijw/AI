@@ -490,7 +490,8 @@ and `rl_navigation.sim`, never Gymnasium or `rl_core` (`tests/test_import_footpr
 the benchmark calls it. It holds two filters with the same calls: an extended Kalman filter, `EkfLocalizer`, which
 tracks a pose it is given at the start, and a particle filter, `MclLocalizer` (Monte Carlo localization), which can
 also start from anywhere and recover from a kidnapping (the robot carried elsewhere without being told), as the EKF
-cannot ([`docs/roadmap.md`](docs/roadmap.md), "State estimation").
+cannot, though the EKF recovers from a small bump while standing still (below;
+[`docs/roadmap.md`](docs/roadmap.md), "State estimation").
 
 - **Encoders**: `rl_navigation.sim.WheelOdometry` models them. A reading is a `(2,)` array, the left and the right
   wheel's travel in metres since the previous reading, with noise variance `k × |travel|` per wheel. Its wheel base
@@ -502,7 +503,13 @@ cannot ([`docs/roadmap.md`](docs/roadmap.md), "State estimation").
 - **Loop**: call `predict(wheel_travel)` with each encoder reading, then `update(readings)` with the scan taken at
   that pose; `pose` and `covariance` hold the estimate. A reading at or beyond `max_range`, at or below `min_range`,
   or NaN counts as a dropout. `update` returns an `UpdateResult` saying which beams it used, gated as outliers, or
-  left out as nonlinear (across a corner).
+  left out as nonlinear (across a corner). A still robot's covariance shrinks to almost nothing, so after a bump
+  of a few centimetres every beam fails the gate; after `reset_after=3` such scans (`None` disables) the EKF raises
+  its variances to at least `reset_std²` (0.2 m, 0.2 m, 0.1 rad) and recovers (`UpdateResult.reset`). It handles
+  bumps up to about 0.3 m and 0.1 to 0.3 rad with the lidar; the HC-SR04 sonars recover from position bumps up to
+  0.3 m and 0.1 rad. Two or more resets in `EkfLocalizer.recent_resets` (the last 20 scans) mean the filter is lost.
+  A large heading bump can settle it on a symmetric room's alias (the lidar, after 1.5 rad in a square room), and
+  once its resets stop nothing signals it, as with MCL.
 
 In the simulator, `World` stands in for the robot (run from the repository with the package installed):
 
@@ -561,7 +568,9 @@ long-run average catches up (about 700 scans, 70 s at 10 Hz, after a 10 cm bump 
 simulator, and an HC-SR04 step about 65 ms with the simulator (about 120 ms with `max_beams=64`, every lidar beam),
 so size `num_particles` and `max_beams` to the robot's control rate. `update`
 returns an `MclUpdate`; its `used` marks the beams in the likelihood, so it is not comparable with the EKF's
-`UpdateResult.used`. The reported `covariance` is conservative: `model_std` widens the cloud. Known limitation: in a
+`UpdateResult.used`. The reported `covariance` is conservative: `model_std` widens the cloud;
+`MclSettings.covariance_scale` corrects it per axis (default `(1, 1, 1)`, unscaled; fitted values per sensor in
+its docstring and `TESTING.md` `EST-2`). Known limitation: in a
 symmetric arena, resampling collapses one of the mirror-image hypotheses within 1 to 3 scans, so `cluster_weight` ends
 near 1 and cannot flag the ambiguity. Its evaluation (global localization and recovery from a kidnapping at step 300,
 over fresh seeds 101 to 150) is `TESTING.md` `EST-2`; `evaluation.ekf()` and `evaluation.mcl()` build either filter

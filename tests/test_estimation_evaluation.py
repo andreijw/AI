@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from rl_navigation.estimation import MclSettings
+from rl_navigation.estimation import EkfLocalizer, MclSettings, SensorMap
 from rl_navigation.estimation.evaluation import (
     Trial,
     average_nees,
@@ -17,7 +17,7 @@ from rl_navigation.estimation.evaluation import (
     summarize,
     summarize_localization,
 )
-from rl_navigation.sim import LayoutParams, WheelOdometry, hc_sr04, lidar
+from rl_navigation.sim import Arena, LayoutParams, WheelOdometry, hc_sr04, lidar
 
 # Two-sided 95 % bounds of chi-square(3 R) / R for R = 30 runs (Wilson-Hilferty): the per-step
 # band of the average NEES over 30 independent runs. The tests apply it to that average taken
@@ -187,6 +187,23 @@ def test_the_default_localizer_is_the_ekf():
     explicit = run_trial(4, hc_sr04(), steps=30, make_localizer=ekf())
     np.testing.assert_array_equal(default.estimates, explicit.estimates)
     np.testing.assert_array_equal(default.covariances, explicit.covariances)
+
+
+def test_the_ekf_factory_passes_the_reset_settings_on():
+    make = ekf(reset_after=None, min_candidates=4, reset_std=(0.3, 0.3, 0.2), reset_window=10)
+    localizer = make(
+        range_map=SensorMap(Arena(4.0, 4.0), lidar()),
+        odometry=WheelOdometry(),
+        start=np.array([2.0, 2.0, 0.0]),
+        covariance=0.01 * np.eye(3),
+        rng=np.random.default_rng(0),
+        robot_radius=0.1,
+    )
+    assert isinstance(localizer, EkfLocalizer)
+    assert localizer.reset_after is None, "The factory should pass reset_after on."
+    assert localizer.min_candidates == 4, "The factory should pass min_candidates on."
+    np.testing.assert_array_equal(localizer.reset_std, [0.3, 0.3, 0.2])
+    assert localizer.reset_window == 10, "The factory should pass reset_window on."
 
 
 @pytest.mark.parametrize("ekf_argument", [{"iterations": 2}, {"linearity_tol": 0.01}])

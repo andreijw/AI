@@ -479,7 +479,7 @@ def _bumped_still_robot(scans_after):
 
 
 def test_a_bumped_still_robot_recovers():
-    """Pushed 0.1 m sideways while still, which the EKF never recovers from (every beam gated).
+    """Pushed 0.1 m sideways while still, which an EKF without its reset never recovers from.
     Measured 2026-11-06: within 3 cm for good after 18 scans at 300 particles."""
     mcl, bumped, _ = _bumped_still_robot(50)
     error = pose_difference(mcl.pose, bumped)
@@ -549,6 +549,46 @@ def test_a_seeded_filter_is_reproducible():
     assert not np.array_equal(runs[0], runs[2]), "Seeds should differ."
 
 
+def _scaled_run(scale=None):
+    """A seeded filter after three steps, with ``covariance_scale`` left at its default when
+    ``scale`` is None."""
+    sensor = lidar()
+    settings = {} if scale is None else {"covariance_scale": scale}
+    mcl = _mcl(SensorMap(ROOM, sensor), TRUTH, np.diag([0.01, 0.01, 0.004]), seed=3, **settings)
+    for step in range(3):
+        mcl.predict([0.01, 0.012])
+        mcl.update(_scan(sensor, TRUTH, seed=step))
+    return mcl
+
+
+def test_the_covariance_scale_rescales_only_the_reported_covariance():
+    """With D = diag(scale), the covariance is D^1/2 C D^1/2 for the cluster's C: each variance
+    times its scale, each covariance times the root of both; particles and pose unchanged."""
+    scale = np.array([0.25, 4.0, 2.0])
+    default, scaled = _scaled_run(), _scaled_run(tuple(scale))
+    np.testing.assert_array_equal(scaled.particles, default.particles)
+    np.testing.assert_array_equal(scaled.pose, default.pose)
+    root = np.sqrt(scale)
+    np.testing.assert_array_equal(
+        scaled.covariance,
+        default.covariance * np.outer(root, root),
+        err_msg="The covariance should be exactly D^1/2 C D^1/2.",
+    )
+    _, cluster_covariance, _ = heaviest_cluster(scaled.particles, scaled.weights, ROUGHENING)
+    np.testing.assert_array_equal(
+        default.covariance, cluster_covariance, err_msg="heaviest_cluster itself is unscaled."
+    )
+
+
+def test_the_default_covariance_scale_changes_nothing():
+    """(1, 1, 1) reports the cluster's covariance bit for bit, as before the scale existed."""
+    explicit, default = _scaled_run((1.0, 1.0, 1.0)), _scaled_run()
+    _, cluster_covariance, _ = heaviest_cluster(default.particles, default.weights, ROUGHENING)
+    np.testing.assert_array_equal(default.covariance, cluster_covariance)
+    np.testing.assert_array_equal(explicit.covariance, cluster_covariance)
+    np.testing.assert_array_equal(explicit.particles, default.particles)
+
+
 # Construction -----------------------------------------------------------------------------------
 
 
@@ -596,6 +636,10 @@ def test_an_invalid_start_is_refused(pose, covariance, match):
         {"alpha_fast": 1.5},
         {"roughening": (0.0, 0.005, 0.005)},
         {"roughening": (0.005, 0.005)},
+        {"covariance_scale": (0.0, 1.0, 1.0)},
+        {"covariance_scale": (1.0, -0.5, 1.0)},
+        {"covariance_scale": (1.0, 1.0, np.inf)},
+        {"covariance_scale": (1.0, 1.0)},
     ],
 )
 def test_invalid_settings_are_refused(settings):

@@ -12,6 +12,42 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-08
+
+### Added
+
+- **EKF still-robot reset and MCL per-axis covariance scale** (`feature/estimation-filter-fixes`; PR 3a of the
+  roadmap item "State estimation"):
+  - **EKF reset.** A still robot's covariance used to collapse, so after a bump of more than about 3 cm every beam
+    was gated and the EKF never recovered. `EkfLocalizer` now counts a scan with at least `min_candidates=2`
+    candidate beams of which at least half are gated. After `reset_after=3` such scans in a row it raises the
+    diagonal of `P` to at least `reset_std=(0.2, 0.2, 0.1)` squared; the floor is idempotent, so repeated resets
+    do not compound.
+  - **Reset signals.** `UpdateResult.reset` flags each reset, and `recent_resets` counts those in the last 20
+    scans: 2 or more means lost. `reset_after=None` restores the old behaviour.
+  - **Recovery.** In a 5 × 5 m room the lidar recovers to below 1 mm from bumps of 5 to 30 cm, 0.1 to 0.3 rad and
+    0.1 + 0.1 m + 0.2 rad. The HC-SR04 recovers from position bumps up to 0.3 m and from 0.1 rad, but not from
+    0.3 rad (its beams turn nonlinear and no reset fires) or the combined bump. After a 1.5 rad bump the lidar EKF
+    settled on the square room's 90° alias after 2 resets, and once the resets stopped nothing signalled it, the
+    same limitation as MCL's.
+  - **EST-1 re-run with the reset on** (seeds 1 to 50, 4 rows): 199 of 200 runs are bit-identical to the old filter.
+    One false alarm (HC-SR04, 30 % dropout, seed 40) moves that row's `mean_nees` from 3.29 to 3.28 and its
+    `nees_below_upper_95` from 0.967 to 0.968.
+  - **MCL covariance scale.** `MclSettings.covariance_scale` (default `(1, 1, 1)`, the maintainer's decision)
+    scales the reported covariance per axis as D^½ P D^½; poses and EST-2's shares are unchanged. Fitted on
+    tuning seeds 1 to 20, the values are lidar (0.130, 0.124, 0.308) and HC-SR04 (0.174, 0.180, 0.525). One
+    scalar could not work: EST-2's published mean NEES of 0.57 to 0.94 would need s ≥ 0.94 / 3.72 = 0.253 and
+    s ≤ 0.57 / 2.36 = 0.242 to put all four rows in the 50-run band.
+  - **MCL judgement on seeds 101 to 150** (criteria fixed before the held-out seeds were read):
+    - Per-axis error ratios are 0.92 to 1.06 on every row, inside the [0.5, 2.0] gate.
+    - The share of steps whose 50-run ANEES lies in [2.36, 3.72] is 93.1 % and 91.3 % for the lidar and 87.1 %
+      for the HC-SR04 with 30 % dropout. For the HC-SR04 with its own dropout it is **82.5 %, failing the 85 %
+      gate**. The maintainer lowered that gate from 90 % after the tuning seeds gave 89.6 %, before seeds 101 to
+      150 were read.
+    - Mean ANEES after scaling is 2.77 to 3.11, against 0.56 to 0.91 unscaled (both from step 50; EST-2's 0.57 to
+      0.94 counts every step).
+  - TESTING.md `EST-1` and `EST-2`.
+
 ## 2026-11-07
 
 ### Added
