@@ -21,16 +21,6 @@ No open items.
 
 ### Training
 
-- [ ] **A final checkpoint at the end of `train.py`** (found in navigation PR 5, 2026-11-07)
-  - **Description**: `Trainer` saves every `save_frequency` episodes and not at the end of training, so the newest
-    checkpoint can be up to `save_frequency - 1` episodes older than the final weights. The navigation robustness
-    sweep (TESTING.md `ROB-2`) ran on such checkpoints. Save once more when training ends, unless that episode was
-    just saved.
-  - **Acceptance criteria**: after `train()`, the newest agent and trainer files hold the final weights and episode
-    count; `--resume` from them continues as from a periodic save; a run whose last episode is a multiple of
-    `save_frequency` writes no duplicate.
-  - **Out of scope**: changing `save_frequency` in committed configs.
-
 - [ ] **Parallel environments for the on-policy agents** (added by the maintainer, 2026-11-04)
   - **Description**: The `Trainer` steps one environment, one episode at a time. rl-zoo's A2C collects from 8
     environments in lockstep (64 transitions per update on Pendulum), and its PPO configs usually from several too;

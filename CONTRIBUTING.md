@@ -275,7 +275,10 @@ Training runs and the test suite write bulky outputs that must never be committe
   - `checkpoints/` (serialized NumPy agent weights)
   - `test_logs/` and `test_checkpoints/` (temporary test-suite outputs)
 - **Checkpoint format** — persist model weights as NumPy `.npz` files (or plain state dicts). Keep checkpoint frequency
-  (`save_frequency`) balanced to avoid excessive disk writes. `BaseAgent.save` writes one compressed `.npz`: what the
+  (`save_frequency`) balanced to avoid excessive disk writes; `train.py` also saves once after its last episode
+  (`Trainer(save_final=True)`, unless that episode was just saved), so the newest checkpoint holds the final weights.
+  Trainers built elsewhere (benchmark, record, robustness, export, scripts) do not unless they pass `save_final=True`.
+  `BaseAgent.save` writes one compressed `.npz`: what the
   agent's `_checkpoint_arrays` and `_extra_checkpoint_state` return, the state of every generator attribute (`rng_*`
   keys), and for DQN and DDPG the filled part of the replay buffer (`replay_*`), so a loaded agent continues exactly as
   the saved one would have. An agent built by `make_agent` adds its environment's observation settings

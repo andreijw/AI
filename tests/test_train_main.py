@@ -157,3 +157,13 @@ def test_output_dirs_default_to_the_working_directory():
         os.path.join(base, "pendulum", "ppo")
         for base in ("./checkpoints", "./logs", "./videos", "./plots")
     )
+
+
+def test_train_py_saves_a_final_checkpoint_at_the_last_episode(tmp_path, monkeypatch):
+    """4 episodes with save_frequency 10: no periodic save, yet the run ends with a checkpoint."""
+    run_main(["--config", minimal_config(tmp_path)], monkeypatch)
+    (folder,) = (tmp_path / "checkpoints").glob("*/*")
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "agent_episode_4.pt",
+        "trainer_episode_4.npz",
+    ]

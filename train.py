@@ -351,6 +351,7 @@ def main():
                 eval_env=eval_env,
                 eval_seed=eval_seed,
                 curriculum=curriculum,
+                save_final=True,
             )
             logger.info("Trainer created")
             if curriculum is not None:
