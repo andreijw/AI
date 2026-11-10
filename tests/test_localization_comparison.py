@@ -257,6 +257,7 @@ REPORT_META = {
         "reset_std": [0.2, 0.2, 0.1],
         "reset_window": 20,
         "nis_quantile": 0.999,
+        "count_off_map": True,
     },
     "machines": ["Linux-aarch64"],
     "blas_threads": ["OPENBLAS_NUM_THREADS=1"],
@@ -277,6 +278,8 @@ EKF reset: after 3 counting scans of at least 2 candidates, variance floor (0.2,
 squared, window 20 scans.
 EKF hold: an update that does not converge or has an NIS over the chi-square 0.999 quantile \
 keeps P.
+EKF off-map count: a scan with no candidate beam while the estimate is not in free space counts \
+toward the reset.
 
 ## Tracking from the noisy start
 
@@ -373,6 +376,7 @@ SETTINGS = {
         "reset_std": [0.2, 0.2, 0.1],
         "reset_window": 20,
         "nis_quantile": 0.999,
+        "count_off_map": True,
     },
     "mcl_settings": {"num_particles": 150, "covariance_scale": [1.0, 1.0, 1.0]},
 }
@@ -456,8 +460,12 @@ def test_check_records_rejects_mismatched_settings(change):
         check_records([_record(seed=1), _record(seed=2, **change)])
 
 
-# The EKF's settings as records written before the hold (2026-11-09) carry them.
-RESET_BEFORE_THE_HOLD = {k: v for k, v in SETTINGS["ekf_reset"].items() if k != "nis_quantile"}
+# The EKF's settings as records written before the hold (2026-11-09) carry them, and as records
+# written before the off-map count (2026-11-10).
+RESET_BEFORE_THE_HOLD = {
+    k: v for k, v in SETTINGS["ekf_reset"].items() if k not in {"nis_quantile", "count_off_map"}
+}
+RESET_BEFORE_OFF_MAP = {k: v for k, v in SETTINGS["ekf_reset"].items() if k != "count_off_map"}
 
 
 def test_check_records_ignores_the_ekf_settings_of_mcl_records():
@@ -470,12 +478,46 @@ def test_check_records_ignores_the_ekf_settings_of_mcl_records():
 
 def test_a_record_without_nis_quantile_ran_without_the_hold():
     """A missing ``nis_quantile`` reads as None (the hold off), which is what such a run did."""
-    off = {**SETTINGS["ekf_reset"], "nis_quantile": None}
+    off = {**SETTINGS["ekf_reset"], "nis_quantile": None, "count_off_map": False}
     check_records(
         [_record(seed=1, ekf_reset=RESET_BEFORE_THE_HOLD), _record(seed=2, ekf_reset=off)]
     )
     with pytest.raises(ValueError, match="settings"):
         check_records([_record(seed=1, ekf_reset=RESET_BEFORE_THE_HOLD), _record(seed=2)])
+
+
+def test_a_record_without_count_off_map_ran_without_it():
+    """A missing ``count_off_map`` reads as False (the off-map count off), as such a run was."""
+    off = {**SETTINGS["ekf_reset"], "count_off_map": False}
+    check_records([_record(seed=1, ekf_reset=RESET_BEFORE_OFF_MAP), _record(seed=2, ekf_reset=off)])
+
+
+def test_old_and_new_ekf_records_do_not_merge():
+    """EKF records from before the off-map count cannot be merged with records run with it: an
+    EST-3 rerun that left an old EKF record in ``--records`` would otherwise mix two filters."""
+    with pytest.raises(ValueError, match="EKF settings") as refused:
+        check_records([_record(seed=1, ekf_reset=RESET_BEFORE_OFF_MAP), _record(seed=2)])
+    message = str(refused.value)
+    assert "'count_off_map': False" in message and "'count_off_map': True" in message, message
+
+
+@pytest.mark.parametrize(
+    ("count_off_map", "text"),
+    [
+        (
+            True,
+            "EKF off-map count: a scan with no candidate beam while the estimate is not in free",
+        ),
+        (False, "EKF off-map count: off."),
+        ("missing", "EKF off-map count: off."),
+    ],
+)
+def test_format_markdown_names_the_off_map_count(count_off_map, text):
+    """Records written before the off-map count have no key; they ran without it."""
+    reset = {**REPORT_META["ekf_reset"], "count_off_map": count_off_map}
+    if count_off_map == "missing":
+        del reset["count_off_map"]
+    assert text in format_markdown([], {**REPORT_META, "ekf_reset": reset})
 
 
 def test_check_records_allows_each_sensor_its_own_mcl_scale():

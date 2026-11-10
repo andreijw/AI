@@ -41,6 +41,28 @@ Acrobot-v1) and
   - The experiment-runner skill now says queued runs import a frozen copy of `src`: PR 2's first runs were
     cancelled because they could have imported code under a mutation check. TESTING.md `TR-38`.
 
+### Fixed
+
+- **The EKF reports itself lost when its estimate leaves the map** (`fix/ekf-sparse-held-scans`; the State estimation
+  follow-up "The EKF's hold leaves sparse HC-SR04 scans quiet"; the maintainer's decisions of 2026-11-10):
+  - **The cause was not sparse held scans.** Held scans with one candidate explained 6 and 21 of about 2,100 and
+    2,400 confidently-wrong steps. About half of the HC-SR04's came from a lost estimate outside the arena's walls,
+    where every sonar is nonlinear or reads nothing, so no scan counted toward the reset; the estimate gets there
+    through held updates (56 to 74 %) or dead reckoning, and the silence predates the hold. The rise the 2026-11-09
+    entry reported (0.321 to 0.354, 0.308 to 0.341) is within seed noise (paired over 50 seeds, +0.033 with 95 %
+    intervals spanning 0); the hold's lidar gains stand.
+  - **The fix.** A scan with no candidate beam counts toward the reset when the estimate is off the map
+    (`EkfLocalizer(count_off_map=True)`, the default; `RangeMap.free(points, margin)` moved up from `ParticleMap`,
+    margin 0 so a robot tracked against a wall is not flagged). Designed on seeds 101 to 120 and 1 to 100, judged
+    once on 121 to 150, every pre-registered claim passed: HC-SR04 confidently wrong 0.162 and 0.190 (limit 0.25),
+    lidar 0.135 and 0.188 (limits 0.203 and 0.282), recoveries within 2 of 30, collapsed steps within 15 %.
+  - **Over all 50 seeds** (`docs/benchmarks/localization_results.md`, regenerated): HC-SR04 confidently wrong 0.354
+    to 0.163 and 0.341 to 0.189, lidar 0.123 to 0.124 and 0.201 to 0.165; kidnap recovery 12 to 28 % (was 14 to 30 %;
+    one run fewer on two rows). Every tracking run (`EST-1`, both with the default and `count_off_map=False`), every
+    MCL figure and `EST-4` are bit-identical.
+  - Supersedes the 2026-11-09 figures "14 to 30 %" recovery and "12.3 to 35.4 %" confidently wrong. TESTING.md
+    `EST-1`, `EST-3`, `EST-4`.
+
 ## 2026-11-09
 
 ### Added

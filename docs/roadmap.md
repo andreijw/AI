@@ -161,14 +161,6 @@ steps 3 to 5 are sketches to turn into full items when picked.
     within 1 to 3 scans, so `cluster_weight` ends near 1, and after a 1.5 rad bump the lidar EKF settled on the
     square room's 90° alias once its resets stopped. Options: keep several MCL clusters alive and report the
     ambiguity, prefer symmetry-breaking moves, or rely on distinctive features from the map.
-  - **The EKF's hold leaves sparse HC-SR04 scans quiet** (found by EKF robustness, CHANGELOG.md 2026-11-09; the
-    maintainer chose to ship and follow up). A held scan counts toward the reset only with at least
-    `min_candidates` (2) candidates, so an HC-SR04 filter held at the 0.2 m floor while 1 to 2 m off can go 20 scans
-    without reporting itself lost: its "confidently wrong" share after a kidnapping rose from 0.321 to 0.354 and
-    0.308 to 0.341, and at 30 % dropout its steps under 1 cm of uncertainty while lost rose from 1,278 to 1,405.
-    Options: count a held scan with one candidate (a rule change; rerun `EST-1` and the EKF part of `EST-3`, about
-    40 minutes), and make the confidently-wrong metric also require a small σ, so a filter sitting at the reset
-    floor is not counted as confident.
   - **Accepted limit: the 0.3 rad HC-SR04 heading bump** (the maintainer's decision, 2026-11-09). No reset fires:
     three of the four candidate sonars happen to agree with the wrong heading (one turns nonlinear, one is gated),
     so the scan looks consistent. Documented in `EkfLocalizer` and pinned by

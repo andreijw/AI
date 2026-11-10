@@ -86,6 +86,7 @@ class EkfReset:
     ``nis_quantile`` is the hold's setting rather than the reset's; it lives here because the
     records keep these settings as one ``ekf_reset`` entry, and a held scan counts toward the
     reset. A record written before the hold has no ``nis_quantile``: it ran without it (None).
+    Likewise a record written before the off-map count has no ``count_off_map`` (False).
     """
 
     reset_after: int | None = 3
@@ -93,6 +94,7 @@ class EkfReset:
     reset_std: tuple[float, float, float] = (0.2, 0.2, 0.1)
     reset_window: int = 20
     nis_quantile: float | None = 0.999
+    count_off_map: bool = True
 
 
 class InstrumentedLocalizer:
@@ -338,8 +340,9 @@ def _is_ekf(record: TrialRecord) -> bool:
 
 
 def _ekf_reset(record: TrialRecord) -> dict[str, Any]:
-    """The record's EKF settings; a record from before the hold ran without it."""
-    return {"nis_quantile": None, **record.meta["settings"]["ekf_reset"]}
+    """The record's EKF settings; a record from before the hold or the off-map count ran
+    without it."""
+    return {"nis_quantile": None, "count_off_map": False, **record.meta["settings"]["ekf_reset"]}
 
 
 def _ekf_settings(records: Sequence[TrialRecord]) -> dict[str, Any] | None:
@@ -822,6 +825,13 @@ def format_markdown(rows: Sequence[ComparisonRow], meta: Mapping[str, Any]) -> s
             f"EKF hold: an update that does not converge or has an NIS over the chi-square "
             f"{quantile:g} quantile keeps P."
         )
+    if reset.get("count_off_map", False):
+        off_map_text = (
+            "EKF off-map count: a scan with no candidate beam while the estimate is not in free "
+            "space counts toward the reset."
+        )
+    else:
+        off_map_text = "EKF off-map count: off."
     lines = [
         "# Localization comparison: EKF and MCL",
         "",
@@ -835,6 +845,7 @@ def format_markdown(rows: Sequence[ComparisonRow], meta: Mapping[str, Any]) -> s
         f"model_std {mcl_settings['model_std']:g}; covariance scale {scales}.",
         reset_text,
         hold_text,
+        off_map_text,
         "",
         "## Tracking from the noisy start",
         "",
