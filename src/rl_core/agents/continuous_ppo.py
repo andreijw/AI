@@ -11,10 +11,10 @@ from rl_core.utils.config_values import positive_int
 from .continuous_actor_critic import ContinuousActorCriticBase
 from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import episode_end, gae
-from .rollout import EpisodeRollout, RolloutColumns
+from .rollout import EpisodeRollout, RolloutColumns, RolloutWindows
 
 
-class ContinuousPPOAgent(ContinuousActorCriticBase):
+class ContinuousPPOAgent(RolloutWindows, ContinuousActorCriticBase):
     """
     Proximal Policy Optimization (PPO) agent with clipped objective for continuous control.
 
@@ -22,6 +22,9 @@ class ContinuousPPOAgent(ContinuousActorCriticBase):
     updates with probability ratio clipping:
       r_t(theta) = exp(log_prob(a_t|s_t) - old_log_prob(a_t|s_t))
       L_clip = -min(r_t * A_t, clip(r_t, 1-eps, 1+eps) * A_t)
+
+    With several training environments (``training.num_envs`` with ``update_every``) the rollouts
+    are whole windows of every environment's steps instead (:class:`RolloutWindows`).
 
     Each ``update`` call brings one episode from the Trainer. The agent buffers whole episodes
     until it holds at least ``rollout_steps`` transitions (1: train on every episode), then trains

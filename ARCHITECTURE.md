@@ -121,7 +121,8 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
    batch, with return-minus-value advantages. The Trainer calls `update` once per episode by default; PPO returns no
    metrics on the episodes it only stores. With `training.update_every: N` it calls `update` every N steps inside the
    episode instead, with the steps since the last call, and the rest with the step that ends the episode. Only an
-   agent that learns from a replay buffer, or the continuous Actor-Critic with `n_steps` equal to N, accepts that
+   agent that learns from a replay buffer, the continuous Actor-Critic with `n_steps` equal to N, or PPO with
+   several training environments (below), accepts that
    (`enable_mid_episode_updates(update_every)`, which `BaseAgent` refuses): DQN and DDPG take `MidEpisodeUpdates` from
    `rl_core/agents/mid_episode.py`, which counts gradient steps over every transition trained on, so
    `updates_per_step: 0.5` still means one step per two transitions with one transition per call. The PyTorch backends
@@ -489,9 +490,14 @@ With `training.num_envs` above 1, `train.py` and the benchmark also build the ex
 settings first) and one batched `step` of every playing one per vector step. The pool never resets an environment on
 its own, so a step's observation is always the true last one of a finished episode, and an environment that has
 finished draws nothing more. `InlinePool` steps them in this process; the interface is batched so that worker
-processes or a simulator stepping many robots as one array could implement it. Each finished episode goes to the
-agent's `update` as one batch and is recorded in finish order; the agent opts in through
-`BaseAgent.enable_parallel_envs`, which REINFORCE, both Actor-Critics and the random agents accept and PPO and the
+processes or a simulator stepping many robots as one array could implement it. Without `update_every` each finished
+episode goes to the agent's `update` as one batch; with it, every `update_every` vector steps the trainer hands
+every environment's steps of that window to `BaseAgent.update_segments` in one call (one segment per environment
+and episode, cut where the episode or the window ended). The continuous Actor-Critic makes one A2C step over the
+window; PPO (`rl_core.agents.rollout.RolloutWindows`) buffers the window and trains only at the end of a call, its
+rollouts whole windows. Episodes are recorded in finish order. The agent opts in through
+`BaseAgent.enable_parallel_envs(num_envs, update_every)`, which REINFORCE, both Actor-Critics, PPO (only with
+`update_every`, `rollout_steps` a multiple of `update_every × num_envs`) and the random agents accept and the
 replay-buffer agents refuse. The trainer file saves every environment's generators (environment i's under `env<i>_`
 keys) and `num_envs`, written only above 1; with one environment training uses the single-environment loop and
 writes the same files as before.

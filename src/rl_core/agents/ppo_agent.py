@@ -10,10 +10,10 @@ from rl_core.utils.config_values import optional_positive_int, positive_int
 from .actor_critic_base import ActorCriticBase
 from .optim import anneal_fraction, anneal_steps_from_config
 from .returns import episode_end, gae
-from .rollout import EpisodeRollout, RolloutColumns
+from .rollout import EpisodeRollout, RolloutColumns, RolloutWindows
 
 
-class PPOAgent(ActorCriticBase):
+class PPOAgent(RolloutWindows, ActorCriticBase):
     """
     PPO with the clipped objective (Schulman et al., 2017) for discrete actions.
 
@@ -31,6 +31,8 @@ class PPOAgent(ActorCriticBase):
     PPO and Stable-Baselines3 do; a terminated episode does not bootstrap. Steps still buffered
     when training stops are never trained on. Checkpoints hold the weights, the optimizer state,
     the annealing counter and the buffered steps (see :class:`EpisodeRollout`).
+    With several training environments (``training.num_envs`` with ``update_every``) the rollouts
+    are whole windows of every environment's steps instead (:class:`RolloutWindows`).
     Rollouts are whole episodes, so the counter can step past ``anneal_steps`` mid-rollout; the
     fraction is then held at zero.
 

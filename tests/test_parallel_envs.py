@@ -33,7 +33,7 @@ from tests.trainer_internals import force_lockstep
 EVAL_SEED = 900
 
 
-class _LenEnv:
+class ScriptedEnv:
     """Episodes of the given lengths in turn. The observation is ``[env_id, episode, step]``; the
     last step terminates (or, with ``truncate``, is cut by the time limit) and reports success when
     the episode number is even. Counts every ``step`` and ``reset`` it is asked for."""
@@ -84,7 +84,7 @@ class _Recorder(RandomAgent):
         return {}
 
 
-class _Logger:
+class MessageLogger:
     def __init__(self) -> None:
         self.messages: list[str] = []
 
@@ -99,14 +99,14 @@ class _Logger:
 
 
 def _scripted(lengths_per_env, agent=None, truncate=False, **training):
-    envs = [_LenEnv(i, lengths, truncate) for i, lengths in enumerate(lengths_per_env)]
+    envs = [ScriptedEnv(i, lengths, truncate) for i, lengths in enumerate(lengths_per_env)]
     config = {"eval_frequency": 1000, "save_frequency": 1000, "num_envs": len(envs), **training}
     trainer = Trainer(
         env=envs[0],
         agent=agent or _Recorder(),
         config=config,
-        logger=_Logger(),
-        eval_env=_LenEnv(99, [2]),
+        logger=MessageLogger(),
+        eval_env=ScriptedEnv(99, [2]),
         eval_seed=EVAL_SEED,
         extra_envs=envs[1:],
     )
@@ -121,39 +121,44 @@ def _scripted(lengths_per_env, agent=None, truncate=False, **training):
 @pytest.mark.parametrize("value", [True, 0, -1, "2", 2.5])
 def test_num_envs_is_read_strictly(value):
     with pytest.raises(ValueError, match="num_envs"):
-        Trainer(env=_LenEnv(0, [3]), agent=_Recorder(), config={"num_envs": value})
+        Trainer(env=ScriptedEnv(0, [3]), agent=_Recorder(), config={"num_envs": value})
 
 
 def test_the_number_of_environments_must_match_num_envs():
     with pytest.raises(ValueError, match="num_envs"):
-        Trainer(env=_LenEnv(0, [3]), agent=_Recorder(), config={"num_envs": 2})
+        Trainer(env=ScriptedEnv(0, [3]), agent=_Recorder(), config={"num_envs": 2})
     with pytest.raises(ValueError, match="num_envs"):
-        Trainer(env=_LenEnv(0, [3]), agent=_Recorder(), config={}, extra_envs=[_LenEnv(1, [3])])
+        Trainer(
+            env=ScriptedEnv(0, [3]), agent=_Recorder(), config={}, extra_envs=[ScriptedEnv(1, [3])]
+        )
 
 
 def test_several_environments_need_an_evaluation_environment():
     with pytest.raises(ValueError, match="eval_env"):
         Trainer(
-            env=_LenEnv(0, [3]),
+            env=ScriptedEnv(0, [3]),
             agent=_Recorder(),
             config={"num_envs": 2},
-            extra_envs=[_LenEnv(1, [3])],
+            extra_envs=[ScriptedEnv(1, [3])],
         )
 
 
-def test_update_every_is_refused_with_several_environments():
-    with pytest.raises(ValueError, match="update_every"):
-        _scripted([[3], [3]], update_every=2)
+def test_update_every_with_several_environments_is_the_agents_to_accept():
+    # Since one clock across environments (PR 2) the trainer takes it; the agent decides
+    # (tests/test_parallel_updates.py). The random agents accept, as with one environment.
+    trainer, _ = _scripted([[3], [3]], update_every=2, num_episodes=2)
+    trainer.train()
+    assert trainer.episode_lengths == [3, 3]
 
 
 def test_a_rendering_environment_is_refused_with_several_environments():
-    envs = [_LenEnv(0, [3], render_mode="rgb_array"), _LenEnv(1, [3])]
+    envs = [ScriptedEnv(0, [3], render_mode="rgb_array"), ScriptedEnv(1, [3])]
     with pytest.raises(ValueError, match="render"):
         Trainer(
             env=envs[0],
             agent=_Recorder(),
             config={"num_envs": 2},
-            eval_env=_LenEnv(9, [2]),
+            eval_env=ScriptedEnv(9, [2]),
             eval_seed=EVAL_SEED,
             extra_envs=envs[1:],
         )
@@ -311,8 +316,8 @@ def test_lockstep_at_one_environment_keeps_the_budget_rule(budget):
 
 
 def test_evaluation_and_saving_run_once_at_the_end_of_the_crossing_vector_step(tmp_path):
-    envs = [_LenEnv(i, [3]) for i in range(2)]
-    logger = _Logger()
+    envs = [ScriptedEnv(i, [3]) for i in range(2)]
+    logger = MessageLogger()
     trainer = Trainer(
         env=envs[0],
         agent=_Recorder(),
@@ -324,7 +329,7 @@ def test_evaluation_and_saving_run_once_at_the_end_of_the_crossing_vector_step(t
             "checkpoint_dir": str(tmp_path),
         },
         logger=logger,
-        eval_env=_LenEnv(9, [2]),
+        eval_env=ScriptedEnv(9, [2]),
         eval_seed=EVAL_SEED,
         extra_envs=envs[1:],
         save_final=True,
@@ -362,7 +367,7 @@ def _cartpole_run(tmp_path, num_envs, seed=1, resume=None, **training):
         env=envs[0],
         agent=agent,
         config=config,
-        logger=_Logger(),
+        logger=MessageLogger(),
         eval_env=eval_env,
         eval_seed=EVAL_SEED,
         extra_envs=envs[1:],
@@ -457,7 +462,7 @@ def test_each_environment_takes_the_curriculum_settings_before_each_of_its_reset
         env=envs[0],
         agent=ReinforceAgent(4, 2, {"seed": 2}),
         config={"num_envs": 2, "num_episodes": 6, "eval_frequency": 100, "save_frequency": 100},
-        logger=_Logger(),
+        logger=MessageLogger(),
         eval_env=CartPoleEnv(seed=9, obs_noise_std=0.05),
         eval_seed=EVAL_SEED,
         curriculum=curriculum_from_config({"curriculum": section}, envs[0]),
@@ -639,7 +644,7 @@ def test_a_non_finite_metric_names_the_episode_that_produced_it():
 
 def test_episodes_in_flight_at_a_checkpoint_are_dropped_on_resume(tmp_path):
     def build(lengths):
-        envs = [_LenEnv(i, n) for i, n in enumerate(lengths)]
+        envs = [ScriptedEnv(i, n) for i, n in enumerate(lengths)]
         trainer = Trainer(
             env=envs[0],
             agent=_Recorder(),
@@ -650,8 +655,8 @@ def test_episodes_in_flight_at_a_checkpoint_are_dropped_on_resume(tmp_path):
                 "save_frequency": 1,
                 "checkpoint_dir": str(tmp_path),
             },
-            logger=_Logger(),
-            eval_env=_LenEnv(9, [2]),
+            logger=MessageLogger(),
+            eval_env=ScriptedEnv(9, [2]),
             eval_seed=EVAL_SEED,
             extra_envs=envs[1:],
         )

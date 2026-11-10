@@ -296,8 +296,10 @@ calls `update` every N steps and once more at the episode's end, as SB3's `train
 policy updated moments before (CHANGELOG.md, 2026-10-30). The gradient steps owed are counted over all transitions,
 `floor((counted + n) * updates_per_step) - floor(counted * updates_per_step)`, so the total does not depend on how the
 episode is cut. DQN, DDPG, TD3 and SAC accept it (DQN needs `updates_per_step` and `exploration_steps`); REINFORCE and
-PPO train on whole episodes and refuse it; the continuous Actor-Critic accepts it only with `update_every` equal to its
-`n_steps` (true A2C).
+the discrete Actor-Critic train on whole episodes and refuse it; the continuous Actor-Critic accepts it only with
+`update_every` equal to its `n_steps` (true A2C); PPO accepts it only with several training environments
+(`training.num_envs`), where every rollout is whole windows of `update_every` steps from each (docs/usage.md,
+"Several training environments").
 
 ## Random agents (`RandomAgent`, `ContinuousRandomAgent`)
 

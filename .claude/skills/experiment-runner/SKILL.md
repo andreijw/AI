@@ -76,6 +76,10 @@ CartPole agent improves, so expect the full run to cost more than the linear est
   baseline curves they were to be compared with. Run it from a frozen worktree
   (`git worktree add --detach ~/rl-experiments/<item>/repo HEAD`) when you will edit `src/` meanwhile: each
   seed imports the code when it starts, so later seeds would otherwise train on half-written changes.
+  A queued job imports `src` when it starts, which can be long after `submit`: point its `PYTHONPATH` at a
+  frozen copy of `src` (a detached worktree, or `cp -r src ~/rl-experiments/<item>/snap/`), never at a
+  worktree a mutation check or an editor may change mid-run. On 2026-11-10 PR 2's first parallel-environment
+  runs started while `mutation_check.py` had a break applied in the worktree and had to be cancelled.
 - More than about half an hour in total, or anything that would occupy the machine while the maintainer is
   using it: say what you want to run and why, and ask.
 

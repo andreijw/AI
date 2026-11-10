@@ -3,7 +3,7 @@
 import importlib
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from types import MappingProxyType
 from typing import Any, ClassVar, final
@@ -446,35 +446,51 @@ class BaseAgent(ABC):
         :meth:`update` gets ``update_every`` steps of an episode at a time (fewer for its last
         part), and :meth:`end_episode` still follows its last part. An agent that learns from a
         replay buffer accepts (see ``mid_episode``), and so does the continuous Actor-Critic with
-        ``n_steps`` equal to ``update_every``. Only an agent whose updates have a fixed length, as
-        that one, needs to read ``update_every``; the others ignore it.
+        ``n_steps`` equal to ``update_every``, and PPO with several training environments
+        (``rollout.RolloutWindows``). Only an agent whose updates have a fixed length, as those,
+        needs to read ``update_every``; the others ignore it.
 
         Raises:
             ValueError: By default: this agent trains on whole episodes or rollouts.
         """
         raise ValueError(
             f"{type(self).__name__} trains on whole episodes: update_every needs an agent that "
-            "learns from a replay buffer (DQN, DDPG, TD3) or the continuous Actor-Critic with "
-            "n_steps"
+            "learns from a replay buffer (DQN, DDPG, TD3), the continuous Actor-Critic with "
+            "n_steps, or PPO with several environments"
         )
 
-    def enable_parallel_envs(self, num_envs: int) -> None:
+    def enable_parallel_envs(self, num_envs: int, update_every: int | None = None) -> None:
         """
-        Called by the Trainer before training when ``training.num_envs`` is above 1: from then on
-        :meth:`update` gets each environment's finished episode as its own batch, in the order the
-        episodes finish, while the other environments' episodes are still being played. An agent
-        that trains on each whole episode as it ends accepts (REINFORCE, both Actor-Critics, the
-        random agents). An agent whose updates assume the data were collected by the policy it
-        trains (PPO's ratio) or that learns from a replay buffer refuses until it is designed for
-        it.
+        Called by the Trainer before training when ``training.num_envs`` is above 1, before
+        :meth:`enable_mid_episode_updates`, with both settings.
+
+        Without ``update_every``, :meth:`update` then gets each environment's finished episode as
+        its own batch, in the order the episodes finish, while the other environments' episodes
+        are still being played: REINFORCE, both Actor-Critics and the random agents accept. With
+        it, :meth:`update_segments` gets every environment's steps of each window of
+        ``update_every`` vector steps in one call: the continuous Actor-Critic (one A2C step) and
+        PPO (whole windows per rollout) accept. An agent that learns from a replay buffer refuses
+        until it is designed for it.
 
         Raises:
             ValueError: By default.
         """
         raise ValueError(
             f"{type(self).__name__} does not train from several environments yet: num_envs above "
-            "1 is for REINFORCE, the Actor-Critics and the random agents"
+            "1 is for REINFORCE, the Actor-Critics, PPO (with update_every) and the random agents"
         )
+
+    def update_segments(self, segments: Sequence[Any]) -> list[dict[str, float]]:
+        """
+        Train on one window of several environments' steps (``training.num_envs`` with
+        ``update_every``): ``segments`` are batches as :meth:`update` takes them, each a run of one
+        environment's steps that ends where its episode or the window ended, in environment
+        order. By default :meth:`update` on each in turn.
+
+        Returns:
+            The metrics of each update made, in order.
+        """
+        return [self.update(segment) for segment in segments]
 
     @abstractmethod
     def update(self, batch: Any) -> dict[str, float]:

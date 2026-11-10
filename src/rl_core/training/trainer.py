@@ -47,6 +47,11 @@ class EpisodeResult:
     success: bool | None
 
 
+# One step as the trainer keeps it: (observation, action, reward, next observation, done,
+# terminated, raw observation, raw next observation), the observations as normalised for the agent.
+_Transition = tuple[Any, Any, Any, Any, bool, bool, Any, Any]
+
+
 @dataclass
 class _Playing:
     """An episode in progress in one of several training environments."""
@@ -56,7 +61,9 @@ class _Playing:
     reward: float = 0.0
     length: int = 0
     success: bool | None = None
-    transitions: list[tuple[Any, Any, Any, Any, bool, bool, Any, Any]] = field(default_factory=list)
+    # Steps not yet handed to the agent: the episode so far, or with update_every its steps
+    # since the last window.
+    transitions: list[_Transition] = field(default_factory=list)
 
 
 def success_rate(successes: Sequence[bool | None]) -> float | None:
@@ -184,10 +191,12 @@ class Trainer:
                     stacklevel=2,
                 )
         self.total_steps_trained = 0
-        self._check_parallel_envs(env, extra_envs, agent, eval_env)
         # Hand the agent the episode so far every update_every steps instead of the whole episode
-        # at its end (None). Validated here, before the agent, which may refuse it, is told.
+        # at its end (None); with several environments, every environment's steps of each window
+        # of update_every vector steps at once. Validated here, before the agent, which may refuse
+        # it, is told: of the environments first, then of update_every.
         self.update_every: int | None = optional_positive_int(config, "update_every")
+        self._check_parallel_envs(env, extra_envs, agent, eval_env)
         if self.update_every is not None:
             agent.enable_mid_episode_updates(self.update_every)
 
@@ -252,12 +261,7 @@ class Trainer:
                 f"num_envs {self.num_envs} cannot render or record training: environment(s) "
                 f"{rendering} have a render_mode; train with one environment to watch it"
             )
-        if self.config.get("update_every") is not None:
-            raise ValueError(
-                f"update_every is not supported with num_envs {self.num_envs} yet: chunks of "
-                "several environments' episodes need one clock across them"
-            )
-        agent.enable_parallel_envs(self.num_envs)
+        agent.enable_parallel_envs(self.num_envs, self.update_every)
 
     def _get_int_config(self, name: str, default: int) -> int:
         """Get an integer config value without lossy coercion."""
@@ -508,15 +512,35 @@ class Trainer:
 
         Each vector step starts an episode in every idle environment the budget allows (each
         given the curriculum's settings first), chooses every playing environment's action in
-        environment order, and steps them all. An episode that ends (terminated, truncated, or cut
-        at ``max_steps_per_episode``) goes to the agent as one batch, then is recorded, in
-        environment order; evaluation and a checkpoint follow once, at the end of a vector step in
-        which their frequency was crossed, named by the episodes recorded then. Once the budget is
-        met no episode starts, and those in flight finish and are trained on. With one environment
-        this plays exactly the episodes, updates and records of the single-environment loop.
+        environment order, and steps them all. Without ``update_every`` an episode that ends
+        (terminated, truncated, or cut at ``max_steps_per_episode``) goes to the agent as one
+        batch. With it, every ``update_every`` vector steps the agent gets every environment's
+        steps of that window in one :meth:`BaseAgent.update_segments` call: per environment, the
+        end of an episode that finished in the window, then the episode still playing, cut at the
+        window's end (so it bootstraps); what is left when training ends goes in a last call.
+        Finished episodes are then recorded in environment order, and evaluation and a checkpoint
+        follow once, at the end of a vector step in which their frequency was crossed, named by the
+        episodes recorded then. Once the budget is met no episode starts, and those in flight
+        finish and are trained on.
+
+        With ``update_every``, an episode that ends off a window boundary is recorded in the vector
+        step it ends, before its last steps (up to ``update_every - 1``) are trained on at the
+        window's end: an evaluation or checkpoint of that vector step sees the agent before them,
+        and a resume from such a checkpoint never trains on them. The single-environment loop
+        updates before it records.
+
+        A non-finite update metric is attributed to ``current_episode``: without ``update_every``
+        the episode the update was on; with it, the next episode to be recorded, since a window
+        mixes several. With one environment this plays exactly the episodes, updates and records of
+        the single-environment loop, and with ``update_every`` too while every episode's length is
+        a multiple of it (the single loop restarts its chunks with each episode).
         """
         pool = InlinePool(self.envs)
         playing: dict[int, _Playing] = {}
+        # With update_every: the segments of episodes that ended in this window, by environment,
+        # the vector steps the window has run, and how many episodes ended in it.
+        closed: dict[int, list[list[_Transition]]] = {}
+        window_steps = episodes_ended = 0
         while True:
             self.current_episode = len(self.episode_rewards) + 1
             starting: list[int] = []
@@ -532,6 +556,8 @@ class Trainer:
                     obs = self.agent.normalize_observation(raw, training=True)
                     playing[index] = _Playing(obs, raw)
             if not playing:
+                if closed:
+                    self._hand_over_window(playing, closed, episodes_ended)
                 self.current_episode = len(self.episode_rewards)
                 return
 
@@ -564,12 +590,22 @@ class Trainer:
                     ended.append(index)
 
             before = len(self.episode_rewards)
-            for position, index in enumerate(ended):
-                # The number this episode is recorded as, so a non-finite update metric names it
-                # (first_non_finite_episode) even when several episodes end in one vector step.
-                self.current_episode = before + position + 1
-                self._update_agent(playing[index].transitions)
-                self.agent.end_episode()
+            if self.update_every is None:
+                for position, index in enumerate(ended):
+                    # The number this episode is recorded as, so a non-finite update metric names
+                    # it (first_non_finite_episode) even when several end in one vector step.
+                    self.current_episode = before + position + 1
+                    self._update_agent(playing[index].transitions)
+                    self.agent.end_episode()
+            else:
+                for index in ended:
+                    closed.setdefault(index, []).append(playing[index].transitions)
+                    playing[index].transitions = []
+                episodes_ended += len(ended)
+                window_steps += 1
+                if window_steps == self.update_every:
+                    self._hand_over_window(playing, closed, episodes_ended)
+                    window_steps = episodes_ended = 0
             for index in ended:
                 episode = playing.pop(index)
                 self._record_episode(EpisodeResult(episode.reward, episode.length, episode.success))
@@ -578,6 +614,28 @@ class Trainer:
                 self._evaluate_and_log(after)
             if after // self.save_frequency > before // self.save_frequency:
                 self._save_checkpoint(after)
+
+    def _hand_over_window(
+        self,
+        playing: dict[int, _Playing],
+        closed: dict[int, list[list[_Transition]]],
+        episodes_ended: int,
+    ) -> None:
+        """Give the agent one window: per environment in order, the segments of its episodes that
+        ended in the window, then that of the episode it is playing; then ``end_episode`` once for
+        each episode that ended. Empties the window."""
+        segments = []
+        for index in range(self.num_envs):
+            segments += [self._batch(transitions) for transitions in closed.get(index, [])]
+            if index in playing and playing[index].transitions:
+                segments.append(self._batch(playing[index].transitions))
+                playing[index].transitions = []
+        closed.clear()
+        if segments:
+            for metrics in self.agent.update_segments(segments):
+                self._record_update_metrics(metrics)
+        for _ in range(episodes_ended):
+            self.agent.end_episode()
 
     def _save_final_checkpoint(self, start: int) -> None:
         """Save the last episode when ``save_final`` is set, this call trained (``start`` is the
@@ -641,7 +699,7 @@ class Trainer:
         # Transitions not yet handed to the agent: the whole episode, or with update_every the
         # steps since the last update. Each keeps the raw observations too, for an agent whose
         # replay buffer stores them and normalises when it samples.
-        transitions: list[tuple[Any, Any, Any, Any, bool, bool, Any, Any]] = []
+        transitions: list[_Transition] = []
         update_every = self.update_every if training else None
 
         done = False
@@ -670,14 +728,16 @@ class Trainer:
 
         return EpisodeResult(episode_reward, episode_length, success)
 
-    def _update_agent(
-        self, transitions: list[tuple[Any, Any, Any, Any, bool, bool, Any, Any]]
-    ) -> None:
+    def _update_agent(self, transitions: list[_Transition]) -> None:
+        """Hand the agent these transitions, in order, as one batch (:meth:`_batch`), and keep its
+        metrics."""
+        self._record_update_metrics(self.agent.update(self._batch(transitions)))
+
+    def _batch(self, transitions: list[_Transition]) -> dict[str, np.ndarray]:
         """
-        Hand the agent these transitions, in order, as one batch, and keep its metrics. A
-        normalising agent's batch also carries ``raw_observations`` and ``raw_next_observations``,
-        the environment's observations before normalisation, which a replay buffer stores; an
-        on-policy agent ignores them.
+        These transitions, in order, as one batch. A normalising agent's batch also carries
+        ``raw_observations`` and ``raw_next_observations``, the environment's observations before
+        normalisation, which a replay buffer stores; an on-policy agent ignores them.
         """
         (observations, actions, rewards, next_observations, dones, terminateds, raws,
          raw_nexts) = zip(*transitions, strict=True)  # fmt: skip
@@ -692,7 +752,7 @@ class Trainer:
         if self.agent.observation_normalizer is not None:
             batch["raw_observations"] = np.array(raws)
             batch["raw_next_observations"] = np.array(raw_nexts)
-        self._record_update_metrics(self.agent.update(batch))
+        return batch
 
     def evaluate(self, num_episodes: int = 10) -> dict[str, float]:
         """

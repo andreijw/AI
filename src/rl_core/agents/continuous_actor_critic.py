@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar, NamedTuple
 
 import numpy as np
@@ -412,9 +412,11 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
                 "each call is then exactly one chunk"
             )
 
-    def enable_parallel_envs(self, num_envs: int) -> None:
-        """Accept several environments: each update is one finished episode, replayed in ``n_steps``
-        chunks as with one."""
+    def enable_parallel_envs(self, num_envs: int, update_every: int | None = None) -> None:
+        """Accept several environments. Without ``update_every`` each update is one finished
+        episode, replayed in ``n_steps`` chunks as with one; with it (equal to ``n_steps``, which
+        :meth:`enable_mid_episode_updates` checks) each window of every environment's steps is one
+        A2C step (:meth:`update_segments`)."""
         return None
 
     def update(self, trajectory: Any) -> dict[str, float]:
@@ -475,6 +477,56 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
                     self._train_step(states[start:end], actions[start:end], returns, advantages)
                 )
 
+        return self._update_metrics(chunks, saturation, first_fraction)
+
+    def update_segments(self, segments: Sequence[Any]) -> list[dict[str, float]]:
+        """
+        One A2C step on a window of several environments' steps (``training.num_envs`` with
+        ``update_every`` equal to ``n_steps``): every segment's GAE targets first, all from the
+        current weights, each bootstrapped from the value of its own last next state unless its
+        last step terminated; then, with ``normalize_advantages``, advantages normalised over the
+        whole window; then one optimizer step on the mean loss over every transition, as SB3's A2C
+        trains on ``n_steps x n_envs``. One segment trains exactly as :meth:`update` does.
+
+        Without ``n_steps`` (Monte Carlo) the segments are whole episodes, each one update.
+
+        Raises:
+            ValueError: If a segment is longer than ``n_steps``.
+        """
+        if self.n_steps == 0:
+            return super().update_segments(segments)
+        parsed = [p for p in (self._parse_episode(segment) for segment in segments) if p]
+        if not parsed:
+            return []
+        first_fraction = anneal_fraction(self._steps_trained, self.anneal_steps)
+        columns: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
+        for states, actions, rewards, next_obs, terminated_last in parsed:
+            n = len(rewards)
+            if n > self.n_steps:
+                raise ValueError(f"a segment holds {n} steps, more than n_steps ({self.n_steps})")
+            bootstrap_obs = None if next_obs is None else next_obs[n - 1]
+            terminal = terminated_last or bootstrap_obs is None
+            advantages, returns = self._chunk_targets(
+                states, rewards * self.reward_scale, bootstrap_obs, terminal
+            )
+            columns.append((states, actions, advantages, returns))
+        states, actions, advantages, returns = (
+            np.concatenate(c) for c in zip(*columns, strict=True)
+        )
+        saturation: float | None = None
+        if self.bounded_mean:
+            _, _, _, hidden = self._forward(states)
+            _, _, u = self._mean(hidden)
+            saturation = None if u is None else float(np.mean(np.abs(u) > 0.99))
+        if self.normalize_advantages and len(advantages) > 1:
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        step = self._train_step(states, actions, returns, advantages)
+        return [self._update_metrics([step], saturation, first_fraction)]
+
+    def _update_metrics(
+        self, chunks: list[dict[str, float]], saturation: float | None, first_fraction: float
+    ) -> dict[str, float]:
+        """The metrics of one update call: means over its optimizer steps' loss components."""
         metrics = {
             "loss": float(np.mean([c["total"] for c in chunks])),
             "policy_loss": float(np.mean([c["policy"] for c in chunks])),

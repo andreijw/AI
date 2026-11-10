@@ -12,6 +12,35 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-10
+
+### Added
+
+- **Several training environments on one update clock, and PPO with several environments**
+  (`feature/parallel-envs-one-clock`; PR 2, the last of the roadmap item "Parallel environments for the on-policy
+  agents", which is now complete; stacked on PR 1):
+  - **`update_every` with `num_envs`**: every `update_every` vector steps the trainer hands the agent one window
+    holding each environment's steps (`update_segments`): segments of episodes that ended first, then the open one
+    cut at the boundary, which bootstraps. The continuous Actor-Critic takes one A2C step over the window (targets
+    from the same weights, each segment bootstrapped from its own next state, advantages normalised jointly,
+    gradient clipping over the window); one segment trains exactly as `update` does. PPO, both kinds, accepts
+    several environments only with this layout (`rollout_steps` a multiple of `update_every × num_envs`, trained
+    once per full rollout, so the stored old log-probabilities stay those of collection); whole-episode PPO at
+    N > 1 stays refused. With `update_every`, an evaluation or checkpoint can come before an episode's last steps
+    are trained on. Asynchronous environments are deferred until a measured speedup.
+  - **N = 1 unchanged**: the trainer golden's three arms, now including the Pendulum Actor-Critic with
+    `update_every: 8` through the new collector, match bit for bit.
+  - **CartPole PPO, 4 environments × 64 steps** (seeds 1 to 5, 200,000 steps; claim fixed beforehand): solves and
+    holds 475 on 5 of 5, 87,165 steps to solve on average against 79,556 with one environment.
+  - **Pendulum continuous Actor-Critic, 8 environments × 8 steps** (rl-zoo's A2C layout; seeds 1 to 5 paired
+    against the committed config, 1,000,000 steps): final 100-episode training averages -244.1 against -282.7,
+    better on all 5 seeds (by 7.2 to 63.6), so it wins under the project's rule; no seed holds -200; greedy
+    evaluation -184.0 ± 42.7 against -170.0 ± 25.9; about 260 s a seed against 329 s. A second arm at
+    `learning_rate: 0.002` (measurement only): -264.7, one seed 21.3 below the baseline. The committed config is
+    unchanged; adopting the layout is the maintainer's decision (Code Health item).
+  - The experiment-runner skill now says queued runs import a frozen copy of `src`: PR 2's first runs were
+    cancelled because they could have imported code under a mutation check. TESTING.md `TR-38`.
+
 ## 2026-11-09
 
 ### Added
