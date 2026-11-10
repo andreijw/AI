@@ -458,6 +458,24 @@ class BaseAgent(ABC):
             "n_steps"
         )
 
+    def enable_parallel_envs(self, num_envs: int) -> None:
+        """
+        Called by the Trainer before training when ``training.num_envs`` is above 1: from then on
+        :meth:`update` gets each environment's finished episode as its own batch, in the order the
+        episodes finish, while the other environments' episodes are still being played. An agent
+        that trains on each whole episode as it ends accepts (REINFORCE, both Actor-Critics, the
+        random agents). An agent whose updates assume the data were collected by the policy it
+        trains (PPO's ratio) or that learns from a replay buffer refuses until it is designed for
+        it.
+
+        Raises:
+            ValueError: By default.
+        """
+        raise ValueError(
+            f"{type(self).__name__} does not train from several environments yet: num_envs above "
+            "1 is for REINFORCE, the Actor-Critics and the random agents"
+        )
+
     @abstractmethod
     def update(self, batch: Any) -> dict[str, float]:
         """

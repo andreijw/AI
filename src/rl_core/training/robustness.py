@@ -25,6 +25,7 @@ from ..agents.base_agent import BaseAgent
 from ..challenges.challenge import BenchmarkChallenge
 from .checkpoints import read_trainer_state, trainer_state_path
 from .curriculum import CurriculumScheduler, interpolate, require_schedulable
+from .parallel import single_env_training
 from .trainer import Trainer, known_successes, success_rate
 
 _RANDOMIZATION = "domain_randomization"
@@ -294,7 +295,7 @@ def robustness_rows(
             trainer = Trainer(
                 agent=agent,
                 env=env,
-                config=config["training"],
+                config=single_env_training(config["training"]),
                 eval_env=env,
                 eval_seed=eval_seed,
             )

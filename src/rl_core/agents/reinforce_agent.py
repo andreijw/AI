@@ -168,6 +168,10 @@ class ReinforceAgent(BaseAgent):
         probs, _ = self._policy(observation)
         return self._select_action_from_probs(probs, training)
 
+    def enable_parallel_envs(self, num_envs: int) -> None:
+        """Accept several environments: each update is one finished episode, as with one."""
+        return None
+
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         Update policy parameters using the REINFORCE gradient estimate.

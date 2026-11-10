@@ -16,6 +16,25 @@ Acrobot-v1) and
 
 ### Added
 
+- **Several training environments for REINFORCE and the Actor-Critics** (`feature/parallel-envs-n-envs`; PR 1 of the
+  roadmap item "Parallel environments for the on-policy agents", stacked on PR 0):
+  - **`training.num_envs: N`** (default 1) steps N copies of the training environment in lockstep through an
+    in-process batched pool (`rl_core/training/parallel.py`): select every action, then step every environment. Each
+    finished episode is handed to the agent as its own batch, so a time-limit or trainer cut still bootstraps and a
+    termination does not. Environment 0 keeps the run's seed; the others get independent `SeedSequence` streams
+    (`seeding.env_seed`, not `seed + i`). Evaluation and checkpoints fire once per vector step, named by the
+    episodes recorded; a step budget lets running episodes finish (at most (N−1) × the longest episode over).
+  - **Refused at N > 1**: PPO and the replay-buffer agents (an `enable_parallel_envs` hook that agents opt into),
+    `update_every`, rendering and video, and resuming with a different N. A resume at N > 1 is reproducible but drops
+    the episodes in flight.
+  - **N = 1 is unchanged**: no key and `num_envs: 1` run the old loop, and the new collector forced to one
+    environment matches the trainer golden bit for bit (its third arm); both one-environment benchmark reruns
+    reproduce `docs/benchmarks/cartpole_results.md` exactly.
+  - **CartPole, seeds 1 to 5, 500,000 steps** (pre-registered: no worse than one environment): REINFORCE solves 5 of
+    5 with 4 environments against 4 of 5 (steps to solve 320,676 against 318,029); the Actor-Critic 5 of 5 against 5
+    of 5, holding 475 on 5 against 4 and solving in 272,136 steps against 374,332. Wall time per seed unchanged.
+    TESTING.md `TR-37`. No committed config changes.
+
 - **A golden of seeded training runs** (`feature/parallel-envs`; PR 0 of the roadmap item "Parallel environments for
   the on-policy agents"): `tests/test_trainer_golden.py` runs `Trainer.train()` on 13 tiny seeded cases (REINFORCE,
   Actor-Critic, PPO and DQN in both action kinds where they exist; linear and reward-threshold curricula; observation

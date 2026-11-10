@@ -51,7 +51,8 @@ To optimize token usage and context window limits:
     a table of each parameter's bounds.
   * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`), the checkpoint's trainer file
     (`checkpoints.py`), curriculum scheduling of the training environment's noise and randomization
-    (`curriculum.py`) and the robustness benchmark's perturbations and greedy rows (`robustness.py`).
+    (`curriculum.py`), the pool of training environments `training.num_envs` steps in lockstep
+    (`parallel.py`) and the robustness benchmark's perturbations and greedy rows (`robustness.py`).
   * `src/rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
     settings that agents, trainer and environments share (`config_values.py`), structured logging (`logger.py`),
     video recording (`video.py`), visualization helpers (`visualization.py`, imported directly: the package does

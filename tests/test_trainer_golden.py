@@ -16,10 +16,13 @@ truncation and a ``max_steps_per_episode`` cut, evaluation with and without an e
 advance on their own (linear and reward_threshold), an environment that reports ``is_success``, and DQN
 with and without ``update_every`` (the loop is shared).
 
-Arms: each case runs with no ``num_envs`` key and with ``num_envs: 1``; both must match the one
-recording. Before the key existed the trainer ignored it, so the second arm only pins that it still
-means "today's training". The parallel-environments work adds a third arm: the lockstep collector
-forced at one environment (``tests/trainer_internals.py``).
+Arms: each case runs with no ``num_envs`` key, with ``num_envs: 1``, and with ``num_envs: 1`` through
+the lockstep collector that trains several environments, forced at one (``force_lockstep`` in
+tests/trainer_internals.py); all three must match the one recording, so the new loop is held to
+today's training wherever the two can agree. The lockstep arm skips the cases with ``update_every``,
+which that collector refuses until its chunks follow one clock across environments; when they do,
+only a case whose episode lengths are all multiples of ``update_every`` can join (the Pendulum one,
+24 = 3 x 8, not DQN's on CartPole).
 
 Numbers agree to a relative 1e-12, as in tests/test_dqn_golden.py: the file was recorded on one machine
 (aarch64, OpenBLAS) and CI checks it on x86, where matrix products can round differently in the last
@@ -58,6 +61,7 @@ from rl_core.training import Trainer
 from rl_core.training.curriculum import curriculum_from_config
 from rl_navigation.environments.navigation_env import NavigationEnv
 from rl_pendulum.environments.pendulum_env import PendulumEnv
+from tests.trainer_internals import force_lockstep
 
 GOLDEN = Path(__file__).parent / "data" / "trainer_training.npz"
 RECORD = os.environ.get("RECORD_TRAINER_GOLDEN") == "1"
@@ -68,7 +72,12 @@ PENDULUM_STEPS = 24  # 3 x 8: the update_every case's chunks line up with its ep
 TORQUE = {"action_low": -2.0, "action_high": 2.0}
 
 # The training-config arms every case runs under. "num_envs: 1" must mean today's training.
-ARMS: dict[str, dict[str, Any]] = {"no-key": {}, "num_envs-1": {"num_envs": 1}}
+ARMS: dict[str, dict[str, Any]] = {
+    "no-key": {},
+    "num_envs-1": {"num_envs": 1},
+    "lockstep-1": {"num_envs": 1},  # and the lockstep collector forced (force_lockstep)
+}
+LOCKSTEP_ARM = "lockstep-1"
 
 
 @dataclass(frozen=True)
@@ -325,6 +334,8 @@ def _outputs(name: str, arm: str, tmp_path: Path) -> dict[str, np.ndarray]:
             curriculum=curriculum,
             save_final=case.save_final,
         )
+        if arm == LOCKSTEP_ARM:
+            force_lockstep(trainer)
         stats = trainer.train()
         env_state_end = env.rng_state()
         final_agent = tmp_path / "final_agent.pt"
@@ -372,8 +383,18 @@ def _recorded(name: str) -> dict[str, np.ndarray]:
         return {k[len(prefix) :]: golden[k] for k in golden.files if k.startswith(prefix)}
 
 
-@pytest.mark.parametrize("arm", list(ARMS))
-@pytest.mark.parametrize("name", list(CASES))
+def _pairs() -> list[tuple[str, str]]:
+    """Every case under every arm, except the lockstep arm for a case with ``update_every``: the
+    lockstep collector refuses it until it counts chunks on one clock across environments."""
+    return [
+        (name, arm)
+        for name, case in CASES.items()
+        for arm in ARMS
+        if not (arm == LOCKSTEP_ARM and "update_every" in case.training)
+    ]
+
+
+@pytest.mark.parametrize(("name", "arm"), _pairs())
 def test_training_matches_the_recorded_arrays(name, arm, tmp_path):
     outputs = _outputs(name, arm, tmp_path)
     if RECORD:

@@ -412,6 +412,11 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
                 "each call is then exactly one chunk"
             )
 
+    def enable_parallel_envs(self, num_envs: int) -> None:
+        """Accept several environments: each update is one finished episode, replayed in ``n_steps``
+        chunks as with one."""
+        return None
+
     def update(self, trajectory: Any) -> dict[str, float]:
         """
         Update policy and value networks on one episode, or with ``training.update_every`` on one

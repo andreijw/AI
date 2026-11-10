@@ -75,6 +75,9 @@ class ContinuousRandomAgent(BaseAgent):
     def enable_mid_episode_updates(self, update_every: int) -> None:
         """Accepted: it learns nothing, so a benchmark floor can share a config with update_every."""
 
+    def enable_parallel_envs(self, num_envs: int) -> None:
+        """Accepted: it learns nothing, so a benchmark floor can share a config with num_envs."""
+
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         No-op update for random agent.

@@ -5,7 +5,7 @@ import math
 import os
 import warnings
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import gymnasium as gym
@@ -23,6 +23,7 @@ from .checkpoints import (
     write_atomically,
 )
 from .curriculum import CurriculumScheduler, require_schedulable
+from .parallel import InlinePool, num_envs_of, rng_states, split_rng_states
 
 _logger = logging.getLogger(__name__)
 
@@ -44,6 +45,18 @@ class EpisodeResult:
     reward: float
     length: int
     success: bool | None
+
+
+@dataclass
+class _Playing:
+    """An episode in progress in one of several training environments."""
+
+    observation: Any  # as normalised for the agent
+    raw_observation: Any
+    reward: float = 0.0
+    length: int = 0
+    success: bool | None = None
+    transitions: list[tuple[Any, Any, Any, Any, bool, bool, Any, Any]] = field(default_factory=list)
 
 
 def success_rate(successes: Sequence[bool | None]) -> float | None:
@@ -84,6 +97,7 @@ class Trainer:
         curriculum: CurriculumScheduler | None = None,
         *,
         save_final: bool = False,
+        extra_envs: Sequence[Any] = (),
     ):
         """
         Initialize the trainer.
@@ -106,11 +120,18 @@ class Trainer:
                 ``train``). Only ``train.py`` asks for it; the benchmark, ``record.py`` and other
                 callers of a config that names a ``checkpoint_dir`` do not write checkpoints they
                 never asked for.
+            extra_envs: The training environments after ``env`` when ``training.num_envs`` is
+                above 1, built like it (``BenchmarkChallenge.make_extra_envs``). They are stepped
+                in lockstep with it, each episode handed to the agent and recorded as it finishes
+                (see :meth:`train`).
 
         Raises:
             ValueError: If ``eval_env`` is given without a non-negative integer ``eval_seed``, or
                 ``curriculum`` without ``eval_env`` or with an ``env`` that cannot change its
-                settings between episodes.
+                settings between episodes; if ``training.num_envs`` is not a positive integer or
+                is not the number of training environments given; or, with several, if there is
+                no ``eval_env``, an environment renders, ``update_every`` is set, or the agent
+                refuses them (``enable_parallel_envs``).
         """
         if eval_env is not None and (
             eval_seed is None
@@ -126,7 +147,8 @@ class Trainer:
                 raise ValueError(
                     "A curriculum needs an evaluation environment built at the target settings"
                 )
-            require_schedulable(env)
+            for training_env in (env, *extra_envs):
+                require_schedulable(training_env)
         self.curriculum = curriculum
         self.env = env
         self.eval_env = eval_env
@@ -162,6 +184,7 @@ class Trainer:
                     stacklevel=2,
                 )
         self.total_steps_trained = 0
+        self._check_parallel_envs(env, extra_envs, agent, eval_env)
         # Hand the agent the episode so far every update_every steps instead of the whole episode
         # at its end (None). Validated here, before the agent, which may refuse it, is told.
         self.update_every: int | None = optional_positive_int(config, "update_every")
@@ -200,6 +223,41 @@ class Trainer:
         self._non_finite_metrics_seen: set[str] = set()
         # 1-based training episode in which an update metric first stopped being finite.
         self.first_non_finite_episode: int | None = None
+        # The episode count of the last checkpoint this trainer saved.
+        self._last_saved_episode: int | None = None
+
+    def _check_parallel_envs(
+        self, env: Any, extra_envs: Sequence[Any], agent: BaseAgent, eval_env: Any
+    ) -> None:
+        """Read ``num_envs``, keep the training environments, and refuse what several cannot do."""
+        self.num_envs = num_envs_of(self.config)
+        self.envs: tuple[Any, ...] = (env, *extra_envs)
+        if len(self.envs) != self.num_envs:
+            raise ValueError(
+                f"training.num_envs is {self.num_envs}, but the trainer was given "
+                f"{len(self.envs)} training environment(s)"
+            )
+        # Several environments train through the lockstep collector; tests force it for one.
+        self._lockstep = self.num_envs > 1
+        if self.num_envs == 1:
+            return
+        if eval_env is None:
+            raise ValueError(
+                f"num_envs {self.num_envs} needs an eval_env: evaluating on a training "
+                "environment would cut the episode it is playing"
+            )
+        rendering = [i for i, e in enumerate(self.envs) if getattr(e, "render_mode", None)]
+        if rendering:
+            raise ValueError(
+                f"num_envs {self.num_envs} cannot render or record training: environment(s) "
+                f"{rendering} have a render_mode; train with one environment to watch it"
+            )
+        if self.config.get("update_every") is not None:
+            raise ValueError(
+                f"update_every is not supported with num_envs {self.num_envs} yet: chunks of "
+                "several environments' episodes need one clock across them"
+            )
+        agent.enable_parallel_envs(self.num_envs)
 
     def _get_int_config(self, name: str, default: int) -> int:
         """Get an integer config value without lossy coercion."""
@@ -372,53 +430,16 @@ class Trainer:
                 f"The budget is already met after {len(self.episode_rewards)} episodes; "
                 "nothing to train."
             )
-        while self._budget_left(len(self.episode_rewards)):
+        if self._lockstep:
+            self._train_lockstep()
+        while not self._lockstep and self._budget_left(len(self.episode_rewards)):
             episode = len(self.episode_rewards)  # done so far, restored by resume()
             self.current_episode = episode + 1
             if self.curriculum is not None:
                 self._start_curriculum_episode()
-            played = self._run_episode(training=True)
-            episode_reward, episode_length = played.reward, played.length
-
-            self.episode_rewards.append(episode_reward)
-            self.episode_lengths.append(episode_length)
-            self.episode_successes.append(played.success)
-            self.total_steps_trained += episode_length
-            if self.curriculum is not None and self.curriculum.record(episode_reward):
-                self._log_info(
-                    f"Curriculum stage {self.curriculum.stage}/{self.curriculum.stages} "
-                    f"(difficulty {self.curriculum.difficulty:.2f}) from episode {episode + 2}"
-                )
-
-            # Log progress
-            if (episode + 1) % _LOG_INTERVAL == 0:
-                avg_reward = np.mean(self.episode_rewards[-_LOG_INTERVAL:])
-                avg_length = np.mean(self.episode_lengths[-_LOG_INTERVAL:])
-                self._log_info(
-                    f"Episode {episode + 1}{self._progress_suffix()} | "
-                    f"Avg Reward (last {_LOG_INTERVAL}): {avg_reward:.2f} | "
-                    f"Avg Length (last {_LOG_INTERVAL}): {avg_length:.2f}"
-                )
-
-                self._log_metrics(
-                    {
-                        "episode": episode + 1,
-                        "avg_reward": avg_reward,
-                        "avg_length": avg_length,
-                        **_success_field("success_rate", self.episode_successes[-_LOG_INTERVAL:]),
-                        **((self.curriculum and self.curriculum.played_metrics()) or {}),
-                        **self._drain_update_metrics(),
-                    }
-                )
-
-            # Evaluation
+            self._record_episode(self._run_episode(training=True))
             if (episode + 1) % self.eval_frequency == 0:
-                eval_stats = self.evaluate()
-                self._log_info(f"Evaluation at episode {episode + 1}: {eval_stats}")
-
-                self._log_metrics({"evaluation": eval_stats})
-
-            # Save checkpoint
+                self._evaluate_and_log(episode + 1)
             if (episode + 1) % self.save_frequency == 0:
                 self._save_checkpoint(episode + 1)
 
@@ -437,11 +458,132 @@ class Trainer:
             stats["curriculum_difficulty"] = self._end_curriculum()
         return stats
 
+    def _record_episode(self, played: EpisodeResult) -> None:
+        """Record one finished training episode: its histories, the step count, the curriculum,
+        and the periodic log record every ``_LOG_INTERVAL`` episodes."""
+        self.episode_rewards.append(played.reward)
+        self.episode_lengths.append(played.length)
+        self.episode_successes.append(played.success)
+        self.total_steps_trained += played.length
+        done = len(self.episode_rewards)
+        if self.curriculum is not None and self.curriculum.record(played.reward):
+            self._log_info(
+                f"Curriculum stage {self.curriculum.stage}/{self.curriculum.stages} "
+                f"(difficulty {self.curriculum.difficulty:.2f}) from episode {done + 1}"
+            )
+        if done % _LOG_INTERVAL == 0:
+            avg_reward = np.mean(self.episode_rewards[-_LOG_INTERVAL:])
+            avg_length = np.mean(self.episode_lengths[-_LOG_INTERVAL:])
+            self._log_info(
+                f"Episode {done}{self._progress_suffix()} | "
+                f"Avg Reward (last {_LOG_INTERVAL}): {avg_reward:.2f} | "
+                f"Avg Length (last {_LOG_INTERVAL}): {avg_length:.2f}"
+            )
+            self._log_metrics(
+                {
+                    "episode": done,
+                    "avg_reward": avg_reward,
+                    "avg_length": avg_length,
+                    **_success_field("success_rate", self.episode_successes[-_LOG_INTERVAL:]),
+                    **((self.curriculum and self.curriculum.played_metrics()) or {}),
+                    **self._drain_update_metrics(),
+                }
+            )
+
+    def _evaluate_and_log(self, episodes_done: int) -> None:
+        eval_stats = self.evaluate()
+        self._log_info(f"Evaluation at episode {episodes_done}: {eval_stats}")
+        self._log_metrics({"evaluation": eval_stats})
+
+    def _may_start(self, in_flight_episodes: int, in_flight_steps: int) -> bool:
+        """Whether a training environment may start another episode while these are in flight:
+        the budget counts them as done. With nothing in flight this is :meth:`_budget_left`."""
+        if self.total_steps is not None:
+            return self.total_steps_trained + in_flight_steps < self.total_steps
+        return len(self.episode_rewards) + in_flight_episodes < self.num_episodes
+
+    def _train_lockstep(self) -> None:
+        """
+        Train from every training environment in lockstep, one vector step at a time.
+
+        Each vector step starts an episode in every idle environment the budget allows (each
+        given the curriculum's settings first), chooses every playing environment's action in
+        environment order, and steps them all. An episode that ends (terminated, truncated, or cut
+        at ``max_steps_per_episode``) goes to the agent as one batch, then is recorded, in
+        environment order; evaluation and a checkpoint follow once, at the end of a vector step in
+        which their frequency was crossed, named by the episodes recorded then. Once the budget is
+        met no episode starts, and those in flight finish and are trained on. With one environment
+        this plays exactly the episodes, updates and records of the single-environment loop.
+        """
+        pool = InlinePool(self.envs)
+        playing: dict[int, _Playing] = {}
+        while True:
+            self.current_episode = len(self.episode_rewards) + 1
+            starting: list[int] = []
+            for index in range(self.num_envs):
+                in_flight_steps = sum(episode.length for episode in playing.values())
+                if index not in playing and self._may_start(
+                    len(playing) + len(starting), in_flight_steps
+                ):
+                    starting.append(index)
+            if starting:
+                settings = None if self.curriculum is None else self.curriculum.settings()
+                for index, raw, _ in pool.reset(starting, settings):
+                    obs = self.agent.normalize_observation(raw, training=True)
+                    playing[index] = _Playing(obs, raw)
+            if not playing:
+                self.current_episode = len(self.episode_rewards)
+                return
+
+            actions = {
+                index: self.agent.select_action(playing[index].observation, training=True)
+                for index in sorted(playing)
+            }
+            ended = []
+            for index, raw_next, reward, terminated, truncated, info in pool.step(actions):
+                episode = playing[index]
+                next_obs = self.agent.normalize_observation(raw_next, training=True)
+                done = terminated or truncated
+                episode.transitions.append(
+                    (
+                        episode.observation,
+                        actions[index],
+                        reward,
+                        next_obs,
+                        done,
+                        bool(terminated),
+                        episode.raw_observation,
+                        raw_next,
+                    )
+                )
+                episode.reward += float(reward)
+                episode.length += 1
+                episode.success = bool(info["is_success"]) if "is_success" in info else None
+                episode.observation, episode.raw_observation = next_obs, raw_next
+                if done or episode.length >= self.max_steps_per_episode:
+                    ended.append(index)
+
+            before = len(self.episode_rewards)
+            for position, index in enumerate(ended):
+                # The number this episode is recorded as, so a non-finite update metric names it
+                # (first_non_finite_episode) even when several episodes end in one vector step.
+                self.current_episode = before + position + 1
+                self._update_agent(playing[index].transitions)
+                self.agent.end_episode()
+            for index in ended:
+                episode = playing.pop(index)
+                self._record_episode(EpisodeResult(episode.reward, episode.length, episode.success))
+            after = len(self.episode_rewards)
+            if after // self.eval_frequency > before // self.eval_frequency:
+                self._evaluate_and_log(after)
+            if after // self.save_frequency > before // self.save_frequency:
+                self._save_checkpoint(after)
+
     def _save_final_checkpoint(self, start: int) -> None:
         """Save the last episode when ``save_final`` is set, this call trained (``start`` is the
-        episodes done before it) and the loop did not just save that episode."""
+        episodes done before it) and the last checkpoint saved is not of that episode."""
         done = len(self.episode_rewards)
-        if self.save_final and done > start and done % self.save_frequency != 0:
+        if self.save_final and done > start and done != self._last_saved_episode:
             self._save_checkpoint(done)
 
     def _start_curriculum_episode(self) -> None:
@@ -621,6 +763,7 @@ class Trainer:
                 np.savez_compressed(f, **arrays)
 
         write_atomically(trainer_path, write_state)
+        self._last_saved_episode = episode
         self._log_info(f"Checkpoint saved to {agent_path}")
 
     def _env_id(self) -> str:
@@ -642,9 +785,10 @@ class Trainer:
             non_finite_metrics_seen=sorted(self._non_finite_metrics_seen),
             first_non_finite_episode=self.first_non_finite_episode,
             eval_seed=self.eval_seed,
-            env_state=self.env.rng_state() if isinstance(self.env, ResumableEnv) else {},
+            env_state=rng_states(self.envs),
             curriculum=None if self.curriculum is None else self.curriculum.spec(),
             episode_successes=known_successes(self.episode_successes),
+            num_envs=self.num_envs,
         )
 
     def resume(self, agent_checkpoint: str) -> None:
@@ -669,8 +813,11 @@ class Trainer:
         state = read_trainer_state(agent_checkpoint)
         self._check_resumable(state)
         self.agent.load(agent_checkpoint)
-        if isinstance(self.env, ResumableEnv):
-            self.env.set_rng_state(state.env_state)
+        for env, env_state in zip(
+            self.envs, split_rng_states(self.envs, state.env_state), strict=True
+        ):
+            if isinstance(env, ResumableEnv):
+                env.set_rng_state(env_state)
         self.episode_rewards = list(state.episode_rewards)
         self.episode_lengths = list(state.episode_lengths)
         # A run that did not save its successes (not all known, or from before the metric) resumes
@@ -702,6 +849,11 @@ class Trainer:
         ):
             if saved != actual:
                 raise ValueError(f"The checkpoint's {what} is {saved}; this trainer's is {actual}")
+        if state.num_envs != self.num_envs:
+            raise ValueError(
+                f"The run trained with num_envs {state.num_envs}; this trainer has "
+                f"{self.num_envs}: resume with the same number of environments"
+            )
         if bool(state.env_state) != isinstance(self.env, ResumableEnv):
             raise ValueError(
                 "The checkpoint holds environment generators this environment cannot restore"
@@ -726,11 +878,15 @@ class Trainer:
                 "from this trainer's"
             )
         if isinstance(self.env, ResumableEnv):
-            expected = set(self.env.rng_state())
+            expected = set(rng_states(self.envs))
             unexpected, missing = set(state.env_state) - expected, expected - set(state.env_state)
             if unexpected or missing:
                 raise ValueError(
                     f"The checkpoint's environment state has keys {sorted(unexpected)} this "
                     f"environment does not, and lacks {sorted(missing)}"
                 )
-            self.env.check_rng_state(state.env_state)
+            for env, env_state in zip(
+                self.envs, split_rng_states(self.envs, state.env_state), strict=True
+            ):
+                if isinstance(env, ResumableEnv):
+                    env.check_rng_state(env_state)

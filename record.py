@@ -11,6 +11,7 @@ from gymnasium.wrappers import RecordVideo
 
 from rl_core.seeding import eval_seed_for
 from rl_core.training import Trainer
+from rl_core.training.parallel import single_env_training
 from rl_core.utils import setup_logger
 from rl_core.utils.video import merge_episode_clips
 from train import (
@@ -74,7 +75,7 @@ def main():
             trainer = Trainer(
                 env=env,
                 agent=agent,
-                config=config["training"],
+                config=single_env_training(config["training"]),
                 logger=logger,
                 eval_env=env,
                 eval_seed=eval_seed_for(config["environment"].get("seed")),

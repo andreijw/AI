@@ -57,6 +57,8 @@ def derive_rng(seed: int | None, stream: int) -> np.random.Generator:
 
 # Stream for the seed of a run's fixed evaluation start states (see eval_seed_for).
 EVAL_STREAM = 20
+# Stream for the seeds of a run's second and later training environments (see env_seed).
+ENV_COPY_STREAM = 21
 # Stream a random agent draws its evaluation actions from, apart from its training actions.
 AGENT_EVAL_STREAM = 13
 
@@ -71,6 +73,30 @@ def eval_seed_for(seed: int | None) -> int:
     without a seed gets an entropy-drawn value: fixed within that run, not reproducible across runs.
     """
     return int(derive_rng(seed, EVAL_STREAM).integers(2**31, 2**32))
+
+
+def env_seed(seed: int | None, index: int) -> int | None:
+    """
+    The seed of training environment ``index`` of a run that trains ``training.num_envs`` of them.
+
+    Environment 0 keeps the run's seed, so a run with one environment is unchanged. Each other one
+    gets a seed drawn from the run's seed on its own stream, in [0, 2**31): below the evaluation
+    seeds of :func:`eval_seed_for`, and not ``seed + index``, under which run ``s``'s second
+    environment would replay run ``s + 1``'s first and seeds compared side by side would share
+    episodes. A run without a seed gets None for every environment (entropy-seeded each).
+
+    Raises:
+        ValueError: If ``index`` is not a non-negative integer, or ``seed`` is invalid.
+    """
+    if isinstance(index, bool) or not isinstance(index, int | np.integer) or index < 0:
+        raise ValueError(f"index must be a non-negative integer, got {index!r}.")
+    if seed is None:
+        return None
+    derive_rng(seed, ENV_COPY_STREAM)  # validates the seed as every stream does
+    if index == 0:
+        return int(seed)
+    sequence = np.random.SeedSequence(int(seed), spawn_key=(ENV_COPY_STREAM, int(index)))
+    return int(sequence.generate_state(1, np.uint32)[0] >> 1)
 
 
 def generator_state(generator: np.random.Generator) -> np.ndarray:
