@@ -6,11 +6,25 @@ import numpy as np
 import pytest
 
 from rl_cartpole.environments import CartPoleEnv
-from rl_core.agents import DDPGAgent, DQNAgent, PPOAgent, ReinforceAgent, TD3Agent
+from rl_core.agents import (
+    ContinuousPPOAgent,
+    DDPGAgent,
+    DQNAgent,
+    PPOAgent,
+    ReinforceAgent,
+    TD3Agent,
+)
 from rl_core.agents.base_agent import OBS_NORM_KEY_PREFIX
 from rl_core.agents.observation_normalizer import RunningMeanStd
 from rl_core.agents.replay_buffer import ReplayBuffer
 from rl_core.training import Trainer
+from rl_pendulum.environments.pendulum_env import PendulumEnv
+from tests.agent_internals import (
+    forward_batch,
+    gaussian_forward,
+    log_prob,
+    spy_on_ppo_minibatches,
+)
 from tests.helpers import minimal_config, run_main
 from tests.test_agent_harness import (
     ALL_AGENTS,
@@ -446,6 +460,124 @@ def test_evaluation_leaves_the_statistics_unchanged(tmp_path):
     trainer.evaluate(3)
     for key, value in agent.observation_normalizer.state().items():
         np.testing.assert_array_equal(value, state[key], err_msg=f"evaluation changed {key}")
+
+
+def _policy_log_probs(agent, observations, actions):
+    """log pi(a|s) for a batch under the agent's current weights, as its PPO update computes them."""
+    if isinstance(agent, ContinuousPPOAgent):
+        mu, log_std, _, _ = gaussian_forward(agent, observations)
+        return log_prob(agent, actions, mu, log_std)
+    probs, _, _ = forward_batch(agent, observations)
+    return np.log(np.clip(probs[np.arange(len(actions)), actions], 1e-8, 1.0))
+
+
+# Each PPO with a rollout of several short episodes, so the statistics move between and during
+# rollouts; a small network and few epochs keep it fast.
+PPO_ROLLOUT_CASES = [
+    pytest.param(
+        ContinuousPPOAgent,
+        {
+            "hidden_dim": 8,
+            "rollout_steps": 60,
+            "batch_size": 16,
+            "ppo_epochs": 2,
+            "action_low": -2.0,
+            "action_high": 2.0,
+        },
+        lambda: PendulumEnv(seed=5, max_episode_steps=20),
+        3,
+        1,
+        id="ContinuousPPOAgent-Pendulum",
+    ),
+    pytest.param(
+        PPOAgent,
+        {"hidden_dim": 8, "rollout_steps": 60, "minibatch_size": 16, "ppo_epochs": 2},
+        lambda: CartPoleEnv(seed=5),
+        4,
+        2,
+        id="PPOAgent-CartPole",
+    ),
+]
+
+
+@pytest.mark.parametrize("agent_cls,config,make_env,obs_dim,action_dim", PPO_ROLLOUT_CASES)
+def test_ppo_old_log_probs_are_those_of_collection_under_moving_statistics(
+    agent_cls, config, make_env, obs_dim, action_dim, tmp_path, monkeypatch
+):
+    """
+    PPO recomputes its old log-probabilities at the start of an update, on the inputs it stored.
+    With the statistics moving on every training observation, those must still be exactly the
+    log-probabilities of the actions the policy took on the inputs it acted on, and the first
+    mini-batch's ratio must be 1: nothing about the input may change between collection and
+    update (diagnosis of the Pendulum PPO collapse with normalisation, 2026-11-09).
+    """
+    agent = agent_cls(obs_dim, action_dim, {"seed": 3, **config, **ON})
+    collected = {}  # (input, action) -> log pi(a|s) when the action was drawn
+    select_action = agent.select_action
+
+    def acting(observation, training=True):
+        action = select_action(observation, training=training)
+        if training:
+            row = np.asarray(observation, dtype=np.float64)[None]
+            acts = np.asarray(action)[None]
+            collected[row.tobytes() + acts.tobytes()] = float(
+                _policy_log_probs(agent, row, acts)[0]
+            )
+        return action
+
+    monkeypatch.setattr(agent, "select_action", acting)
+    updates = {"first_minibatch_checked": 0}
+    means_at_update = []  # the normaliser's mean when each update starts
+    update = agent.update
+
+    def updating(batch):
+        normalizer = agent.observation_normalizer
+        assert normalizer is not None
+        means_at_update.append(normalizer.mean.copy())
+        updates["pending"] = True
+        return update(batch)
+
+    monkeypatch.setattr(agent, "update", updating)
+
+    def minibatch(original, observations, actions, returns, advantages, old_log_probs, *a, **kw):
+        for row, act, old in zip(observations, actions, old_log_probs, strict=True):
+            key = row[None].tobytes() + np.asarray(act)[None].tobytes()
+            assert key in collected, (
+                "PPO trained on an input the policy never acted on: the stored observation must "
+                "be the one normalised at collection, under the statistics of that moment"
+            )
+            assert abs(old - collected[key]) <= 1e-12, (
+                f"old log-probability {old!r} differs from the collection-time {collected[key]!r}"
+            )
+        if updates.pop("pending", False):
+            ratio = np.exp(_policy_log_probs(agent, observations, actions) - old_log_probs)
+            assert np.max(np.abs(ratio - 1.0)) <= 1e-12, (
+                f"the first mini-batch's ratio must be 1 before any step, got {ratio!r}"
+            )
+            updates["first_minibatch_checked"] += 1
+        return original(observations, actions, returns, advantages, old_log_probs, *a, **kw)
+
+    spy_on_ppo_minibatches(monkeypatch, agent, minibatch)
+    env, eval_env = make_env(), make_env()
+    try:
+        training = {
+            "num_episodes": 9,
+            "max_steps_per_episode": 20,
+            "eval_frequency": 1000,
+            "save_frequency": 1000,
+            "checkpoint_dir": str(tmp_path),
+        }
+        Trainer(env=env, agent=agent, config=training, eval_env=eval_env, eval_seed=700).train()
+    finally:
+        env.close()
+        eval_env.close()
+
+    assert updates["first_minibatch_checked"] >= 2, (
+        "at least two rollouts must be trained on, the second under statistics that have moved"
+    )
+    assert not np.allclose(means_at_update[0], means_at_update[-1]), (
+        "the statistics must have moved between the first and last update, or the test pins nothing"
+    )
 
 
 def test_a_resumed_normalising_run_ends_exactly_like_one_that_never_stopped(tmp_path):
