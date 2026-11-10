@@ -63,15 +63,6 @@ an item.
   greedy evaluation was 321 to 327 (CHANGELOG.md, 2026-11-05). The training average includes exploration noise.
   Untried: rl-zoo's gSDE exploration (`use_sde`, `log_std_init: -3`), which its recipe uses on this environment and
   this framework lacks (dropped from the item by the maintainer, 2026-11-05); TD3 at rl-zoo's 1,000,000 steps.
-- [ ] **Why Pendulum PPO collapses with observation normalisation**: with `normalize_observations: true`
-  `configs/pendulum_ppo.yaml` held -200 on 2 of seeds 1 to 5 against 4; seed 5 reached -187 by episode 310 and slid
-  to about -1000 by episode 900 with the entropy steady and a small value loss, while the learning rate annealed
-  (CHANGELOG.md, 2026-11-04). A scratch variant with the statistics frozen per rollout collapsed on 3 of 5
-  (2026-10-29). The same option helps the continuous Actor-Critic and CartPole PPO (`TR-24`), so a defect in how PPO
-  uses normalised inputs is possible, not only a poor fit. A `training-doctor` diagnosis on seed 5 would settle
-  which: the statistics' drift late in the run, the policy's mean action and log standard deviation, and the update
-  metrics around the slide.
-
 ### Phase 6 — Advanced RL & Robotics Extensions
 
 No open items.
