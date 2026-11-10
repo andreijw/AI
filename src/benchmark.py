@@ -30,6 +30,7 @@ from rl_core.challenges import (
 )
 from rl_core.seeding import eval_seed_for
 from rl_core.training.budget import apply_budget_override, budget_of
+from rl_core.training.parallel import num_envs_of
 from rl_core.training.trainer import Trainer, success_rate
 from rl_core.utils.smoothing import rolling_average
 
@@ -228,6 +229,8 @@ class SeedRun:
     separate_eval: bool
     # The run's curriculum mode, or None for a run without one.
     curriculum: str | None = None
+    # Training environments stepped in lockstep (training.num_envs).
+    num_envs: int = 1
 
 
 class BenchmarkRunner:
@@ -287,13 +290,19 @@ class BenchmarkRunner:
             for agent, agent_runs in runs.items()
             if agent_runs[-1].curriculum is not None
         }
+        # Each agent's training.num_envs above 1, as its last seed set it.
+        parallel = {
+            agent: agent_runs[-1].num_envs
+            for agent, agent_runs in runs.items()
+            if agent_runs[-1].num_envs > 1
+        }
 
         plot_file = self._save_plot(runs, budgets, resolved) if save_plot else None
         metrics_json_path = self._write_metrics_json(resolved, summary, results, budgets)
         if report_path:
             os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
             report_md = self._generate_markdown_report(
-                summary, resolved, plot_file, report_path, separate_eval, curricula
+                summary, resolved, plot_file, report_path, separate_eval, curricula, parallel
             )
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write(report_md)
@@ -392,7 +401,9 @@ class BenchmarkRunner:
             )
         budget = budget_of(train_cfg)
         eval_env = self.challenge.setup_eval_env(agent_type, seed)
+        extra_envs = []
         try:
+            extra_envs = self.challenge.setup_extra_envs(agent_type, seed, num_envs_of(train_cfg))
             curriculum = self.challenge.setup_curriculum(agent_type, seed, env)
             trainer = Trainer(
                 agent=agent,
@@ -402,6 +413,7 @@ class BenchmarkRunner:
                 eval_env=eval_env,
                 eval_seed=None if eval_env is None else eval_seed_for(seed),
                 curriculum=curriculum,
+                extra_envs=extra_envs,
             )
 
             start_time = time.perf_counter()
@@ -416,7 +428,8 @@ class BenchmarkRunner:
             episode_lengths = [int(n) for n in trainer.episode_lengths]
             episode_successes = list(trainer.episode_successes)
         finally:
-            env.close()
+            for opened in (env, *extra_envs):
+                opened.close()
             if eval_env is not None:
                 eval_env.close()
 
@@ -431,6 +444,7 @@ class BenchmarkRunner:
             budget,
             eval_env is not None,
             None if curriculum is None else curriculum.mode,
+            num_envs_of(train_cfg),
         )
 
     def _run_record(
@@ -542,13 +556,15 @@ class BenchmarkRunner:
         report_path: str,
         separate_eval: bool,
         curricula: dict[str, str] | None = None,
+        parallel: dict[str, int] | None = None,
     ) -> str:
-        """Generate formatted Markdown report text for this challenge."""
+        """Generate formatted Markdown report text for this challenge. ``parallel`` maps each agent
+        that trained from several environments to its ``training.num_envs``."""
         has_step_budget = any(stats["budget_unit"] == "steps" for stats in summary.values())
         lines = [
             *self._report_header(),
             *self._report_configuration(settings),
-            *self._report_solve_rule(settings, separate_eval, has_step_budget),
+            *self._report_solve_rule(settings, separate_eval, has_step_budget, parallel or {}),
             *_report_curricula(curricula or {}),
             *_report_table(settings.agents, summary),
             *_report_plot_link(plot_file, report_path),
@@ -578,9 +594,14 @@ class BenchmarkRunner:
         ]
 
     def _report_solve_rule(
-        self, settings: _ResolvedSettings, separate_eval: bool, has_step_budget: bool
+        self,
+        settings: _ResolvedSettings,
+        separate_eval: bool,
+        has_step_budget: bool,
+        parallel: dict[str, int],
     ) -> list[str]:
-        """The solve rule in words, with the evaluation and step-budget notes that apply."""
+        """The solve rule in words, with the evaluation and step-budget notes that apply.
+        ``parallel`` maps each agent that trained from several environments to how many."""
         lines = ["## How a Run Counts as Solved", ""]
         threshold = self.challenge.solve_threshold
         if threshold is None:
@@ -611,6 +632,13 @@ class BenchmarkRunner:
                 "A step budget finishes the episode that crosses it, so a run can overshoot "
                 "its budget by up to one episode."
             )
+            if parallel:
+                trained = ", ".join(f"{agent}: {n}" for agent, n in sorted(parallel.items()))
+                lines.append(
+                    f"Runs that trained from N environments (`training.num_envs`, {trained}) also "
+                    "finish the episodes in flight in the other environments, so they can "
+                    "overshoot by up to N - 1 more episodes."
+                )
         return lines
 
 

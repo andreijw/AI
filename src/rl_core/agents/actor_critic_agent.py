@@ -63,6 +63,10 @@ class ActorCriticAgent(ActorCriticBase):
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
 
+    def enable_parallel_envs(self, num_envs: int) -> None:
+        """Accept several environments: each update is one finished episode, as with one."""
+        return None
+
     def update(self, batch: dict[str, Any]) -> dict[str, float]:
         """
         Update actor and critic parameters using the collected trajectory.

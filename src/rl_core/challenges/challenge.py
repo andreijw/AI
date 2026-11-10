@@ -12,6 +12,7 @@ import gymnasium as gym
 
 from rl_core.agents.base_agent import BaseAgent
 from rl_core.environments import OBSERVATION_DEFAULTS
+from rl_core.seeding import env_seed
 from rl_core.training.budget import apply_budget_override
 from rl_core.training.curriculum import CurriculumScheduler, curriculum_from_config
 from rl_core.utils.config import load_config
@@ -105,6 +106,34 @@ class BenchmarkChallenge(abc.ABC):
             render_mode: Gymnasium render mode, or None.
         """
         ...
+
+    def make_extra_envs(self, env_config: Mapping[str, Any], num_envs: int) -> list[ChallengeEnv]:
+        """
+        The training environments after the first of a run with ``training.num_envs`` of them:
+        environment i (from 1) is :meth:`make_env` of a copy of ``env_config`` whose seed is
+        ``env_seed(seed, i)``, without rendering. ``env_config`` itself is not changed.
+
+        Raises:
+            Whatever :meth:`make_env` raises; the environments already built are closed first.
+        """
+        envs: list[ChallengeEnv] = []
+        try:
+            for index in range(1, num_envs):
+                section = {**env_config, "seed": env_seed(env_config.get("seed"), index)}
+                envs.append(self.make_env(section, render_mode=None))
+        except BaseException:
+            for env in envs:
+                env.close()
+            raise
+        return envs
+
+    def setup_extra_envs(self, agent_type: str, seed: int, num_envs: int) -> list[ChallengeEnv]:
+        """The extra training environments (:meth:`make_extra_envs`) of a benchmark run, from
+        the run's environment section as :meth:`setup_run` builds the first; none for one."""
+        if num_envs <= 1:
+            return []
+        config = self.load_run_config(agent_type, seed, None)
+        return self.make_extra_envs(config["environment"], num_envs)
 
     def make_agent(
         self, agent_type: str, agent_config: Mapping[str, Any], env: ChallengeEnv

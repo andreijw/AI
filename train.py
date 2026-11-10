@@ -19,6 +19,7 @@ from rl_core.seeding import eval_seed_for
 from rl_core.training import Trainer
 from rl_core.training.budget import apply_budget_override
 from rl_core.training.curriculum import curriculum_from_config
+from rl_core.training.parallel import num_envs_of
 from rl_core.utils import load_config, setup_logger
 from rl_core.utils.video import TrainingVideoRecorder
 
@@ -329,8 +330,13 @@ def main():
     with headless_rendering(enabled=args.record_video):
         env = None
         eval_env = None
+        extra_envs = []
         try:
             env = run_challenge.make_env(config["environment"], render_mode)
+            # training.num_envs above 1: the other environments, each seeded from the run's seed.
+            extra_envs = run_challenge.make_extra_envs(
+                config["environment"], num_envs_of(config["training"])
+            )
             # Evaluation runs on its own environment with fixed start states, so how often a run
             # evaluates does not change which start states its training episodes see.
             eval_env = run_challenge.make_env(config["environment"], render_mode=None)
@@ -352,6 +358,7 @@ def main():
                 eval_seed=eval_seed,
                 curriculum=curriculum,
                 save_final=True,
+                extra_envs=extra_envs,
             )
             logger.info("Trainer created")
             if curriculum is not None:
@@ -364,7 +371,7 @@ def main():
                 attach_video_recorder(env, trainer, args.video_every, video_dir, logger)
             train_and_plot(trainer, args.plot, plot_dir, challenge, agent_type, logger)
         finally:
-            for opened in (env, eval_env):
+            for opened in (env, *extra_envs, eval_env):
                 if opened is not None:
                     close_env(opened, logger)
 

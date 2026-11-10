@@ -487,12 +487,43 @@ training:
   # total_steps: 100000  # optional: train for this many environment steps instead (num_episodes is then ignored)
   # update_every: 1      # optional: update every N steps inside the episode, not after it (DQN, DDPG, TD3, SAC;
   #                      #   the continuous Actor-Critic with n_steps equal to it, as A2C)
+  # num_envs: 1          # optional: training environments stepped in lockstep (REINFORCE, both Actor-Critics and the
+  #                      #   random agents; see "Several training environments")
   max_steps_per_episode: 500
   eval_frequency: 100
   save_frequency: 100
   checkpoint_dir: "./checkpoints"
   log_dir: "./logs"
 ```
+
+### Several training environments
+
+`training.num_envs: N` (default 1) trains from N copies of the `environment` section's environment, stepped in
+lockstep in one process. Without the key, or with 1, training is exactly what it was (`tests/test_trainer_golden.py`
+holds it to a recording). With N above 1:
+
+- Environment 0 keeps the section's seed; environment i gets `rl_core.seeding.env_seed(seed, i)`, its own stream
+  of the run's seed (not `seed + i`, under which seed 1's second environment would replay seed 2's first).
+- Each vector step chooses every playing environment's action in environment order, then steps them all. An
+  episode that ends (terminated, truncated, or cut at `max_steps_per_episode`) goes to the agent as one batch,
+  exactly as a single environment's would, and is then recorded. The records, the solve rule and the 100-episode
+  window count finished episodes in the order they finish. A time-limit cut still bootstraps and a termination
+  does not, for the agents that bootstrap.
+- Evaluation and a checkpoint run once, at the end of the vector step in which their frequency was crossed, and the
+  checkpoint is named by the episodes recorded then (`agent_episode_<n>` need not be a multiple of `save_frequency`).
+- Once the budget is met no new episode starts; episodes in flight finish and are trained on, so `total_steps` can
+  be overshot by up to `(N - 1) × max_steps_per_episode` more than with one environment.
+- The observation normaliser sees every environment's observations; the curriculum gives each environment its
+  settings before each of its resets. An episode that began under an earlier curriculum stage is recorded with the
+  difficulty at its end.
+- `--resume` restores every environment's generators and refuses a different `num_envs`. The episodes in flight at
+  the checkpoint are lost, so a resumed run is reproducible but is not the uninterrupted run.
+- Accepted by REINFORCE, both Actor-Critics and the random agents. Each update is one finished episode, so the
+  other environments' episodes in flight were partly played by an earlier policy (up to N - 1 updates old).
+- Refused, with an error naming the reason: PPO (its probability ratio would hide data from an older policy),
+  DQN, DDPG, TD3 and SAC; `update_every`; a training environment that renders (`--render`, `--record-video` or a
+  `render_mode`); and a run without an evaluation environment (direct `Trainer` callers). `record.py` and
+  `robustness.py` evaluate one environment from such a config.
 
 ### Curriculum
 

@@ -50,6 +50,11 @@ No open items.
     Approved for the item (the maintainer, 2026-11-09): one key, `training.num_envs`; an in-process environment pool;
     independent seed streams per environment; PPO at N > 1 only with the one-clock layout; the Pendulum 8 × 8
     measurement with a second `learning_rate: 0.002` arm, measurement only.
+  - **Progress (PR 1, 2026-11-09)**: `training.num_envs: N` trains REINFORCE, both Actor-Critics and the random agents
+    from N environments in lockstep, each finished episode handed over as its own batch (CHANGELOG.md, 2026-11-09).
+    On CartPole (seeds 1 to 5, 500,000 steps) REINFORCE solves 5 of 5 with 4 environments against 4 of 5 with one,
+    and the Actor-Critic 5 of 5 against 5 of 5, holding 5 against 4. PPO, `update_every` and rendering at N > 1 are
+    refused until PR 2 (PPO and the one-clock layout) or later.
   - **Description**: The `Trainer` steps one environment, one episode at a time. rl-zoo's A2C collects from 8
     environments in lockstep (64 transitions per update on Pendulum), and its PPO configs usually from several too;
     ours cannot follow either recipe. Add `training.num_envs` for the on-policy agents (REINFORCE, and Actor-Critic

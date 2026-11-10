@@ -482,6 +482,20 @@ target. Without an evaluation environment (direct `Trainer` callers and tests) e
 environment. `record.py` passes its playback environment as the evaluation environment with the same seed, so a
 playback shows the training run's evaluation start states.
 
+With `training.num_envs` above 1, `train.py` and the benchmark also build the extra training environments
+(`BenchmarkChallenge.make_extra_envs`, each seeded with `rl_core.seeding.env_seed`) and pass them as
+`Trainer(..., extra_envs=...)`. The trainer then trains through its lockstep collector over an environment pool
+(`rl_core.training.parallel`): one batched `reset` of the environments that may start an episode (the curriculum's
+settings first) and one batched `step` of every playing one per vector step. The pool never resets an environment on
+its own, so a step's observation is always the true last one of a finished episode, and an environment that has
+finished draws nothing more. `InlinePool` steps them in this process; the interface is batched so that worker
+processes or a simulator stepping many robots as one array could implement it. Each finished episode goes to the
+agent's `update` as one batch and is recorded in finish order; the agent opts in through
+`BaseAgent.enable_parallel_envs`, which REINFORCE, both Actor-Critics and the random agents accept and PPO and the
+replay-buffer agents refuse. The trainer file saves every environment's generators (environment i's under `env<i>_`
+keys) and `num_envs`, written only above 1; with one environment training uses the single-environment loop and
+writes the same files as before.
+
 `Trainer._run_episode` returns a frozen `EpisodeResult(reward, length, success)`, and the public
 `Trainer.evaluate_episodes` returns a list of them (`evaluate` averages them). An episode's `success` is
 `bool(info["is_success"])` from its last step, the Gymnasium and SB3 Monitor convention, or None when that step's `info`

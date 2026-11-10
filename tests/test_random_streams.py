@@ -15,6 +15,7 @@ import copy
 import numpy as np
 import pytest
 
+from rl_core import seeding
 from rl_core.agents import (
     ActorCriticAgent,
     ContinuousActorCriticAgent,
@@ -28,7 +29,7 @@ from rl_core.agents import (
     SACAgent,
     TD3Agent,
 )
-from rl_core.seeding import WRAPPER_STREAM, derive_rng
+from rl_core.seeding import WRAPPER_STREAM, derive_rng, env_seed
 from tests.helpers import torch_backend_cases
 
 SEED = 7
@@ -139,3 +140,31 @@ def test_a_random_agent_checkpoint_saved_before_named_streams_still_loads(tmp_pa
     agent.load(path)
     expected = [int(old.integers(0, 2)) for _ in range(10)]
     assert [agent.select_action(np.zeros(4), training=True) for _ in range(10)] == expected
+
+
+def test_env_copy_seeds_repeat_no_agent_wrapper_or_start_state_stream():
+    """A run with ``training.num_envs`` seeds its second and later environments with ``env_seed``.
+    Their start states (``default_rng`` of that seed) and noise must not repeat any generator the
+    run already draws from: its agents' streams, the evaluation-seed stream, and its first
+    environment's start states and noise."""
+    streams = [
+        seeding.WRAPPER_STREAM,
+        seeding.AGENT_WEIGHTS_STREAM,
+        seeding.AGENT_EXPLORATION_STREAM,
+        seeding.AGENT_REPLAY_STREAM,
+        seeding.AGENT_EVAL_STREAM,
+        seeding.AGENT_TARGET_NOISE_STREAM,
+        seeding.AGENT_POLICY_NOISE_STREAM,
+        seeding.EVAL_STREAM,
+        seeding.ENV_COPY_STREAM,
+    ]
+    assert len(set(streams)) == len(streams), "every stream constant should be distinct"
+    for seed in range(21):
+        run = [np.random.default_rng(seed)] + [derive_rng(seed, s) for s in streams]
+        copies = []
+        for index in range(1, 9):
+            copy_seed = env_seed(seed, index)
+            assert copy_seed is not None
+            copies += [np.random.default_rng(copy_seed), derive_rng(copy_seed, WRAPPER_STREAM)]
+        draws = [tuple(g.random(4)) for g in run + copies]
+        assert len(set(draws)) == len(draws), f"seed {seed}: an environment copy repeats a stream"

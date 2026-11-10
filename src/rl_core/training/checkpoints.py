@@ -110,6 +110,10 @@ class TrainerState:
     # Each episode's success (EpisodeResult.success), saved only when every one is known; None
     # for a run whose environment did not report them all, and for files from before the metric.
     episode_successes: list[bool] | None = None
+    # Training environments stepped together (training.num_envs); written only when above 1, so a
+    # one-environment run's file keeps its keys. Environment i >= 1's generators are saved in
+    # env_state under "env<i>_" keys.
+    num_envs: int = 1
 
     def to_arrays(self) -> dict[str, Any]:
         """The state as ``.npz`` arrays."""
@@ -132,6 +136,8 @@ class TrainerState:
             arrays["curriculum"] = np.array(self.curriculum)
         if self.episode_successes is not None:
             arrays["episode_successes"] = np.array(self.episode_successes, dtype=np.bool_)
+        if self.num_envs != 1:
+            arrays["num_envs"] = np.array(self.num_envs)
         clashing = sorted(arrays.keys() & self.env_state.keys())
         if clashing:
             raise ValueError(
@@ -168,6 +174,7 @@ class TrainerState:
             env_state={k: np.asarray(data[k]) for k in data if k not in _KNOWN},
             curriculum=_text(data, "curriculum") if "curriculum" in data else None,
             episode_successes=_successes(data) if "episode_successes" in data else None,
+            num_envs=_integer(data, "num_envs") if "num_envs" in data else 1,
         )
         match = _AGENT_NAME.match(name)
         episodes = int(match.group(1)) if match else -1
@@ -183,6 +190,8 @@ class TrainerState:
                 f"episode_successes holds {len(state.episode_successes)} episodes; {name} was "
                 f"saved after {episodes}"
             )
+        if state.num_envs < 1:
+            raise ValueError(f"num_envs must be positive, got {state.num_envs}")
         if state.eval_seed is not None and state.eval_seed < 0:
             raise ValueError(f"eval_seed must be non-negative, got {state.eval_seed}")
         first = state.first_non_finite_episode
@@ -214,7 +223,14 @@ _REQUIRED = (
     "update_metric_window",
     "non_finite_metrics_seen",
 )
-_KNOWN = (*_REQUIRED, "first_non_finite_episode", "eval_seed", "curriculum", "episode_successes")
+_KNOWN = (
+    *_REQUIRED,
+    "first_non_finite_episode",
+    "eval_seed",
+    "curriculum",
+    "episode_successes",
+    "num_envs",
+)
 
 
 def _scalar(data: Mapping[str, Any], key: str) -> Any:

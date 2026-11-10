@@ -14,3 +14,10 @@ def log_metrics(trainer: Trainer, metrics: Mapping[str, Any]) -> None:
     """Send one metrics record through the trainer's logger dispatch, as train() does every
     ten episodes; its five logger shapes are easier to pin one record at a time."""
     trainer._log_metrics(dict(metrics))
+
+
+def force_lockstep(trainer: Trainer) -> None:
+    """Train through the lockstep collector even with one environment, which training otherwise
+    plays through the single-environment loop; tests/test_trainer_golden.py holds the two to the
+    same recording."""
+    trainer._lockstep = True
