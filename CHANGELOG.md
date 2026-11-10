@@ -39,6 +39,25 @@ Acrobot-v1) and
   - **`MAP-2`**: an update takes 1.3 ms (lidar, 64 beams, 100 × 100 cells), 0.7 ms (HC-SR04) and 3.4 ms (lidar,
     400 × 400) on the Jetson Orin Nano. TESTING.md `MAP-1` and `MAP-2`.
 
+- **Why Pendulum PPO collapses with observation normalisation: a fit problem, not a defect**
+  (`fix/pendulum-ppo-normalisation`; closes the Code Health item; the maintainer's decision, 2026-11-09):
+  - **No code defect.** With `normalize_observations: true`, the old log-probs PPO stores match those at collection
+    to 1e-14 and the first mini-batch's ratio is exactly 1, on all 90 updates of seed 5 and every update of 11 runs.
+    Seed 5 reproduces exactly (final 100-episode average -1005.6; seeds 1 to 5 hold -200 on 2 of 5, mean -360.7).
+  - **Cause.** The normaliser's statistics keep moving all run (seed 5's mean of θ̇ from -0.04 at episode 506 to
+    +0.91 at the end) while the learning rate and clip range anneal to 0, so late in the run the policy cannot follow
+    its shifting inputs; its actions saturate and its failures shift the statistics further. Decisive: seed 5's
+    weights from episode 990 score -1028 greedy with their own statistics and -201 with those of episode 781 (10
+    evaluation episodes each); every snapshot from episode 451 on scores -183 to -315 under mid-run statistics.
+  - **Freezing is not a better config.** Statistics frozen after episode 310 remove seed 5's slide (final -145.8,
+    held); a rule fixed beforehand, frozen after episode 100 on seeds 1 to 5, holds on 3 of 5 (mean -191.8) against
+    the committed config's 4 of 5 (-186.5, without normalisation). `configs/pendulum_ppo.yaml` is unchanged and no
+    freeze key is added. Runs and plots: `~/rl-experiments/ppo-norm/` on the development machine.
+  - **Regression test** in `tests/test_observation_normalizer.py`,
+    `test_ppo_old_log_probs_are_those_of_collection_under_moving_statistics`, for continuous PPO on Pendulum and
+    discrete PPO on CartPole, pins that the stored old log-probs are those of collection under statistics that move
+    between rollouts (4 of 4 mutations caught).
+
 - **The README as the project's front page, and the robotics ladder** (`feature/readme-restructure`; the
   maintainer's choices of 2026-11-09):
   - The project presents itself as **RL and Robot Navigation**, not "RL CartPole": README, CLAUDE.md, CONTRIBUTING.md,
