@@ -207,9 +207,11 @@ CASES: dict[str, Case] = {
             "save_frequency": 100,
         },
     ),
+    # Agent seed 17: every PPO ratio stays at least 0.04 from the clip edges, so a last-bit
+    # difference on another machine cannot flip a clipped step (seed 11 failed on CI's x86).
     "ppo-curriculum-linear": Case(
         _cartpole(obs_noise_std=0.05),
-        _agent(PPOAgent, **PPO),
+        _agent(PPOAgent, **{**PPO, "seed": 17}),
         {"num_episodes": 10, "eval_frequency": 6, "save_frequency": 100},
         eval_env=_cartpole(obs_noise_std=0.05, seed=9),
         curriculum={"mode": "linear", "start": NOISE_CURRICULUM_START, "episodes": 4},
@@ -389,15 +391,22 @@ def test_training_matches_the_recorded_arrays(name, arm, tmp_path):
         f"{name} ({arm}) should record the same arrays as the file; missing {missing[:5]}, "
         f"new {extra[:5]}"
     )
+    # Every differing array is reported, not just the first, so a failure on another machine shows
+    # where the runs part (an update metric only, or the weights and episodes after it).
+    failures = []
     for key, value in outputs.items():
         want = expected[key]
-        assert value.dtype == want.dtype, f"{name}/{key} ({arm}) changed dtype"
-        if EXACT or value.dtype.kind not in "fc":  # names, counts and generator states: exact
-            np.testing.assert_array_equal(value, want, err_msg=f"{name}/{key} ({arm}) differs")
-        else:
-            np.testing.assert_allclose(
-                value, want, rtol=RTOL, atol=ATOL, err_msg=f"{name}/{key} ({arm}) differs"
-            )
+        try:
+            assert value.dtype == want.dtype, f"{name}/{key} ({arm}) changed dtype"
+            if EXACT or value.dtype.kind not in "fc":  # names, counts and generator states: exact
+                np.testing.assert_array_equal(value, want, err_msg=f"{name}/{key} ({arm}) differs")
+            else:
+                np.testing.assert_allclose(
+                    value, want, rtol=RTOL, atol=ATOL, err_msg=f"{name}/{key} ({arm}) differs"
+                )
+        except AssertionError as error:
+            failures.append(str(error).strip())
+    assert not failures, f"{len(failures)} array(s) differ:\n\n" + "\n\n".join(failures)
 
 
 def _record_keys(recorded: dict[str, np.ndarray], suffix: str) -> list[str]:
