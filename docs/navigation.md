@@ -2,7 +2,7 @@
 
 The navigation half of the project: a NumPy robot simulator with Gymnasium environments to train agents in, and a
 state-estimation library meant to run on a Jetson robot. Phase 8 of [roadmap.md](roadmap.md) holds what is still
-open (mapping, planning, the real robot). How to train and benchmark the navigation agents is in
+open (SLAM, planning, the real robot). How to train and benchmark the navigation agents is in
 [usage.md](usage.md); their numbers are in [results.md](results.md).
 
 ## Range-Sensor Navigation
@@ -180,3 +180,31 @@ filter's 2σ position ellipse](images/localization_seed101_step381.png)
 
 *Frame 381 of the seed-101 lidar trial (`TESTING.md` `EST-4`): the true robot with its lidar scan and path, and a
 position estimate drawn with its 2σ ellipse.*
+
+## Mapping
+
+`rl_navigation.mapping` builds a log-odds occupancy grid from range scans at known poses (Thrun, Burgard and Fox,
+*Probabilistic Robotics*, Table 9.1), the first step of Phase 8's "Occupancy-grid mapping and SLAM"; SLAM, which
+needs no known poses, comes in later pull requests. Like `estimation` it imports only NumPy and `rl_navigation.sim`,
+so it runs on the robot.
+
+```python
+from rl_navigation.mapping import LIDAR_LOG_ODDS, OccupancyGrid
+from rl_navigation.sim import lidar
+
+grid = OccupancyGrid(lidar(), shape=(100, 100), resolution=0.05, model=LIDAR_LOG_ODDS)  # 5 x 5 m
+grid.update(pose, readings)  # one scan at a known pose (x, y, theta)
+occupied = grid.occupied()  # (rows, cols) booleans: more likely occupied than not
+```
+
+Each beam's cells are traced exactly (half-open intervals, so a hit on a cell border goes to the far cell): the
+endpoint's cell is marked occupied and the cells before it free, with log-odds clamped to [0.12, 0.97]. Readings at
+maximum range, dropouts and NaN change nothing. The lidar preset makes a cell occupied after one hit and frees it
+again after 18 misses; the HC-SR04 preset traces each of its five cone rays with the mount's single reading.
+
+On fresh seeds 101 to 150 (`TESTING.md` `MAP-1`, 600 steps a run) the lidar map is 99.96 % accurate with occupied
+precision 1.0000, recall of the surfaces its beams reached 0.94 to 0.95 and free-space coverage 0.98; the HC-SR04's
+is 99.1 % accurate with precision 0.87 to 0.88. Built from dead reckoning instead of the true poses, the lidar map
+falls to precision 0.34, with hundreds of cells mapped free inside obstacles. An update takes 1.3 ms on the Jetson
+(lidar, 100 × 100 cells; `MAP-2`). `rl_navigation.mapping.evaluation` drives and scores such runs; the package does
+not import it.

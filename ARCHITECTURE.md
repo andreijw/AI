@@ -62,14 +62,16 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 1. **Core Decoupling**: Algorithms and trainers in `rl_core` have zero coupling to specific Gymnasium environments.
 2. **Challenge Isolation**: Challenge-specific environments, physics domain randomizations, and configs reside in
    independent packages (`rl_cartpole`, `rl_pendulum`, `rl_acrobot`, `rl_mountaincar`, `rl_lunarlander`,
-   `rl_bipedalwalker`, `rl_navigation`). `rl_navigation` (Phase 8) is a library first, in three layers, each importing
+   `rl_bipedalwalker`, `rl_navigation`). `rl_navigation` (Phase 8) is a library first, in layers, each importing
    only the ones below it, so a robot's or another project's code can stop at any layer
    (`tests/test_import_footprint.py`):
    - `rl_navigation.sim` (`geometry`: `Arena`, batched `cast_rays`, swept-disc `segment_hits`, `clearance`,
-     `occupancy_grid`; `kinematics`; `sensors`: `RangeSensor`, `hc_sr04`, `lidar`; `odometry`: `WheelOdometry`;
-     `layouts`; `world`: `World`; `render`: the arena as an RGB array, `RangeSensor.beams` drawn over it, and overlay
-     painters for points, paths and pose markers) imports only NumPy and the standard library,
-     never Gymnasium or `rl_core`.
+     `occupancy_grid`; `kinematics`; `sensors`: `RangeSensor` with its `mount_origins` and `ray_angles`, the one
+     place a mount's position and its rays' directions are worked out, `hc_sr04`, `lidar`, and `usable_readings`, the
+     one rule for a reading that carries a range, which the estimators and the mapper share; `odometry`:
+     `WheelOdometry`; `layouts`; `world`: `World`; `render`: the arena as an RGB array, `RangeSensor.beams` drawn over
+     it, and overlay painters for points, paths and pose markers) imports only NumPy and the standard library, never
+     Gymnasium or `rl_core`.
    - `rl_navigation.estimation` is the robot's own code beside the Gymnasium layer, not under it: pose estimation on a
      known map (`ekf`: `EkfLocalizer`; `kalman`: `kalman_update` in Joseph form; `mcl`: `MclLocalizer`, augmented Monte
      Carlo localization with its pure resampling and likelihood functions; `evaluation`: seeded trials with either
@@ -86,6 +88,14 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
      is meant to plug in the same way, so the filters never name the map's type. The encoders are a simulator object,
      `WheelOdometry`, which the filter also uses as its motion model; it draws from its own generator, so adding it
      changed no seeded trajectory of the environment (`tests/test_env_golden.py`).
+   - `rl_navigation.mapping` is a peer of `estimation`, not a layer over it: a log-odds occupancy grid built from range
+     scans at known poses (`beams`: the exact, vectorised traversal of the cells a ray crosses and the inverse sensor
+     model's choice of free and occupied cells; `grid`: `OccupancyGrid` and its `LogOddsModel` presets for the lidar and
+     the HC-SR04). Its core imports NumPy and `rl_navigation.sim` only, so it runs on the robot without the estimators.
+     `evaluation`, seeded runs on `run_trial`'s trajectory scored against the arena rasterised with `occupancy_grid`, is
+     a desk tool the package's `__init__` does not import, and the only module of `mapping` that imports `estimation`;
+     neither `estimation` nor the challenge imports `mapping`. The grid is not yet a `RangeMap`: that arrives with the
+     first filter to localize on a built map (Phase 8, step 3, PR 3).
    - `rl_navigation.gym_env` (`NavigationGymEnv`) is the Gymnasium environment over the simulator, and importing it
      registers `Navigation-v0` and `NavigationContinuous-v0`. It imports Gymnasium and `rl_navigation.sim` only, so
      `import rl_navigation.gym_env; gym.make("NavigationContinuous-v0")` works without the training framework.
@@ -172,6 +182,7 @@ flowchart TD
         NavGym["rl_navigation.gym_env: Navigation-v0, NavigationContinuous-v0 (Gymnasium + sim only)"]
         NavSim["rl_navigation.sim: NumPy simulator (arena, ray casting, sensors, odometry, layouts, World, render)"]
         NavEst["rl_navigation.estimation: EkfLocalizer and MclLocalizer over a RangeMap (NumPy + sim only)"]
+        NavMap["rl_navigation.mapping: log-odds OccupancyGrid from scans at known poses (NumPy + sim only)"]
     end
 
     subgraph Core ["rl_core Framework"]
@@ -220,6 +231,7 @@ flowchart TD
     Navigation --> NavGym
     NavGym --> NavSim
     NavEst --> NavSim
+    NavMap --> NavSim
 ```
 
 ---

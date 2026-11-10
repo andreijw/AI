@@ -6,7 +6,7 @@ https://github.com/andreijw/AI/actions/workflows/ci.yml)
 A pure-NumPy reinforcement-learning framework and a NumPy robot navigation library, built toward a Jetson robot.
 
 **Works:** ten benchmark challenges with agents from REINFORCE to SAC, and localization (EKF and Monte Carlo) in
-simulation. **Not yet:** nothing has run on a real robot; mapping, planning and the hardware are open.
+simulation. **Not yet:** nothing has run on a real robot; SLAM, planning and the hardware are open.
 
 ## What's inside
 
@@ -44,7 +44,11 @@ extended Kalman filter (EKF) and Monte Carlo localization (MCL, which starts fro
 carried elsewhere). In simulation the EKF's position error is a few millimetres while tracking, but it recovers from
 a kidnapping in 10 to 18% of runs against MCL's 86 to 98%
 ([comparison report](docs/benchmarks/localization_results.md)). The video of one trial is written by
-`python -m rl_navigation.localization_video`:
+`python -m rl_navigation.localization_video`.
+
+`rl_navigation.mapping` builds an occupancy grid from the same scans at known poses: on fresh seeds the lidar map
+is 99.96 % accurate with no false occupied cell, while a map built from wheel odometry alone falls to 34 % precision,
+which is what SLAM is for.
 
 ![One frame of the seed-101 lidar localization video](docs/images/localization_seed101_step381.png)
 
@@ -55,7 +59,8 @@ Details, the API and the measurements are in [docs/navigation.md](docs/navigatio
 Where this is going, from the roadmap ([docs/roadmap.md](docs/roadmap.md)):
 
 - **Learning in simulation: done.** Classic control, Box2D and navigation challenges, REINFORCE to SAC.
-- **Knowing where it is: current.** Odometry, EKF and MCL work in simulation; mapping and SLAM are planned.
+- **Knowing where it is: current.** Odometry, EKF and MCL work in simulation, and so does mapping with known poses;
+  SLAM is planned.
 - **Planning and driving: planned.** A* and a path follower as a classical baseline for the learned policy.
 - **The real robot: planned, nothing run yet.** HC-SR04 and lidar on the Jetson, ROS 2 nodes, fitting the simulated
   noise to real readings. Beyond it, proposed only: MuJoCo robots and arms, GPU-parallel simulation, Isaac Lab,

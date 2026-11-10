@@ -190,7 +190,17 @@ steps 3 to 5 are sketches to turn into full items when picked.
   - **The EKF's lost HC-SR04 run at 30 % dropout** (one of 50 in `EST-3`, mean NEES 279 for the row): not diagnosed.
   - **Out of scope**: SLAM and unknown maps (step 3), odometry calibration (step 5).
 
-- [ ] **Occupancy-grid mapping and SLAM**
+- [~] **Occupancy-grid mapping and SLAM** (picked 2026-11-09; PR 1 mapping with known poses; PR 2 landmark EKF-SLAM;
+  PR 3 lidar scan matching and the grid as a `RangeMap` (`GridMap`); PR 4 grid FastSLAM; possibly PR 5 a report and
+  CLI)
+  - **Progress (PR 1, 2026-11-09)**: `rl_navigation.mapping` builds a log-odds occupancy grid from range scans at
+    known poses (5 cm cells, an exact vectorised beam traversal, presets for both sensors), as a peer of
+    `estimation`. On fresh seeds 101 to 150 the lidar maps pass every gate (accuracy 0.9996, precision 1.0000, recall
+    of seen surfaces 0.94 to 0.95, free-space coverage 0.98, at most 2 false-free cells per run, at the gate); the
+    HC-SR04 rows are reported; maps built from dead reckoning instead fall to precision 0.34 (CHANGELOG.md,
+    2026-11-09). Left for later PRs: SLAM, and a `deep` false-free metric whose neighbours lie in one obstacle (one
+    seed's 2 cells straddle a real 2 cm gap between two boxes). PR 2 needs a circle fit for landmarks, not yet
+    scoped.
   - **Description**: Occupancy-grid mapping from range readings with known poses (log-odds, an inverse sensor
     model for both presets), then SLAM without them: landmark EKF-SLAM, then a particle-filter grid SLAM
     (FastSLAM-style) with scan matching for the lidar preset. Judged by map and pose error against ground truth,

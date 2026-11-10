@@ -9,6 +9,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from rl_navigation.sim.geometry import Arena, FloatArray, clearance
 from rl_navigation.sim.sensors import RangeSensor
+from rl_navigation.sim.sensors import usable_readings as sim_usable_readings
 
 
 class RangeMap(Protocol):
@@ -69,11 +70,11 @@ class ParticleMap(RangeMap, Protocol):
 def usable_readings(readings: FloatArray, range_map: RangeMap) -> NDArray[np.bool_]:
     """``(N,)``: the readings that carry a range, ``min_range < z < max_range``.
 
-    A dropout, a driver's NaN and "nothing within range" all read as unusable, as does a reading
-    clipped at ``min_range``; NaN compares False, so it is never usable.
+    The simulator's rule, :func:`rl_navigation.sim.sensors.usable_readings`, which the mapper
+    shares: a dropout, a driver's NaN and "nothing within range" all read as unusable, as does a
+    reading clipped at ``min_range``.
     """
-    usable: NDArray[np.bool_] = (readings > range_map.min_range) & (readings < range_map.max_range)
-    return usable
+    return sim_usable_readings(readings, range_map)
 
 
 @dataclass(frozen=True, eq=False)

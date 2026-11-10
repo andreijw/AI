@@ -85,7 +85,8 @@ To optimize token usage and context window limits:
   (Phase 8); `__init__.py` imports nothing, so each layer below can be imported without the ones above it.
   * `src/rl_navigation/sim/`: the simulator, NumPy and the standard library only (never Gymnasium or `rl_core`):
     `geometry.py` (arena, batched ray casting, swept-disc collision, occupancy grid), `kinematics.py` (unicycle),
-    `sensors.py` (range sensors, `hc_sr04` and `lidar` presets), `odometry.py` (`WheelOdometry`: noisy left and
+    `sensors.py` (range sensors with `mount_origins` and `ray_angles`, `hc_sr04` and `lidar` presets, and
+    `usable_readings`), `odometry.py` (`WheelOdometry`: noisy left and
     right wheel travel), `layouts.py` (random layouts with a reachable goal), `world.py` (`World`: pose, motion
     with wheel slip, collision, goal, sensors) and `render.py` (the arena as an RGB array, and the overlay painters
     `paint_points`, `paint_path` and `paint_pose`).
@@ -98,6 +99,13 @@ To optimize token usage and context window limits:
     `python -m rl_navigation.estimation.comparison` command; not imported by the package) and `recording.py` (snapshots
     of the EKF and MCL on one seeded trial and the frames painted from them; not imported by the package). No
     environment or benchmark challenge uses it.
+  * `src/rl_navigation/mapping/`: occupancy-grid mapping with known poses, a peer of `estimation`: `beams.py`
+    (`traverse_cells`, the exact vectorised cell traversal, `endpoint_visits`, the inverse sensor model's free and
+    occupied cells, and `sensor_rays`) and `grid.py` (`OccupancyGrid`, the log-odds grid, and `LogOddsModel` with the
+    `LIDAR_LOG_ODDS` and `HC_SR04_LOG_ODDS` presets) import NumPy and `rl_navigation.sim` only; `evaluation.py`
+    (`record_run`, `build_map`, `score_map`, `map_trial`, `summarize_maps`: seeded runs on `run_trial`'s trajectory
+    scored against the true map) is a desk tool, the one module that imports `estimation`, and the package does not
+    import it.
   * `src/rl_navigation/localization_video.py`: `python -m rl_navigation.localization_video`, which writes a
     `recording` to an MP4 (imageio-ffmpeg, the `video` extra) and PNG stills (matplotlib); never overwrites a file.
   * `src/rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.

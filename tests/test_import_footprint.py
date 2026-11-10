@@ -142,6 +142,10 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.estimation.comparison",
         "rl_navigation.estimation.recording",
         "rl_navigation.localization_video",
+        "rl_navigation.mapping",
+        "rl_navigation.mapping.beams",
+        "rl_navigation.mapping.grid",
+        "rl_navigation.mapping.evaluation",
     ],
 )
 def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
@@ -181,6 +185,60 @@ def test_navigation_estimation_imports_only_the_simulator():
         f"rl_navigation.estimation loaded {result.stdout.strip()}: it may import NumPy, the "
         "standard library and rl_navigation.sim only."
     )
+
+
+def _loaded_navigation_packages(imports: str) -> list[str]:
+    """The ``rl_navigation`` subpackages a fresh process has loaded after ``imports``."""
+    code = (
+        "import sys; sys.path.insert(0, 'src'); "
+        f"import {imports}; "
+        "print(' '.join(sorted({m.split('.')[1] for m in sys.modules "
+        "if m.startswith('rl_navigation.')})))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.split()
+
+
+def test_the_mapping_core_imports_only_the_simulator():
+    """The mapper runs on the robot beside the simulator's geometry: not the estimators, not the
+    Gymnasium layer. It is a peer of rl_navigation.estimation, not a layer above it."""
+    loaded = _loaded_navigation_packages(
+        "rl_navigation.mapping, rl_navigation.mapping.beams, rl_navigation.mapping.grid"
+    )
+    assert loaded == ["mapping", "sim"], f"the mapping core loaded rl_navigation.{loaded}"
+
+
+def test_the_mapping_evaluation_desk_tool_imports_only_sim_and_estimation():
+    loaded = _loaded_navigation_packages("rl_navigation.mapping.evaluation")
+    assert set(loaded) <= {"estimation", "mapping", "sim"}, f"loaded rl_navigation.{loaded}"
+
+
+def test_the_mapping_package_does_not_import_its_evaluation():
+    code = (
+        "import sys; sys.path.insert(0, 'src'); import rl_navigation.mapping; "
+        "print('rl_navigation.mapping.evaluation' in sys.modules)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False", "rl_navigation/mapping/__init__.py imported evaluation"
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "rl_navigation.estimation",
+        "rl_navigation.estimation.evaluation",
+        "rl_navigation.environments",
+        "rl_navigation.benchmark",
+    ],
+)
+def test_the_estimators_and_the_challenge_do_not_load_the_mapper(module):
+    assert "mapping" not in _loaded_navigation_packages(module), f"{module} loaded the mapper"
 
 
 @pytest.mark.parametrize("module", ["rl_navigation.environments", "rl_navigation.benchmark"])
