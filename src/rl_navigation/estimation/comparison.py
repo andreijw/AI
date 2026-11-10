@@ -81,12 +81,18 @@ SENSORS: dict[str, SensorFactory] = {"hc_sr04": hc_sr04, "lidar": lidar}
 
 @dataclass(frozen=True)
 class EkfReset:
-    """The EKF's still-robot reset, as :class:`EkfLocalizer` takes it."""
+    """The EKF's still-robot reset and its hold, as :class:`EkfLocalizer` takes them.
+
+    ``nis_quantile`` is the hold's setting rather than the reset's; it lives here because the
+    records keep these settings as one ``ekf_reset`` entry, and a held scan counts toward the
+    reset. A record written before the hold has no ``nis_quantile``: it ran without it (None).
+    """
 
     reset_after: int | None = 3
     min_candidates: int = 2
     reset_std: tuple[float, float, float] = (0.2, 0.2, 0.1)
     reset_window: int = 20
+    nis_quantile: float | None = 0.999
 
 
 class InstrumentedLocalizer:
@@ -326,13 +332,32 @@ def _shared_settings(settings: Mapping[str, Any]) -> dict[str, Any]:
     return {**settings, "mcl_settings": mcl_settings}
 
 
+def _is_ekf(record: TrialRecord) -> bool:
+    """Whether the record is one of the EKF's trial sets."""
+    return bool(MODES[record.meta["mode"]][0] == "ekf")
+
+
+def _ekf_reset(record: TrialRecord) -> dict[str, Any]:
+    """The record's EKF settings; a record from before the hold ran without it."""
+    return {"nis_quantile": None, **record.meta["settings"]["ekf_reset"]}
+
+
+def _ekf_settings(records: Sequence[TrialRecord]) -> dict[str, Any] | None:
+    """The first EKF record's EKF settings (all agree once :func:`check_records` passed); None
+    without an EKF record. MCL records are skipped: they may predate the hold."""
+    return next((_ekf_reset(record) for record in records if _is_ekf(record)), None)
+
+
 def check_records(records: Sequence[TrialRecord]) -> None:
     """Refuse records that cannot be merged into one comparison; timings are not compared.
+
+    The EKF's settings (``ekf_reset``) are compared among EKF records only, since MCL does not
+    read them; so MCL records from before the hold merge with EKF records run with it.
 
     Raises:
         ValueError: No records; two of the same (sensor, dropout, mode, seed); or settings that
             differ (all of them within a sensor, all but the MCL covariance scale across
-            sensors).
+            sensors, and the EKF's among the EKF records).
     """
     if not records:
         raise ValueError("A comparison needs trial records; got none.")
@@ -344,15 +369,22 @@ def check_records(records: Sequence[TrialRecord]) -> None:
                 f"A duplicate trial record of (sensor, dropout, mode, seed) {identity}."
             )
         seen.add(identity)
-    shared = _shared_settings(records[0].meta["settings"])
+    ekf_reset = _ekf_settings(records)
+    shared: dict[str, Any] | None = None
     per_sensor: dict[str, dict[str, Any]] = {}
     for record in records:
-        settings = record.meta["settings"]
+        settings = {k: v for k, v in record.meta["settings"].items() if k != "ekf_reset"}
+        shared = _shared_settings(settings) if shared is None else shared
         sensor_settings = per_sensor.setdefault(record.meta["sensor"], settings)
         if _shared_settings(settings) != shared or settings != sensor_settings:
             raise ValueError(
                 f"Trial record {_identity(record.meta)} has other settings than the rest: "
                 f"{settings} against {sensor_settings if settings != sensor_settings else shared}."
+            )
+        if _is_ekf(record) and _ekf_reset(record) != ekf_reset:
+            raise ValueError(
+                f"Trial record {_identity(record.meta)} has other EKF settings than the rest: "
+                f"{_ekf_reset(record)} against {ekf_reset}."
             )
 
 
@@ -416,7 +448,7 @@ def _report_meta(records: Sequence[TrialRecord], deadline: int, hold: int) -> di
         "hold": hold,
         "mcl_settings": _shared_settings(settings)["mcl_settings"],
         "mcl_scales": dict(sorted(scales.items())),
-        "ekf_reset": settings["ekf_reset"],
+        "ekf_reset": _ekf_settings(records) or settings["ekf_reset"],
         "machines": sorted({timing["machine"] for timing in timings}),
         "blas_threads": sorted({timing["blas_threads"] for timing in timings}),
         "jobs_notes": sorted({timing["jobs_note"] for timing in timings}),
@@ -440,7 +472,8 @@ def merge_records(records: Sequence[TrialRecord], *, deadline: int, hold: int) -
     for record in records:
         row = groups.setdefault((record.meta["sensor"], record.meta["dropout"]), {})
         row.setdefault(record.meta["mode"], []).append(record)
-    window = int(records[0].meta["settings"]["ekf_reset"]["reset_window"])
+    ekf_reset = _ekf_settings(records)
+    window = 0 if ekf_reset is None else int(ekf_reset["reset_window"])
     rows = []
     row_seeds: dict[str, list[int]] = {}
     for sensor, dropout in sorted(
@@ -781,6 +814,14 @@ def format_markdown(rows: Sequence[ComparisonRow], meta: Mapping[str, Any]) -> s
             f"{reset['min_candidates']} candidates, variance floor ({_axes(reset['reset_std'])}) "
             f"squared, window {reset['reset_window']} scans."
         )
+    quantile = reset.get("nis_quantile")
+    if quantile is None:
+        hold_text = "EKF hold: off."
+    else:
+        hold_text = (
+            f"EKF hold: an update that does not converge or has an NIS over the chi-square "
+            f"{quantile:g} quantile keeps P."
+        )
     lines = [
         "# Localization comparison: EKF and MCL",
         "",
@@ -793,6 +834,7 @@ def format_markdown(rows: Sequence[ComparisonRow], meta: Mapping[str, Any]) -> s
         f"MCL: {mcl_settings['num_particles']} particles, {mcl_settings['max_beams']} beams, "
         f"model_std {mcl_settings['model_std']:g}; covariance scale {scales}.",
         reset_text,
+        hold_text,
         "",
         "## Tracking from the noisy start",
         "",

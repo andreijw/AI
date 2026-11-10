@@ -19,9 +19,15 @@ The filter follows the EKF localization of Thrun, Burgard and Fox, *Probabilisti
   exceeds ``linearity_window`` in any component is refused and the last one kept. Each iterate
   is linearized with the same check as the prior: a beam that fails it there (a corner within
   the window, or a non-finite cast) leaves the remaining iterations, since its central
-  difference could be huge and collapse ``P``; with no beam left the last iterate stands. ``P`` takes the last accepted ``K`` and ``H``. One iteration is the plain
-  EKF. Relinearizing matters most after a large error: a single update linearized centimetres
-  off leaves ``P`` overconfident.
+  difference could be huge and collapse ``P``; with no beam left the last iterate stands. ``P``
+  takes the last accepted ``K`` and ``H``. One iteration is the plain EKF. Relinearizing matters
+  most after a large error: a single update linearized centimetres off leaves ``P``
+  overconfident.
+- An update is *held* when it did not converge (an iterate's step was refused) or when its
+  normalised innovation squared exceeds the ``nis_quantile`` quantile of chi-square with as many
+  degrees of freedom as used beams: its mean moves to the last accepted iterate, but ``P`` stays
+  the prior, since a covariance from a linearization the scan contradicts would claim a precision
+  it does not have (after a reset it collapsed to millimetres round a pose metres off).
 
 **Frames and units.** The pose ``(x, y, theta)`` is the robot's axle midpoint (its centre) in the
 map's frame, metres and radians, ``theta`` in ``[-pi, pi)``. Wheel travel is in metres. A scan
@@ -29,6 +35,7 @@ passed to :meth:`EkfLocalizer.update` is taken at the pose reached by the last
 :meth:`EkfLocalizer.predict`.
 """
 
+import statistics
 from collections import deque
 from dataclasses import dataclass
 from typing import NamedTuple
@@ -98,6 +105,24 @@ def motion_jacobians(
     return F, G
 
 
+def chi2_quantile(q: float, dof: int) -> float:
+    """The ``q`` quantile of chi-square with ``dof`` degrees of freedom, by Wilson and Hilferty's
+    cube-root normal approximation: ``k (1 - 2/(9k) + z sqrt(2/(9k)))^3`` with ``z`` the normal
+    quantile. At 0.999 it is 3.0 % above the exact value for one degree of freedom (11.16 against
+    10.83) and closer for more (16.55 against 16.27 for three, 33.07 against 32.91 for twelve).
+
+    Raises:
+        ValueError: ``q`` not strictly between 0 and 1, or ``dof`` below 1.
+    """
+    if not 0.0 < q < 1.0:
+        raise ValueError(f"chi2_quantile needs a quantile strictly between 0 and 1, got {q}.")
+    if dof < 1:
+        raise ValueError(f"chi2_quantile needs at least 1 degree of freedom, got {dof}.")
+    z = statistics.NormalDist().inv_cdf(q)
+    spread = 2.0 / (9.0 * dof)
+    return float(dof * (1.0 - spread + z * spread**0.5) ** 3)
+
+
 class Linearization(NamedTuple):
     """The expected ranges at a pose and their Jacobian.
 
@@ -165,8 +190,10 @@ class UpdateResult:
         nis: Normalised innovation squared of the used beams at the first linearization (0 when
             none was used).
         iterations: Accepted iterations (0 when no beam was used).
-        reset: Whether this scan completed ``reset_after`` consecutive mostly gated scans and
-            raised the covariance (see :class:`EkfLocalizer`).
+        reset: Whether this scan completed ``reset_after`` consecutive counting scans (mostly
+            gated, or held) and raised the covariance (see :class:`EkfLocalizer`).
+        held: Whether the update was held: it did not converge, or its NIS exceeded the
+            ``nis_quantile`` quantile, so the mean moved but the covariance was kept.
     """
 
     used: NDArray[np.bool_]
@@ -175,6 +202,7 @@ class UpdateResult:
     nis: float
     iterations: int
     reset: bool = False
+    held: bool = False
 
 
 class EkfLocalizer:
@@ -183,21 +211,24 @@ class EkfLocalizer:
     **The reset.** A still robot's covariance collapses to a fraction of a millimetre; bumped a
     few centimetres, every beam then fails the gate and the filter never moves again. A scan
     *counts* when it has at least ``min_candidates`` candidate beams (used after the last
-    iteration, or gated) and at least half of them are gated. After ``reset_after``
-    consecutive counting scans the filter raises each variance to at least ``reset_std**2``
-    (``P[i, i] <- max(P[i, i], reset_std[i]^2)``, off-diagonals kept), and the count starts
-    again. The floor is idempotent, so a filter that
+    iteration, or gated) and either at least half of them are gated or its update was held (see
+    the module docstring). After ``reset_after`` consecutive counting scans the filter raises
+    each variance to at least ``reset_std**2`` (``P[i, i] <- max(P[i, i], reset_std[i]^2)``,
+    off-diagonals kept), and the count starts again. The floor is idempotent, so a filter that
     keeps resetting does not grow ``P`` without bound. :attr:`recent_resets` counts the resets
     in the last ``reset_window`` scans: **2 or more means the filter is lost** (it keeps
     resetting and cannot find a pose that explains the scans), 0 that the last reset, if any,
-    recovered it.
+    recovered it. Because a held scan counts, a filter whose scans keep contradicting it keeps
+    resetting, and so keeps reporting itself lost, until a scan converges and agrees.
 
     Limits: in a symmetric room a reset can lock onto a pose that explains the scans as well as
     the true one (a 90 degree alias of a square room); its covariance shrinks again and
     :attr:`recent_resets` falls to 0, so the filter is wrong and quiet. The particle filter has
-    the same limit. A reset needs gated beams: a heading bump of 0.3 rad on the HC-SR04's five
-    sonars fires none, because its beams leave the linearity window and are marked
-    ``nonlinear``, which are not candidates.
+    the same limit. A reset needs a scan that contradicts the estimate: a heading bump of
+    0.3 rad on the HC-SR04's five sonars fires none, because three of its sonars change by under
+    3 cm and stay used, one turns nonlinear and only one is gated. A wrong association that a
+    scan explains (a beam linearized on the wrong wall near a corner, consistent with its prior)
+    is not caught either; the hold acts on the next scan that contradicts it.
 
     Args:
         range_map: The known map seen through the robot's range sensor; its ``noise_std`` is the
@@ -219,6 +250,9 @@ class EkfLocalizer:
         reset_std: ``(3,)`` positive floor of the standard deviations ``(x, y, theta)`` after a
             reset, metres and radians.
         reset_window: Scans over which :attr:`recent_resets` counts (at least 1).
+        nis_quantile: The chi-square quantile above which an update's NIS holds it (in (0, 1));
+            0.999 holds about 0.5 % of scans in tracking. None turns the hold off entirely, a
+            refused iteration included: the filter as it was before the hold.
 
     Raises:
         ValueError: A pose or covariance of the wrong shape or not finite, a covariance that is
@@ -241,6 +275,7 @@ class EkfLocalizer:
         min_candidates: int = 2,
         reset_std: ArrayLike = (0.2, 0.2, 0.1),
         reset_window: int = 20,
+        nis_quantile: float | None = 0.999,
     ) -> None:
         pose, covariance = checked_start(pose, covariance, "EkfLocalizer")
         if not range_map.noise_std > 0.0:
@@ -251,6 +286,11 @@ class EkfLocalizer:
         settings = {"fd_step": fd_step, "linearity_window": linearity_window, "gate": gate}
         if linearity_tol is not None:
             settings["linearity_tol"] = linearity_tol
+        if nis_quantile is not None and not 0.0 < nis_quantile < 1.0:
+            raise ValueError(
+                f"EkfLocalizer nis_quantile must be in (0, 1) or None, got {nis_quantile}."
+            )
+        self.nis_quantile = nis_quantile
         for name, value in settings.items():
             if not value > 0.0:
                 raise ValueError(f"EkfLocalizer {name} must be positive, got {value}.")
@@ -297,13 +337,15 @@ class EkfLocalizer:
         """Resets within the last ``reset_window`` scans; 2 or more means the filter is lost."""
         return sum(self._recent)
 
-    def _counted_reset(self, used: NDArray[np.bool_], gated: NDArray[np.bool_]) -> bool:
+    def _counted_reset(
+        self, used: NDArray[np.bool_], gated: NDArray[np.bool_], held: bool = False
+    ) -> bool:
         """Count this scan toward the reset and apply the floor if it completes the run."""
         if self.reset_after is None:
             return False
         num_gated = int(np.count_nonzero(gated))
         candidates = int(np.count_nonzero(used)) + num_gated
-        counts = candidates >= self.min_candidates and 2 * num_gated >= candidates
+        counts = candidates >= self.min_candidates and (held or 2 * num_gated >= candidates)
         self._counting_scans = self._counting_scans + 1 if counts else 0
         reset = self._counting_scans >= self.reset_after
         if reset:
@@ -343,7 +385,8 @@ class EkfLocalizer:
         ``max_range`` (no echo), at or below ``min_range`` (clipped), when its expected range is
         within ``3 sigma_r`` of ``max_range``, when its beam is not linear, or when the gate
         rejects it. With nothing used the pose and covariance are left exactly as they were,
-        unless the scan completes a reset, which raises the covariance's diagonal.
+        unless the scan completes a reset, which raises the covariance's diagonal. A held update
+        moves the pose but keeps the covariance (see the module docstring).
 
         Args:
             readings: ``(N,)`` scan in the sensor's mount order, metres.
@@ -390,6 +433,7 @@ class EkfLocalizer:
         )
         x_i, P_i, accepted = x0, P0, 0
         active = final = used
+        refused = False
         while True:
             offset = pose_difference(x_i, x0)
             x_next, P_next = kalman_update(
@@ -399,6 +443,7 @@ class EkfLocalizer:
             if accepted:
                 step = pose_difference(x_next, x_i)
                 if np.any(np.abs(step) > self.linearity_window):
+                    refused = True
                     break
             x_i, P_i, accepted, final = x_next, P_next, accepted + 1, active
             if accepted == self.iterations:
@@ -412,12 +457,16 @@ class EkfLocalizer:
             if not active.any():
                 break
             H_i, innovation_i = relinearized.H[active], z[active] - relinearized.h[active]
-        self._pose, self._covariance = x_i, P_i
+        held = self.nis_quantile is not None and (
+            refused or nis > chi2_quantile(self.nis_quantile, int(np.count_nonzero(used)))
+        )
+        self._pose, self._covariance = x_i, P0 if held else P_i
         return UpdateResult(
             final,
             gated,
             lin.nonlinear | (used & ~final),
             nis,
             accepted,
-            self._counted_reset(final, gated),
+            self._counted_reset(final, gated, held),
+            held,
         )

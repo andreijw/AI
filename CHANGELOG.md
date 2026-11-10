@@ -16,6 +16,35 @@ Acrobot-v1) and
 
 ### Added
 
+- **EKF robustness: a held update keeps its covariance** (`feature/ekf-robustness`; the maintainer's decisions of
+  2026-11-09):
+  - **The cause.** After a reset (a kidnapping, or a wrong wall matched near a corner) the next scan's update could
+    not converge and was plainly inconsistent with the prediction (NIS in the thousands), yet it still shrank the
+    covariance from 200 mm to about 2 mm round a wrong pose. Seed 131's lost HC-SR04 run (`EST-3`, 30 % dropout)
+    began when a sonar matched the wrong wall near a corner while its neighbour was a dropout.
+  - **The hold.** An update whose iteration refused a step, or whose NIS at the first linearization exceeds the
+    chi-square 0.999 quantile (Wilson-Hilferty, at most 3 % high at one beam), keeps the moved estimate but the prior
+    covariance, and counts toward the reset when it has at least `min_candidates` candidates. `UpdateResult.held`;
+    `EkfLocalizer(nis_quantile=0.999)`, with `None` turning the hold off (bit-identical to the old filter on all 200
+    `EST-1` runs). Chosen over freezing the estimate as well (4 of 14 bump recoveries instead of 11, lidar tracking
+    error six times higher), inflating the covariance (a lost `EST-1` run) and refused-step-only (seed 131 stays
+    lost).
+  - **Results** (full reruns of `EST-1` and the EKF part of `EST-3`; MCL's rows bit-identical): tracking unchanged
+    to 4 decimals (mean NEES 3.05 to 3.25); the lost HC-SR04 run is gone (0 of 50, position RMSE 6.8 mm against
+    0.33 m, mean NEES 3.38 against 279); kidnap recovery with the lidar 0.16 to 0.30 and 0.10 to 0.24, with the
+    HC-SR04 0.16 to 0.20 and 0.18 to 0.14 (9 against 7 of 50, within noise); steps collapsed onto a wrong pose after
+    a kidnapping fall by 89 % and 81 % (lidar) and 41 % and 10 % (HC-SR04). `EST-4`'s seed 101 now re-localizes 138
+    steps after the kidnapping.
+  - **Not better: the HC-SR04's "confidently wrong" share** rose from 0.321 to 0.354 and 0.308 to 0.341, mostly
+    filters sitting at the 0.2 m reset floor 1 to 2 m off; shipped with a follow-up item (the maintainer's decision).
+  - **Correction.** The 2026-11-08 entry says an HC-SR04 0.3 rad bump fires no reset because its beams turn
+    nonlinear; in fact three of its four candidate sonars agree with the wrong heading. It stays a documented limit,
+    and the roadmap criterion "a reset fires for the 0.3 rad HC-SR04 bump" was dropped (the maintainer's decision).
+  - Superseded figures: the EKF rows of `docs/benchmarks/localization_results.md` (regenerated), the EKF's 10 to 18 %
+    recovery and its 23.9 to 32.1 % confidently-wrong share (now 14 to 30 % and 12.3 to 35.4 %), and the 2026-11-08
+    "199 of 200 bit-identical" `EST-1` figures (now 183 of 200 runs differ from before the hold). TESTING.md `EST-1`,
+    `EST-3`, `EST-4`.
+
 - **Occupancy-grid mapping with known poses** (`feature/occupancy-grid-mapping`; PR 1 of the roadmap item
   "Occupancy-grid mapping and SLAM"):
   - **`rl_navigation.mapping`** builds a log-odds occupancy grid (Thrun, Burgard and Fox, *Probabilistic Robotics*,

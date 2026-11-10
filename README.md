@@ -42,7 +42,7 @@ held-out layouts after 100,000 steps; the random agent in 1%.
 `rl_navigation.estimation` finds the robot's pose on a known map from wheel encoders and range readings, with an
 extended Kalman filter (EKF) and Monte Carlo localization (MCL, which starts from anywhere and recovers from being
 carried elsewhere). In simulation the EKF's position error is a few millimetres while tracking, but it recovers from
-a kidnapping in 10 to 18% of runs against MCL's 86 to 98%
+a kidnapping in 14 to 30% of runs against MCL's 86 to 98%
 ([comparison report](docs/benchmarks/localization_results.md)). The video of one trial is written by
 `python -m rl_navigation.localization_video`.
 
