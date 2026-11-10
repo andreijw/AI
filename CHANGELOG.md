@@ -16,6 +16,17 @@ Acrobot-v1) and
 
 ### Added
 
+- **A golden of seeded training runs** (`feature/parallel-envs`; PR 0 of the roadmap item "Parallel environments for
+  the on-policy agents"): `tests/test_trainer_golden.py` runs `Trainer.train()` on 13 tiny seeded cases (REINFORCE,
+  Actor-Critic, PPO and DQN in both action kinds where they exist; linear and reward-threshold curricula; observation
+  normalisation; a trainer cut and time-limit truncation; evaluation with and without an evaluation environment;
+  `save_frequency` and `save_final`; a step budget; `is_success`) and compares every episode, metric record,
+  checkpoint name and key, the final agent state and the environment's generators with arrays recorded on develop
+  (`tests/data/trainer_training.npz`; floats to a relative 1e-12, the rest exactly; `RECORD_TRAINER_GOLDEN=1`
+  re-records, `TRAINER_GOLDEN_EXACT=1` demands bit-for-bit). Each case also runs with `num_envs: 1`; six deliberate
+  trainer mutations (a draw order, a lost bootstrap, chunks off by one, an early evaluation, a skipped final save, a
+  curriculum fed the wrong reward) are all caught. Tests only.
+
 - **EKF robustness: a held update keeps its covariance** (`feature/ekf-robustness`; the maintainer's decisions of
   2026-11-09):
   - **The cause.** After a reset (a kidnapping, or a wrong wall matched near a corner) the next scan's update could

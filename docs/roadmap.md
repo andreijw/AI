@@ -41,7 +41,15 @@ No open items.
 
 ### Training
 
-- [ ] **Parallel environments for the on-policy agents** (added by the maintainer, 2026-11-04)
+- [~] **Parallel environments for the on-policy agents** (added by the maintainer, 2026-11-04; picked 2026-11-09;
+  PR 0 a golden of seeded training runs, PR 1 N environments for REINFORCE and Actor-Critic, PR 2 one update clock and
+  PPO, async environments deferred)
+  - **Progress (PR 0, 2026-11-09)**: `tests/test_trainer_golden.py` pins 13 seeded `Trainer.train()` runs (every
+    agent kind, curriculum, normaliser, cuts and truncation, evaluation, checkpoints, step budget, success) to
+    recorded arrays, so the later PRs can show `num_envs: 1` is today's training (CHANGELOG.md, 2026-11-09).
+    Approved for the item (the maintainer, 2026-11-09): one key, `training.num_envs`; an in-process environment pool;
+    independent seed streams per environment; PPO at N > 1 only with the one-clock layout; the Pendulum 8 × 8
+    measurement with a second `learning_rate: 0.002` arm, measurement only.
   - **Description**: The `Trainer` steps one environment, one episode at a time. rl-zoo's A2C collects from 8
     environments in lockstep (64 transitions per update on Pendulum), and its PPO configs usually from several too;
     ours cannot follow either recipe. Add `training.num_envs` for the on-policy agents (REINFORCE, and Actor-Critic
