@@ -7,12 +7,48 @@ surface within its cone, cast as ``rays_per_cone`` rays spread evenly across the
 
 import math
 from dataclasses import dataclass, field
+from typing import Protocol
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
 from rl_navigation.sim.geometry import Arena, FloatArray, cast_rays
 from rl_navigation.sim.kinematics import wrap_angle
+
+
+class RangeLimits(Protocol):
+    """The two limits that decide whether a reading carries a range: a :class:`RangeSensor`, or a
+    map the estimators read through it (``rl_navigation.estimation.maps.RangeMap``)."""
+
+    @property
+    def min_range(self) -> float:
+        """Nearest distance the sensor reports, in metres."""
+        ...
+
+    @property
+    def max_range(self) -> float:
+        """Farthest distance the sensor reports, in metres; a lost reading reads this."""
+        ...
+
+
+def usable_readings(readings: ArrayLike, limits: RangeLimits) -> NDArray[np.bool_]:
+    """The readings that carry a range, ``min_range < z < max_range``, as booleans of their shape.
+
+    A dropout, a driver's NaN and "nothing within range" all read as unusable, as does a reading
+    clipped at ``min_range``; NaN compares False, so it is never usable. This is the one rule the
+    estimators and the mapper share.
+    """
+    z = np.asarray(readings, dtype=np.float64)
+    usable: NDArray[np.bool_] = (z > limits.min_range) & (z < limits.max_range)
+    return usable
+
+
+def _pose_rows(poses: ArrayLike) -> FloatArray:
+    """``poses`` as a ``(P, 3)`` float64 array, refusing any other shape."""
+    rows = np.asarray(poses, dtype=np.float64)
+    if rows.ndim != 2 or rows.shape[1] != 3:
+        raise ValueError(f"RangeSensor needs poses of shape (P, 3), got {rows.shape}.")
+    return rows
 
 
 def _check_noise(noise_std: float, dropout_prob: float) -> None:
@@ -93,27 +129,65 @@ class RangeSensor:
         """Number of readings per scan, one per mount."""
         return len(self.mount_angles)
 
+    def mount_origins(self, poses: ArrayLike) -> FloatArray:
+        """Where each mount sits, from many poses: ``mount_radius`` along heading plus mount angle.
+
+        Args:
+            poses: ``(P, 3)`` poses ``(x, y, theta)``.
+
+        Returns:
+            ``(P, N, 2)`` mount positions; every one is the pose's ``(x, y)`` for a sensor at the
+            centre (``mount_radius`` 0).
+
+        Raises:
+            ValueError: ``poses`` is not ``(P, 3)``.
+        """
+        poses = _pose_rows(poses)
+        mounts = poses[:, 2, None] + self.mount_angles  # (P, N)
+        origins: FloatArray = poses[:, None, :2] + self.mount_radius * np.stack(
+            [np.cos(mounts), np.sin(mounts)], axis=-1
+        )
+        return origins
+
+    def ray_angles(self, poses: ArrayLike) -> FloatArray:
+        """The direction of every ray of every mount, from many poses.
+
+        Args:
+            poses: ``(P, 3)`` poses ``(x, y, theta)``.
+
+        Returns:
+            ``(P, N, K)`` angles in radians, heading plus :attr:`ray_offsets` (``K`` is
+            ``rays_per_cone``; with an odd ``K`` the middle ray points along its mount).
+
+        Raises:
+            ValueError: ``poses`` is not ``(P, 3)``.
+        """
+        poses = _pose_rows(poses)
+        angles: FloatArray = poses[:, 2, None, None] + self.ray_offsets
+        return angles
+
     def true_ranges(self, arena: Arena, poses: ArrayLike) -> FloatArray:
         """Noiseless, unclipped ranges from many poses at once (for a particle filter's likelihood).
 
+        Rays start at :meth:`mount_origins` and point along :meth:`ray_angles`. A sensor at the
+        centre casts every ray from one origin per pose, which costs a particle filter's
+        likelihood about a quarter less than one origin per mount.
+
         Args:
             arena: The arena.
-            poses: ``(P, 3)`` poses ``(x, y, theta)``.
+            poses: ``(P, 3)`` poses ``(x, y, theta)``, or one ``(3,)`` pose.
 
         Returns:
             ``(P, N)``: for each pose and mount, the minimum distance over the cone's rays,
             measured from the mount.
         """
         poses = np.asarray(poses, dtype=np.float64).reshape(-1, 3)
+        angles = self.ray_angles(poses)  # (P, N, K)
         if self.mount_radius == 0.0:  # every ray starts at the centre: one origin per pose
-            ranges = cast_rays(arena, poses[:, :2], poses[:, 2, None] + self.ray_offsets.ravel())
+            ranges = cast_rays(arena, poses[:, :2], angles.reshape(len(poses), -1))
         else:  # one origin per mount, on the robot's perimeter
-            mounts = poses[:, 2, None] + self.mount_angles  # (P, N)
-            origins = poses[:, None, :2] + self.mount_radius * np.stack(
-                [np.cos(mounts), np.sin(mounts)], axis=-1
-            )  # (P, N, 2)
-            angles = (poses[:, 2, None, None] + self.ray_offsets).reshape(-1, self.rays_per_cone)
-            ranges = cast_rays(arena, origins.reshape(-1, 2), angles)
+            origins = self.mount_origins(poses).reshape(-1, 2)
+            ranges = cast_rays(arena, origins, angles.reshape(-1, self.rays_per_cone))
         return ranges.reshape(len(poses), self.num_readings, -1).min(axis=-1)
 
     def beams(self, pose: ArrayLike, readings: ArrayLike) -> FloatArray:
@@ -125,13 +199,13 @@ class RangeSensor:
                 drawn at full length.
 
         Returns:
-            ``(N, 2, 2)``: for each mount, its position and the point ``readings`` metres along
-            its direction.
+            ``(N, 2, 2)``: for each mount, its position (:meth:`mount_origins`) and the point
+            ``readings`` metres along its direction.
         """
-        x, y, theta = np.asarray(pose, dtype=np.float64)
-        angles = theta + self.mount_angles
+        poses = np.asarray(pose, dtype=np.float64).reshape(1, 3)
+        angles = poses[0, 2] + self.mount_angles
         directions = np.stack([np.cos(angles), np.sin(angles)], axis=1)
-        mounts = np.array([x, y]) + self.mount_radius * directions
+        mounts = self.mount_origins(poses)[0]
         ranges = np.asarray(readings, dtype=np.float64).reshape(-1, 1)
         return np.stack([mounts, mounts + ranges * directions], axis=1)
 

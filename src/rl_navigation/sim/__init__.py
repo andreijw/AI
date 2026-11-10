@@ -8,7 +8,7 @@ from rl_navigation.sim.geometry import Arena, cast_rays, clearance, occupancy_gr
 from rl_navigation.sim.kinematics import unicycle_step, wrap_angle
 from rl_navigation.sim.layouts import Layout, LayoutParams, generate_layout, path_exists
 from rl_navigation.sim.odometry import WheelOdometry
-from rl_navigation.sim.sensors import RangeSensor, hc_sr04, lidar
+from rl_navigation.sim.sensors import RangeLimits, RangeSensor, hc_sr04, lidar, usable_readings
 from rl_navigation.sim.world import Motion, World
 
 __all__ = [
@@ -16,6 +16,7 @@ __all__ = [
     "Layout",
     "LayoutParams",
     "Motion",
+    "RangeLimits",
     "RangeSensor",
     "WheelOdometry",
     "World",
@@ -28,5 +29,6 @@ __all__ = [
     "path_exists",
     "segment_hits",
     "unicycle_step",
+    "usable_readings",
     "wrap_angle",
 ]

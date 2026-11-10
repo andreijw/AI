@@ -5,8 +5,11 @@ import math
 import numpy as np
 import pytest
 
-from rl_navigation.sim.geometry import Arena
-from rl_navigation.sim.sensors import RangeSensor, hc_sr04, lidar
+from rl_navigation.estimation.maps import SensorMap
+from rl_navigation.sim.geometry import Arena, cast_rays
+from rl_navigation.sim.layouts import LayoutParams, generate_layout
+from rl_navigation.sim.sensors import RangeSensor, hc_sr04, lidar, usable_readings
+from tests.navigation_cases import free_poses
 
 EMPTY = Arena(width=5.0, height=5.0)
 CENTRE = np.array([2.5, 2.5, 0.0])
@@ -237,3 +240,122 @@ def test_beams_turn_with_the_heading_and_draw_a_dropout_at_full_range():
     sensor = lidar(num_beams=1, max_range=4.0)
     beams = sensor.beams([1.0, 0.5, math.pi / 2], [sensor.max_range])
     np.testing.assert_allclose(beams, [[[1.0, 0.5], [1.0, 4.5]]], atol=1e-12)
+
+
+def true_ranges_before_the_shared_helpers(sensor: RangeSensor, arena: Arena, poses) -> np.ndarray:
+    """A verbatim copy of ``RangeSensor.true_ranges`` as it was before ``mount_origins`` and
+    ``ray_angles`` existed (develop at 3bd91a4), kept as the oracle that the refactor onto them
+    changed no bit of any range: the golden tests compare with tolerances and would miss it."""
+    poses = np.asarray(poses, dtype=np.float64).reshape(-1, 3)
+    if sensor.mount_radius == 0.0:  # every ray starts at the centre: one origin per pose
+        ranges = cast_rays(arena, poses[:, :2], poses[:, 2, None] + sensor.ray_offsets.ravel())
+    else:  # one origin per mount, on the robot's perimeter
+        mounts = poses[:, 2, None] + sensor.mount_angles  # (P, N)
+        origins = poses[:, None, :2] + sensor.mount_radius * np.stack(
+            [np.cos(mounts), np.sin(mounts)], axis=-1
+        )  # (P, N, 2)
+        angles = (poses[:, 2, None, None] + sensor.ray_offsets).reshape(-1, sensor.rays_per_cone)
+        ranges = cast_rays(arena, origins.reshape(-1, 2), angles)
+    return ranges.reshape(len(poses), sensor.num_readings, -1).min(axis=-1)
+
+
+ORACLE_SENSORS = {
+    "lidar": lidar(),
+    "hc_sr04": hc_sr04(),
+    "centre_cone": RangeSensor(mount_angles=[0.0, 1.0], cone_width=0.2, rays_per_cone=3),
+}
+
+
+@pytest.mark.parametrize("name", sorted(ORACLE_SENSORS))
+def test_true_ranges_are_bit_identical_to_before_the_shared_mount_helpers(name):
+    """true_ranges now casts from mount_origins and ray_angles; every range must be the same
+    float as before, on 200 free poses of a seeded layout with circles and boxes."""
+    sensor = ORACLE_SENSORS[name]
+    arena = generate_layout(np.random.default_rng(7), LayoutParams()).arena
+    poses = free_poses(arena, 200, seed=8)
+    assert sensor.mount_origins(poses).shape == (len(poses), sensor.num_readings, 2)
+    np.testing.assert_array_equal(
+        sensor.true_ranges(arena, poses),
+        true_ranges_before_the_shared_helpers(sensor, arena, poses),
+        err_msg=f"{name}: true_ranges changed after the refactor onto the shared helpers",
+    )
+
+
+def test_mount_origins_lie_on_the_mount_radius_along_each_mount_direction():
+    """HC-SR04 mounts sit 0.1 m from the centre along heading + mount angle; a lidar's at it."""
+    poses = np.array([[1.0, 2.0, 0.3], [3.0, 1.0, -2.0]])
+    sonar = hc_sr04()
+    origins = sonar.mount_origins(poses)
+    directions = poses[:, 2, None] + sonar.mount_angles  # (2, 5)
+    expected = poses[:, None, :2] + 0.1 * np.stack([np.cos(directions), np.sin(directions)], -1)
+    np.testing.assert_allclose(origins, expected, atol=1e-15)
+    np.testing.assert_array_equal(
+        lidar().mount_origins(poses), np.repeat(poses[:, None, :2], 64, axis=1)
+    )
+
+
+def test_ray_angles_are_the_heading_plus_each_mounts_ray_offsets():
+    poses = np.array([[1.0, 2.0, 0.3], [3.0, 1.0, -2.0]])
+    sonar = hc_sr04()
+    angles = sonar.ray_angles(poses)
+    assert angles.shape == (2, 5, 5)
+    np.testing.assert_array_equal(angles, poses[:, 2, None, None] + sonar.ray_offsets)
+    # With an odd ray count the middle ray points along the mount.
+    np.testing.assert_allclose(angles[:, :, 2], poses[:, 2, None] + sonar.mount_angles, atol=1e-15)
+
+
+def test_beams_start_at_the_mount_origins_along_the_middle_ray():
+    sonar = hc_sr04()
+    pose = np.array([1.5, 2.0, 0.7])
+    readings = np.array([0.5, 1.0, 1.5, 2.0, 4.0])
+    beams = sonar.beams(pose, readings)
+    np.testing.assert_array_equal(beams[:, 0], sonar.mount_origins(pose[None])[0])
+    middle = sonar.ray_angles(pose[None])[0, :, 2]
+    ends = beams[:, 0] + readings[:, None] * np.stack([np.cos(middle), np.sin(middle)], -1)
+    np.testing.assert_allclose(beams[:, 1], ends, atol=1e-12)
+
+
+@pytest.mark.parametrize("bad", [np.zeros(2), np.zeros((2, 4))])
+def test_mount_origins_reject_poses_that_are_not_rows_of_three(bad):
+    with pytest.raises(ValueError, match=r"\(P, 3\)"):
+        lidar().mount_origins(bad)
+
+
+def test_usable_readings_keep_only_ranges_strictly_inside_the_sensor_limits():
+    """A dropout (max_range), a clipped reading (min_range) and NaN carry no range."""
+    sensor = lidar(min_range=0.05, max_range=4.0)
+    readings = np.array([0.05, 0.0500001, 2.0, 3.9999, 4.0, np.nan, 5.0, 0.01])
+    np.testing.assert_array_equal(
+        usable_readings(readings, sensor), [False, True, True, True, False, False, False, False]
+    )
+
+
+def test_estimation_usable_readings_is_the_simulator_rule():
+    """The estimators keep their import, and it is the same rule, not a copy."""
+    from rl_navigation.estimation import usable_readings as estimation_usable_readings
+
+    sensor = hc_sr04()
+    readings = np.array([0.02, 0.5, 4.0, np.nan, 3.0])
+    np.testing.assert_array_equal(
+        estimation_usable_readings(readings, SensorMap(EMPTY, sensor)),
+        usable_readings(readings, sensor),
+    )
+
+
+@pytest.mark.parametrize(("sensor", "origins_per_pose"), [(lidar(), 1), (hc_sr04(), 5)])
+def test_true_ranges_casts_one_origin_per_pose_for_a_centre_sensor(
+    monkeypatch, sensor, origins_per_pose
+):
+    """A lidar at the centre casts all its rays from one origin per pose: one per mount would cost
+    a particle filter's likelihood about 37 % (27 against 37 ms at 2000 particles, 16 beams)."""
+    from rl_navigation.sim import sensors
+
+    calls = []
+
+    def spy(arena, origins, angles, *args, **kwargs):
+        calls.append(np.shape(origins))
+        return cast_rays(arena, origins, angles, *args, **kwargs)
+
+    monkeypatch.setattr(sensors, "cast_rays", spy)
+    sensor.true_ranges(EMPTY, np.array([[1.0, 1.0, 0.0], [2.0, 3.0, 1.0], [4.0, 2.0, -2.0]]))
+    assert calls == [(3 * origins_per_pose, 2)]

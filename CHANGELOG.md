@@ -16,6 +16,29 @@ Acrobot-v1) and
 
 ### Added
 
+- **Occupancy-grid mapping with known poses** (`feature/occupancy-grid-mapping`; PR 1 of the roadmap item
+  "Occupancy-grid mapping and SLAM"):
+  - **`rl_navigation.mapping`** builds a log-odds occupancy grid (Thrun, Burgard and Fox, *Probabilistic Robotics*,
+    Table 9.1) from range scans at known poses: an exact vectorised traversal of each beam's cells (half-open
+    intervals, so a hit on a cell border goes to the far cell), the endpoint cell occupied and the cells before it
+    free, clamped to [0.12, 0.97]. Presets: the lidar `p_hit` 0.7 and `p_miss` 0.45 (one hit makes a cell occupied,
+    18 misses free it again), the HC-SR04 0.6 and 0.45, each of its five cone rays traced with the mount's reading.
+    Readings at maximum range, dropouts and NaN change nothing. 5 cm cells by default.
+  - **Layering.** The core imports NumPy and `rl_navigation.sim` only, a peer of `estimation`; only the desk tool
+    `mapping.evaluation` imports `estimation`, to drive runs through `run_trial` with a recording stub. The sensors'
+    mount geometry (`RangeSensor.mount_origins`, `ray_angles`) and the usable-reading rule (`usable_readings`,
+    `RangeLimits`) moved into `sim`; `true_ranges` is bit-identical to before (an oracle test against the old code),
+    and MCL's update time is unchanged.
+  - **`MAP-1`** (judged once on fresh seeds 101 to 150, 600 steps, own dropout and 30 %; criteria fixed beforehand):
+    the lidar passes every gate: accuracy 0.9996, occupied precision 1.0000, recall of seen surfaces 0.937 and 0.953,
+    free-space coverage 0.984 and 0.983, at most 2 false-free cells in any run (at the gate: one seed's 2 cells
+    straddle a real 2.1 cm gap between two boxes, which the metric counts; another's 1 cell is a 3.4σ reading). The
+    HC-SR04, reported without a gate (the maintainer's decision): accuracy 0.991, precision 0.87 to 0.88, recall
+    0.84 to 0.85, coverage 0.91 to 0.92. Built from dead reckoning instead of the true poses, the lidar map falls to
+    precision 0.34 with 439 false-free cells per run on average: the case for SLAM. About 5 minutes on the Jetson.
+  - **`MAP-2`**: an update takes 1.3 ms (lidar, 64 beams, 100 × 100 cells), 0.7 ms (HC-SR04) and 3.4 ms (lidar,
+    400 × 400) on the Jetson Orin Nano. TESTING.md `MAP-1` and `MAP-2`.
+
 - **Why Pendulum PPO collapses with observation normalisation: a fit problem, not a defect**
   (`fix/pendulum-ppo-normalisation`; closes the Code Health item; the maintainer's decision, 2026-11-09):
   - **No code defect.** With `normalize_observations: true`, the old log-probs PPO stores match those at collection
