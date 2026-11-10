@@ -177,17 +177,27 @@ steps 3 to 5 are sketches to turn into full items when picked.
 
 - [ ] **State estimation follow-ups** (left open when the State estimation item closed, 2026-11-09; CHANGELOG.md,
   2026-11-06 to 2026-11-09)
-  - **Symmetric arenas.** Both filters can settle on a mirror pose with nothing to flag it: MCL's resampling keeps
-    one mirror hypothesis within 1 to 3 scans, so `cluster_weight` ends near 1, and after a 1.5 rad bump the lidar
-    EKF settled on the square room's 90° alias once its resets stopped.
-  - **A reset trigger for nonlinear scans.** The EKF's reset counts gated beams, so an HC-SR04 bump of 0.3 rad,
-    whose beams turn nonlinear rather than gated, fires none.
-  - **MCL's covariance scale for the HC-SR04 with its own dropout** fails the ANEES-band gate on seeds 101 to 150
-    (82.5 % against 85 %); the default scale stays (1, 1, 1).
-  - **The EKF's reset does not hold after a kidnapping.** On seed 101 (lidar, `EST-4`) the reset fires every three or
-    four scans, and the next scan's update collapses the covariance back to a few millimetres round a wrong pose,
-    which may be why the EKF recovers in only 10 to 18 % of `EST-3`'s runs. Not investigated.
-  - **The EKF's lost HC-SR04 run at 30 % dropout** (one of 50 in `EST-3`, mean NEES 279 for the row): not diagnosed.
+  - **Symmetric arenas** (deferred until occupancy-grid mapping has landed, the maintainer's decision, 2026-11-09).
+    Both filters can settle on a mirror pose with nothing to flag it: MCL's resampling keeps one mirror hypothesis
+    within 1 to 3 scans, so `cluster_weight` ends near 1, and after a 1.5 rad bump the lidar EKF settled on the
+    square room's 90° alias once its resets stopped. Options: keep several MCL clusters alive and report the
+    ambiguity, prefer symmetry-breaking moves, or rely on distinctive features from the map.
+  - **The EKF's hold leaves sparse HC-SR04 scans quiet** (found by EKF robustness, CHANGELOG.md 2026-11-09; the
+    maintainer chose to ship and follow up). A held scan counts toward the reset only with at least
+    `min_candidates` (2) candidates, so an HC-SR04 filter held at the 0.2 m floor while 1 to 2 m off can go 20 scans
+    without reporting itself lost: its "confidently wrong" share after a kidnapping rose from 0.321 to 0.354 and
+    0.308 to 0.341, and at 30 % dropout its steps under 1 cm of uncertainty while lost rose from 1,278 to 1,405.
+    Options: count a held scan with one candidate (a rule change; rerun `EST-1` and the EKF part of `EST-3`, about
+    40 minutes), and make the confidently-wrong metric also require a small σ, so a filter sitting at the reset
+    floor is not counted as confident.
+  - **Accepted limit: the 0.3 rad HC-SR04 heading bump** (the maintainer's decision, 2026-11-09). No reset fires:
+    three of the four candidate sonars happen to agree with the wrong heading (one turns nonlinear, one is gated),
+    so the scan looks consistent. Documented in `EkfLocalizer` and pinned by
+    `test_a_heading_bump_the_sonars_barely_see_fires_no_reset`; the earlier explanation, "the beams turn nonlinear
+    rather than gated", was wrong.
+  - **Accepted limit: MCL's covariance scale for the HC-SR04 with its own dropout** fails the ANEES-band gate on
+    seeds 101 to 150 (82.5 % against 85 %) while passing the per-axis gate (0.92 to 1.06); the default scale stays
+    (1, 1, 1). Kept as a documented limit (the maintainer's decision, 2026-11-09); refit when MCL's settings change.
   - **Out of scope**: SLAM and unknown maps (step 3), odometry calibration (step 5).
 
 - [ ] **Occupancy-grid mapping and SLAM**

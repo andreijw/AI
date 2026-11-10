@@ -256,6 +256,7 @@ REPORT_META = {
         "min_candidates": 2,
         "reset_std": [0.2, 0.2, 0.1],
         "reset_window": 20,
+        "nis_quantile": 0.999,
     },
     "machines": ["Linux-aarch64"],
     "blas_threads": ["OPENBLAS_NUM_THREADS=1"],
@@ -274,6 +275,8 @@ MCL: 2000 particles, 16 beams, model_std 0.15; covariance scale hc_sr04 (1, 1, 1
 (0.5, 0.25, 2).
 EKF reset: after 3 counting scans of at least 2 candidates, variance floor (0.2, 0.2, 0.1) \
 squared, window 20 scans.
+EKF hold: an update that does not converge or has an NIS over the chi-square 0.999 quantile \
+keeps P.
 
 ## Tracking from the noisy start
 
@@ -352,6 +355,15 @@ def test_format_markdown_says_when_the_ekf_reset_is_off():
     assert "EKF reset: off." in format_markdown([], meta)
 
 
+@pytest.mark.parametrize("nis_quantile", [None, "missing"])
+def test_format_markdown_says_when_the_ekf_hold_is_off(nis_quantile):
+    """``nis_quantile=None`` turns the hold off, and records written before the hold have no key."""
+    reset = {**REPORT_META["ekf_reset"], "nis_quantile": nis_quantile}
+    if nis_quantile == "missing":
+        del reset["nis_quantile"]
+    assert "EKF hold: off." in format_markdown([], {**REPORT_META, "ekf_reset": reset})
+
+
 SETTINGS = {
     "steps": 12,
     "kidnap_at": 4,
@@ -360,6 +372,7 @@ SETTINGS = {
         "min_candidates": 2,
         "reset_std": [0.2, 0.2, 0.1],
         "reset_window": 20,
+        "nis_quantile": 0.999,
     },
     "mcl_settings": {"num_particles": 150, "covariance_scale": [1.0, 1.0, 1.0]},
 }
@@ -441,6 +454,28 @@ def test_check_records_rejects_a_duplicate_trial_even_with_other_timings():
 def test_check_records_rejects_mismatched_settings(change):
     with pytest.raises(ValueError, match="settings"):
         check_records([_record(seed=1), _record(seed=2, **change)])
+
+
+# The EKF's settings as records written before the hold (2026-11-09) carry them.
+RESET_BEFORE_THE_HOLD = {k: v for k, v in SETTINGS["ekf_reset"].items() if k != "nis_quantile"}
+
+
+def test_check_records_ignores_the_ekf_settings_of_mcl_records():
+    """MCL does not read ``ekf_reset``, so MCL records from before the hold merge with new EKF
+    records; EST-3 reruns only the EKF that way."""
+    check_records(
+        [_record(seed=1), _record(seed=1, mode="mcl_kidnap", ekf_reset=RESET_BEFORE_THE_HOLD)]
+    )
+
+
+def test_a_record_without_nis_quantile_ran_without_the_hold():
+    """A missing ``nis_quantile`` reads as None (the hold off), which is what such a run did."""
+    off = {**SETTINGS["ekf_reset"], "nis_quantile": None}
+    check_records(
+        [_record(seed=1, ekf_reset=RESET_BEFORE_THE_HOLD), _record(seed=2, ekf_reset=off)]
+    )
+    with pytest.raises(ValueError, match="settings"):
+        check_records([_record(seed=1, ekf_reset=RESET_BEFORE_THE_HOLD), _record(seed=2)])
 
 
 def test_check_records_allows_each_sensor_its_own_mcl_scale():
@@ -678,6 +713,22 @@ def test_merge_records_computes_each_sets_figures_by_hand():
     assert "max_recent_resets" not in {key.removeprefix("mcl_") for key in metrics}, (
         "MCL has no resets, so no reset column"
     )
+
+
+def test_merge_records_takes_the_ekf_settings_from_an_ekf_record():
+    """The report's EKF settings and the reset window come from the EKF records even when an MCL
+    record from before the hold comes first."""
+    ekf_records = [_known_record(seed, m) for seed in (1, 2) for m in KNOWN_MODES if "ekf" in m]
+    mcl_records = []
+    for seed in (1, 2):
+        for mode in ("mcl_tracking", "mcl_kidnap"):
+            record = _known_record(seed, mode)
+            settings = {**record.meta["settings"], "ekf_reset": RESET_BEFORE_THE_HOLD}
+            mcl_records.append(TrialRecord(record.trial, {**record.meta, "settings": settings}))
+    merged = merge_records(mcl_records + ekf_records, deadline=2, hold=2)
+    expected = merge_records(ekf_records + mcl_records, deadline=2, hold=2)
+    assert merged.meta["ekf_reset"] == ekf_records[0].meta["settings"]["ekf_reset"]
+    assert merged.rows == expected.rows, "The record order should not change any figure."
 
 
 def test_merge_records_refuses_sets_of_different_seeds():

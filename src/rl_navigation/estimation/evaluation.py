@@ -121,10 +121,12 @@ def ekf(
     min_candidates: int = 2,
     reset_std: tuple[float, float, float] = (0.2, 0.2, 0.1),
     reset_window: int = 20,
+    nis_quantile: float | None = 0.999,
 ) -> LocalizerFactory:
     """A factory of :class:`EkfLocalizer` started at the trial's noisy start and covariance.
 
-    The keyword arguments are the filter's still-robot reset (see :class:`EkfLocalizer`).
+    The keyword arguments are the filter's still-robot reset and its hold (see
+    :class:`EkfLocalizer`).
     """
 
     def make(
@@ -147,6 +149,7 @@ def ekf(
             min_candidates=min_candidates,
             reset_std=reset_std,
             reset_window=reset_window,
+            nis_quantile=nis_quantile,
         )
 
     return make
