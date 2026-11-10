@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rl-cartpole"
 version = "0.1.0"
-description = "A modular reinforcement learning framework for CartPole simulation"
+description = "A pure-NumPy reinforcement-learning framework and robot navigation library, built toward a Jetson robot"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -43,7 +43,7 @@ torch = [
 ]
 # LunarLander and BipedalWalker (Box2D). Gymnasium's own box2d extra pins box2d==2.3.10, which has no aarch64 build;
 # box2d-py builds from source with swig, which pip's isolated build cannot find, so install it first
-# as ./setup.sh does (README, LunarLander). Rendering uses pygame-ce, as Gymnasium does.
+# as ./setup.sh does (docs/usage.md, LunarLander (Box2D)). Rendering uses pygame-ce, as Gymnasium does.
 box2d = [
     "box2d-py==2.3.8",
     "pygame-ce>=2.1.3",

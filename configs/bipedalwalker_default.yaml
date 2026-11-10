@@ -2,8 +2,8 @@
 # BipedalWalker-v3: 24 observations (hull angle, angular velocity and speeds, hip and knee angles and speeds, two leg
 # contacts, ten lidar distances), four joint torques in [-1, 1], a reward of about 300 for walking the whole course
 # less a small torque cost, -100 for a fall (hull on the ground) or leaving the left edge, 1,600-step limit. Solved at
-# a 100-episode training average of 300 (Gymnasium's reward_threshold). Needs Box2D: ./setup.sh builds it (README,
-# LunarLander).
+# a 100-episode training average of 300 (Gymnasium's reward_threshold). Needs Box2D: ./setup.sh builds it
+# (docs/usage.md, LunarLander (Box2D)).
 
 # Environment settings
 environment:

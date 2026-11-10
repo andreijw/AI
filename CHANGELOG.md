@@ -16,6 +16,25 @@ Acrobot-v1) and
 
 ### Added
 
+- **The README as the project's front page, and the robotics ladder** (`feature/readme-restructure`; the
+  maintainer's choices of 2026-11-09):
+  - The project presents itself as **RL and Robot Navigation**, not "RL CartPole": README, CLAUDE.md, CONTRIBUTING.md,
+    the `setup.ps1` header and `pyproject.toml`'s `description` (the package name `rl-cartpole` is unchanged).
+  - The README is a 140-line front page (from 1,253): what works and what does not yet, the ten challenges with their
+    solve counts, the navigation library with one frame of the localization video, the ladder, a quick start and a
+    documentation map. The rest moved, checked by a scripted inventory (145 command lines before and after), to
+    `docs/usage.md`, `docs/navigation.md`, `docs/results.md` and `docs/ai-assistants.md`, and the architecture notes
+    into `docs/agents.md`; `docs/environment_setup_summary.md` is marked historical.
+  - `scripts/check_doc_links.py` checks every relative link, cross-file anchor and file path in the Markdown (0 broken
+    of 126); it runs in a test and, approved by the maintainer, in CI's `Checks` job, which also runs on docs-only
+    pull requests. `tests/test_readme_front_page.py` fails when a benchmark challenge or report is missing from the
+    front page. TESTING.md `CI-8`.
+  - `docs/roadmap.md` opens with the **robotics ladder**: the direction from simulated control to the real robot, as a
+    view over the roadmap's items. Phase 7's MuJoCo item widens to inverted pendulums, locomotion and arms; four
+    proposed items are added as sketches, each naming its feasibility and the decision it needs: Gymnasium-Robotics
+    arms, GPU-parallel simulation on the Jetson, Isaac Lab on cloud or x86 hardware (Isaac Sim does not run on the
+    Jetson), and multi-agent navigation.
+
 - **Localization on video** (`feature/localization-recording`; stacked on `feature/localization-comparison`):
   - `python -m rl_navigation.localization_video` writes one seeded trial as an MP4 (and PNG stills with
     `--stills`): the true robot, its scan and path, MCL's particles and estimate from a global start, and the EKF's

@@ -46,7 +46,11 @@ CONTRIBUTING.md, GEMINI.md and ARCHITECTURE.md.
 | `docs/roadmap.md` | Open and in-progress items: description, acceptance criteria, status, follow-ups | Always. Record what was built and what was dropped while the item is open |
 | `CHANGELOG.md` | One condensed entry per completed item, newest first, under the date it was handed off | When an item completes, in its hand-off commit; the item leaves the roadmap at the same time |
 | `TESTING.md` | Manual checks a person runs, as rows with an ID (`ENV-`, `TR-`, `VID-`, `OUT-`, `BM-`, `CKPT-`, `LOG-`, `CI-`), a command and an expected result | A command, flag, output path or expected behaviour was added or changed |
-| `README.md` | Features, project structure, install, usage commands, configuration, architecture summary | A headline feature, a command, a prerequisite or the folder layout changed |
+| `README.md` | The front page: what the repo is, what works and what does not, the challenge table (one row per registered challenge, named by its environment id, with its report), the robotics ladder, the quick start, the documentation map | A challenge was added, its result changed, a headline feature or the quick-start command changed, or the ladder moved |
+| `docs/usage.md` | Install (including Box2D), every train, record, export, benchmark and robustness command, configuration, curriculum, environment settings and checkpoints, the development commands | A command, flag, prerequisite, config key or output path changed |
+| `docs/results.md` | The full table of which agent solves which challenge, with the caveats behind each number | A committed config, a measured result or a threshold changed |
+| `docs/navigation.md` | The navigation environments, the simulator and the state-estimation library with its measurements | `rl_navigation` changed, or its numbers did |
+| `docs/ai-assistants.md` | MCP server setup, skill setup and skill tooling | A skill, a skill tool, `.mcp.json` or `.claude/settings.json` changed |
 | `docs/agents.md` | How each agent works: its idea, its update as the code computes it, this repo's options, what was measured, lessons | An agent was added, or its update rule, options, committed config or measured result changed |
 | `ARCHITECTURE.md` | Package boundaries, the agent class diagram, the training sequence, the artifact tree, extension steps | A class, a base-class method in the diagram, a boundary or an output path changed |
 | `CONTRIBUTING.md` | Standards (§1 to §3), the workflow (§4), the artifact policy (§5) | A rule or a step changed |
@@ -105,6 +109,10 @@ fails:
 npx markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules
 python .claude/skills/doc-sync/scripts/check_md_width.py          # the virtual environment's Python
 ```
+
+Also run `python scripts/check_doc_links.py`: it fails on any relative link, cross-file anchor or file path in the
+Markdown that no longer resolves (a renamed heading, a moved file). CI runs it on every pull request, and
+`tests/test_doc_links.py` runs it too.
 
 ## 5. Report
 

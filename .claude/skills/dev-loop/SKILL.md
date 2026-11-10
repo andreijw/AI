@@ -153,7 +153,7 @@ description. Suggestions are optional. After three rounds, stop looping and repo
 
 `architect`, `cleanup` and `pr-reviewer` build on the brooks-lint plugin. If it is not installed they still
 run with the project's own checks; say in the hand-off that the general rubric was skipped, and point to
-the setup steps in the README. A plugin installed mid-session is not loaded until Claude Code restarts, for
+the setup steps in `docs/ai-assistants.md`. A plugin installed mid-session is not loaded until Claude Code restarts, for
 this session and for the agents it spawns.
 
 ### 8. Doc sync
@@ -247,7 +247,7 @@ as a peer, since it sees only your prompt:
   that changed (a key, a default, a result and its seeds). It edits the docs and reports what it changed and
   what it could not settle. Meanwhile you run the mutation, duplication and cleanup gates.
 - Then the `pr-reviewer` agent on code and docs together. Beside it, for a PR that quotes results, a second
-  agent that checks every number in `CHANGELOG.md`, `README.md`, `TESTING.md` and config comments against
+  agent that checks every number in `CHANGELOG.md`, `README.md`, `docs/results.md`, `TESTING.md` and config comments against
   the results files (`benchmark_metrics.json`, the metrics logs), and for a large test change a third that runs
   `brooks-lint:brooks-test` on the changed test files.
 
