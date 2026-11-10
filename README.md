@@ -1,999 +1,132 @@
-# RL CartPole
+# RL and Robot Navigation
 
-A modular reinforcement learning framework for CartPole simulation. This project implements a
-clean, extensible foundation for experimenting with RL algorithms in physics-based environments.
+[![CI](https://github.com/andreijw/AI/actions/workflows/ci.yml/badge.svg)](
+https://github.com/andreijw/AI/actions/workflows/ci.yml)
 
-## Overview
+A pure-NumPy reinforcement-learning framework and a NumPy robot navigation library, built toward a Jetson robot.
 
-This project implements a reinforcement learning (RL) agent that learns to balance a pole on a
-moving cart using pure simulation. It is intentionally designed as a foundational robotics/AI
-module: simple enough to complete quickly, but structured in a way that mirrors real robotics
-control loops and can be extended later.
+**Works:** ten benchmark challenges with agents from REINFORCE to SAC, and localization (EKF and Monte Carlo) in
+simulation. **Not yet:** nothing has run on a real robot; mapping, planning and the hardware are open.
 
-The architecture is designed to support:
+## What's inside
 
-- Multiple RL algorithms (random, REINFORCE, actor-critic, PPO and DQN for CartPole; random, actor-critic and PPO with
-  Gaussian policies, DDPG and TD3 with deterministic policies, and SAC, for Pendulum; random, PPO and DQN for Acrobot;
-  random and DQN for MountainCar; random, DDPG and TD3 with Ornstein-Uhlenbeck exploration noise for
-  MountainCarContinuous; random and DQN for LunarLander; random, TD3 and SAC for LunarLanderContinuous; random, SAC
-  and TD3 for BipedalWalker; random, PPO and DQN for the range-sensor navigation task Navigation-v0, and random, PPO
-  and TD3 for NavigationContinuous-v0)
-- Robot state estimation on a known map (`rl_navigation.estimation`, NumPy only, meant to run on the robot): wheel
-  odometry, an extended Kalman filter and Monte Carlo localization with global start and kidnapping recovery, an
-  EKF-against-MCL report ([`docs/benchmarks/localization_results.md`](docs/benchmarks/localization_results.md)), and
-  a video of one localization trial (see State estimation below)
-- Easy experimentation with different configurations
-- Clean separation between environments, agents, and training pipelines
-- Extensibility for future robotics modules (vision, SLAM, ROS2 integration, etc.)
+Eight Gymnasium environments and two navigation environments of this project's own, each with a committed config per
+agent. Every agent is written in NumPy; only DDPG, TD3 and SAC have an optional PyTorch backend. The table lists
+the agents that solve each challenge, measured on seeds 1 to 5 (MountainCar-v0 also on 11 to 15); the full table
+with every agent, how long each holds its score, and the caveats is in [docs/results.md](docs/results.md).
 
-## Features
+| Challenge | Agents and seeds solved ("holds": still at the threshold at the end) | Report |
+| :--- | :--- | :--- |
+| CartPole-v1 | PPO, DQN and Actor-Critic 5 of 5 (Actor-Critic holds 4); REINFORCE 4 of 5 (holds 3) | [report](docs/benchmarks/cartpole_results.md) |
+| Pendulum-v1 | SAC, DDPG, TD3 and PPO 5 of 5 (PPO holds 4); continuous Actor-Critic 0 of 5 | [report](docs/benchmarks/pendulum_results.md) |
+| Acrobot-v1 | PPO and DQN 5 of 5 | [results](docs/results.md) |
+| MountainCar-v0 | DQN reaches -110 on 10 of 10 seeds but holds it on 3 of 10 | [results](docs/results.md) |
+| MountainCarContinuous-v0 | DDPG and TD3 5 of 5 | [results](docs/results.md) |
+| LunarLander-v3 | DQN 5 of 5 | [results](docs/results.md) |
+| LunarLanderContinuous-v3 | SAC and TD3 5 of 5 | [report](docs/benchmarks/lunarlander_continuous_results.md) |
+| BipedalWalker-v3 | SAC 4 of 5 (holds 1); TD3 2 of 5 (holds 0) | [report](docs/benchmarks/bipedalwalker_results.md) |
+| Navigation-v0 | DQN 5 of 5; PPO reaches the threshold on 5 of 5 but holds it on 1 | [report](docs/benchmarks/navigation_results.md) |
+| NavigationContinuous-v0 | TD3 5 of 5; PPO reaches it on 5 of 5 but holds it on 0 | [report](docs/benchmarks/navigation_continuous_results.md) |
 
-- **Modular Architecture**: Clean separation of concerns with dedicated modules for environments,
-  agents, training, and utilities
-- **Environment Wrapper**: Custom CartPole environment wrapper with episode tracking and monitoring
-- **Configurable Training**: YAML-based configuration system for easy experimentation
-- **Logging & Metrics**: Built-in logging system for tracking training progress
-- **Extensible Agent Framework**: Base agent interface for implementing new RL algorithms
-- **Comprehensive Testing**: Unit tests for core functionality
+A run is **solved** when its average training reward over 100 episodes reaches the challenge's threshold, and
+**held** when its last 100 episodes still do. The published benchmarks use seeds 1 to 5; `train.py` uses seed
+42, so a single run can land on the unlucky side of these numbers.
 
-## Project Structure
+## Robot navigation
 
-```
-AI/
-├── src/
-│   ├── rl_core/                 # Algorithm-agnostic RL framework
-│   │   ├── agents/              # Core discrete & continuous agent implementations
-│   │   │   ├── base_agent.py
-│   │   │   ├── actor_critic_agent.py
-│   │   │   ├── actor_critic_base.py
-│   │   │   ├── continuous_actor_critic.py
-│   │   │   ├── continuous_ppo.py
-│   │   │   ├── continuous_random_agent.py
-│   │   │   ├── dqn_agent.py
-│   │   │   ├── optim.py         # Adam and clipped SGD, for the continuous agents and the `optimizer` option
-│   │   │   ├── ppo_agent.py
-│   │   │   ├── random_agent.py
-│   │   │   ├── reinforce_agent.py
-│   │   │   ├── replay_buffer.py
-│   │   │   ├── returns.py       # Discounted returns shared by the episodic agents
-│   │   │   └── softmax.py       # Numerically stable softmax shared by the discrete policies
-│   │   ├── environments/        # BaseEnvWrapper: seeding, observation noise, velocity masking, frame stacking
-│   │   ├── training/            # Generic training pipeline (trainer.py, curriculum.py)
-│   │   ├── utils/               # Config & its strict readers, logging, video, plotting, rolling averages
-│   │   ├── challenges/          # BenchmarkChallenge, the challenge registry, discover_challenges
-│   │   ├── export/              # Greedy policy to C (c_header.py) or ONNX (onnx_model.py), checked vs NumPy
-│   │   └── seeding.py           # Separate seeded random streams (derive_rng)
-│   ├── rl_cartpole/             # CartPole-v1 discrete balance control challenge
-│   │   ├── environments/        # CartPole wrappers and vectorization factories
-│   │   └── benchmark.py         # CartPole benchmark challenge implementation
-│   ├── rl_pendulum/             # Pendulum-v1 continuous torque control challenge
-│   │   ├── environments/        # Pendulum wrappers and continuous noise factories
-│   │   └── benchmark.py         # Pendulum benchmark challenge implementation
-│   ├── rl_acrobot/              # Acrobot-v1 discrete swing-up challenge
-│   │   ├── environments/        # Acrobot wrapper (observation noise) and factories
-│   │   └── benchmark.py         # Acrobot benchmark challenge implementation
-│   ├── rl_mountaincar/          # MountainCar-v0 and MountainCarContinuous-v0 exploration challenges
-│   │   ├── environments/        # Mountain car wrapper (observation noise) and a factory for each id
-│   │   └── benchmark.py         # Both MountainCar benchmark challenge implementations
-│   ├── rl_lunarlander/          # LunarLander-v3 and LunarLanderContinuous-v3 (Box2D) challenges
-│   │   ├── environments/        # Lunar lander wrapper (observation noise) and a factory for each id
-│   │   └── benchmark.py         # Both LunarLander benchmark challenge implementations
-│   ├── rl_bipedalwalker/        # BipedalWalker-v3 (Box2D) four-joint walking challenge
-│   │   ├── environments/        # Bipedal walker wrapper (observation noise) and its factory
-│   │   └── benchmark.py         # BipedalWalker benchmark challenge implementation
-│   ├── rl_navigation/           # Navigation-v0 and NavigationContinuous-v0 range-sensor navigation (Phase 8)
-│   │   ├── sim/                 # NumPy-only simulator: arena, ray casting, sensors, odometry, layouts, World, renderer
-│   │   ├── estimation/          # Pose estimation on a known map (EKF, Monte Carlo), the comparison report and
-│   │   │                        # the trial recorder; imports only NumPy and sim/
-│   │   ├── localization_video.py # Writes one localization trial as an MP4 and PNG stills (needs the video extra)
-│   │   ├── gym_env.py           # The Gymnasium environment; imports only Gymnasium and sim/, never rl_core
-│   │   ├── environments/        # Navigation wrapper (noise, domain randomization) and a factory for each id
-│   │   └── benchmark.py         # Both navigation benchmark challenge implementations
-│   └── benchmark.py             # Benchmark runner & CLI (finds challenges through rl_core)
-├── tests/                       # Unit & integration test suites
-├── configs/                     # YAML hyperparameter configurations
-│   ├── cartpole_*.yaml          # CartPole challenge configs (default, PPO, DQN, etc.)
-│   ├── pendulum_*.yaml          # Pendulum challenge configs (default, PPO, A2C, DDPG, TD3, SAC)
-│   ├── acrobot_*.yaml           # Acrobot challenge configs (default, PPO, DQN)
-│   ├── mountaincar_*.yaml       # MountainCar challenge configs (default, DQN)
-│   ├── mountaincar_continuous_*.yaml  # MountainCarContinuous configs (default, DDPG with OU noise, TD3 on PyTorch)
-│   ├── lunarlander_*.yaml       # LunarLander configs (random baselines, DQN, TD3 and SAC on PyTorch)
-│   ├── bipedalwalker_*.yaml     # BipedalWalker configs (random baseline, SAC and TD3 on PyTorch)
-│   └── navigation_*.yaml        # Navigation configs (random baselines, PPO and DQN; continuous: PPO and TD3)
-├── train.py                     # Main training entrypoint
-├── record.py                    # Checkpoint video recorder
-├── export.py                    # Checkpoint to a standalone C header or an ONNX model
-├── robustness.py                # Checkpoint played on perturbed environments (robustness report)
-├── setup.ps1                   # Windows developer setup
-├── pyproject.toml              # Project packaging & tool settings
-├── CONTRIBUTING.md             # Coding standards & workflow
-├── ARCHITECTURE.md             # Architectural design & Mermaid diagrams
-└── README.md                   # This file
-```
+`Navigation-v0` and `NavigationContinuous-v0` put a disc robot in a randomly laid-out room, seeing only its range
+sensors (five HC-SR04 sonars, or a 64-beam lidar). The simulator is NumPy only and `rl_navigation.gym_env` needs
+neither the training framework nor `rl_core`, so another project can import it. TD3 reaches the goal in 96% of 100
+held-out layouts after 100,000 steps; the random agent in 1%.
 
-## Installation
+`rl_navigation.estimation` finds the robot's pose on a known map from wheel encoders and range readings, with an
+extended Kalman filter (EKF) and Monte Carlo localization (MCL, which starts from anywhere and recovers from being
+carried elsewhere). In simulation the EKF's position error is a few millimetres while tracking, but it recovers from
+a kidnapping in 10 to 18% of runs against MCL's 86 to 98%
+([comparison report](docs/benchmarks/localization_results.md)). The video of one trial is written by
+`python -m rl_navigation.localization_video`:
 
-### Prerequisites
+![One frame of the seed-101 lidar localization video](docs/images/localization_seed101_step381.png)
 
-- Python 3.12+ (the version CI tests)
-- pip or conda package manager
+Details, the API and the measurements are in [docs/navigation.md](docs/navigation.md).
 
-### Windows Quick Setup
+## The robotics ladder
 
-From PowerShell in the repository root, run:
+Where this is going, from the roadmap ([docs/roadmap.md](docs/roadmap.md)):
 
-```powershell
-.\setup.ps1
-```
+- **Learning in simulation: done.** Classic control, Box2D and navigation challenges, REINFORCE to SAC.
+- **Knowing where it is: current.** Odometry, EKF and MCL work in simulation; mapping and SLAM are planned.
+- **Planning and driving: planned.** A* and a path follower as a classical baseline for the learned policy.
+- **The real robot: planned, nothing run yet.** HC-SR04 and lidar on the Jetson, ROS 2 nodes, fitting the simulated
+  noise to real readings. Beyond it, proposed only: MuJoCo robots and arms, GPU-parallel simulation, Isaac Lab,
+  multi-agent navigation.
 
-The script installs Git and Python 3.12 via `winget` if they are missing, creates a `.venv` virtual environment,
-installs the package with `[dev,video,onnx]` extras, and runs the same checks as CI (Ruff, mypy, pytest). Flags:
-`-NonInteractive` (no prompts), `-SkipChecks`, `-Update` (upgrade tools and packages), and `-InstallHooks`
-(`pre-commit install`). Activate the environment afterwards with `.\.venv\Scripts\Activate.ps1`.
+## Quick start
 
-If script execution is disabled, run it once with `powershell -ExecutionPolicy Bypass -File .\setup.ps1`.
-
-### Linux and macOS Setup
+Requirements: Python 3.12; the extras are `dev`, `video`, `box2d`, `onnx` and `torch` (see `pyproject.toml`).
 
 ```bash
-./setup.sh                  # .venv, the CPU profile: .[dev,video,box2d,onnx], no PyTorch
-./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG, TD3 and SAC backend (backend: torch); ~5 GiB
+./setup.sh                  # Linux and macOS: .venv with the CPU profile, then the CI checks
+./setup.sh --profile gpu    # adds PyTorch (.venv-gpu), for the DDPG, TD3 and SAC backend
 ```
 
-Each creates its environment if missing, upgrades its packages and runs the CI checks (`--skip-checks` to skip). Both
-build Box2D for LunarLander and BipedalWalker first (see below); CI installs neither PyTorch nor Box2D and skips their
-tests. Both profiles, `setup.ps1` and CI's test job install the `onnx` extra (`onnx` and `onnxruntime`) for the ONNX
-export.
+```powershell
+.\setup.ps1                 # Windows: Python 3.12, .venv, dependencies, then the CI checks
+```
 
 ### LunarLander (Box2D)
 
-LunarLander and BipedalWalker need Box2D. Gymnasium's own extra (`pip install "gymnasium[box2d]"`) pins `box2d==2.3.10`,
-which has no build for the Jetson's aarch64, so this project's `box2d` extra names `box2d-py`, which builds from source
-with `swig` (about 90 seconds; it needs a C++ compiler and the Python headers, on Debian and Ubuntu `sudo apt install
-build-essential python3.12-dev`). `./setup.sh` does it; by hand, inside the virtual environment:
+LunarLander and BipedalWalker need Box2D, which `./setup.sh` builds (`box2d-py`, from source with `swig`) and
+`setup.ps1` does not. By hand, and what happens without it, see
+[Installation in docs/usage.md](docs/usage.md#lunarlander-box2d).
+
+### First run
+
+Train PPO on CartPole (about 45 seconds on the project's Jetson, run alone) and watch the average reward
+climb to 500:
 
 ```bash
-pip install swig==4.5.1 "setuptools<85" "wheel<0.49"   # the versions it was verified with
-PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.8
-pip install -e ".[dev,video,box2d,onnx]"
-```
-
-`setup.ps1` does not install it on Windows. Without Box2D the LunarLander and BipedalWalker challenges are still
-listed, and building their environment fails at once with these steps: `BaseEnvWrapper` checks every Gymnasium Box2D
-environment (`rl_core.environments.uses_box2d`) before `gym.make`, so a new Box2D challenge gets the same message.
-
-### Manual Setup (any OS)
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/andreijw/AI.git
-cd AI
-```
-
-2. Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Or install in development mode:
-
-```bash
-pip install -e .
-```
-
-## Usage
-
-### Quick Start: Train Your First Agent
-
-The fastest way to try the framework is to run the training script with the default
-random-agent baseline configuration:
-
-```bash
-python train.py --config configs/cartpole_default.yaml
-```
-
-By default, `configs/cartpole_default.yaml` trains for `total_steps: 50000` environment steps.
-
-For a quick smoke-test pass `--num-episodes 50` (or `--total-steps 2000`), or create a minimal config:
-
-```yaml
-# configs/quick_test.yaml
-environment:
-  name: "CartPole-v1"
-  max_episode_steps: 500
-  seed: 42            # reproducible sequence of start states (each episode differs)
-
-agent:
-  type: "random"
-  config:
-    seed: 42          # makes action selection reproducible
-
-training:
-  num_episodes: 50
-  max_steps_per_episode: 500
-  eval_frequency: 10
-  save_frequency: 50
-  checkpoint_dir: "./checkpoints"
-  log_dir: "./logs"
-```
-
-Then run:
-
-```bash
-python train.py --config configs/quick_test.yaml
-```
-
-To generate and save learning-curve plots during training, include `--plot` on your initial run:
-
-```bash
-python train.py --config configs/quick_test.yaml --plot
-```
-
-> Note: Running `train.py` again with `--plot` will start a new training run and then save plots,
-> it does **not** only load and plot previous results.
-
-### Train specific agent configurations
-
-```bash
-# Random baseline
-python train.py --config configs/cartpole_default.yaml
-
-# REINFORCE
-python train.py --config configs/cartpole_reinforce.yaml
-
-# Actor-Critic
-python train.py --config configs/cartpole_actor_critic.yaml
-
-# PPO
 python train.py --config configs/cartpole_ppo.yaml
-
-# DQN
-python train.py --config configs/cartpole_dqn.yaml
-
-# Pendulum Continuous Actor-Critic
-python train.py --config configs/pendulum_actor_critic.yaml
-
-# Pendulum Continuous PPO
-python train.py --config configs/pendulum_ppo.yaml
-
-# Pendulum DDPG
-python train.py --config configs/pendulum_ddpg.yaml
-
-# Pendulum TD3
-python train.py --config configs/pendulum_td3.yaml
-
-# Pendulum SAC (64x64 networks, updating after every step; about 9 minutes)
-python train.py --config configs/pendulum_sac.yaml
-
-# Acrobot DQN and PPO
-python train.py --config configs/acrobot_dqn.yaml
-python train.py --config configs/acrobot_ppo.yaml
-
-# MountainCar DQN (learns, does not reliably solve)
-python train.py --config configs/mountaincar_dqn.yaml
-
-# MountainCarContinuous DDPG with Ornstein-Uhlenbeck exploration noise
-python train.py --config configs/mountaincar_continuous_ddpg.yaml
-
-# MountainCarContinuous TD3 at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu)
-.venv-gpu/bin/python train.py --config configs/mountaincar_continuous_td3.yaml
-
-# LunarLander random baselines, discrete and continuous (need Box2D: see LunarLander above)
-python train.py --config configs/lunarlander_default.yaml
-python train.py --config configs/lunarlander_continuous_default.yaml
-
-# LunarLander DQN (rl-zoo settings; solves 200)
-python train.py --config configs/lunarlander_dqn.yaml
-
-# LunarLanderContinuous TD3 at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu; solves 200)
-.venv-gpu/bin/python train.py --config configs/lunarlander_continuous_td3.yaml
-
-# LunarLanderContinuous SAC at 400x300 on the PyTorch backend (needs ./setup.sh --profile gpu; solves 200)
-.venv-gpu/bin/python train.py --config configs/lunarlander_continuous_sac.yaml
-
-# BipedalWalker random baseline (needs Box2D: see LunarLander above)
-python train.py --config configs/bipedalwalker_default.yaml
-
-# BipedalWalker SAC and TD3 at 400x300 on the PyTorch backend, 500,000 steps each (needs ./setup.sh --profile gpu;
-# about 0.9 and 1.3 hours alone on the Jetson's GPU, estimated; SAC reaches 300 on 4 of 5 seeds, TD3 on 2 of 5)
-.venv-gpu/bin/python train.py --config configs/bipedalwalker_sac.yaml
-.venv-gpu/bin/python train.py --config configs/bipedalwalker_td3.yaml
-
-# Navigation random baselines, discrete and continuous (threshold 7.0, far above random; see Range-Sensor Navigation)
-python train.py --config configs/navigation_default.yaml
-python train.py --config configs/navigation_continuous_default.yaml
-
-# Navigation PPO and DQN (Navigation-v0), PPO and TD3 (NavigationContinuous-v0); about 5 minutes for PPO, 15 for DQN
-# and TD3 a seed with three runs sharing the CPU (DQN's result: see Range-Sensor Navigation below)
-python train.py --config configs/navigation_ppo.yaml
-python train.py --config configs/navigation_dqn.yaml
-python train.py --config configs/navigation_continuous_ppo.yaml
-python train.py --config configs/navigation_continuous_td3.yaml
 ```
 
-### Which agents solve which challenge
-
-A run solves the challenge when its average training reward over 100 episodes reaches the threshold: 475 for
-CartPole-v1, -200 for Pendulum-v1, -100 for Acrobot-v1, -110 for MountainCar-v0, 90 for MountainCarContinuous-v0, 200
-for LunarLander-v3 and LunarLanderContinuous-v3, 300 for BipedalWalker-v3, 7 for Navigation-v0 and
-NavigationContinuous-v0. It **holds** when the average over its last
-100 episodes is still at or above the threshold. Each agent trains for a budget of environment steps set against its
-rl-baselines3-zoo reference (see the config comments). Measured with the committed configs on seeds 1 to 5 on 2026-10-18
-(CartPole PPO on 2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment and named
-random streams ([`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md),
-[`docs/benchmarks/pendulum_results.md`](docs/benchmarks/pendulum_results.md); LunarLanderContinuous TD3 on 2026-11-01 in
-[`docs/benchmarks/lunarlander_continuous_results.md`](docs/benchmarks/lunarlander_continuous_results.md); BipedalWalker
-SAC and TD3 on 2026-11-05 in [`docs/benchmarks/bipedalwalker_results.md`](docs/benchmarks/bipedalwalker_results.md);
-navigation on 2026-11-07 in [`docs/benchmarks/navigation_results.md`](docs/benchmarks/navigation_results.md) and
-[`docs/benchmarks/navigation_continuous_results.md`](docs/benchmarks/navigation_continuous_results.md)).
-`train.py` uses seed 42, which these benchmarks do not include (BipedalWalker's one seed-42 run is below), so a
-single `train.py` run may land on the unlucky side of these numbers:
-
-| Challenge | Agent | Config | Budget (steps) | Seeds solved | Steps to solve | Held |
-| :--- | :--- | :--- | :---: | :---: | :---: | :---: |
-| CartPole-v1 | PPO | `cartpole_ppo.yaml` (standard PPO, annealed) | 200,000 | 5 of 5 | 72k to 90k | 5 of 5 |
-| CartPole-v1 | Actor-Critic | `cartpole_actor_critic.yaml` (Adam) | 500,000 | 5 of 5 | 209k to 456k | 4 of 5 |
-| CartPole-v1 | REINFORCE | `cartpole_reinforce.yaml` (Adam) | 500,000 | 4 of 5 | 255k to 376k | 3 of 5 |
-| CartPole-v1 | DQN | `cartpole_dqn.yaml` (Adam, per-step exploration) | 300,000 | 5 of 5 | 144k to 183k | 5 of 5 |
-| Pendulum-v1 | DDPG | `pendulum_ddpg.yaml` (rl-zoo settings, 64×64 networks) | 40,000 | 5 of 5 | 31k | 5 of 5 |
-| Pendulum-v1 | TD3 | `pendulum_td3.yaml` (rl-zoo settings, 64×64 networks); CHANGELOG.md, 2026-10-25 | 40,000 | 5 of 5 | 32.6k to 33.4k | 5 of 5 |
-| Pendulum-v1 | PPO | `pendulum_ppo.yaml` (2048-step rollouts, annealed) | 200,000 | 5 of 5 | 72k to 157k | 4 of 5 |
-| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates, observation normalisation); CHANGELOG.md, 2026-11-04 | 1,000,000 | 0 of 5 | — | 0 of 5 |
-| Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
-| Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
-| MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate, 100k buffer, observations normalised when sampled); seeds 1 to 5 and 11 to 15, 2026-11-04 | 200,000 | 10 of 10 | 141k to 197k | 3 of 10 |
-| MountainCarContinuous-v0 | DDPG | `mountaincar_continuous_ddpg.yaml` (rl-zoo settings, OU noise, 64×64 networks) | 300,000 | 5 of 5 | 25k to 69k | 5 of 5 |
-| MountainCarContinuous-v0 | TD3 | `mountaincar_continuous_td3.yaml` (rl-zoo settings, OU noise, 400×300 networks, PyTorch backend); CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 37k to 70k | 5 of 5 |
-| LunarLander-v3 | DQN | `lunarlander_dqn.yaml` (rl-zoo settings, one hidden layer of 256, epsilon floor 0.1); seeds 1 to 5, which chose the floor; held-out seeds 11 to 15: 5 of 5 reach (166k to 297k), 4 of 5 hold; CHANGELOG.md, 2026-10-27 | 300,000 | 5 of 5 | 152k to 228k | 5 of 5 |
-| LunarLanderContinuous-v3 | TD3 | `lunarlander_continuous_td3.yaml` (rl-zoo settings, 400×300 networks, updates after every step, PyTorch backend); CHANGELOG.md, 2026-11-01; held-out seeds 11 to 15: 5 of 5 reach and hold, CHANGELOG.md, 2026-10-30 | 400,000 | 5 of 5 | 174k to 294k | 5 of 5 |
-| BipedalWalker-v3 | SAC | `bipedalwalker_sac.yaml` (rl-zoo settings without gSDE, 400×300 networks, PyTorch backend); CHANGELOG.md, 2026-11-05 | 500,000 | 4 of 5 | 210k to 387k | 1 of 5 |
-| BipedalWalker-v3 | TD3 | `bipedalwalker_td3.yaml` (rl-zoo settings, 400×300 networks, updates after every step, PyTorch backend, half rl-zoo's budget); CHANGELOG.md, 2026-11-05 | 500,000 | 2 of 5 | 399k to 425k | 0 of 5 |
-
-CartPole DQN trains for 300,000 steps rather than rl-zoo's 50,000: holding a 100-episode average of 475 alone takes
-47,500 steps, and rl-zoo's 50,000-step result is a greedy evaluation after training (CHANGELOG.md, 2026-10-18).
-Pendulum DDPG uses rl-zoo's settings with 64×64 networks instead of 400×300, which take about 16 times longer in
-NumPy; its greedy evaluation averages -158 (± 25 across the 5 seeds' means) against rl-zoo's -152 (± 94 across
-episodes of one run) (CHANGELOG.md, 2026-10-19). Pendulum PPO trains on rollouts of whole episodes for 200,000
-steps, twice rl-zoo's 100,000; updating on one episode at a time it solved no seed (CHANGELOG.md, 2026-10-18).
-Continuous Actor-Critic does not solve: its training average ends at -286 to -307, though its greedy evaluation
-of -172 ± 27 beats the random agent on every seed (CHANGELOG.md, 2026-10-19).
-Acrobot was measured on 2026-10-22 (CHANGELOG.md, 2026-10-22); it has no published report under `docs/benchmarks/`
-yet. Acrobot DQN keeps exploring with 2% random actions rather than rl-zoo's 10%: with 10% its training average ended
-at -95 to -103 and held on 1 of 5 seeds; with 2% it ends at -90 to -96, and its greedy evaluation is -85 ± 6.
-MountainCar DQN learns to reach the flag but does not reliably hold -110. Its greedy policy reaches about -100 mid-run
-and does not stay there; a 100,000-transition replay buffer (rl-zoo: 10,000) helps the training average. On seeds 1 to
-10 the final training averages are -107 to -132 (mean -120.5, against -131.2 with 10,000) against the random agent's
--200, its greedy evaluation is -120 ± 13, and 2 of 10 seeds end at or above -110, both crossing it in their last 5,000
-to 14,000 steps (CHANGELOG.md, 2026-10-25). Since 2026-11-04 its observations are normalised when a batch is
-sampled: on seeds 1 to 5 and 11 to 15 every seed reaches -110 and 3 of 10 hold it, final averages -106 to -119,
-greedy evaluation -110 ± 7 (CHANGELOG.md, 2026-11-04). Two hidden layers, a Huber loss or scaled inputs did
-not help (CHANGELOG.md, 2026-10-23). PPO has no
-MountainCar config: without reward normalisation it never reached the flag in 1,000,000 steps on any of 5 seeds.
-MountainCarContinuous DDPG explores with Ornstein-Uhlenbeck noise (sigma 0.5), as rl-zoo's does; its greedy evaluation
-averages 93.4 (± 0.2 across seed means) against rl-zoo's 93.5. With Gaussian noise of the same std it solved no seed:
-four learned to stand still (CHANGELOG.md, 2026-10-23). It was measured on 2026-10-23 and has no published report
-under `docs/benchmarks/`. MountainCarContinuous TD3 trains rl-zoo's 400×300 networks on the PyTorch backend, so it
-needs `.venv-gpu`; its greedy evaluation averages 93.8 (± 0.2 across seed means), and a seed takes about 20 minutes
-on the Jetson's GPU (CHANGELOG.md, 2026-10-27). Seed 42, which `train.py` uses, was measured too: it reaches 90 at
-about episode 150 and holds it (last 100 episodes 92.3). It has no published report under `docs/benchmarks/` either.
-LunarLander DQN uses rl-zoo's settings with one hidden layer of 256 and a squared-error loss (SB3 uses Huber), for
-300,000 steps against rl-zoo's 100,000. rl-zoo's exploration floor of 0.1 held 200 on 5 of 5 seeds against 3 of 5 for
-0.02. On held-out seeds 11 to 15 it reached 200 on 5 of 5 (one at 297,000 steps, near the end of the budget) and held it
-on 4 of 5, greedy evaluation 238 ± 25; seed 42 reaches 200 at about episode 450 and ends at 237 (CHANGELOG.md,
-2026-10-27). The random agent's final averages are -178 to -194.
-LunarLanderContinuous TD3 trains rl-zoo's 400×300 networks on the PyTorch backend, so it needs `.venv-gpu`, for
-400,000 steps against rl-zoo's 300,000, and updates after every environment step as rl-zoo does
-(`training.update_every: 1`). Every seed in both sets reaches 200 and holds it: final 100-episode averages 202 to 248
-on seeds 1 to 5 (CHANGELOG.md, 2026-11-01), and a mean of 242.8 on held-out seeds 11 to 15 (CHANGELOG.md, 2026-10-30).
-Greedy evaluation still varies by seed: 58 to 251 on seeds 1 to 5 (mean 182 ± 69), with only 2 of 5 at 200 or more. A
-seed takes about 54 minutes alone on the Jetson's GPU (CHANGELOG.md, 2026-11-01). Before that change the config
-updated after each episode, and held 200 on 3 and 4 of 5 seeds (CHANGELOG.md, 2026-10-28 and 2026-10-30). The random
-agent's final averages are -214 to -228.
-BipedalWalker SAC and TD3 both train rl-zoo's 400×300 networks on the PyTorch backend for 500,000 steps, so they need
-`.venv-gpu`; SAC explores without rl-zoo's gSDE, and TD3 gets half rl-zoo's 1,000,000 steps so the two share a budget
-(the configs' headers list the departures). SAC's greedy evaluation is 324.4 ± 1.9 (321.3 to 326.9), at 300 or more
-on 5 of 5 seeds, though its training average, exploration included, holds 300 only on seed 1 (final averages 251 to
-307). TD3's greedy evaluation is 300.1 ± 12.3 (281.6 to 317.7), at 300 or more on 2 of 5, and its final training
-averages are 242 to 295. SAC's evaluation beats TD3's on all 5 paired seeds. With three seeds sharing the Jetson's GPU
-a seed took about 1.7 hours for SAC and 2.1 hours for TD3; one alone takes about 0.9 and 1.3 hours, estimated from a
-13,000-step probe rather than a full run (CHANGELOG.md, 2026-11-05). Seed 42, which `train.py` uses, was trained once
-with SAC: its final 100-episode average is 302.4 after 636 episodes (500,412 steps, 4,752 seconds). The random agent's
-final averages are -99 to -101.
-
-### Run any agent from one base config (quick overrides)
-
-You can override both the agent type and number of episodes directly from CLI without
-editing YAML files:
+It logs a line every 10 episodes, for example `Episode 670 | steps 197377/200000 | Avg Reward (last 10): 500.00 |
+Avg Length (last 10): 500.00`, evaluates every 100 episodes and saves a checkpoint under
+`checkpoints/cartpole/ppo/`. More: one command per committed config, recording, export, benchmarks and resuming are
+in [docs/usage.md](docs/usage.md).
 
 ```bash
-# quick random agent run
-python train.py --config configs/cartpole_default.yaml --agent-type random --num-episodes 50
-
-# quick REINFORCE run
-python train.py --config configs/cartpole_default.yaml --agent-type reinforce --num-episodes 200
-
-# quick Actor-Critic run
-python train.py --config configs/cartpole_default.yaml --agent-type actor_critic --num-episodes 200
-
-# quick PPO run
-python train.py --config configs/cartpole_default.yaml --agent-type ppo --num-episodes 200
-
-# quick DQN run
-python train.py --config configs/cartpole_default.yaml --agent-type dqn --num-episodes 200
+python src/benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42   # compare agents
+python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt
+pytest -q                                                                                 # the tests
 ```
 
-The challenge comes from the config's `environment.name`, which must be a registered challenge's environment id
-exactly (`Acrobot-v1`, `BipedalWalker-v3`, `CartPole-v1`, `LunarLander-v3`, `LunarLanderContinuous-v3`,
-`MountainCar-v0`, `MountainCarContinuous-v0`, `Navigation-v0`, `NavigationContinuous-v0` or `Pendulum-v1`); any other
-name is an error that lists the options. `--challenge acrobot`, `bipedalwalker`, `cartpole`, `lunarlander`,
-`lunarlander_continuous`, `mountaincar`, `mountaincar_continuous`, `navigation`, `navigation_continuous` or `pendulum`
-must agree with that name, and is required for a config that has no `environment.name`.
-An agent the challenge does not support (for example `--agent-type dqn` on Pendulum) is rejected before training.
-
-### Range-Sensor Navigation
-
-`Navigation-v0` and `NavigationContinuous-v0` are this project's own Gymnasium environments (Phase 8 of
-[`docs/roadmap.md`](docs/roadmap.md)): a disc robot drives to a goal through randomly placed obstacles, seeing only
-its range sensors. Each reset draws a new layout; `reset(options={"layout": layout})` plays a given
-`rl_navigation.sim.Layout` instead.
-
-- **Actions**: `Navigation-v0` has five discrete actions (straight ahead, forward arcs left and right at half speed,
-  turns on the spot left and right). `NavigationContinuous-v0` takes two actions in [-1, 1]: forward speed from 0 to
-  0.5 m/s (no reverse, as the sonars face forward) and turn rate within ±2 rad/s.
-- **Observation**: goal distance, cos and sin of the goal's bearing, the last executed forward speed and turn rate,
-  then the range readings: five HC-SR04 sonars by default (`sensor: "hc_sr04"`, 10 values in all), or a full-circle
-  lidar (`sensor: "lidar"`, `lidar_beams`, default 64).
-- **Reward**: 10 × the progress toward the goal over the starting distance, -0.01 per step and -10 on a collision.
-  Reaching the goal or colliding ends the episode; otherwise it is truncated after 400 steps.
-- **Framework settings** (`rl_navigation.environments.NavigationEnv`): `action_noise_prob` (discrete) or
-  `action_noise_std` (continuous), `obs_noise_std`, `frame_stack`, `frame_deltas`, `num_obstacles`, and
-  `domain_randomization` ranges of `wheel_slip`, `sensor_noise_std`, `dropout_prob` and `num_obstacles`.
-  `mask_velocity: true` is refused.
-- **Rendering**: `render_mode: "rgb_array"` draws the arena in NumPy (`rl_navigation/sim/render.py`), so
-  `--record-video` and `record.py` work as for any challenge; `"human"` opens a window through Gymnasium's
-  `HumanRendering`, which needs pygame-ce (installed by the `box2d` extra).
-
-The benchmark runs `random`, `ppo` and `dqn` on `Navigation-v0` (`--challenge navigation`) and `random`, `ppo` and
-`td3` on `NavigationContinuous-v0` (`--challenge navigation_continuous`), each from its committed config
-(`configs/navigation_*.yaml`). Both ids are solved when the training average over 100 episodes reaches 7.0, which
-is about 90% of training episodes at the goal (the maintainer's choice, 2026-11-07); the reward has no goal bonus, so
-the threshold also asks for short trips. It also counts successes (`info["is_success"]` of an episode's last step):
-the training log, the evaluation, the Markdown report's "Eval Success" column and the JSON carry the rate. Measured on
-seeds 1 to 5 with greedy evaluation over 100 held-out layouts (2026-11-07,
-[`docs/benchmarks/navigation_results.md`](docs/benchmarks/navigation_results.md) and
-[`docs/benchmarks/navigation_continuous_results.md`](docs/benchmarks/navigation_continuous_results.md)): TD3 reaches
-the goal in 96% of them after 100,000 steps and holds the threshold on 5 of 5 seeds, DQN 94% after 300,000 (5 of 5;
-with squared error and a fixed rate it reached 11%; `td_loss: huber` and a decaying rate are the fix), PPO 88% after
-200,000 with either action space (it reaches 7.0 on every seed but holds it on 1 of 5 discrete and 0 of 5
-continuous), and the random agent 1%. A sweep over sensor noise and dropout (TESTING.md `ROB-2`, three TD3 seeds) kept
-success between 87 and 98% on every row, from no noise to 0.4 m and from no dropout to 40% (one DQN seed fell to
-82% at dropout 0.4), and a domain-randomization curriculum did not make TD3 more robust. A step with a sonar read
-takes about 0.65 ms and a reset about 20 ms (measured on the Jetson in the design review).
-
-The environment does not need the training framework. `rl_navigation.gym_env` imports only Gymnasium and the NumPy
-simulator `rl_navigation.sim`, never `rl_core`, so another project can use it directly:
-
-```python
-import gymnasium as gym
-
-import rl_navigation.gym_env  # registers Navigation-v0 and NavigationContinuous-v0
-
-env = gym.make("NavigationContinuous-v0")
-obs, info = env.reset(seed=0)
-obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
-```
-
-`info` holds `is_success`, `collision` and `goal_distance`. The framework's noise and domain randomization live in
-`rl_navigation.environments`, which does import `rl_core`.
-
-#### State estimation
-
-`rl_navigation.estimation` estimates the robot's pose `(x, y, θ)` (metres and radians, in the map's frame) from its
-wheel encoders and range readings on a known map. It is a library for the robot's own program: it imports only NumPy
-and `rl_navigation.sim`, never Gymnasium or `rl_core` (`tests/test_import_footprint.py`), and nothing in training or
-the benchmark calls it. It holds two filters with the same calls: an extended Kalman filter, `EkfLocalizer`, which
-tracks a pose it is given at the start, and a particle filter, `MclLocalizer` (Monte Carlo localization), which can
-also start from anywhere and recover from a kidnapping (the robot carried elsewhere without being told), as the EKF
-cannot, though the EKF recovers from a small bump while standing still (below; [`CHANGELOG.md`](CHANGELOG.md),
-2026-11-06 to 2026-11-09, and the open item "State estimation follow-ups" in [`docs/roadmap.md`](docs/roadmap.md)).
-
-- **Encoders**: `rl_navigation.sim.WheelOdometry` models them. A reading is a `(2,)` array, the left and the right
-  wheel's travel in metres since the previous reading, with noise variance `k × |travel|` per wheel. Its wheel base
-  (0.2 m) and `k` (2.5e-4 m) are placeholders until they are calibrated on the robot.
-- **Map**: the EKF reads the map only through the `RangeMap` protocol (`min_range`, `max_range`, `noise_std` and
-  `expected_ranges(poses)`), and the particle filter only through `ParticleMap`, which extends it with
-  `num_readings`, `bounds`, `free` and `expected_beam_ranges`. `SensorMap(arena, sensor)` provides both for a known
-  `Arena` and a `RangeSensor`.
-- **Loop**: call `predict(wheel_travel)` with each encoder reading, then `update(readings)` with the scan taken at
-  that pose; `pose` and `covariance` hold the estimate. A reading at or beyond `max_range`, at or below `min_range`,
-  or NaN counts as a dropout. `update` returns an `UpdateResult` saying which beams it used, gated as outliers, or
-  left out as nonlinear (across a corner). A still robot's covariance shrinks to almost nothing, so after a bump
-  of a few centimetres every beam fails the gate; after `reset_after=3` such scans (`None` disables) the EKF raises
-  its variances to at least `reset_std²` (0.2 m, 0.2 m, 0.1 rad) and recovers (`UpdateResult.reset`). It handles
-  bumps up to about 0.3 m and 0.1 to 0.3 rad with the lidar; the HC-SR04 sonars recover from position bumps up to
-  0.3 m and 0.1 rad. Two or more resets in `EkfLocalizer.recent_resets` (the last 20 scans) mean the filter is lost.
-  A large heading bump can settle it on a symmetric room's alias (the lidar, after 1.5 rad in a square room), and
-  once its resets stop nothing signals it, as with MCL.
-
-In the simulator, `World` stands in for the robot (run from the repository with the package installed):
-
-```python
-import numpy as np
-
-from rl_navigation.estimation import EkfLocalizer, SensorMap
-from rl_navigation.sim import LayoutParams, WheelOdometry, World, generate_layout, hc_sr04
-
-rng = np.random.default_rng(0)
-layout = generate_layout(rng, LayoutParams())  # on the robot: the known map of its room
-sensor, encoders = hc_sr04(), WheelOdometry()  # placeholder noise until calibrated
-world = World(layout.arena, sensor, layout.start, layout.goal)  # stands in for the robot
-ekf = EkfLocalizer(
-    SensorMap(layout.arena, sensor),
-    encoders,
-    pose=layout.start,
-    covariance=np.diag([0.05, 0.05, 0.05]) ** 2,
-)
-readings, _ = world.read_sensors(rng)
-for _ in range(100):
-    v, omega = (0.2, 0.0) if readings.min() > 0.4 else (0.0, 1.0)  # drive, or turn away
-    motion = world.step(v, omega, rng)
-    ekf.predict(encoders.read(motion.v, motion.omega, world.dt, rng))  # (left, right) in metres
-    readings, _ = world.read_sensors(rng)  # metres; max_range or NaN when there is no echo
-    result = ekf.update(readings)
-print(np.round(ekf.pose - world.pose, 3), int(result.used.sum()), "beams used")
-```
-
-It prints an error of at most 2 mm and 6 mrad, with 3 of the 5 sonars used in the last update. On the robot, the
-encoder and sonar drivers replace `encoders.read` and `world.read_sensors`, and the `Arena` is the room's. The filter's
-model breaks at a collision, where the wheels turn while the robot stays put, so its estimate drifts from then on.
-
-Measured over 50 seeded layouts × 600 steps of a wandering robot with the filter's defaults (2026-11-06;
-`TESTING.md` `EST-1`): position RMSE 5.7 mm and heading 10.8 mrad with the HC-SR04 sonars, 1.8 mm and 1.7 mrad with
-a 64-beam lidar; with 30 % of readings dropped, 6.3 mm (sonars) and 2.0 mm (lidar). Dead reckoning on the same
-encoders has a position RMSE of 0.93 m, and 45 of its 50 runs exceed 0.5 m of error at some step. The filter's mean
-NEES is 3.2 to 3.3 and its median 2.4 to 2.5 (3 degrees of freedom); 96 to 97 % of steps lie under 9.35, the
-chi-square 97.5 % point, where a consistent filter puts 97.5 %. Occasional spikes remain: the worst step of any run
-reaches a NEES of about 340 with the sonars (seed 2) and 2,700 with the lidar (seed 30, a start-up transient from a
-first update made 0.04 rad off). In an empty arena the lidar filter's ANEES over 30 runs, 3.05, lies inside the
-95 % band [2.19, 3.94], a loose check that catches only a large miscalibration (CHANGELOG.md, 2026-11-06).
-
-**Monte Carlo localization.** `MclLocalizer(range_map, odometry, pose=None, covariance=None, *, rng, settings)` takes
-the same `predict(wheel_travel)` and `update(readings)` and exposes `pose`, `covariance`, `particles`, `weights` and
-`cluster_weight`. Give it `pose` and `covariance` to start near a known pose, or leave them out to start with the
-particles spread over the free space. It is augmented MCL (Thrun, Burgard and Fox, *Probabilistic Robotics*, Tables
-8.2 and 8.3, with the low-variance resampler of Table 4.4) with a cut-down beam model: when the likelihood falls
-against its long-run average, a share of the particles is redrawn over the free space, which is how it recovers from a
-kidnapping. One deviation from Table 8.3: the particles injected on the previous scan are left out of that average,
-since counted in they drag it down and keep injecting more for about 1000 scans after the robot is found; what remains
-after a disturbance is about 1 % of the particles injected per scan, and a resampling on every scan, until the
-long-run average catches up (about 700 scans, 70 s at 10 Hz, after a 10 cm bump with 300 particles).
-`MclSettings` (frozen) holds the knobs; the defaults are 2000 particles, 16 beams per scan and a `model_std` of
-0.15 m. At the defaults on one Jetson core a lidar step costs about 45 ms for the filter alone and 50 ms with the
-simulator, and an HC-SR04 step about 65 ms with the simulator (about 120 ms with `max_beams=64`, every lidar beam),
-so size `num_particles` and `max_beams` to the robot's control rate. `update`
-returns an `MclUpdate`; its `used` marks the beams in the likelihood, so it is not comparable with the EKF's
-`UpdateResult.used`. The reported `covariance` is conservative: `model_std` widens the cloud;
-`MclSettings.covariance_scale` corrects it per axis (default `(1, 1, 1)`, unscaled; fitted values per sensor in
-its docstring and `TESTING.md` `EST-2`). Known limitation: in a
-symmetric arena, resampling collapses one of the mirror-image hypotheses within 1 to 3 scans, so `cluster_weight` ends
-near 1 and cannot flag the ambiguity. Its evaluation (global localization and recovery from a kidnapping at step 300,
-over fresh seeds 101 to 150) is `TESTING.md` `EST-2`; `evaluation.ekf()` and `evaluation.mcl()` build either filter
-for `run_trial(make_localizer=...)`.
-
-**EKF against MCL.** `python -m rl_navigation.estimation.comparison` runs both filters on the same seeded trials
-(each sensor, with its own dropout and with 30 %) and prints a Markdown report: tracking accuracy and consistency
-(position and heading RMSE, NEES, per-axis error against the reported variance), then a global start and a kidnapping
-at step 300 (shares localized and recovered, steps to get there, and how often a filter is confidently wrong). It saves
-one record per trial with `--records`, so an interrupted run resumes and jobs run apart merge with `--from-records`; it
-writes no file unless `--report` is given. Run with the `TESTING.md` `EST-3` settings (seeds 101 to 150, 600 steps; the
-report is [`docs/benchmarks/localization_results.md`](docs/benchmarks/localization_results.md)), the EKF tracks more
-accurately from the noisy start (lidar position RMSE about 2 mm against MCL's 7 mm) but recovers from the kidnapping
-in only 10 to 18 % of runs against MCL's 86 to 98 %, at about 2 to 3 ms a step against MCL's 37 to 51 ms; with 30 %
-dropout the HC-SR04's EKF loses one run of 50 where MCL does not. The module is a desk tool and
-`rl_navigation.estimation` does not import it.
-
-**Watching one trial.** `python -m rl_navigation.localization_video --seed 101 --mcl-scale 0.130 0.124 0.308 --output
-<scratch>/seed101.mp4` writes one seeded lidar trial as a video: the true robot, its scan and path, MCL's particles
-and estimate from a global start, and the EKF's estimate from the noisy start, each with its 2σ position ellipse,
-with a kidnapping at step 300 (`--kidnap-at none` for none). Both filters run on the same trajectory
-(`rl_navigation.estimation.recording`, painted with NumPy at 160 pixels per metre). `--stills` saves chosen frames as
-PNGs; `--output` is required and never overwritten. The MP4 needs the `video` extra; `TESTING.md` `EST-4` says what
-to look for.
-
-### Visualization and video recording
-
-Outputs are partitioned into per-challenge and per-agent folders so runs never overwrite one another:
-`checkpoints/<challenge>/<agent_type>/`, `videos/<challenge>/<agent_type>/`, `plots/<challenge>/<agent_type>/`,
-and `logs/<challenge>/<agent_type>/` (for example `checkpoints/cartpole/ppo/agent_episode_1400.pt` or
-`checkpoints/pendulum/ppo/agent_episode_200.pt`). Re-training the same agent replaces that agent's previous
-outputs; copy its folders first to keep a run. Logs in `logs/` are timestamped per run.
-
-### Resuming a run
-
-`train.py` saves a checkpoint every `save_frequency` episodes and once more after its last episode, so the newest
-checkpoint holds the final weights (an interrupted run keeps only the periodic ones; the
-benchmark writes none). Every
-checkpoint is two files: `agent_episode_<n>.pt` (the agent, its optimizer state, generators and any replay buffer) and
-`trainer_episode_<n>.npz` beside it (the episode and step counts, reward history, evaluation seed and the training
-environment's generators, the curriculum if any, and a hash of the agent file, so a mismatched pair is refused).
-Resuming from one continues the run so that it ends exactly as it would have without the stop; the budget counts what
-was already trained, and checkpoint numbering continues (a run ending on a multiple of `save_frequency` writes no
-extra file, and resuming with the budget already met writes none):
-
-```bash
-python train.py --config configs/cartpole_ppo.yaml --resume checkpoints/cartpole/ppo/agent_episode_300.pt
-```
-
-Use the same config (and `--agent-type` or budget flags) as the original run; hyperparameter changes are not
-detected. With `--record-video` the resumed run records the same clips, under the same episode numbers, as an
-uninterrupted run would; into the original video folder Gymnasium warns "Overwriting existing videos", but the
-earlier clips are kept, as the new ones have later numbers. A resumed run writes new timestamped log files, and
-checkpoints saved before 2026-10-21 hold no trainer state and cannot be resumed.
-
-For a full run with saved learning-curve plots (saved to `plots/ppo/`):
-
-```bash
-python train.py --config configs/cartpole_ppo.yaml --plot
-```
-
-To visualize live training locally (requires display):
-
-```bash
-python train.py --config configs/cartpole_ppo.yaml --render
-```
-
-For headless visualization (saved MP4 videos):
-
-```bash
-python train.py --config configs/cartpole_ppo.yaml --record-video
-```
-
-### Basic/default run
-
-Run training with defaults (`configs/cartpole_default.yaml`):
-
-```bash
-python train.py
-```
-
-### Record Training Videos (Headless / SSH)
-
-If you are running on a headless machine such as an **NVIDIA Orin Nano accessed via SSH**,
-there is no display available so `--render` will not work. Use `--record-video` instead to
-save MP4 videos of training episodes to disk. No display or X server is required.
-
-First, install the optional video dependencies:
-
-```bash
-pip install -e ".[video]"
-# or: pip install moviepy "gymnasium[classic-control]"
-```
-
-Then run training with video recording:
-
-```bash
-python train.py --record-video
-```
-
-Videos are saved to `./videos/<agent_type>/` by default. Use `--video-dir` to choose a different
-location (used exactly as given):
-
-```bash
-python train.py --record-video --video-dir /path/to/videos
-```
-
-By default a clip is recorded every `eval_frequency` training episodes (configured in the YAML
-file, default 100). Clips are named after the training episode they show
-(`cartpole-training-episode-<N>.mp4`); evaluation episodes are never recorded. Use
-`--video-every` to change the interval:
-
-```bash
-# Record every 25th training episode as its own clip
-python train.py --record-video --video-every 25
-```
-
-Every recorded episode is rendered and encoded frame by frame, so small intervals slow training
-down (recording all 1000 random-agent episodes takes ~6 minutes instead of ~8 seconds).
-
-The localization video (`python -m rl_navigation.localization_video`, see State estimation) does not record an
-agent: it takes a required `--output` path and never writes into `videos/` on its own. Recordings kept by hand go in
-`videos/navigation/localization/`, git-ignored like the rest of `videos/`.
-
-### Record a Trained Agent
-
-To get one longer video of a trained agent, record it from a checkpoint after training. This
-does not slow training down:
-
-```bash
-python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_1400.pt --episodes 5
-```
-
-`record.py` loads the agent type from the config (or `--agent-type`), plays `--episodes`
-evaluation episodes (default 5) and saves them as one
-`videos/<challenge>/<agent_type>/<challenge>-playback-full.mp4` (`--video-dir` to change).
-A well-trained agent balances for the full 500 steps, i.e. 10 seconds per episode.
-
-After training, copy the videos to your local machine and open them in any video player:
-
-```bash
-# From your local machine
-scp -r user@orin-nano:/path/to/AI/videos .
-```
-
-### Export a Trained Agent to C
-
-To run a trained policy without Python, on a microcontroller or a robot, export it as one self-contained C99
-header:
-
-```bash
-python export.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt --output policy_weights.h
-```
-
-The header holds the weights as `float` arrays (hexadecimal literals, exact in float32) and two functions,
-`policy_outputs(obs, out)` and `policy_act`: `int policy_act(const float *obs)` for a discrete agent, `void
-policy_act(const float *obs, float *action)` for a continuous one. It acts as `select_action(obs, training=False)`
-does, including the agent's observation normalisation, and needs only `<math.h>` (link with `-lm`). Its input is
-the observation after the environment's `mask_velocity`, `frame_stack` and `frame_deltas`, which the header's
-comment names but does not apply.
-
-Every agent with a network exports: REINFORCE, Actor-Critic and PPO (discrete and continuous), DQN (plain and dueling),
-DDPG, TD3 and SAC (its mean). A checkpoint trained on the PyTorch backend exports without PyTorch, through the NumPy
-agent. The random agents are refused ("has no network to export") before the checkpoint is read. Before writing the
-header, `export.py` plays `--verify-episodes` greedy episodes (default 3; 0 skips this), compiles the header with `$CC`,
-`cc`, `gcc` or `clang`, and checks its outputs against NumPy's on every observation, to within 1e-5 absolute plus 1e-5
-relative; the summary gives the worst error as a share of that tolerance. If they disagree it writes no header and exits
-with status 1; without a compiler it writes the header unchecked and exits with status 1. A discrete action may differ
-only where NumPy's two best outputs are that close; these are reported as near-ties.
-
-### Export a Trained Agent to ONNX
-
-For a device with an ONNX runtime (onnxruntime, TensorRT, OpenVINO and others), export the same policy as an ONNX
-model. It needs the `onnx` extra (`pip install -e ".[onnx]"`; the setup scripts install it):
-
-```bash
-python export.py --format onnx --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt --output policy.onnx
-```
-
-The model takes `observation` (float32, `[batch, observation size]`; one observation is a batch of one) and gives
-`outputs` (the network's outputs) and `action`: an int64 index per row for a discrete agent, a float32 action vector
-for a continuous one. Like the header it includes the observation normalisation and the action head, and takes the
-observation after `mask_velocity`, `frame_stack` and `frame_deltas`. The weights are float32; the model uses opset 17
-and IR version 8, which onnxruntime has loaded since 1.14; its metadata names the agent, the checkpoint (with its
-SHA-256), the action head and the observation settings.
-
-The same agents export, and the check is the same, run in onnxruntime instead of a compiler. The model is written only
-when it passes: without `onnx`, or without `onnxruntime` when checking, `export.py` stops before loading anything,
-names the install command and exits with status 1 (`--verify-episodes 0` writes it unchecked, needing only `onnx`).
-
-### Multi-Agent Benchmarking
-
-Run an automated comparative benchmark across all algorithms over reproducible seeds:
-
-```bash
-# Benchmark all agents on CartPole, each for its own config's budget, across seeds 42 and 123
-python src/benchmark.py --challenge cartpole \
-    --agents random reinforce actor_critic ppo dqn --seeds 42 123
-
-# Quick comparison between PPO and DQN, both for 150 episodes
-python src/benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42
-```
-
-Without `--episodes` or `--steps`, each agent trains for its own config's budget (`configs/<challenge>_<agent>.yaml`,
-or `<challenge>_default.yaml` for the random agent): `training.total_steps` environment steps when set, else
-`training.num_episodes` episodes. A step budget finishes the episode that crosses it. A run counts as solved when its
-average training reward over `--window` consecutive episodes (default 100) reaches the challenge's threshold (475 for
-CartPole-v1, -200 for Pendulum-v1); the report gives the episode and the environment steps it took, and **Held**: the
-share of runs whose last `--window` episodes still average at or above the threshold. The final greedy evaluation is
-reported in its own column and does not count as a solve. `train.py --total-steps N` trains for a step budget too.
-Without `--agents`, every agent the challenge supports runs. Before any agent trains, the benchmark checks that each
-one's config can be built, so a backend that is not installed stops the run at once: the MountainCarContinuous TD3
-config needs PyTorch, so outside `.venv-gpu` name the others (`--challenge mountaincar_continuous --agents random
-ddpg`).
-
-Outputs:
-
-- Comparative learning curve plot: `plots/benchmarks/cartpole/benchmark_comparison.png`
-- Markdown summary table: [`docs/benchmarks/cartpole_results.md`](docs/benchmarks/cartpole_results.md)
-- Raw metrics JSON: `plots/benchmarks/cartpole/benchmark_metrics.json`
-
-## Configuration
-
-Configuration files are in YAML format. Here's an example:
-
-```yaml
-# Environment settings
-environment:
-  name: "CartPole-v1"
-  render_mode: null
-  max_episode_steps: 500
-  seed: 42
-  # frame_stack: 4        # optional, every challenge: the last 4 observations, oldest first, as one vector
-  # mask_velocity: true   # optional, every challenge but Navigation: zero the velocity entries (partially observed)
-  # frame_deltas: true    # optional, with frame_stack >= 2: the newest frame, then the differences between frames
-  # obs_noise_std: 0.05   # optional: noise and domain randomization, the settings evaluation always plays
-  # curriculum:           # optional: train from easier settings up to the ones above (see below)
-  #   mode: step          #   linear | step | reward_threshold
-  #   episodes: 400       #   linear and step: training episodes to reach the target
-  #   stages: 4           #   step and reward_threshold
-  #   start: {obs_noise_std: 0.0}
-
-# Agent settings
-agent:
-  type: "random"  # Options: "random", "reinforce", "actor_critic", "ppo", "dqn"
-  config:
-    seed: 42
-    # normalize_observations: true  # optional: running mean and variance of the inputs, saved with the
-    #                               #   checkpoint (every agent; DQN, DDPG, TD3 and SAC store raw observations
-    #                               #   and normalise each sampled batch)
-
-# Training settings
-training:
-  num_episodes: 1000
-  # total_steps: 100000  # optional: train for this many environment steps instead (num_episodes is then ignored)
-  # update_every: 1      # optional: update every N steps inside the episode, not after it (DQN, DDPG, TD3, SAC;
-  #                      #   the continuous Actor-Critic with n_steps equal to it, as A2C)
-  max_steps_per_episode: 500
-  eval_frequency: 100
-  save_frequency: 100
-  checkpoint_dir: "./checkpoints"
-  log_dir: "./logs"
-```
-
-### Curriculum
-
-`environment.curriculum` trains through easier settings first. The `environment` section stays the target: the
-evaluation environment is built from it as always, so evaluation and its greedy episodes play the hardest settings.
-`start` gives the easiest value of any schedulable setting the section turns on (`obs_noise_std` on every
-challenge; `action_noise_prob` or `action_noise_std` and `domain_randomization` on CartPole, Pendulum and the two
-Navigation ids). A start
-randomization may name some of the target's parameters; the others stay at their target range. Before each
-training episode one difficulty d, from 0 to 1, sets every scheduled setting to `(1 - d) * start + d * target`, and
-moves a randomization range's two ends separately.
-
-| `mode` | Keys | Difficulty |
-| :--- | :--- | :--- |
-| `linear` | `episodes` | episodes done / `episodes`, capped at 1 |
-| `step` | `episodes`, `stages` | `stages` equal steps over `episodes` |
-| `reward_threshold` | `stages`, `threshold`, `window`, `min_episodes_per_stage` | one stage up when the average training reward of the stage's last `window` episodes reaches `threshold`, after at least `min_episodes_per_stage` (no fewer than `window`) at that stage; it never falls |
-
-The 10-episode metrics records carry `curriculum_difficulty` (and `curriculum_stage`) of the last episode trained,
-the log says when a stage advances, and a run that ends below difficulty 1 warns. The solve rule is unchanged, but
-its training average then mixes difficulties, so quote a curriculum run's greedy evaluation at the target as well.
-A run with a curriculum resumes only with the same one. `record.py`, `export.py` and the benchmark's evaluation
-build the target and ignore the curriculum; `src/benchmark.py` trains each run through its config's curriculum, and
-its report names each agent that did.
-
-### Robustness of a Trained Agent
-
-`robustness.py` plays a checkpoint greedily with one setting changed at a time, to show how far outside its training
-the policy holds up:
-
-```bash
-python robustness.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt --sweep length=0.25,0.5,1.0,2.0 --sweep obs_noise_std=0,0.05,0.1 --report <scratch>/robustness.md
-```
-
-Each `--sweep SETTING=V1,V2,...` names a noise setting the challenge's wrapper can schedule (`obs_noise_std`;
-`action_noise_prob` on CartPole and Navigation-v0, `action_noise_std` on Pendulum and NavigationContinuous-v0) or a
-parameter it can randomize (CartPole `gravity`, `masscart`, `masspole`, `length`; Pendulum `g`, `m`, `l` or their long
-names; Navigation `wheel_slip`, `sensor_noise_std`, `dropout_prob`, `num_obstacles`), one `--sweep` per setting.
-Every value gets a new evaluation environment built from the config's `environment` section, with the noise level
-set or the parameter pinned to that value (other randomized parameters keep their ranges), and plays `--episodes`
-greedy episodes (default 20). Episode i of every row resets with the same seed, so the start states are paired;
-noise draws are not once a pinned parameter adds a draw at each reset. The first row is the config's own target.
-
-Each row says whether the value is inside the range the agent trained on: the config's value without a curriculum,
-or from the curriculum's start to the difficulty the run reached, replayed from the trainer file beside the
-checkpoint (the configured start to target when there is none). A config whose curriculum differs from the one in
-the trainer file, or that has none where the run had one, is refused, as a resume refuses it. The table gives mean
-and spread of the greedy reward, mean length, the share of episodes whose reward reached the solve threshold (the
-"Reward ≥ threshold" column) and, for an environment that reports `is_success` (Navigation), the share that succeeded
-("Success"). It is printed; `--report` also writes it as Markdown, and nothing is written without it. A checkpoint
-from the PyTorch backend loads into the NumPy agent, so no PyTorch is needed.
+## Documentation
+
+- [docs/usage.md](docs/usage.md): install, train, record, export, benchmark, configure, develop
+- [docs/navigation.md](docs/navigation.md): the navigation simulator and state estimation
+- [docs/results.md](docs/results.md): which agents solve which challenge, with the caveats
+- [docs/agents.md](docs/agents.md): how each agent works
+- [docs/roadmap.md](docs/roadmap.md): open work and the robotics ladder
+- [docs/pytorch_jetson_timing.md](docs/pytorch_jetson_timing.md): what the Jetson's GPU buys
+- [docs/ai-assistants.md](docs/ai-assistants.md): Claude Code setup, MCP servers and skills
+- [ARCHITECTURE.md](ARCHITECTURE.md), [TESTING.md](TESTING.md), [CONTRIBUTING.md](CONTRIBUTING.md),
+  [CHANGELOG.md](CHANGELOG.md); the folder layout is in [GEMINI.md](GEMINI.md#2-codebase-directory-layout)
 
 ## Development
 
-### Running Tests
-
-Run the test suite:
+The checks CI runs, from the virtual environment:
 
 ```bash
-pytest -q
+ruff check . && ruff format --check .   # lint and format
+mypy src                                # types
+pytest -q                               # tests (CI enforces 50% line coverage)
+python scripts/check_doc_links.py       # every Markdown link resolves
 ```
 
-Run tests with coverage (CI-aligned):
-
-```bash
-pytest --cov-report=xml --cov-fail-under=50
-```
-
-### Code Formatting
-
-Format code with Ruff:
-
-```bash
-ruff format .
-```
-
-### Linting
-
-Check code quality with Ruff:
-
-```bash
-ruff check .
-```
-
-Fix auto-fixable issues:
-
-```bash
-ruff check --fix .
-```
-
-### Type Checking
-
-Run type checking with mypy:
-
-```bash
-mypy src/
-```
-
-### Security Scanning
-
-Run security checks with Bandit:
-
-```bash
-bandit -r src/ -ll
-```
-
-### Markdown Linting
-
-Lint markdown documentation:
-
-```bash
-npx --yes markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules
-```
-
-## CI/CD
-
-Every pull request runs two jobs in `ci.yml`, which are the required status checks, plus CodeQL:
-
-- **Checks**: Ruff lint and format, MyPy, Bandit, the pylint duplicate-code audit, markdownlint, and a check
-  that the workflow list below is current
-- **Unit Tests**: pytest with coverage (50% minimum) and the Codecov upload
-- **CodeQL**: security analysis, also on every push to `develop` and weekly
-
-A pull request that changes only `docs/**` or Markdown files (outside `src/` and `tests/`) skips the Python
-steps but still reports both checks; markdownlint and the workflow-list check always run. A new push to a
-pull request cancels its older run. Weekly Maintenance re-runs `ci.yml` on `develop` every Monday.
-
-Every action is pinned to a commit SHA, every workflow has a read-only token (CodeQL's results upload is the
-one write), and no workflow reads a secret other than `CODECOV_TOKEN` or calls a paid LLM API.
-`tests/test_ci_policy.py` fails when a workflow breaks any of these rules. Dependabot opens one grouped pull
-request per week for pip and one for GitHub Actions.
-
-### Local Development Tools
-
-Pre-commit hooks are available for local development. Install them with:
-
-```bash
-pip install -e ".[dev]"
-pre-commit install
-```
-
-The pre-commit hooks will automatically run:
-
-- Code formatting (Ruff)
-- Linting checks (Ruff)
-- Type checking (MyPy)
-- Security scanning (Bandit)
-- Markdown linting (markdownlint)
-- File validation (trailing whitespace, YAML/JSON syntax, etc.)
-
-### Workflows
-
-Workflows are automatically synchronized from `.github/workflows` by
-`scripts/sync_workflow_docs.py`; the `Checks` job fails when the list is stale.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) first: it holds the coding standards and the branch-first, test-driven
+workflow (§4). AI assistants also follow [CLAUDE.md](CLAUDE.md) or [GEMINI.md](GEMINI.md). The CI workflows are
+synchronized from `.github/workflows` by `scripts/sync_workflow_docs.py`; the `Checks` job fails when the list is
+stale:
 
 <!-- WORKFLOWS:START -->
 
@@ -1002,251 +135,6 @@ Workflows are automatically synchronized from `.github/workflows` by
 - **weekly-maintenance.yml** - Weekly Maintenance
 
 <!-- WORKFLOWS:END -->
-
-## Architecture
-
-### Environment Wrapper
-
-The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment, `PendulumEnv` wraps Pendulum-v1, `AcrobotEnv`
-wraps Acrobot-v1, `MountainCarEnv` wraps MountainCar-v0 and MountainCarContinuous-v0, `LunarLanderEnv` wraps
-LunarLander-v3 and LunarLanderContinuous-v3 and `BipedalWalkerEnv` wraps BipedalWalker-v3 (observation noise only for
-those four), and `NavigationEnv` wraps this project's Navigation-v0 and NavigationContinuous-v0 (Range-Sensor
-Navigation below). All seven subclass
-`rl_core.environments.BaseEnvWrapper`, which owns seeding, observation noise and episode statistics. They provide:
-
-- Episode tracking and statistics
-- Standardized interface for training pipeline
-- Easy monitoring and logging integration
-
-Every challenge's `environment` section also takes `frame_stack`, `mask_velocity` and `frame_deltas`, applied by the
-base after the observation noise; Navigation refuses `mask_velocity: true`, as its observation holds no velocity of
-the robot's state. `mask_velocity: true` zeroes the velocity entries and keeps the observation's length,
-as rl-zoo's `MaskVelocityWrapper` does. `frame_stack: K` joins the last K observations, oldest first, into one vector;
-at a reset the first observation fills every slot. `frame_deltas: true` gives that stack as its newest frame followed by
-the differences between consecutive frames, newest first: the same entries, but a velocity hidden in the small change
-between frames becomes an input of its own. Agents size themselves from the stacked space, so a checkpoint trained with
-these keys must be played back (`record.py`) or resumed with the same `environment` section. Checkpoints record the
-keys, and loading one under other values stops with an error naming each key with its saved and current value;
-checkpoints saved before 2026-11-02 hold no record and load unchecked. On masked CartPole, PPO with `frame_stack: 4`
-recovers much of what masking takes away but does not solve (CHANGELOG.md, 2026-11-01). With `normalize_observations:
-true` in the agent's config it solves on 4 of 5 seeds and holds on 2, and with `frame_deltas: true` as well on 5 of 5,
-holding on all 5 (CHANGELOG.md, 2026-11-02).
-
-### Agent Framework
-
-The `BaseAgent` abstract class defines the interface for all RL agents:
-
-- `select_action()`: Choose actions based on observations
-- `update()`: Update policy based on collected experience
-- `_checkpoint_arrays()` / `_load_checkpoint_arrays(data)`: what a checkpoint holds; `BaseAgent.save()` and
-  `load()` write and read it, with every generator
-
-Implemented agents (in `src/rl_core/agents/`; how each one works, its update and what it measured:
-[`docs/agents.md`](docs/agents.md)):
-
-- **Discrete Control Agents**:
-  - `RandomAgent`: Random action baseline policy
-  - `ReinforceAgent`: Monte Carlo policy-gradient agent
-  - `ActorCriticAgent`: Advantage Actor-Critic (A2C) policy + value network agent
-  - `PPOAgent`: Clipped-policy Proximal Policy Optimization agent
-  - `DQNAgent`: Deep Q-Network with replay buffer and target network; double DQN targets (`double_q: true`) and a
-    dueling network (`dueling: true`) and a Huber TD loss (`td_loss: huber`) are opt-in
-- **Continuous Control Agents**:
-  - `ContinuousRandomAgent`: Uniform random continuous torque baseline policy
-  - `ContinuousActorCriticAgent`: Continuous Gaussian policy A2C with state-value critic
-  - `ContinuousPPOAgent`: Continuous Gaussian policy PPO with clipped surrogate objective
-  - `DDPGAgent`: Deep Deterministic Policy Gradient with replay, a Q critic and Polyak target networks; it explores
-    with Gaussian noise or, with `noise_type: ornstein_uhlenbeck`, temporally correlated Ornstein-Uhlenbeck noise
-    (`rl_core/agents/exploration_noise.py`)
-  - `TD3Agent`: Twin Delayed DDPG: two critics with the smaller target, smoothed target actions and delayed actor
-    and target updates (`configs/pendulum_td3.yaml`)
-  - `SACAgent`: Soft Actor-Critic: a squashed Gaussian actor, twin critics with Polyak targets and a learned
-    entropy temperature (`ent_coef`, `target_entropy`; `configs/pendulum_sac.yaml`, and on the PyTorch backend
-    `configs/lunarlander_continuous_sac.yaml` and `configs/bipedalwalker_sac.yaml`)
-- **Optional PyTorch backend**: `TorchDDPGAgent`, `TorchTD3Agent` and `TorchSACAgent` train DDPG's, TD3's and SAC's
-  gradient steps in PyTorch, on the GPU as CUDA graphs, and keep everything else, acting included, in NumPy. Add
-  `backend: torch` to a DDPG, TD3 or SAC config's `agent.config` (optional: `device: auto|cpu|cuda`,
-  `dtype: float32|float64`, `cuda_graph: true|false`). It needs PyTorch, which `.venv` and CI do not have: build a
-  separate environment as in [`docs/pytorch_jetson_timing.md`](docs/pytorch_jetson_timing.md) and run `train.py`
-  from it. Its checkpoints are the NumPy agent's format, so `record.py` can replay a GPU-trained checkpoint without
-  PyTorch by setting `backend: numpy` in the run's config. Build the environment with `./setup.sh --profile gpu`
-  (`.venv-gpu`).
-  Measured speed: see the timing document.
-
-### Training Pipeline
-
-The `Trainer` class orchestrates the training process:
-
-- Episode collection and management
-- Agent policy updates
-- Evaluation and checkpointing
-- Metrics logging
-
-## Next AI Progression
-
-With discrete control (CartPole: Random, REINFORCE, Actor-Critic, PPO, DQN) and continuous control (Pendulum: Random,
-Actor-Critic, PPO, DDPG) fully operational, and Acrobot (Random, PPO, DQN), MountainCar (Random, DQN) and
-MountainCarContinuous (Random, DDPG) added as the first rungs of the challenge ladder, the framework provides a
-decoupled foundation for future AI challenges.
-The ladder of next challenges is Phase 7 of [`docs/roadmap.md`](docs/roadmap.md). Whether the Jetson's GPU can
-speed up training was measured in [`docs/pytorch_jetson_timing.md`](docs/pytorch_jetson_timing.md).
-
-### Next Steps
-
-1. **Robot navigation stack**: state estimation, mapping and planning on the range-sensor navigation simulator, then
-   the policy on the Jetson robot (Phase 8 of [`docs/roadmap.md`](docs/roadmap.md)).
-2. **Advanced Environments**: MuJoCo tasks (the Phase 7 challenge ladder), with the SAC and TD3 agents that walk
-   BipedalWalker-v3 (SAC's greedy evaluation reaches 300 on 5 of 5 seeds, TD3's on 2 of 5).
-3. **Hyperparameter Sweeps & Automated Tuning**: Population-based training or grid-search runners.
-
-## Future Enhancements
-
-After DQN, the current structure also supports:
-
-- **Additional Algorithms**: A3C, SAC, etc.
-- **Advanced Environments**: More complex physics simulations
-- **Vision Integration**: Camera-based observations
-- **SLAM Integration**: Simultaneous localization and mapping
-- **ROS2 Integration**: Robot Operating System 2 support
-- **Embedded Deployment**: Deploy trained agents to edge devices
-
-## AI Assistant MCP Servers
-
-The repo ships a shared [`.mcp.json`](.mcp.json) that gives Claude Code (and other MCP clients) up-to-date library
-documentation. It contains no secrets or machine paths; the API key comes from an environment variable. Usage rules
-for the assistant live in [CLAUDE.md](CLAUDE.md#mcp-servers).
-
-| Server | Scope | Purpose | Needs |
-| :--- | :--- | :--- | :--- |
-| `context7` ([Context7](https://context7.com)) | Project (`.mcp.json`) | Version-correct Gymnasium, NumPy, pytest, Ruff, mypy, and Matplotlib docs | Free API key in `CONTEXT7_API_KEY` |
-
-The definition is identical to the one in the sibling `eternal-descent` repo, so if `CONTEXT7_API_KEY` is already set
-for that project, skip to step 3.
-
-### Setup
-
-1. **Create a Context7 API key** at <https://context7.com/dashboard> (free; keys start with `ctx7sk`).
-
-2. **Store it as a user environment variable** without echoing it:
-
-   ```powershell
-   # Windows (PowerShell): copy the key from the dashboard first, then read it from the clipboard.
-   [Environment]::SetEnvironmentVariable('CONTEXT7_API_KEY', (Get-Clipboard -Raw).Trim(), 'User')
-   Set-Clipboard -Value ' '   # clear the key from the clipboard
-   ```
-
-   ```bash
-   # macOS / Linux: append to ~/.zshrc or ~/.bashrc (the key is stored in plain text there)
-   read -rs -p "Context7 API key: " CONTEXT7_API_KEY && echo
-   printf 'export CONTEXT7_API_KEY=%q\n' "$CONTEXT7_API_KEY" >> ~/.zshrc
-   unset CONTEXT7_API_KEY
-   ```
-
-3. **Restart.** Fully quit VS Code (every window), or open a new terminal, so the variable is inherited.
-
-4. **Approve the project server.** The first time you run `claude` in the repo, trust the folder and approve
-   `context7`. Or pre-approve it in your personal, git-ignored `.claude/settings.local.json`:
-
-   ```json
-   {
-     "enabledMcpjsonServers": ["context7"]
-   }
-   ```
-
-   To undo approvals: `claude mcp reset-project-choices`.
-
-5. **Verify.** Run `claude mcp list`; `context7` should show `Connected` with no *Missing environment variables*
-   warning. "Connected" alone is not proof, so also run a real prompt: *"Use context7 to look up `Env.step` in the
-   Gymnasium docs."* Expect snippets mentioning `terminated` and `truncated`, **not** "Invalid API key".
-
-### Troubleshooting
-
-- **"Connected" but tools fail.** HTTP servers connect and list tools even with a missing or invalid key. Context7
-  only reports `Invalid API key … should start with 'ctx7sk'` inside the tool result.
-- **A new environment variable isn't picked up.** Reloading the window isn't enough: quit **every** VS Code window.
-  Check from VS Code's integrated terminal: `[bool]$env:CONTEXT7_API_KEY`.
-
-## AI Assistant Skills
-
-The repo ships the development workflow as Claude Code **skills** in [`.claude/skills/`](.claude/skills/). They are
-Markdown files committed with the code, so cloning the repo installs them: Claude Code loads them when it starts in
-this folder and picks the right one from what you ask. Together they let the assistant act as the dev team while a
-person makes three decisions: which work to do, whether the plan is right, and when to commit.
-
-| Skill | What it does | Runs |
-| :--- | :--- | :--- |
-| `dev-loop` | Takes a feature or fix from proposal to hand-off, calling the others in order | Whenever you ask to build, change or fix something, or ask what is next |
-| `architect` | Reviews a plan or structure: package boundaries, Python class design, NumPy and Gymnasium hazards | On every plan before you see it |
-| `algorithm-crafter` | Pins down an algorithm's variant, array shapes and hand-derived gradients, then fits it to the agent base classes and registries | When the work is a new agent or update rule |
-| `test-crafter` | Writes unit tests, gradient checks and integration tests, then breaks the code on purpose to prove they fail | Before the implementation |
-| `experiment-runner` | Runs seeded training sweeps outside your saved results and reports what they do and do not show | When the question is whether an agent learns |
-| `training-doctor` | Finds why an agent does not learn, diverges or gives NaN, cheapest check first | Before any hyperparameter is changed to fix a bad run |
-| `cleanup` | Finds and merges duplication against the whole codebase; removes leftovers | After the implementation |
-| `pr-reviewer` | Final review: acceptance criteria, numerical correctness, soundness of the learning, what gets committed, whether the docs still describe every changed file; opens with a quick summary for you | Before you are asked to commit |
-| `doc-sync` | Brings roadmap, TESTING, README, ARCHITECTURE and assistant docs back in line | Before you are asked to commit |
-
-`architect`, `cleanup` and `pr-reviewer` build on the [brooks-lint](https://github.com/hyhmrright/brooks-lint) plugin
-(MIT), which supplies a general code-quality rubric. The rules specific to this project live in
-[`.brooks-lint.yaml`](.brooks-lint.yaml) and in the skills themselves. Without the plugin the skills still run, with
-the project checks only.
-
-### Skill Tooling
-
-| Tool | Purpose |
-| :--- | :--- |
-| `tests/helpers.py` → `numerical_grad`, `assert_gradients_match` | Finite-difference check of a hand-written backward pass, parameter by parameter |
-| `tests/agent_internals.py` | The one module agent tests may use to reach weights, forward passes and loss methods |
-| `tests/trainer_internals.py` | The same for `Trainer`: its metrics-record dispatch; all else goes through `train()` and `evaluate()` |
-| `.claude/skills/test-crafter/scripts/mutation_check.py` | Applies small breaks from a JSON list, reports which tests notice, restores the files |
-| `.claude/skills/doc-sync/scripts/check_md_width.py` | Checks the Markdown line-length rule on machines without Node |
-| `.claude/skills/experiment-runner/scripts/run_queue.py` | Machine-wide job queue: `submit`, `run`, `status`, `wait`, `cancel`, `prune`; keeps at most 3 training runs going across all agents |
-| `src/benchmark.py --output-dir … --report …` | Seeded experiment sweeps that leave `docs/benchmarks/` and saved runs alone |
-
-### Skill Setup
-
-1. **Prerequisites:** [Claude Code](https://code.claude.com) 2.1 or newer (CLI or the VS Code extension) and the
-   `.venv` from [Installation](#installation). Node.js is optional: it is only needed to run `markdownlint` locally.
-
-2. **Install the brooks-lint plugin.** [`.claude/settings.json`](.claude/settings.json) declares its marketplace,
-   pinned to the tag `v1.7.0`, and enables the plugin for this project. Start `claude` in the repo, trust the folder,
-   and accept the prompt to install it. If no prompt appears, install it from a terminal. The marketplace has to be
-   added before the plugin can be found in it:
-
-   ```bash
-   claude plugin marketplace add hyhmrright/brooks-lint@v1.7.0
-   claude plugin install brooks-lint@brooks-lint-marketplace
-   claude plugin list                                   # brooks-lint, Version: 1.7.0, enabled
-   ```
-
-3. **Restart Claude Code** so the plugin and skills are loaded.
-
-4. **Verify.** Type `/` in Claude Code: the nine skills above should be listed, along with
-   `brooks-lint:brooks-review`, `brooks-lint:brooks-audit` and `brooks-lint:brooks-test`.
-
-5. **Use it.** Ask in plain words ("what should we work on next?", "PPO stopped learning on Pendulum, find out
-   why") or name a skill (`/dev-loop`, `/training-doctor`). The assistant stages changes and prints the commit and
-   push commands; it never commits, pushes or merges.
-
-The same settings file pre-approves what the loop runs constantly, so it does not stop to ask each time: anything run
-with the project's own interpreter (`.venv/bin/python` or `.venv/Scripts/python`, which covers the quality gates,
-`train.py`, `src/benchmark.py` and the skill scripts), edits to the skill files, and `gh run`. That means the
-assistant can run any Python in this repository's environment without a prompt; narrow it in the file if you prefer
-to be asked. Rules are written as patterns, never with one-off file names; approve anything more specific into your
-git-ignored `.claude/settings.local.json`. To opt out of the plugin personally, add this to that file:
-
-```json
-{
-  "enabledPlugins": { "brooks-lint@brooks-lint-marketplace": false }
-}
-```
-
-Other assistants can use the skills too: they are ordinary Markdown, and [GEMINI.md](GEMINI.md) §5 points to them.
-
-## Contributing
-
-Contributions are welcome! Before opening a Pull Request, read [CONTRIBUTING.md](CONTRIBUTING.md). It holds the coding
-standards and the branch-first, test-driven feature & bug workflow (§4) that every change follows. AI coding
-assistants additionally follow [CLAUDE.md](CLAUDE.md) (Claude Code) or [GEMINI.md](GEMINI.md) (Gemini).
 
 ## License
 

@@ -1,4 +1,4 @@
-# RL CartPole — Claude Code Instructions (CLAUDE.md)
+# RL and Robot Navigation — Claude Code Instructions (CLAUDE.md)
 
 ## Tool Efficiency
 
@@ -59,7 +59,7 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 - Run `architect` and `pr-reviewer` in a **fresh agent**: tell it to read the skill's `SKILL.md` and give it the plan
   or branch, since it cannot see the conversation.
 - If the plugin is missing, the skills still run with the project checks; say so and point to
-  [README → AI Assistant Skills](README.md#ai-assistant-skills).
+  [docs/ai-assistants.md → AI Assistant Skills](docs/ai-assistants.md#ai-assistant-skills).
 - **Training runs never write into the maintainer's results.** Send experiment output to the scratch directory:
   `src/benchmark.py` with `--output-dir` and `--report`, `train.py` with a copied config whose `checkpoint_dir` and
   `log_dir` point there. The benchmark rewrites the tracked `docs/benchmarks/*.md` by default; it does so on
@@ -130,7 +130,7 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 
 Shared servers are defined in [.mcp.json](.mcp.json) (same `context7` definition and `CONTEXT7_API_KEY` as the
 eternal-descent repo). Setup and troubleshooting:
-[README → AI Assistant MCP Servers](README.md#ai-assistant-mcp-servers).
+[docs/ai-assistants.md → AI Assistant MCP Servers](docs/ai-assistants.md#ai-assistant-mcp-servers).
 
 | Server | Use it when |
 | :--- | :--- |
@@ -142,7 +142,7 @@ eternal-descent repo). Setup and troubleshooting:
 - **Check Gymnasium APIs in Context7 rather than from memory.** Older Gym tutorials return `done` from `step()`;
   this repo uses the v1.0+ `terminated`/`truncated` split and `reset(seed=...)` returning `(obs, info)`.
 - **If a server is disconnected or a tool returns an auth error, point the user to the
-  [README setup steps](README.md#ai-assistant-mcp-servers) rather than working around it.** Context7 reports
+  [MCP setup steps](docs/ai-assistants.md#ai-assistant-mcp-servers) rather than working around it.** Context7 reports
   "Connected" even with a missing key; an "Invalid API key" tool result means `CONTEXT7_API_KEY` is not set.
 
 ## Git
@@ -174,7 +174,7 @@ Treat the repository as the source of truth when docs disagree:
   under the 100-episode rule (CHANGELOG.md, 2026-10-18). CartPole PPO does solve CartPole-v1: 5 of 5 seeds within
   200,000 steps, holding on all 5 (TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
 - The `box2d` extra names `box2d-py==2.3.8`, not the `box2d==2.3.10` Gymnasium 1.4's own `box2d` extra pins: that
-  has no aarch64 build, and `box2d-py` builds on the Jetson with `swig` and `--no-build-isolation` (README,
-  LunarLander). Rendering uses `pygame-ce`, as Gymnasium does; never install plain `pygame` beside it.
+  has no aarch64 build, and `box2d-py` builds on the Jetson with `swig` and `--no-build-isolation` (docs/usage.md,
+  LunarLander (Box2D)). Rendering uses `pygame-ce`, as Gymnasium does; never install plain `pygame` beside it.
 - CONTRIBUTING.md §5 and TESTING.md `CKPT-*` describe `.npz` checkpoints; `Trainer` names them
   `agent_episode_<n>.pt` (NumPy archive content, resolved by `BaseAgent._resolve_save_path`).

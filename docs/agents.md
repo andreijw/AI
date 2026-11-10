@@ -26,6 +26,38 @@ Terms used throughout:
 | TD3 | continuous | as DDPG, twin critics and delayed actor | Pendulum, MountainCarContinuous, LunarLanderContinuous, BipedalWalker, NavigationContinuous |
 | SAC | continuous | stochastic policy, twin action values and an entropy temperature, from replay | Pendulum, LunarLanderContinuous, BipedalWalker |
 
+## The agent classes (`BaseAgent` and the implemented agents)
+
+The `BaseAgent` abstract class defines the interface for all RL agents:
+
+- `select_action()`: Choose actions based on observations
+- `update()`: Update policy based on collected experience
+- `_checkpoint_arrays()` / `_load_checkpoint_arrays(data)`: what a checkpoint holds; `BaseAgent.save()` and
+  `load()` write and read it, with every generator
+
+Implemented agents (in `src/rl_core/agents/`; the sections below say how each one works, its update and what it
+measured):
+
+- **Discrete Control Agents**:
+  - `RandomAgent`: Random action baseline policy
+  - `ReinforceAgent`: Monte Carlo policy-gradient agent
+  - `ActorCriticAgent`: Advantage Actor-Critic (A2C) policy + value network agent
+  - `PPOAgent`: Clipped-policy Proximal Policy Optimization agent
+  - `DQNAgent`: Deep Q-Network with replay buffer and target network; double DQN targets (`double_q: true`) and a
+    dueling network (`dueling: true`) and a Huber TD loss (`td_loss: huber`) are opt-in
+- **Continuous Control Agents**:
+  - `ContinuousRandomAgent`: Uniform random continuous torque baseline policy
+  - `ContinuousActorCriticAgent`: Continuous Gaussian policy A2C with state-value critic
+  - `ContinuousPPOAgent`: Continuous Gaussian policy PPO with clipped surrogate objective
+  - `DDPGAgent`: Deep Deterministic Policy Gradient with replay, a Q critic and Polyak target networks; it explores
+    with Gaussian noise or, with `noise_type: ornstein_uhlenbeck`, temporally correlated Ornstein-Uhlenbeck noise
+    (`rl_core/agents/exploration_noise.py`)
+  - `TD3Agent`: Twin Delayed DDPG: two critics with the smaller target, smoothed target actions and delayed actor
+    and target updates (`configs/pendulum_td3.yaml`)
+  - `SACAgent`: Soft Actor-Critic: a squashed Gaussian actor, twin critics with Polyak targets and a learned
+    entropy temperature (`ent_coef`, `target_entropy`; `configs/pendulum_sac.yaml`, and on the PyTorch backend
+    `configs/lunarlander_continuous_sac.yaml` and `configs/bipedalwalker_sac.yaml`)
+
 ## REINFORCE (`ReinforceAgent`, `src/rl_core/agents/reinforce_agent.py`)
 
 **Idea.** Learns a softmax policy directly from sampled episodes (Williams 1992): after each episode it raises the
@@ -431,6 +463,13 @@ target noise, SAC's two policy noises) drawn on the host from the NumPy agent's 
 is captured as a CUDA graph and replayed as one launch, which is what pays: plain PyTorch on the GPU is no faster than
 NumPy for these small networks. Options: `device` (auto, cpu, cuda), `dtype` (float32, or float64, which matches the
 NumPy agent to rounding: every case of `tests/test_ddpg_td3_golden.py` replays to a relative 1e-9), `cuda_graph`.
+To use it, add `backend: torch` to a DDPG, TD3 or SAC config's `agent.config` (optional: `device: auto|cpu|cuda`,
+`dtype: float32|float64`, `cuda_graph: true|false`). It needs PyTorch, which `.venv` and CI do not have: build a
+separate environment with `./setup.sh --profile gpu` (`.venv-gpu`), as in
+[`pytorch_jetson_timing.md`](pytorch_jetson_timing.md), and run `train.py` from it. Its checkpoints are the NumPy
+agent's format, so `record.py` can replay a GPU-trained checkpoint without PyTorch by setting `backend: numpy` in the
+run's config. Measured speed: see the timing document.
+
 Checkpoints are the NumPy agent's format both ways. The three share `TorchOffPolicyAgent`
 (`rl_core/agents/torch_off_policy.py`: device copies, staging, capture, the mirror, the critic step, the minimum
 target Q); each adds only its step. A group is clipped on the device exactly when its NumPy Adam clips it, so SAC's

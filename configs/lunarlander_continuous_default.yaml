@@ -2,7 +2,7 @@
 # LunarLanderContinuous-v3: 8 observations (position, velocity, angle, angular velocity, two leg contacts), two
 # throttles in [-1, 1] (main engine, side engines), a shaped reward for moving towards the pad and landing (+100 to
 # +140), -100 for a crash, a fuel cost per firing, 1,000-step limit. Solved at a 100-episode training average of 200
-# (Gymnasium's reward_threshold). Needs Box2D: ./setup.sh builds it (README, LunarLander).
+# (Gymnasium's reward_threshold). Needs Box2D: ./setup.sh builds it (docs/usage.md, LunarLander (Box2D)).
 
 # Environment settings
 environment:

@@ -73,7 +73,7 @@ To optimize token usage and context window limits:
     factory for each.
   * `src/rl_mountaincar/benchmark.py`: both MountainCar benchmark challenge implementations.
 * **`src/rl_lunarlander/`**: LunarLander-v3 (discrete) and LunarLanderContinuous-v3 challenges, which need Box2D
-  (the `box2d` extra, built by `./setup.sh`; README, LunarLander).
+  (the `box2d` extra, built by `./setup.sh`; docs/usage.md, LunarLander (Box2D)).
   * `src/rl_lunarlander/environments/`: lunar lander wrapper (observation noise only), shared by both ids, and a
     factory for each.
   * `src/rl_lunarlander/benchmark.py`: both LunarLander benchmark challenge implementations.
@@ -179,7 +179,7 @@ Run these commands in the root workspace directory:
 ./setup.sh
 
 # Any OS: install dependencies in editable development mode inside an activated venv
-# (LunarLander's and BipedalWalker's Box2D needs the extra steps in README, LunarLander)
+# (LunarLander's and BipedalWalker's Box2D needs the extra steps in docs/usage.md, LunarLander (Box2D))
 pip install -e ".[dev,video,onnx]"
 ```
 

@@ -125,7 +125,7 @@ Run them in this order, fix what they find, and rerun whatever a fix could have 
 | Review | fresh agent following `.claude/skills/pr-reviewer/SKILL.md` on the diff against `develop` | verdict is Approve; no Critical findings left |
 | Test quality | same agent, `brooks-lint:brooks-test` on the changed test files | no Critical findings left |
 | Learning run | `experiment-runner` skill, when the change touches an update rule, a loss, a network, the trainer, a wrapper or a committed config | the claim written down beforehand holds across the seeds run |
-| Markdown | `python .claude/skills/doc-sync/scripts/check_md_width.py` (line length only), and `npx markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules` where Node is installed; without Node, `pymarkdownlnt` from a scratch virtual environment (`pymarkdown --disable-rules md013,md024,md033,md041,md040,md029 scan <files>`, matching `.markdownlint.json`). Deleting a roadmap item must keep the blank line before the next heading: on 2026-11-09 a removal failed CI's MD022 | CI's markdownlint job would pass |
+| Markdown | `python .claude/skills/doc-sync/scripts/check_md_width.py` (line length only), and `npx markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules` where Node is installed; without Node, `pymarkdownlnt` from a scratch virtual environment (`pymarkdown --disable-rules md013,md024,md033,md041,md040,md029 scan <files>`, matching `.markdownlint.json`; skip `.claude/` files, whose YAML front matter it misreads and which CI's glob does not reach). Deleting a roadmap item must keep the blank line before the next heading: on 2026-11-09 a removal failed CI's MD022 | CI's markdownlint job would pass |
 
 **Smoke runs must not touch the maintainer's results.** `train.py` writes to the `checkpoint_dir` and
 `log_dir` named in the config and overwrites an agent's earlier checkpoints, and `src/benchmark.py` rewrites
@@ -153,7 +153,7 @@ description. Suggestions are optional. After three rounds, stop looping and repo
 
 `architect`, `cleanup` and `pr-reviewer` build on the brooks-lint plugin. If it is not installed they still
 run with the project's own checks; say in the hand-off that the general rubric was skipped, and point to
-the setup steps in the README. A plugin installed mid-session is not loaded until Claude Code restarts, for
+the setup steps in `docs/ai-assistants.md`. A plugin installed mid-session is not loaded until Claude Code restarts, for
 this session and for the agents it spawns.
 
 ### 8. Doc sync
@@ -247,7 +247,7 @@ as a peer, since it sees only your prompt:
   that changed (a key, a default, a result and its seeds). It edits the docs and reports what it changed and
   what it could not settle. Meanwhile you run the mutation, duplication and cleanup gates.
 - Then the `pr-reviewer` agent on code and docs together. Beside it, for a PR that quotes results, a second
-  agent that checks every number in `CHANGELOG.md`, `README.md`, `TESTING.md` and config comments against
+  agent that checks every number in `CHANGELOG.md`, `README.md`, `docs/results.md`, `TESTING.md` and config comments against
   the results files (`benchmark_metrics.json`, the metrics logs), and for a large test change a third that runs
   `brooks-lint:brooks-test` on the changed test files.
 

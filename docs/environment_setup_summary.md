@@ -1,5 +1,10 @@
 # Environment Setup Implementation Summary
 
+> **Historical.** This summary describes the environment setup as it was when the repository held only CartPole;
+> paths such as `src/rl_cartpole/...` and the files it lists may no longer match the layout. For the current one see
+> [GEMINI.md](../GEMINI.md#2-codebase-directory-layout) and
+> [ARCHITECTURE.md](../ARCHITECTURE.md).
+
 ## Overview
 
 This document summarizes the implementation of the basic environment setup for the CartPole RL
