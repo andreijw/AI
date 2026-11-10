@@ -32,11 +32,12 @@ from .observation import (
 
 # How to install Box2D here. Gymnasium's own hint (pip install "gymnasium[box2d]") pins
 # box2d==2.3.10, which has no build for the Jetson's aarch64; box2d-py builds from source with swig
-# (README, LunarLander).
+# (docs/usage.md, LunarLander (Box2D)).
 BOX2D_INSTALL_HINT = (
     "{env_name} needs Box2D: run ./setup.sh, or install it by hand into the virtual environment "
     "with `pip install swig==4.5.1 'setuptools<85' 'wheel<0.49'` and then `PATH=<venv>/bin:$PATH "
-    "pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.8` (README, LunarLander)"
+    "pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.8` "
+    "(docs/usage.md, LunarLander (Box2D))"
 )
 
 # Checkpoint keys of an environment's generators: the wrapper's noise stream and Gymnasium's

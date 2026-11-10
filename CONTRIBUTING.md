@@ -1,4 +1,4 @@
-# Contributing Guidelines & Coding Standards — AI CartPole Framework
+# Contributing Guidelines & Coding Standards — RL and Robot Navigation
 
 Welcome to the **AI Reinforcement Learning Framework**! Follow these mandatory conventions and workflows when
 contributing, writing code, refactoring components, or submitting pull requests.
@@ -120,7 +120,8 @@ hyperparameters and published benchmark numbers, scope, new dependencies and cha
 the maintainer.
 
 **Skills.** In Claude Code each step is carried out by a skill in [`.claude/skills/`](.claude/skills/), started by
-`dev-loop`. Setup: [README → AI Assistant Skills](README.md#ai-assistant-skills). Other assistants and human
+`dev-loop`. Setup:
+[docs/ai-assistants.md → AI Assistant Skills](docs/ai-assistants.md#ai-assistant-skills). Other assistants and human
 contributors can read the same files as checklists.
 
 | Step | Skill |

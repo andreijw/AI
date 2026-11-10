@@ -1,4 +1,4 @@
-# ── RL CartPole Developer Setup Script (Windows Edition) ───────────────────
+# ── RL and Robot Navigation Developer Setup Script (Windows Edition) ───────
 #
 # This script automates environment verification and installation from scratch.
 # It checks/installs Git and Python 3.12 (the version CI uses), creates the
@@ -213,7 +213,7 @@ function Initialize-Venv([string]$Python) {
     }
     Write-Host "[+] Dependencies installed." -ForegroundColor Green
     Write-Host "[!] Box2D (LunarLander, BipedalWalker) is not installed on Windows: box2d-py needs swig and a C++ build;" -ForegroundColor Yellow
-    Write-Host "    the LunarLander and BipedalWalker tests are skipped (README, LunarLander)." -ForegroundColor Yellow
+    Write-Host "    the LunarLander and BipedalWalker tests are skipped (docs/usage.md, LunarLander (Box2D))." -ForegroundColor Yellow
 
     if ($InstallHooks) {
         Write-Host "[*] Installing pre-commit hooks..." -ForegroundColor Cyan
@@ -310,7 +310,7 @@ try {
     }
     if (-not $context7Key) {
         Write-Host "  [WARN] CONTEXT7_API_KEY is not set; the context7 MCP server will not work." -ForegroundColor Yellow
-        Write-Host "         See README -> AI Assistant MCP Servers." -ForegroundColor Yellow
+        Write-Host "         See docs/ai-assistants.md -> AI Assistant MCP Servers." -ForegroundColor Yellow
     }
 
     Write-Host ""

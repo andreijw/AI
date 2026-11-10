@@ -5,6 +5,26 @@ Status labels: `[ ]` Not Started · `[~]` In Progress
 Open and in-progress work only. Completed work, with its measured results, is in [CHANGELOG.md](../CHANGELOG.md):
 an item that is done moves there, condensed, in the hand-off commit that completes it.
 
+## Robotics ladder (the direction)
+
+The repo is the foundation for robotics work. Each rung below is a view over the items in this file; where it stands
+is in the item itself and on the [README](../README.md). A rung marked "proposed" is an item sketch below, to be
+turned into a full item when the maintainer picks it. The ladder uses no numbers, so it does not collide with Phase
+7's tiers.
+
+| Rung | Item |
+| :--- | :--- |
+| Classic control and Box2D | Phase 7 (MountainCar-v0 "Hold -110" is open) |
+| Inverted pendulums, locomotion, robot arms in MuJoCo | Phase 7 "MuJoCo Tasks": InvertedPendulum and InvertedDoublePendulum first, then Hopper and HalfCheetah, then Reacher and Pusher; one `mujoco` dependency decision for all |
+| Further arms | Phase 7 "Gymnasium-Robotics arms" (proposed): Fetch and Franka Kitchen; a new dependency |
+| GPU-parallel simulation | Phase 8 "GPU-parallel navigation simulation" (proposed): the simulator as PyTorch tensors on the Orin's GPU; needs "Parallel environments for the on-policy agents" first |
+| Isaac Lab, deployed to the Jetson | Phase 8 "Isaac Lab on cloud or x86" (proposed, blocked on hardware): training needs an x86-64 RTX machine or cloud, deployment goes through the ONNX export |
+| Isaac ROS on the robot | Phase 8 "Hardware and ROS 2" (Isaac ROS 4.6 supports Jetson Orin on JetPack 7.2; Isaac ROS documentation, read 2026-11-09) |
+| Autonomous navigation | Phase 8 "Occupancy-grid mapping and SLAM" and "Planning and control" |
+| Sim-to-real | Phase 8 "Hardware and ROS 2" (fitting the sensor noise model to real readings) |
+| Multi-agent coordination | Phase 8 "Multi-agent navigation" (proposed): several robots in the navigation simulator, or PettingZoo (a new dependency) |
+| Learning from pixels | Phase 7 "Learning from Pixels (Tier 4)" |
+
 ---
 
 ## Upcoming Milestones
@@ -125,8 +145,18 @@ when picked.
     examined by the diagnosis above.
 
 - [ ] **MuJoCo Tasks (Tier 3)**
-  - **Description**: Hopper and HalfCheetah, with the SAC and TD3 agents (BipedalWalker: CHANGELOG.md,
-    2026-11-05); needs the `mujoco` package (a new dependency, the maintainer's decision).
+  - **Description**: Inverted pendulums, locomotion and robot arms, with the SAC and TD3 agents (BipedalWalker:
+    CHANGELOG.md, 2026-11-05), in this order: InvertedPendulum and InvertedDoublePendulum first, then Hopper and
+    HalfCheetah, then Reacher and Pusher. Needs the `mujoco` package: one new dependency, one decision of the
+    maintainer's for all three steps.
+
+- [ ] **Gymnasium-Robotics arms (proposed)**
+  - **Description**: Fetch (reach, push, pick and place) and Franka Kitchen from the `gymnasium-robotics` package, as
+    the next arms after Reacher and Pusher. (The Panda arm is not in Gymnasium-Robotics.)
+  - **Feasibility**: plausible after the MuJoCo item, which brings the same `mujoco` dependency. The Fetch
+    observations are dictionaries and their rewards sparse by default, which the agents here have not been tried on;
+    expect a flattening wrapper and a look at the reward before any learning claim. Not examined further.
+  - **Needs**: the maintainer's decision on the `gymnasium-robotics` dependency, taken with the `mujoco` one.
 
 - [ ] **Learning from Pixels (Tier 4)**
   - **Description**: CarRacing or Atari. Needs convolutional networks and a GPU; not practical in pure NumPy.
@@ -179,3 +209,29 @@ steps 3 to 5 are sketches to turn into full items when picked.
     mapper, planner, policy) over the plain-Python core. Ends with the simulated policy and planner run on the
     robot, and a report of what transferred and what did not. New dependencies (`Jetson.GPIO`, ROS 2, a lidar
     driver) are the maintainer's decision when the item is planned.
+
+- [ ] **GPU-parallel navigation simulation (proposed)**
+  - **Description**: The navigation simulator's ray casting and motion as PyTorch tensors on the Orin's GPU, stepping
+    thousands of robots at once, so an agent trains on far more experience than the NumPy simulator allows.
+  - **Feasibility**: plausible, since the backend, `.venv-gpu` and CUDA graphs already run on the Jetson
+    (`docs/pytorch_jetson_timing.md`), and the sim is plain array code. The agents would need batched collection
+    first, which is why "Parallel environments for the on-policy agents" comes before this. Not prototyped.
+  - **Needs**: the maintainer's decision to allow PyTorch outside `rl_core/agents/torch_*.py` (a new module that
+    leaves `rl_navigation.sim` NumPy only, so the robot keeps importing the NumPy simulator), and that item done.
+
+- [ ] **Multi-agent navigation (proposed)**
+  - **Description**: Several robots in one navigation arena that must reach their goals without colliding with each
+    other, trained as independent learners first and with shared information later.
+  - **Feasibility**: plausible as a simulator extension (`World` models one robot today); or through PettingZoo's
+    interface, which is a new dependency. Not prototyped.
+  - **Needs**: the maintainer's decision between an own multi-robot API and PettingZoo (a new dependency).
+
+- [ ] **Isaac Lab on cloud or x86 (proposed, blocked on hardware)**
+  - **Description**: Train a robot policy in NVIDIA Isaac Lab and deploy it to the Jetson through the ONNX export
+    (`export.py`).
+  - **Feasibility**: not on the current hardware. Isaac Sim's only supported aarch64 host is DGX Spark, and Isaac Lab
+    asks for 32 GB of RAM (Isaac Sim and Isaac Lab documentation, read 2026-11-09), more than an Orin Nano has. Training
+    needs an x86-64 machine with an RTX GPU, or a cloud instance. Isaac ROS 4.6, on the robot, does support Jetson
+    Orin on JetPack 7.2 (Isaac ROS documentation, read 2026-11-09).
+  - **Needs**: the maintainer's hardware decision (an x86 RTX machine or cloud) and the new dependencies, which do
+    not belong in this repository's NumPy-only core.

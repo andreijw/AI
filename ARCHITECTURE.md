@@ -628,6 +628,9 @@ plots/
    `tests/test_committed_configs.py` (`STEP_BUDGETS`); a test there fails while `EXPECTED_AGENTS` or `ENV_CLASSES`
    misses a registered challenge. The seeding, settings and frame-stack tests cover it without an edit, through
    `challenge_env_factories()` in `tests/helpers.py`, which also marks a Box2D environment `needs_box2d`.
+4. Add the challenge to the README table (one row, named by its environment id, linking its report) and to
+   `README_NAMES` in `tests/test_readme_front_page.py`, which fails while a registered challenge is missing from the
+   map or the front page; its row in `docs/results.md` carries the caveats.
 
 ### Adding a New Continuous Algorithm
 

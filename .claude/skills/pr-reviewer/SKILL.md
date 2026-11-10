@@ -146,7 +146,7 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
   the command crashed with a `KeyError` before it got there. Only running the documented command found it.
 - The roadmap item matches what was built, including what was dropped.
 - **Every document the change makes stale is updated in this PR**, generated ones included: the README
-  results table, `docs/benchmarks/*.md`, `TESTING.md` expected numbers and timings, config header comments.
+  challenge table and `docs/results.md`, `docs/benchmarks/*.md`, `TESTING.md` expected numbers and timings, config header comments.
   A stale one is a Warning, not a follow-up.
 - **Work items no longer needed are gone.** No roadmap entry still asks a question the change answered or
   describes work it did. The hand-off lists the worktrees, branches and scratch folders the work made, and
@@ -155,8 +155,8 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
   run.
 - A new agent has its section in `docs/agents.md`, and a changed update rule, option, committed config or
   measured result is reflected in the agent's section there.
-- README usage, ARCHITECTURE.md (the class diagram, the extension steps) and config comments still
-  describe the code.
+- `docs/usage.md`, the README front page, ARCHITECTURE.md (the class diagram, the extension steps) and config
+  comments still describe the code, and `python scripts/check_doc_links.py` reports no broken link.
 - The PR description follows `.github/pull_request_template.md` and every ticked box is true.
 
 ## Report
