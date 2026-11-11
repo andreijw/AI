@@ -16,6 +16,19 @@ Acrobot-v1) and
 
 ### Added
 
+- **Circle features from a 360-beam lidar** (`feature/lidar-circle-features`; PR 2a of the Phase 8 item "Occupancy-grid
+  mapping and SLAM", whose PR 2, landmark EKF-SLAM, is split into 2a features and 2b the filter; stacked on the EKF
+  fix): `rl_navigation.slam.features` (NumPy and `sim` only) splits a scan into segments at range jumps, fits a circle
+  to each of 8 points or more by weighted Gauss-Newton from a Kasa start, with each residual weighted by the range noise
+  projected on the surface normal, and reports its covariance from (JᵀJ)⁻¹. A fit is kept only if it passes a chi-square
+  test, its radius is 0.1 to 0.8 m, it is convex towards the robot, two lines (a box corner or a wall) do not explain
+  the points better, and its standard deviations are under 0.1 m. The robot's lidar is the maintainer's choice of
+  2026-11-09: 360° at about 1° per beam. `rl_navigation.slam.feature_evaluation` is the desk tool behind TESTING.md
+  `CIRC-1`. Pre-registered and judged once on seeds 101 to 150 (360 beams, σ 1 cm), all gates pass: fit NEES mean 3.22
+  (gate 2.5 to 3.5; 2.8 to 2.9 on tuning seeds), false fits 0.0005 (≤ 0.005), detection 0.764 (≥ 0.70), centre error
+  median 5.7 mm and p95 2.4 cm (≤ 10 mm, ≤ 4 cm), extraction 6.4 ms median and 11.1 ms p99 on one Jetson core (≤ 8 ms, ≤
+  15 ms). Reported without gates: σ 2 cm (false fits 0.022, centre median 12 mm) and the 64-beam default (detection
+  0.80, 0.19 fits per scan). The SLAM filter is PR 2b.
 - **Several training environments on one update clock, and PPO with several environments**
   (`feature/parallel-envs-one-clock`; PR 2, the last of the roadmap item "Parallel environments for the on-policy
   agents", which is now complete; stacked on PR 1):

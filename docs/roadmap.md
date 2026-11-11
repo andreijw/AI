@@ -180,8 +180,13 @@ steps 3 to 5 are sketches to turn into full items when picked.
     of seen surfaces 0.94 to 0.95, free-space coverage 0.98, at most 2 false-free cells per run, at the gate); the
     HC-SR04 rows are reported; maps built from dead reckoning instead fall to precision 0.34 (CHANGELOG.md,
     2026-11-09). Left for later PRs: SLAM, and a `deep` false-free metric whose neighbours lie in one obstacle (one
-    seed's 2 cells straddle a real 2 cm gap between two boxes). PR 2 needs a circle fit for landmarks, not yet
-    scoped.
+    seed's 2 cells straddle a real 2 cm gap between two boxes).
+  - **Progress (PR 2a, 2026-11-10)**: PR 2 is split into 2a, circle features, and 2b, the landmark EKF-SLAM filter,
+    for the robot's 360° lidar at about 1° per beam (the maintainer's choice, 2026-11-09; the HC-SR04 cannot see
+    landmarks). `rl_navigation.slam.features` fits circles to scan segments with a covariance; on fresh seeds 101 to
+    150 it passes every `CIRC-1` gate (fit NEES 3.22, false fits 0.0005, detection 0.76, centre error 5.7 mm median,
+    6.4 ms a scan; CHANGELOG.md, 2026-11-10). Left for PR 2b: `EkfSlam`, `SLAM-1` and `SLAM-2`, gates set after a
+    tuning pass on the production code, and the bound on lost runs, which is the maintainer's.
   - **Description**: Occupancy-grid mapping from range readings with known poses (log-odds, an inverse sensor
     model for both presets), then SLAM without them: landmark EKF-SLAM, then a particle-filter grid SLAM
     (FastSLAM-style) with scan matching for the lidar preset. Judged by map and pose error against ground truth,

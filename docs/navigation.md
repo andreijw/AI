@@ -221,3 +221,40 @@ is 99.1 % accurate with precision 0.87 to 0.88. Built from dead reckoning instea
 falls to precision 0.34, with hundreds of cells mapped free inside obstacles. An update takes 1.3 ms on the Jetson
 (lidar, 100 × 100 cells; `MAP-2`). `rl_navigation.mapping.evaluation` drives and scores such runs; the package does
 not import it.
+
+## SLAM
+
+`rl_navigation.slam` will estimate the pose and a map of landmarks together, with no known map: landmark EKF-SLAM
+(Phase 8, step 3, PR 2). Its landmarks are the arena's cylinders, fitted as circles to a lidar's scan; the robot
+will carry a 360° lidar at about 1° per beam (the maintainer's decision, 2026-11-09), so the evaluation uses
+`lidar(num_beams=360)`. Like `estimation` it runs on the robot: it imports NumPy, `rl_navigation.sim` and the
+`estimation` core only.
+
+```python
+from rl_navigation.sim import lidar
+from rl_navigation.slam import extract_circles
+
+sensor = lidar(num_beams=360)
+for feature in extract_circles(sensor, readings):  # one scan, metres
+    x, y, radius = feature.z  # the centre in the robot's frame (x ahead) and the radius
+    feature.covariance  # (3, 3), from the fit
+```
+
+A scan's usable readings are split where neighbouring points jump apart, and each segment of at least 8 points is
+fitted with a circle: an algebraic start, then a geometric Gauss-Newton fit in which each residual is weighted by
+the range noise projected on the surface (`σ·max(cos α, 0.3)`, α the beam's incidence), which keeps the fit's
+covariance honest (mean NEES 2.8 to 2.9 on tuning seeds and 3.22 on seeds 101 to 150, against 3). A fit is kept when
+its residuals pass a χ² test, its radius lies in 0.1 to 0.8 m, its centre lies beyond the points (a convex face),
+two straight lines do not explain the points better (a box corner), and its result is sound (finite, a
+positive-definite covariance, no σ above 0.1 m); nothing raises on a scan's content. The HC-SR04's five sonars, 30°
+apart, never give a feature: landmark SLAM needs the lidar.
+
+On fresh seeds 101 to 150 (`TESTING.md` `CIRC-1`, judged once on 2026-11-10) the 360-beam lidar finds 76 % of the
+circles at least 8 beams reach, with a median centre error of 5.7 mm (p95 2.4 cm), a mean fit NEES of 3.22 and
+0.05 % false fits, in 6.4 ms a scan (p99 11 ms) on one Jetson core; every gate passes. Most missed circles touch a
+box, a wall or another circle, so their points join one segment that no circle fits. A circle's fits from successive
+scans are not independent: they share its viewing geometry, and the radius and the centre trade off on a short arc,
+so on tuning seeds a circle's mean radius error sat up to a millimetre or two from zero (a per-circle probe on
+tuning seeds 1 to 5 while the SLAM was planned; `radius_bias_t2` above 1 reflects this and the scans' serial
+correlation alike). Fusing hundreds of them therefore needs a model-error floor in the filter (planned at 15 mm).
+`rl_navigation.slam.feature_evaluation` scores such runs; the package does not import it.
