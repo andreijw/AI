@@ -19,10 +19,11 @@ with and without ``update_every`` (the loop is shared).
 Arms: each case runs with no ``num_envs`` key, with ``num_envs: 1``, and with ``num_envs: 1`` through
 the lockstep collector that trains several environments, forced at one (``force_lockstep`` in
 tests/trainer_internals.py); all three must match the one recording, so the new loop is held to
-today's training wherever the two can agree. The lockstep arm skips the cases with ``update_every``,
-which that collector refuses until its chunks follow one clock across environments; when they do,
-only a case whose episode lengths are all multiples of ``update_every`` can join (the Pendulum one,
-24 = 3 x 8, not DQN's on CartPole).
+today's training wherever the two can agree. With ``update_every`` the lockstep collector hands over
+every ``update_every`` vector steps on one clock across environments, while the single loop restarts
+its chunks with each episode; the two agree only when every episode's length is a multiple of
+``update_every``, so the lockstep arm runs the Pendulum case (24 = 3 x 8) and skips DQN's on
+CartPole, whose episodes end anywhere.
 
 Numbers agree to a relative 1e-12, as in tests/test_dqn_golden.py: the file was recorded on one machine
 (aarch64, OpenBLAS) and CI checks it on x86, where matrix products can round differently in the last
@@ -247,7 +248,10 @@ CASES: dict[str, Case] = {
     ),
     "ppo-navigation-success": Case(
         lambda: NavigationEnv(seed=6, max_episode_steps=20),
-        _agent(PPOAgent, **PPO),
+        # anneal_steps past the run's ~200 steps: annealed to zero, the clip range is 0 and every
+        # ratio is 1 up to rounding, so which samples count as clipped (clip_fraction, and the
+        # gradients in Adam's moments) differed between aarch64 and CI's x86 (#206).
+        _agent(PPOAgent, **{**PPO, "anneal_steps": 1000}),
         {"num_episodes": 10, "eval_frequency": 100, "save_frequency": 100},
     ),
     "dqn": Case(
@@ -383,14 +387,18 @@ def _recorded(name: str) -> dict[str, np.ndarray]:
         return {k[len(prefix) :]: golden[k] for k in golden.files if k.startswith(prefix)}
 
 
+# Cases with update_every whose episode lengths are not all multiples of it: the lockstep
+# collector's one clock and the single loop's per-episode chunks differ there by design.
+LOCKSTEP_EXCLUDED = {"dqn-update-every"}
+
+
 def _pairs() -> list[tuple[str, str]]:
-    """Every case under every arm, except the lockstep arm for a case with ``update_every``: the
-    lockstep collector refuses it until it counts chunks on one clock across environments."""
+    """Every case under every arm, except the lockstep arm for :data:`LOCKSTEP_EXCLUDED`."""
     return [
         (name, arm)
-        for name, case in CASES.items()
+        for name in CASES
         for arm in ARMS
-        if not (arm == LOCKSTEP_ARM and "update_every" in case.training)
+        if not (arm == LOCKSTEP_ARM and name in LOCKSTEP_EXCLUDED)
     ]
 
 

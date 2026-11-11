@@ -63,7 +63,7 @@ class ActorCriticAgent(ActorCriticBase):
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
 
-    def enable_parallel_envs(self, num_envs: int) -> None:
+    def enable_parallel_envs(self, num_envs: int, update_every: int | None = None) -> None:
         """Accept several environments: each update is one finished episode, as with one."""
         return None
 

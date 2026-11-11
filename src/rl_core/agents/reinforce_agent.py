@@ -168,7 +168,7 @@ class ReinforceAgent(BaseAgent):
         probs, _ = self._policy(observation)
         return self._select_action_from_probs(probs, training)
 
-    def enable_parallel_envs(self, num_envs: int) -> None:
+    def enable_parallel_envs(self, num_envs: int, update_every: int | None = None) -> None:
         """Accept several environments: each update is one finished episode, as with one."""
         return None
 

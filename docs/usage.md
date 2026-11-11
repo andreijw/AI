@@ -487,8 +487,8 @@ training:
   # total_steps: 100000  # optional: train for this many environment steps instead (num_episodes is then ignored)
   # update_every: 1      # optional: update every N steps inside the episode, not after it (DQN, DDPG, TD3, SAC;
   #                      #   the continuous Actor-Critic with n_steps equal to it, as A2C)
-  # num_envs: 1          # optional: training environments stepped in lockstep (REINFORCE, both Actor-Critics and the
-  #                      #   random agents; see "Several training environments")
+  # num_envs: 1          # optional: training environments stepped in lockstep (REINFORCE, both Actor-Critics, PPO with
+  #                      #   update_every, and the random agents; see "Several training environments")
   max_steps_per_episode: 500
   eval_frequency: 100
   save_frequency: 100
@@ -518,12 +518,31 @@ holds it to a recording). With N above 1:
   difficulty at its end.
 - `--resume` restores every environment's generators and refuses a different `num_envs`. The episodes in flight at
   the checkpoint are lost, so a resumed run is reproducible but is not the uninterrupted run.
-- Accepted by REINFORCE, both Actor-Critics and the random agents. Each update is one finished episode, so the
-  other environments' episodes in flight were partly played by an earlier policy (up to N - 1 updates old).
-- Refused, with an error naming the reason: PPO (its probability ratio would hide data from an older policy),
-  DQN, DDPG, TD3 and SAC; `update_every`; a training environment that renders (`--render`, `--record-video` or a
-  `render_mode`); and a run without an evaluation environment (direct `Trainer` callers). `record.py` and
-  `robustness.py` evaluate one environment from such a config.
+- Without `update_every`, REINFORCE, both Actor-Critics and the random agents accept it. Each update is one
+  finished episode, so the other environments' episodes in flight were partly played by an earlier policy (up to
+  N - 1 updates old).
+- With `update_every: k`, one clock runs across the environments: every k vector steps the agent gets every
+  environment's steps of that window in one call (`update_segments`), each a run of one environment's steps that
+  ends where its episode or the window ended (a window cut bootstraps from its next state). An environment whose
+  episode ended inside the window gives two: the end of the old episode and the start of the new. What is left
+  when training ends goes in a last call. With one environment `update_every` keeps restarting its chunks with each
+  episode, as before. An episode that ends off a window boundary is recorded, and any evaluation or checkpoint
+  of that vector step runs, before its last steps (up to `update_every - 1`) are trained on at the window's end,
+  so such a checkpoint's agent has not seen them; with one environment the update comes first.
+  - The continuous Actor-Critic (`n_steps` equal to `update_every`) makes one Adam step over the window's N × k
+    transitions: every segment's GAE targets from the same weights, each bootstrapped by its own end, advantages
+    normalised over the window when `normalize_advantages` is on, the loss averaged over all of them. That is
+    rl-zoo's A2C layout (8 environments × 8 steps on Pendulum).
+  - PPO (both kinds) needs `update_every` with several environments, and `rollout_steps` a multiple of
+    `update_every × num_envs` (SB3's `n_steps × n_envs`; CartPole with 4 environments: `update_every: 64` for
+    256). It buffers every segment of a window and trains only at the end of a call, so each rollout is data its
+    current weights collected and its probability ratio starts at 1. Whole episodes handed over one at a time
+    would be trained on after updates their steps did not see, with the ratio blind to it, so PPO refuses
+    several environments without `update_every`; with one environment it still refuses `update_every`.
+- Refused, with an error naming the reason: DQN, DDPG, TD3 and SAC; REINFORCE and the discrete Actor-Critic with
+  `update_every`; a training environment that renders (`--render`, `--record-video` or a `render_mode`); and a run
+  without an evaluation environment (direct `Trainer` callers). `record.py` and `robustness.py` evaluate one
+  environment from such a config.
 
 ### Curriculum
 

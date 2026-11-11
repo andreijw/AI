@@ -590,3 +590,9 @@ def with_extra_checkpoint_entry(agent_cls: type, key: str) -> type:
             return {**super()._extra_checkpoint_state(), key: np.zeros(1)}
 
     return _WithEntry
+
+
+def spy_on_ppo_rollout_training(monkeypatch: Any, agent: AnyPPOAgent, spy: Callable) -> None:
+    """Replace PPO's training on a full rollout with ``spy(original, observations, actions,
+    rewards, dones)`` for one test."""
+    _spy_on(monkeypatch, agent, "_train_on_rollout", spy)
