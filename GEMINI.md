@@ -107,6 +107,11 @@ To optimize token usage and context window limits:
     (`record_run`, `build_map`, `score_map`, `map_trial`, `summarize_maps`: seeded runs on `run_trial`'s trajectory
     scored against the true map) is a desk tool, the one module that imports `estimation`, and the package does not
     import it.
+  * `src/rl_navigation/slam/`: simultaneous localization and mapping, a layer above `estimation`: `features.py`
+    (`FeatureSettings`, `CircleFeature`, `scan_points`, `segment_scan`, `fit_circle`, `extract_circles`: circles fitted
+    to the segments of a lidar scan, the landmarks) imports NumPy, `rl_navigation.sim` and the `estimation` core;
+    `feature_evaluation.py` (`feature_trial`, `summarize_features`: the features scored against the simulator's truth,
+    `TESTING.md` `CIRC-1`) is a desk tool the package does not import.
   * `src/rl_navigation/localization_video.py`: `python -m rl_navigation.localization_video`, which writes a
     `recording` to an MP4 (imageio-ffmpeg, the `video` extra) and PNG stills (matplotlib); never overwrites a file.
   * `src/rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.
