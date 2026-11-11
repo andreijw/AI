@@ -98,8 +98,22 @@ class ContinuousRandomAgent(BaseAgent):
             "action_high": self.action_high,
         }
 
+    def _check_checkpoint_arrays(self, data: Mapping[str, Any], path: str) -> None:
+        """
+        Raises:
+            ValueError: Naming the entry, unless the checkpoint was saved for this agent's spaces:
+                the same dimensions and action bounds. Taking over other ones would act outside
+                this environment's bounds.
+        """
+        super()._check_checkpoint_arrays(data, path)
+        for key, own in self._checkpoint_arrays().items():
+            if not np.array_equal(data[key], own):
+                raise ValueError(
+                    f"{path}: {key} is {np.asarray(data[key]).tolist()} in the checkpoint, this "
+                    f"agent's is {np.asarray(own).tolist()}: it was saved for other observation "
+                    "or action spaces"
+                )
+
     def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
-        self.observation_dim = int(data["observation_dim"])
-        self.action_dim = int(data["action_dim"])
-        self.action_low = np.asarray(data["action_low"], dtype=np.float32)
-        self.action_high = np.asarray(data["action_high"], dtype=np.float32)
+        """Nothing to assign: :meth:`_check_checkpoint_arrays` found every entry equal to this
+        agent's (only the generators, which :meth:`load` restores, carry state)."""

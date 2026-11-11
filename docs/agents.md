@@ -33,7 +33,12 @@ The `BaseAgent` abstract class defines the interface for all RL agents:
 - `select_action()`: Choose actions based on observations
 - `update()`: Update policy based on collected experience
 - `_checkpoint_arrays()` / `_load_checkpoint_arrays(data)`: what a checkpoint holds; `BaseAgent.save()` and
-  `load()` write and read it, with every generator
+  `load()` write and read it, with every generator. Before assigning anything, `load()` checks every entry the agent
+  itself saves against its own shape (`_check_checkpoint_arrays`), so a checkpoint saved with another `hidden_dim`,
+  `hidden_sizes`, `observation_dim` or `action_dim` raises a ValueError naming the entry and both shapes and leaves
+  the agent as it was. A missing entry is refused the same way ("is not a DQNAgent checkpoint: it has no target_W2"),
+  except those an older format or another setting did not save, which each agent lists in
+  `_OPTIONAL_CHECKPOINT_PREFIXES` (the Adam state of an SGD or older continuous file, DQN's counters, any replay buffer)
 
 Implemented agents (in `src/rl_core/agents/`; the sections below say how each one works, its update and what it
 measured):
@@ -469,8 +474,8 @@ To use it, add `backend: torch` to a DDPG, TD3 or SAC config's `agent.config` (o
 `dtype: float32|float64`, `cuda_graph: true|false`). It needs PyTorch, which `.venv` and CI do not have: build a
 separate environment with `./setup.sh --profile gpu` (`.venv-gpu`), as in
 [`pytorch_jetson_timing.md`](pytorch_jetson_timing.md), and run `train.py` from it. Its checkpoints are the NumPy
-agent's format, so `record.py` can replay a GPU-trained checkpoint without PyTorch by setting `backend: numpy` in the
-run's config. Measured speed: see the timing document.
+agent's format, so `record.py`, `export.py` and `robustness.py` replay a GPU-trained checkpoint without PyTorch:
+they build the NumPy agent whatever `backend` the run's config names. Measured speed: see the timing document.
 
 Checkpoints are the NumPy agent's format both ways. The three share `TorchOffPolicyAgent`
 (`rl_core/agents/torch_off_policy.py`: device copies, staging, capture, the mirror, the critic step, the minimum

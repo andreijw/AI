@@ -138,3 +138,41 @@ def test_playback_uses_the_runs_fixed_evaluation_start_states(tmp_path, monkeypa
     (kwargs,) = seen
     assert kwargs["eval_env"] is kwargs["env"]
     assert kwargs["eval_seed"] == eval_seed_for(42)  # minimal_config's environment seed
+
+
+def test_record_plays_a_torch_backend_run_through_the_numpy_agent(tmp_path, monkeypatch):
+    """A ``backend: torch`` run records where PyTorch is not installed: its checkpoint (NumPy
+    arrays either way) loads into the NumPy agent, as export.py and robustness.py do."""
+    pytest.importorskip("moviepy")
+    import gymnasium as gym
+
+    from rl_core.agents import DDPGAgent
+
+    env = gym.make("Pendulum-v1")
+    bounds = {"action_low": env.action_space.low, "action_high": env.action_space.high}
+    env.close()
+    checkpoint = str(tmp_path / "ddpg.pt")
+    DDPGAgent(observation_dim=3, action_dim=1, config=bounds).save(checkpoint)
+    loaded = []
+    original_load = DDPGAgent.load
+
+    def spy_load(self, path):
+        loaded.append(type(self))
+        original_load(self, path)
+
+    monkeypatch.setattr(DDPGAgent, "load", spy_load)
+    config = minimal_config(
+        tmp_path,
+        environment={"name": "Pendulum-v1", "max_episode_steps": 10},
+        training={"max_steps_per_episode": 10},
+        agent={"type": "ddpg", "config": {"backend": "torch"}},
+    )
+    video_dir = tmp_path / "videos"
+    run_main(
+        ["--config", config, "--checkpoint", checkpoint, "--episodes", "1"]
+        + ["--video-dir", str(video_dir)],
+        monkeypatch,
+        module="record",
+    )
+    assert loaded == [DDPGAgent], "the NumPy agent, not the torch one, plays the checkpoint"
+    assert os.path.exists(video_dir / "pendulum-playback-full.mp4")

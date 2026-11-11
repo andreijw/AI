@@ -18,12 +18,13 @@ torch = pytest.importorskip("torch")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_core.agents import DDPGAgent, SACAgent, TD3Agent  # noqa: E402
+from rl_core.agents.continuous_actor_critic import LOG_STD_MAX, LOG_STD_MIN  # noqa: E402
 from rl_core.agents.torch_ddpg_agent import TorchDDPGAgent  # noqa: E402
 from rl_core.agents.torch_sac_agent import TorchSACAgent  # noqa: E402
 from rl_core.agents.torch_td3_agent import TorchTD3Agent  # noqa: E402
 from rl_core.challenges import discover_challenges  # noqa: E402
 from tests import test_ddpg_td3_golden as golden  # noqa: E402
-from tests.agent_internals import device_arrays, weights  # noqa: E402
+from tests.agent_internals import device_arrays, set_weights, weights  # noqa: E402
 
 needs_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA GPU")
 
@@ -478,6 +479,31 @@ def test_float64_cpu_sac_never_clips_the_temperature(tmp_path):
         numpy_agent.select_action(obs, training=False),
         rtol=1e-6,
     )
+
+
+@pytest.mark.parametrize("bound", [LOG_STD_MIN, LOG_STD_MAX])
+def test_float64_cpu_sac_passes_no_gradient_through_a_log_std_on_its_bound(bound, tmp_path):
+    """With every log_std output exactly on a bound, NumPy SAC's strict mask passes it no gradient,
+    so it stays there; the device's clamp must do the same (it does with Python-float bounds; with
+    tensor bounds torch passes half the gradient and the two drift apart)."""
+    numpy_agent = _build(SACAgent)
+    torch_agent = _build(SACAgent, **CPU64)
+    head = weights(numpy_agent)
+    last = max(int(name.removeprefix("actor_W")) for name in head if name.startswith("actor_W"))
+    w, b = f"actor_W{last}", f"actor_b{last}"
+    head[w][:, ACT:] = 0.0  # the log_std half of the output reads nothing from the hidden layer
+    head[b][ACT:] = bound
+    for agent in (numpy_agent, torch_agent):
+        set_weights(agent, **{w: head[w], b: head[b]})
+
+    history = _train_in_lockstep([numpy_agent, torch_agent], episodes=3)
+
+    assert history[-1][0], "both trained"
+    _assert_same_checkpoint(numpy_agent, torch_agent, tmp_path)  # saving syncs the NumPy mirror
+    for agent in (numpy_agent, torch_agent):
+        np.testing.assert_array_equal(
+            weights(agent)[b][ACT:], bound, err_msg="log_std left its bound"
+        )
 
 
 @needs_cuda

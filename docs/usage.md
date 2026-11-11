@@ -273,7 +273,9 @@ python train.py --config configs/cartpole_ppo.yaml --resume checkpoints/cartpole
 ```
 
 Use the same config (and `--agent-type` or budget flags) as the original run; hyperparameter changes are not
-detected. With `--record-video` the resumed run records the same clips, under the same episode numbers, as an
+detected, except network sizes: a checkpoint saved with another `hidden_dim` or `hidden_sizes` is refused, naming the
+entry and both shapes, before anything is loaded (as by `record.py`, `export.py` and `robustness.py`). With
+`--record-video` the resumed run records the same clips, under the same episode numbers, as an
 uninterrupted run would; into the original video folder Gymnasium warns "Overwriting existing videos", but the
 earlier clips are kept, as the new ones have later numbers. A resumed run writes new timestamped log files, and
 checkpoints saved before 2026-10-21 hold no trainer state and cannot be resumed.
@@ -362,6 +364,7 @@ python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/car
 `record.py` loads the agent type from the config (or `--agent-type`), plays `--episodes`
 evaluation episodes (default 5) and saves them as one
 `videos/<challenge>/<agent_type>/<challenge>-playback-full.mp4` (`--video-dir` to change).
+A checkpoint trained on the PyTorch backend records without PyTorch, through the NumPy agent.
 A well-trained agent balances for the full 500 steps, i.e. 10 seconds per episode.
 
 After training, copy the videos to your local machine and open them in any video player:

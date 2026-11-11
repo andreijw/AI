@@ -1,7 +1,7 @@
 """Deep Q-Network (DQN) agent for CartPole."""
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import numpy.typing as npt
@@ -11,7 +11,7 @@ from rl_core.utils.config_values import flag, positive_int
 
 from .base_agent import BaseAgent
 from .inference import DenseLayer, InferencePolicy
-from .mid_episode import MidEpisodeUpdates
+from .mid_episode import TRANSITIONS_KEY, MidEpisodeUpdates
 from .optim import Optimizer, anneal_fraction, anneal_steps_from_config, optimizer_from_config
 from .replay_buffer import ReplayBuffer
 
@@ -96,6 +96,20 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
     * Settings validated at construction: positive integer sizes and frequencies, ``tau`` in
       (0, 1], ``min_buffer_size >= batch_size`` and ``buffer_capacity >= min_buffer_size``.
     """
+
+    # The replay buffer's columns hold its filled part; ReplayBuffer.restore checks them.
+    _UNSIZED_CHECKPOINT_PREFIXES: ClassVar[tuple[str, ...]] = (ReplayBuffer.KEY_PREFIX,)
+    # An older checkpoint has no counters, optimizer state or replay buffer (see
+    # _load_checkpoint_arrays); one saved without mid-episode updates has no transition count.
+    _OPTIONAL_CHECKPOINT_PREFIXES: ClassVar[tuple[str, ...]] = (
+        "adam_",
+        "epsilon",
+        "exploration_step",
+        "update_counter",
+        "steps_trained",
+        ReplayBuffer.KEY_PREFIX,
+        TRANSITIONS_KEY,
+    )
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """
@@ -646,6 +660,20 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
             arrays.update(self._optimizer.state())
         return arrays
 
+    def _check_checkpoint_arrays(self, data: Mapping[str, Any], path: str) -> None:
+        """
+        Raises:
+            ValueError: If the checkpoint's network is dueling and this agent's is not, or the
+                reverse (checked first, as the missing value stream would be named otherwise);
+                then as :meth:`BaseAgent._check_checkpoint_arrays`.
+        """
+        if ("W1_value" in data) != self.dueling:
+            saved, setting = ("a dueling", "true") if "W1_value" in data else ("a plain", "false")
+            raise ValueError(
+                f"The checkpoint holds {saved} Q-network; set dueling: {setting} to load it"
+            )
+        super()._check_checkpoint_arrays(data, path)
+
     def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
         """
         Restore a checkpoint, or an older one.
@@ -658,14 +686,10 @@ class DQNAgent(MidEpisodeUpdates, BaseAgent):
         either ``td_loss``.
 
         Raises:
-            ValueError: If the checkpoint's network is dueling and this agent's is not, or the
-                reverse; checked before anything is restored.
+            ValueError: If its replay buffer does not fit this one; checked before anything is
+                restored. :meth:`_check_checkpoint_arrays` has refused the other network kind, a
+                missing entry or one of another shape before this is called.
         """
-        if ("W1_value" in data) != self.dueling:
-            saved, setting = ("a dueling", "true") if "W1_value" in data else ("a plain", "false")
-            raise ValueError(
-                f"The checkpoint holds {saved} Q-network; set dueling: {setting} to load it"
-            )
         self.replay_buffer.restore(data)
         for name in self._parameter_names():
             setattr(self, f"_{name}", data[name])

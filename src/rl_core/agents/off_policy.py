@@ -25,7 +25,7 @@ from rl_core.utils.config_values import (
 from .base_agent import BaseAgent
 from .bounds import action_bounds
 from .inference import DenseLayer, InferencePolicy
-from .mid_episode import MidEpisodeUpdates
+from .mid_episode import TRANSITIONS_KEY, MidEpisodeUpdates
 from .mlp import Params, layer_count, mlp_backward, mlp_forward
 from .optim import Adam
 from .replay_buffer import ReplayBuffer
@@ -102,6 +102,15 @@ class OffPolicyAgent(MidEpisodeUpdates, BaseAgent):
     DEFAULTS: ClassVar[Mapping[str, Any]]
     # The agent's name in messages: "not a TD3 checkpoint".
     SHORT_NAME: ClassVar[str]
+    # The replay buffer's columns hold its filled part; ReplayBuffer.restore checks them.
+    _UNSIZED_CHECKPOINT_PREFIXES: ClassVar[tuple[str, ...]] = (ReplayBuffer.KEY_PREFIX,)
+    # Every network, its Adam state and the counters are required (they were always saved); a
+    # checkpoint from before the buffer was saved has none, and one saved without mid-episode
+    # updates has no transition count.
+    _OPTIONAL_CHECKPOINT_PREFIXES: ClassVar[tuple[str, ...]] = (
+        ReplayBuffer.KEY_PREFIX,
+        TRANSITIONS_KEY,
+    )
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
         """
@@ -425,6 +434,9 @@ class OffPolicyAgent(MidEpisodeUpdates, BaseAgent):
         arrays.update(self.replay_buffer.checkpoint_state())
         return arrays
 
+    def _checkpoint_kind(self) -> str:
+        return self.SHORT_NAME
+
     def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
         """
         Restore a checkpoint; one saved before the replay buffer was saved empties the buffer.
@@ -432,30 +444,11 @@ class OffPolicyAgent(MidEpisodeUpdates, BaseAgent):
         DDPG) are ignored.
 
         Raises:
-            ValueError: If the checkpoint lacks one of this agent's networks (another agent's
-                checkpoint), or a stored network has a different shape (other ``hidden_sizes``).
+            ValueError: If its replay buffer does not fit this one. :meth:`BaseAgent.load` has
+                refused a missing network (another agent's checkpoint, "not a TD3 checkpoint") or
+                one of another shape (other ``hidden_sizes``) before this is called.
         """
         networks = self._networks()
-        missing = [
-            f"{net}_{name}"
-            for net, params in networks.items()
-            for name in params
-            if f"{net}_{name}" not in data
-        ]
-        if missing:
-            more = ", ..." if len(missing) > 2 else ""
-            raise ValueError(
-                f"not a {self.SHORT_NAME} checkpoint: it has no {', '.join(missing[:2])}{more}"
-            )
-        for net, params in networks.items():
-            for name in params:
-                stored = data[f"{net}_{name}"]
-                if stored.shape != params[name].shape:
-                    raise ValueError(
-                        f"{net}_{name} has shape {stored.shape}, expected "
-                        f"{params[name].shape}: the checkpoint has other hidden_sizes, "
-                        "observation_dim or action_dim"
-                    )
         self.replay_buffer.restore(data)
         for net, params in networks.items():
             for name in params:

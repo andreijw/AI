@@ -12,6 +12,24 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-11
+
+### Fixed
+
+- **A checkpoint that does not fit the agent is refused before anything loads**
+  (`fix/checkpoint-shape-check`). A review of every agent (2026-11-11) found that `load()` assigned a
+  checkpoint's arrays before checking them: one saved with another `hidden_dim` loaded silently under SGD (weights
+  of the other width, `hidden_dim` unchanged) and half-loaded under Adam (weights replaced, then the optimizer state
+  raised; DQN had already restored its replay buffer), and one missing a weight raised `KeyError` part-way.
+  `BaseAgent.load` now checks, before any assignment, that every array the agent saves is present and has the
+  agent's shape, and raises `ValueError` naming the entry (and both shapes); the agent is then unchanged. Entries an
+  older file legitimately lacks (Adam moments of an SGD run, DQN's counters, a replay buffer) are listed per class
+  and still load. `ContinuousRandomAgent` refuses a checkpoint of other dimensions or bounds instead of adopting
+  them. `record.py` builds its agent on the NumPy backend, as `export.py` and `robustness.py` do, so a
+  `backend: torch` run records without PyTorch; a test pins SAC's PyTorch gradient at the `log_std` bounds. Tests:
+  `tests/test_checkpoint_shapes.py` (64), full suite 4108 passed; `TESTING.md` `TR-15` from `.venv-gpu` 441 passed.
+  No update rule changed, so no learning run.
+
 ## 2026-11-10
 
 ### Added

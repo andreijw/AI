@@ -42,10 +42,14 @@ def test_continuous_random_agent_save_load(tmp_path):
     save_file = str(tmp_path / "random_agent.npz")
     agent.save(save_file)
 
-    agent2 = ContinuousRandomAgent(observation_dim=1, action_dim=1, config={})
+    # Built for the same spaces with another seed: a checkpoint for other spaces is refused
+    # (tests/test_checkpoint_shapes.py); loading restores the generators.
+    agent2 = ContinuousRandomAgent(observation_dim=4, action_dim=2, config={**config, "seed": 7})
     agent2.load(save_file)
 
     assert agent2.observation_dim == 4
     assert agent2.action_dim == 2
     assert np.allclose(agent2.action_low, [-3.0, -3.0])
     assert np.allclose(agent2.action_high, [3.0, 3.0])
+    obs = np.zeros(4)
+    np.testing.assert_array_equal(agent2.select_action(obs), agent.select_action(obs))
