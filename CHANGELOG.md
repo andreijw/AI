@@ -14,7 +14,27 @@ Acrobot-v1) and
 
 ## 2026-11-11
 
+### Changed
+
+- **Docs and diagrams are a step of every PR** (`fix/review-doc-fixes`). The `doc-sync` skill gains a "Diagrams"
+  step: update every Mermaid diagram a change makes false, and add one where it explains the change better than
+  prose (a module whose parts call each other, a class hierarchy, a state machine, a cross-package data flow).
+  The `pr-reviewer` skill checks that the docs were updated in the PR and that diagrams match the code, defines its
+  three severities, and requires `TESTING.md` `TR-15` from `.venv-gpu` when a change can reach the PyTorch agents
+  (CI has no PyTorch, so a broken `backend: torch` config passes it); `dev-loop` step 8 points at both.
+
 ### Fixed
+
+- **Stale numbers and wrong claims found by the agent and challenge review** (`fix/review-doc-fixes`). Comments
+  and docs only; no config value changed. Pendulum Continuous Actor-Critic and DDPG numbers in `docs/results.md`
+  and the config headers brought to the current report (-170 ± 26; -158.3 ± 24.8); the CartPole REINFORCE and
+  Actor-Critic optimizer comments matched to the report (4 of 5, holding 3; solve at episode 1272 on average);
+  the navigation robot is described as also told the goal's distance and bearing, not seeing "only its range
+  sensors"; `value_coef` comments state that this repo's critic loss carries a ½, so 0.5 here is SB3's `vf_coef`
+  0.25; the discrete `ActorCriticAgent` is described as REINFORCE with a learned baseline, not A2C, and REINFORCE's
+  per-episode return standardisation as a (slightly biased) heuristic; README notes which reports lack an agent
+  and the held-out seeds of LunarLander DQN and LunarLanderContinuous TD3, and Acrobot DQN's tuning on its
+  reporting seeds. Review reports: `~/rl-experiments/review-2026-11-11/`.
 
 - **A checkpoint that does not fit the agent is refused before anything loads**
   (`fix/checkpoint-shape-check`). A review of every agent (2026-11-11) found that `load()` assigned a

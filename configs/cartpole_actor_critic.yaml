@@ -15,7 +15,9 @@ agent:
   type: "actor_critic"
   config:
     learning_rate: 0.001   # Adam step size
-    optimizer: "adam"      # SGD first reached 475 at episodes 906-1269; Adam at 490-839 (CHANGELOG.md, 2026-10-15)
+    # SGD first reached 475 at episodes 906-1269, Adam at 490-839 (CHANGELOG.md, 2026-10-15); in the
+    # benchmark Adam now solves at episode 1272 on average (docs/benchmarks/cartpole_results.md).
+    optimizer: "adam"
     gamma: 0.99            # Discount factor
     hidden_dim: 128        # Shared hidden layer width
     value_coef: 0.5        # Weight for the critic (value) loss

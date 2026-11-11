@@ -56,11 +56,13 @@ Pendulum DDPG uses rl-zoo's settings with 64×64 networks instead of 400×300, w
 NumPy; its greedy evaluation averages -158 (± 25 across the 5 seeds' means) against rl-zoo's -152 (± 94 across
 episodes of one run) (CHANGELOG.md, 2026-10-19). Pendulum PPO trains on rollouts of whole episodes for 200,000
 steps, twice rl-zoo's 100,000; updating on one episode at a time it solved no seed (CHANGELOG.md, 2026-10-18).
-Continuous Actor-Critic does not solve: its training average ends at -286 to -307, though its greedy evaluation
-of -172 ± 27 beats the random agent on every seed (CHANGELOG.md, 2026-10-19).
+Continuous Actor-Critic does not solve: with observation normalisation (since 2026-11-04) its training average ends
+at -268 to -298, though its greedy evaluation of -170 ± 26 beats the random agent on every seed (CHANGELOG.md,
+2026-11-04; `TESTING.md` `TR-5`; before it, -286 to -307 and -172 ± 27, CHANGELOG.md, 2026-10-19).
 Acrobot was measured on 2026-10-22 (CHANGELOG.md, 2026-10-22); it has no published report under `docs/benchmarks/`
 yet. Acrobot DQN keeps exploring with 2% random actions rather than rl-zoo's 10%: with 10% its training average ended
 at -95 to -103 and held on 1 of 5 seeds; with 2% it ends at -90 to -96, and its greedy evaluation is -85 ± 6.
+The floor was chosen on those same seeds 1 to 5 with no held-out seeds, so the 5 of 5 is optimistic.
 MountainCar DQN learns to reach the flag but does not reliably hold -110. Its greedy policy reaches about -100 mid-run
 and does not stay there; a 100,000-transition replay buffer (rl-zoo: 10,000) helps the training average. On seeds 1 to
 10 the final training averages are -107 to -132 (mean -120.5, against -131.2 with 10,000) against the random agent's

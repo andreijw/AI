@@ -30,7 +30,7 @@ agent:
     gamma: 0.99            # Discount factor (SB3): a 100-step horizon against ~80 steps to a goal
     gae_lambda: 0.95       # GAE lambda (SB3)
     hidden_dim: 128        # Shared hidden layer width
-    value_coef: 0.5        # Weight for the critic (value) loss (SB3)
+    value_coef: 0.5        # Weight for the critic (value) loss; this loss carries a 1/2, so 0.5 = SB3 vf_coef 0.25
     entropy_coef: 0.01     # Entropy bonus weight (rl-zoo LunarLander; SB3: 0.0); not annealed
     clip_epsilon: 0.2      # PPO clip range at the start (SB3); decays with the learning rate
     seed: 42               # Weight initialisation seed

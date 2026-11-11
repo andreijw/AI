@@ -39,7 +39,7 @@ agent:
     hidden_dim: 256                # One hidden layer (rl-zoo: [256, 256])
     buffer_capacity: 50000         # Replay buffer capacity (rl-zoo): about the last 200 episodes
     batch_size: 128                # Training mini-batch size (rl-zoo)
-    min_buffer_size: 1000          # About 15 random episodes before the first batch (LunarLander: 128)
+    min_buffer_size: 1000          # About 10 random episodes before the first batch (LunarLander: 128)
     epsilon_start: 1.0             # Initial exploration probability
     epsilon_end: 0.1               # Exploration floor (rl-zoo; LunarLander held 5 of 5 against 3 of 5 for 0.02)
     exploration_steps: 30000       # Training actions over which epsilon falls linearly

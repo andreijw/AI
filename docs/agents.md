@@ -46,7 +46,7 @@ measured):
 - **Discrete Control Agents**:
   - `RandomAgent`: Random action baseline policy
   - `ReinforceAgent`: Monte Carlo policy-gradient agent
-  - `ActorCriticAgent`: Advantage Actor-Critic (A2C) policy + value network agent
+  - `ActorCriticAgent`: REINFORCE with a learned value baseline (policy + value network; not A2C)
   - `PPOAgent`: Clipped-policy Proximal Policy Optimization agent
   - `DQNAgent`: Deep Q-Network with replay buffer and target network; double DQN targets (`double_q: true`) and a
     dueling network (`dueling: true`) and a Huber TD loss (`td_loss: huber`) are opt-in
@@ -102,8 +102,10 @@ G_t = Monte Carlo return (no bootstrap, no GAE);   A_t = G_t - V(s_t)   (held co
 L   = (1/T) * sum_t [ -A_t * log pi(a_t|s_t) + c_v * 0.5 * (V(s_t) - G_t)^2 - c_e * H(pi(.|s_t)) ]
 ```
 
-`c_v` is `value_coef` (0.5) and `c_e` is `entropy_coef` (0.01); advantages are not normalised. Like REINFORCE it
-does not bootstrap a time-limit cut, unlike the continuous Actor-Critic and PPO.
+`c_v` is `value_coef` (0.5) and `c_e` is `entropy_coef` (0.01); advantages are not normalised. The critic term
+carries a 1/2, as in every loss below, where SB3's `vf_coef` multiplies the plain mean squared error: `value_coef`
+0.5 here equals SB3 `vf_coef` 0.25. Like REINFORCE it does not bootstrap a time-limit cut, unlike the continuous
+Actor-Critic and PPO.
 
 **In this repo.** A shared `obs -> hidden_dim (ReLU)` trunk (`ActorCriticBase`) with a softmax policy head and a
 scalar value head; the hand-written backward pass meets in the shared layer. Only the policy is exported.
