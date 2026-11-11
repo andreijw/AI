@@ -224,7 +224,7 @@ not import it.
 
 ## SLAM
 
-`rl_navigation.slam` will estimate the pose and a map of landmarks together, with no known map: landmark EKF-SLAM
+`rl_navigation.slam` estimates the pose and a map of landmarks together, with no known map: landmark EKF-SLAM
 (Phase 8, step 3, PR 2). Its landmarks are the arena's cylinders, fitted as circles to a lidar's scan; the robot
 will carry a 360° lidar at about 1° per beam (the maintainer's decision, 2026-11-09), so the evaluation uses
 `lidar(num_beams=360)`. Like `estimation` it runs on the robot: it imports NumPy, `rl_navigation.sim` and the
@@ -256,5 +256,48 @@ box, a wall or another circle, so their points join one segment that no circle f
 scans are not independent: they share its viewing geometry, and the radius and the centre trade off on a short arc,
 so on tuning seeds a circle's mean radius error sat up to a millimetre or two from zero (a per-circle probe on
 tuning seeds 1 to 5 while the SLAM was planned; `radius_bias_t2` above 1 reflects this and the scans' serial
-correlation alike). Fusing hundreds of them therefore needs a model-error floor in the filter (planned at 15 mm).
-`rl_navigation.slam.feature_evaluation` scores such runs; the package does not import it.
+correlation alike). Fusing hundreds of them therefore needs a model-error floor in the filter (1.5σ, 15 mm on this
+lidar; below). `rl_navigation.slam.feature_evaluation` scores such runs; the package does not import it.
+
+### Landmark EKF-SLAM
+
+```python
+from rl_navigation.sim import WheelOdometry, lidar
+from rl_navigation.slam import EkfSlam
+
+slam = EkfSlam(lidar(num_beams=360), WheelOdometry(), start_pose, start_covariance)
+slam.predict(wheel_travel)  # (left, right) metres, as EkfLocalizer.predict
+result = slam.update(readings)  # extract circles, associate, one batch update, extend the map
+slam.pose, slam.covariance  # the robot, as a Localizer
+# (L, 3) circles (x, y, radius) and their (L, 3, 3) covariance blocks:
+slam.landmarks, slam.landmark_covariances
+```
+
+`EkfSlam` is Thrun's EKF-SLAM (*Probabilistic Robotics*, Tables 10.1 and 10.2): one Gaussian over the pose and every
+landmark `(x, y, radius)`, the wheel travel as the control, and the body-frame circle as the measurement, with the fit's
+covariance plus a **model-error floor** of `floor_factor` × the range noise (1.5: 15 mm at 1 cm), which absorbs the
+fit's per-circle bias; without it the radius grows overconfident as hundreds of fits are fused (the floor brings its
+NEES to about 1 on tuning seeds) and a landmark's own features fall outside its gate and come back as duplicates. A new
+feature is associated by maximum likelihood (a χ²₃ gate at 0.99, one to one per scan); one beyond `new_landmark_nis`
+(30) from every landmark becomes a candidate, and a landmark after 3 sightings within 10 cm, in 3 scans (the provisional
+list); one in between is discarded. Its Jacobians are **first-estimate Jacobians** (FEJ, Huang, Mourikis and Roumeliotis
+2008): a plain EKF-SLAM linearizes at estimates that move between steps and so learns about the absolute heading, which
+nothing measures (in a test, a robot starting at σθ = 0.3 rad and seeing two circles for 30 scans: standard Jacobians
+shrink σθ to 0.02 rad, FEJ keeps 0.30); FEJ keeps the system's unobservable directions (global translation and rotation)
+unobservable, which the tests check to 1e-12. There is no iteration and no hold, both of which would break that. The
+filter never raises on a scan's content: unsound features are skipped, labelled ones gated, and an update that leaves
+the state non-finite, its covariance indefinite or the pose outside its bounds is undone (`SlamUpdate` counts each).
+
+`rl_navigation.slam.evaluation` drives `run_trial`'s wanderer with the filter (`slam_trial`), optionally with an
+oracle that labels each feature from the true pose (known correspondence), and scores it after aligning the
+estimated trajectory to the true one (`TESTING.md` `SLAM-1`): SLAM cannot recover the start's error or the heading
+drift before its first sighting, so its **aligned trajectory error** and the map's figures are the SLAM figures, and
+the absolute error against dead reckoning is a low bar. Judged once on fresh seeds 101 to 150 (`SLAM-1`, 2026-11-10),
+the 360-beam row passes 7 of its 9 gates: aligned error 6.4 cm mean and 1.1 cm median, 80 % of seen circles mapped, 0.24
+spurious and 0.06 duplicate landmarks a run, 96 % of steps under the NEES bound, 13 of 50 runs lost in absolute terms.
+It fails two: its absolute error is 0.44 of dead reckoning's (gate 0.40), and 9 runs have an aligned error above 10 cm
+(gate 8), 4 of them association failures that the oracle avoids. An update takes 7.5 ms (8.4 ms with 30 landmarks) on
+one Jetson core (`SLAM-2`). Known limits: FEJ stays linearized at a landmark's first
+estimate, so a landmark first seen while the heading was poorly known leaves the run wrong (the lost runs; OC-EKF is
+the follow-up); layouts with at most one circle barely beat dead reckoning (box corners are the follow-up); and with
+30 % of beams dropped the extraction splits each arc at every dropped beam, so few circles are found.

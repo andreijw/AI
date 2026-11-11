@@ -16,7 +16,25 @@ Acrobot-v1) and
 
 ### Added
 
-- **Circle features from a 360-beam lidar** (`feature/lidar-circle-features`; PR 2a of the Phase 8 item "Occupancy-grid
+- **Landmark EKF-SLAM on the 360-beam lidar** (`feature/landmark-ekf-slam`; PR 2b of the Phase 8 item "Occupancy-grid
+  mapping and SLAM"; judged against registered gates and failing 2 of 9, shipped with the failure recorded, the
+  maintainer's decision of 2026-11-10): `rl_navigation.slam.EkfSlam` maps PR 2a's circle features without known poses.
+  It follows Thrun's Tables 10.1 and 10.2 with a provisional landmark list, uses first-estimate Jacobians (Huang et al.
+  2008) so the unobservable heading is not made falsely certain, keeps each circle's radius in the state, makes one
+  batch Joseph update per scan with maximum-likelihood association gated at χ²₃ 0.99 (labelled features at 0.999), adds
+  a model-error floor of 1.5 × the range noise per feature, and never raises on a scan's content (unsound features
+  skipped; an update leaving the state non-finite, P indefinite or the pose off the arena is undone).
+  `rl_navigation.slam.evaluation` is the desk tool behind TESTING.md `SLAM-1` and `SLAM-2`. Gates were set by the
+  maintainer after tuning on seeds 1 to 20 and a check on 21 to 50, registered, then judged once on seeds 101 to 150,
+  600 steps. The 360-beam row passes 7 of 9: error after SE(2) alignment 0.064 m mean and 11 mm median (≤ 0.10, ≤ 0.03),
+  NEES under the 95 % bound on 0.960 of steps (≥ 0.88), circles mapped 0.803 (≥ 0.80), spurious 0.24 and duplicates 0.06
+  per run (≤ 0.6, ≤ 0.2), lost 13 of 50 (≤ 15). It fails 2: position RMSE 0.443 of dead reckoning's (≤ 0.40; 0.354 m
+  against 0.799 m, dead reckoning better than on tuning seeds' 0.93 m) and 9 runs above 0.10 m after alignment (≤ 8; 4
+  of them association failures, as the oracle-labelled row has 5, and seed 113 has no circle). Reported without gates:
+  30 % dropout (lost 25 of 50; PR 2a's segmentation splits at every dropped beam), oracle association, σ 2 cm, the
+  64-beam lidar (lost 49 of 50) and the ceiling, `EkfLocalizer` on the true map (0.9 mm). `SLAM-2` on one Jetson core:
+  an update 7.5 ms median with 10 landmarks and 8.4 ms with 30 (≤ 10 ms; p99 ≤ 30 ms), `predict` 0.19 ms (≤ 0.2 ms). -
+  **Circle features from a 360-beam lidar** (`feature/lidar-circle-features`; PR 2a of the Phase 8 item "Occupancy-grid
   mapping and SLAM", whose PR 2, landmark EKF-SLAM, is split into 2a features and 2b the filter; stacked on the EKF
   fix): `rl_navigation.slam.features` (NumPy and `sim` only) splits a scan into segments at range jumps, fits a circle
   to each of 8 points or more by weighted Gauss-Newton from a Kasa start, with each residual weighted by the range noise
@@ -28,31 +46,28 @@ Acrobot-v1) and
   (gate 2.5 to 3.5; 2.8 to 2.9 on tuning seeds), false fits 0.0005 (≤ 0.005), detection 0.764 (≥ 0.70), centre error
   median 5.7 mm and p95 2.4 cm (≤ 10 mm, ≤ 4 cm), extraction 6.4 ms median and 11.1 ms p99 on one Jetson core (≤ 8 ms, ≤
   15 ms). Reported without gates: σ 2 cm (false fits 0.022, centre median 12 mm) and the 64-beam default (detection
-  0.80, 0.19 fits per scan). The SLAM filter is PR 2b.
-- **Several training environments on one update clock, and PPO with several environments**
-  (`feature/parallel-envs-one-clock`; PR 2, the last of the roadmap item "Parallel environments for the on-policy
-  agents", which is now complete; stacked on PR 1):
-  - **`update_every` with `num_envs`**: every `update_every` vector steps the trainer hands the agent one window
-    holding each environment's steps (`update_segments`): segments of episodes that ended first, then the open one
-    cut at the boundary, which bootstraps. The continuous Actor-Critic takes one A2C step over the window (targets
-    from the same weights, each segment bootstrapped from its own next state, advantages normalised jointly,
-    gradient clipping over the window); one segment trains exactly as `update` does. PPO, both kinds, accepts
-    several environments only with this layout (`rollout_steps` a multiple of `update_every × num_envs`, trained
-    once per full rollout, so the stored old log-probabilities stay those of collection); whole-episode PPO at
-    N > 1 stays refused. With `update_every`, an evaluation or checkpoint can come before an episode's last steps
-    are trained on. Asynchronous environments are deferred until a measured speedup.
-  - **N = 1 unchanged**: the trainer golden's three arms, now including the Pendulum Actor-Critic with
-    `update_every: 8` through the new collector, match bit for bit.
-  - **CartPole PPO, 4 environments × 64 steps** (seeds 1 to 5, 200,000 steps; claim fixed beforehand): solves and
-    holds 475 on 5 of 5, 87,165 steps to solve on average against 79,556 with one environment.
-  - **Pendulum continuous Actor-Critic, 8 environments × 8 steps** (rl-zoo's A2C layout; seeds 1 to 5 paired
-    against the committed config, 1,000,000 steps): final 100-episode training averages -244.1 against -282.7,
-    better on all 5 seeds (by 7.2 to 63.6), so it wins under the project's rule; no seed holds -200; greedy
-    evaluation -184.0 ± 42.7 against -170.0 ± 25.9; about 260 s a seed against 329 s. A second arm at
-    `learning_rate: 0.002` (measurement only): -264.7, one seed 21.3 below the baseline. The committed config is
-    unchanged; adopting the layout is the maintainer's decision (Code Health item).
-  - The experiment-runner skill now says queued runs import a frozen copy of `src`: PR 2's first runs were
-    cancelled because they could have imported code under a mutation check. TESTING.md `TR-38`.
+  0.80, 0.19 fits per scan). The SLAM filter is PR 2b. - **Several training environments on one update clock, and PPO
+  with several environments** (`feature/parallel-envs-one-clock`; PR 2, the last of the roadmap item "Parallel
+  environments for the on-policy agents", which is now complete; stacked on PR 1): - **`update_every` with `num_envs`**:
+  every `update_every` vector steps the trainer hands the agent one window holding each environment's steps
+  (`update_segments`): segments of episodes that ended first, then the open one cut at the boundary, which bootstraps.
+  The continuous Actor-Critic takes one A2C step over the window (targets from the same weights, each segment
+  bootstrapped from its own next state, advantages normalised jointly, gradient clipping over the window); one segment
+  trains exactly as `update` does. PPO, both kinds, accepts several environments only with this layout (`rollout_steps`
+  a multiple of `update_every × num_envs`, trained once per full rollout, so the stored old log-probabilities stay those
+  of collection); whole-episode PPO at N > 1 stays refused. With `update_every`, an evaluation or checkpoint can come
+  before an episode's last steps are trained on. Asynchronous environments are deferred until a measured speedup. - **N
+  = 1 unchanged**: the trainer golden's three arms, now including the Pendulum Actor-Critic with `update_every: 8`
+  through the new collector, match bit for bit. - **CartPole PPO, 4 environments × 64 steps** (seeds 1 to 5, 200,000
+  steps; claim fixed beforehand): solves and holds 475 on 5 of 5, 87,165 steps to solve on average against 79,556 with
+  one environment. - **Pendulum continuous Actor-Critic, 8 environments × 8 steps** (rl-zoo's A2C layout; seeds 1 to 5
+  paired against the committed config, 1,000,000 steps): final 100-episode training averages -244.1 against -282.7,
+  better on all 5 seeds (by 7.2 to 63.6), so it wins under the project's rule; no seed holds -200; greedy evaluation
+  -184.0 ± 42.7 against -170.0 ± 25.9; about 260 s a seed against 329 s. A second arm at `learning_rate: 0.002`
+  (measurement only): -264.7, one seed 21.3 below the baseline. The committed config is unchanged; adopting the layout
+  is the maintainer's decision (Code Health item). - The experiment-runner skill now says queued runs import a frozen
+  copy of `src`: PR 2's first runs were cancelled because they could have imported code under a mutation check.
+  TESTING.md `TR-38`.
 
 ### Fixed
 
