@@ -60,6 +60,9 @@ Acrobot-v1) and
     to 0.163 and 0.341 to 0.189, lidar 0.123 to 0.124 and 0.201 to 0.165; kidnap recovery 12 to 28 % (was 14 to 30 %;
     one run fewer on two rows). Every tracking run (`EST-1`, both with the default and `count_off_map=False`), every
     MCL figure and `EST-4` are bit-identical.
+  - **A new column, "Wrong with σ < 5 cm"**: the confidently-wrong share counting only steps whose position standard
+    deviation (larger eigenvalue) is under 5 cm, so a filter waiting at the 0.2 m reset floor is not called
+    confident. EKF: HC-SR04 0.095 and 0.126, lidar 0.052 and 0.094; MCL 0.280, 0.282, 0.127 and 0.118.
   - Supersedes the 2026-11-09 figures "14 to 30 %" recovery and "12.3 to 35.4 %" confidently wrong. TESTING.md
     `EST-1`, `EST-3`, `EST-4`.
 

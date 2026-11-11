@@ -32,17 +32,18 @@ EKF off-map count: a scan with no candidate beam while the estimate is not in fr
 Confidently wrong: the share of steps after the kidnapping, over all kidnapped runs, with position error over 0.5 m,
 NEES over 9.35 and, for the EKF, no reset in the last 20 scans.
 Localized runs: the same share over only the runs that had localized before the kidnapping (n/a when none had).
+Wrong with σ < 5 cm: the confidently wrong steps whose position standard deviation (larger axis) is under 0.05 m.
 
-| Sensor | Dropout | Filter | Start | Localized | Median to localize | Recovered | Median to recover | Confidently wrong (all runs) | Confidently wrong (localized runs) | Max recent resets | ms/step |
-| :--- | :--- | :--- | :--- | ---: | :--- | ---: | :--- | ---: | ---: | ---: | ---: |
-| hc_sr04 | own | MCL | anywhere | 0.80 | 2.5 steps (0.2 s) | 0.94 | 55 steps (5.5 s) | 0.281 | 0.245 | - | 50.84 |
-| hc_sr04 | own | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.20 | 78 steps (7.8 s) | 0.163 | 0.163 | 7 | 2.69 |
-| hc_sr04 | 0.3 | MCL | anywhere | 0.88 | 5.5 steps (0.6 s) | 0.86 | 39 steps (3.9 s) | 0.284 | 0.256 | - | 37.55 |
-| hc_sr04 | 0.3 | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.12 | 90 steps (9.0 s) | 0.189 | 0.189 | 7 | 2.53 |
-| lidar | own | MCL | anywhere | 0.96 | 0 steps (0.0 s) | 0.96 | 21.5 steps (2.1 s) | 0.127 | 0.129 | - | 37.23 |
-| lidar | own | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.28 | 111.5 steps (11.2 s) | 0.124 | 0.124 | 7 | 4.02 |
-| lidar | 0.3 | MCL | anywhere | 0.96 | 0 steps (0.0 s) | 0.98 | 21 steps (2.1 s) | 0.118 | 0.102 | - | 37.21 |
-| lidar | 0.3 | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.24 | 90 steps (9.0 s) | 0.165 | 0.165 | 7 | 3.98 |
+| Sensor | Dropout | Filter | Start | Localized | Median to localize | Recovered | Median to recover | Confidently wrong (all runs) | Confidently wrong (localized runs) | Wrong with σ < 5 cm (all runs) | Max recent resets | ms/step |
+| :--- | :--- | :--- | :--- | ---: | :--- | ---: | :--- | ---: | ---: | ---: | ---: | ---: |
+| hc_sr04 | own | MCL | anywhere | 0.80 | 2.5 steps (0.2 s) | 0.94 | 55 steps (5.5 s) | 0.281 | 0.245 | 0.280 | - | 50.84 |
+| hc_sr04 | own | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.20 | 78 steps (7.8 s) | 0.163 | 0.163 | 0.095 | 7 | 2.69 |
+| hc_sr04 | 0.3 | MCL | anywhere | 0.88 | 5.5 steps (0.6 s) | 0.86 | 39 steps (3.9 s) | 0.284 | 0.256 | 0.282 | - | 37.55 |
+| hc_sr04 | 0.3 | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.12 | 90 steps (9.0 s) | 0.189 | 0.189 | 0.126 | 7 | 2.53 |
+| lidar | own | MCL | anywhere | 0.96 | 0 steps (0.0 s) | 0.96 | 21.5 steps (2.1 s) | 0.127 | 0.129 | 0.127 | - | 37.23 |
+| lidar | own | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.28 | 111.5 steps (11.2 s) | 0.124 | 0.124 | 0.052 | 7 | 4.02 |
+| lidar | 0.3 | MCL | anywhere | 0.96 | 0 steps (0.0 s) | 0.98 | 21 steps (2.1 s) | 0.118 | 0.102 | 0.118 | - | 37.21 |
+| lidar | 0.3 | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.24 | 90 steps (9.0 s) | 0.165 | 0.165 | 0.094 | 7 | 3.98 |
 
 Timings: Linux-6.8.12-1021-tegra-aarch64-with-glibc2.39; OPENBLAS_NUM_THREADS=1, OMP_NUM_THREADS=1, MKL_NUM_THREADS=1;
 concurrent jobs: 2 J3 jobs (one per sensor), 1 BLAS thread each; review agents may run tests alongside / EKF-only rerun

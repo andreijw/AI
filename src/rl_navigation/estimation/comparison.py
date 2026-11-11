@@ -57,6 +57,12 @@ SensorFactory = Callable[[], RangeSensor]
 # run_trial's World keeps its default step of 0.1 s.
 STEP_SECONDS = 0.1
 
+# A confidently wrong step whose position sigma is under this has collapsed onto a wrong pose,
+# rather than sitting at the EKF's reset floor (0.2 m): a quarter of that floor, in metres.
+COLLAPSED_POSITION_STD = 0.05
+
+_SMALL_SIGMA = f"Wrong with σ < {100 * COLLAPSED_POSITION_STD:g} cm"
+
 # CI's markdownlint (MD013) limit for lines outside tables.
 MARKDOWN_LINE_LENGTH = 120
 
@@ -292,14 +298,19 @@ def nees_per_step(trial: Trial) -> FloatArray:
 
 
 def confidently_wrong(
-    trial: Trial, reset_steps: Sequence[int] | None, window: int
+    trial: Trial,
+    reset_steps: Sequence[int] | None,
+    window: int,
+    max_position_std: float | None = None,
 ) -> NDArray[np.bool_]:
     """For each step from the kidnapping on, whether the filter was wrong and did not show it.
 
     A step is confidently wrong when the position error exceeds :data:`LOST_ERROR`, the NEES
     exceeds :data:`NEES_UPPER_95` (the covariance does not cover the error) and, for a filter
     with resets (``reset_steps`` not None, the EKF), none of the last ``window`` scans, this one
-    included, reset: a filter that keeps resetting is visibly lost, not confidently wrong.
+    included, reset: a filter that keeps resetting is visibly lost, not confidently wrong. With
+    ``max_position_std`` it also needs a position sigma (the square root of the larger eigenvalue
+    of ``P[:2, :2]``) under it: collapsed onto a wrong pose, not merely uncovered.
 
     Raises:
         ValueError: A trial without a kidnapping.
@@ -314,6 +325,9 @@ def confidently_wrong(
         resets[list(reset_steps)] = 1.0
         recent = np.convolve(resets, np.ones(window))[: len(wrong)] > 0.0
         wrong &= ~recent
+    if max_position_std is not None:
+        largest = np.linalg.eigvalsh(trial.covariances[:, :2, :2])[:, -1]
+        wrong &= np.sqrt(largest) < max_position_std
     return wrong[trial.kidnap_at :]
 
 
@@ -407,13 +421,13 @@ def _set_metrics(
         summary = summarize_localization(trials, deadline, hold)
         summary["seconds_to_localize"] = summary["median_steps_to_localize"] * STEP_SECONDS
         summary["seconds_to_recover"] = summary["median_steps_to_recover"] * STEP_SECONDS
-        per_trial = [
-            confidently_wrong(
-                record.trial,
-                None if record.meta["resets"] is None else record.meta["resets"]["steps"],
-                window,
-            )
+        resets = [
+            None if record.meta["resets"] is None else record.meta["resets"]["steps"]
             for record in records
+        ]
+        per_trial = [
+            confidently_wrong(record.trial, steps, window)
+            for record, steps in zip(records, resets, strict=True)
         ]
         localized = [
             wrong
@@ -422,6 +436,12 @@ def _set_metrics(
         ]
         summary["confidently_wrong"] = _share(per_trial)
         summary["confidently_wrong_localized"] = _share(localized)
+        summary["wrong_small_sigma"] = _share(
+            [
+                confidently_wrong(record.trial, steps, window, COLLAPSED_POSITION_STD)
+                for record, steps in zip(records, resets, strict=True)
+            ]
+        )
     else:
         summary = summarize(trials)
         for axis, ratio in zip(("x", "y", "theta"), axis_ratios(trials), strict=True):
@@ -789,6 +809,7 @@ def _kidnap_rows(row: ComparisonRow) -> list[list[str]]:
                 _median_text(get("median_steps_to_recover"), get("seconds_to_recover")),
                 f"{get('confidently_wrong'):.3f}",
                 "n/a" if np.isnan(wrong_localized) else f"{wrong_localized:.3f}",
+                f"{get('wrong_small_sigma'):.3f}",
                 resets,
                 f"{get('ms_per_step'):.2f}",
             ]
@@ -874,6 +895,8 @@ def format_markdown(rows: Sequence[ComparisonRow], meta: Mapping[str, Any]) -> s
         f"EKF, no reset in the last {reset['reset_window']} scans.",
         "Localized runs: the same share over only the runs that had localized before the "
         "kidnapping (n/a when none had).",
+        f"{_SMALL_SIGMA}: the confidently wrong steps whose position standard deviation (larger "
+        f"axis) is under {COLLAPSED_POSITION_STD:g} m.",
         "",
         *_table(
             [
@@ -887,10 +910,11 @@ def format_markdown(rows: Sequence[ComparisonRow], meta: Mapping[str, Any]) -> s
                 "Median to recover",
                 "Confidently wrong (all runs)",
                 "Confidently wrong (localized runs)",
+                f"{_SMALL_SIGMA} (all runs)",
                 "Max recent resets",
                 "ms/step",
             ],
-            [":---"] * 4 + ["---:", ":---", "---:", ":---"] + ["---:"] * 4,
+            [":---"] * 4 + ["---:", ":---", "---:", ":---"] + ["---:"] * 5,
             [line for row in rows for line in _kidnap_rows(row)],
         ),
         "",

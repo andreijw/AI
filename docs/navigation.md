@@ -168,9 +168,10 @@ for `run_trial(make_localizer=...)`.
 **EKF against MCL.** `python -m rl_navigation.estimation.comparison` runs both filters on the same seeded trials (each
 sensor, with its own dropout and with 30 %) and prints a Markdown report: tracking accuracy and consistency (position
 and heading RMSE, NEES, per-axis error against the reported variance), then a global start and a kidnapping at step 300
-(shares localized and recovered, steps to get there, and how often a filter is confidently wrong). It saves one record
-per trial with `--records`, so an interrupted run resumes and jobs run apart merge with `--from-records`; it writes no
-file unless `--report` is given. Run with the `TESTING.md` `EST-3` settings (seeds 101 to 150, 600 steps; the report is
+(shares localized and recovered, steps to get there, how often a filter is confidently wrong, and how often it is so
+with a position σ under 5 cm). It saves one record per trial with `--records`, so an interrupted run resumes and jobs
+run apart merge with `--from-records`; it writes no file unless `--report` is given. Run with the `TESTING.md` `EST-3`
+settings (seeds 101 to 150, 600 steps; the report is
 [`docs/benchmarks/localization_results.md`](benchmarks/localization_results.md)), the EKF tracks more accurately from
 the noisy start (lidar position RMSE about 2 mm against MCL's 7 mm) but recovers from the kidnapping in only 12 to 28 %
 of runs against MCL's 86 to 98 %, at about 2.5 to 4.4 ms a step against MCL's 37 to 51 ms; no EKF tracking run is lost
