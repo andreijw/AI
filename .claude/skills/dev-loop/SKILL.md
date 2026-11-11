@@ -184,6 +184,10 @@ After they have committed: push the branch, then open the PR against `develop` w
 `.github/pull_request_template.md`, with the quick summary as the first lines of its Description and every
 ticked box true. Watch `gh pr checks` until it finishes, and fix a red check without being asked.
 
+A PR stacked on another branch gets no unit tests: CI runs on pull requests into `develop` only. Before the
+maintainer merges a stacked PR, run CI on its branch (`gh workflow run CI --ref <branch>`) and wait for it; on
+2026-11-10 #205 merged untested and its x86 golden failure surfaced only in #206.
+
 When several PRs are open at once they share `CHANGELOG.md` and `docs/roadmap.md`. After each one merges,
 merge `develop` into every other open branch yourself, resolve the conflicts keeping both sides' entries, and
 check that each CHANGELOG entry and roadmap edit of both is still there before the maintainer merges it. On

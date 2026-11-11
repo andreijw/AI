@@ -248,7 +248,10 @@ CASES: dict[str, Case] = {
     ),
     "ppo-navigation-success": Case(
         lambda: NavigationEnv(seed=6, max_episode_steps=20),
-        _agent(PPOAgent, **PPO),
+        # anneal_steps past the run's ~200 steps: annealed to zero, the clip range is 0 and every
+        # ratio is 1 up to rounding, so which samples count as clipped (clip_fraction, and the
+        # gradients in Adam's moments) differed between aarch64 and CI's x86 (#206).
+        _agent(PPOAgent, **{**PPO, "anneal_steps": 1000}),
         {"num_episodes": 10, "eval_frequency": 100, "save_frequency": 100},
     ),
     "dqn": Case(
