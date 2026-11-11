@@ -27,6 +27,7 @@ from rl_navigation.sim import (
     wrap_angle,
 )
 from rl_navigation.sim.layouts import LayoutParams, generate_layout
+from tests.navigation_cases import fd_jacobian
 
 ODOMETRY = WheelOdometry(wheel_base=0.2, noise_per_metre=2.5e-4)
 ROOM = Arena(
@@ -44,19 +45,6 @@ def _beam(angle=0.0, max_range=10.0):
 
 def _ekf(range_map, pose, covariance, **kwargs):
     return EkfLocalizer(range_map, ODOMETRY, pose, covariance, **kwargs)
-
-
-def _fd_jacobian(f, point, eps=1e-6):
-    """Central differences of f, whose output's third entry is an angle: each difference is
-    wrapped, so a step across +-pi reads as the small change it is."""
-    columns = []
-    for k in range(len(point)):
-        step = np.zeros(len(point))
-        step[k] = eps
-        diff = f(point + step) - f(point - step)
-        diff[2] = wrap_angle(diff[2])
-        columns.append(diff / (2 * eps))
-    return np.stack(columns, axis=1)
 
 
 # Predict ----------------------------------------------------------------------------------------
@@ -109,14 +97,14 @@ def test_motion_jacobians_match_finite_differences(turn, theta):
     F, G = motion_jacobians(pose, distance, turn)
     np.testing.assert_allclose(
         F,
-        _fd_jacobian(lambda p: unicycle_step(p, distance, turn, 1.0), pose),
+        fd_jacobian(lambda p: unicycle_step(p, distance, turn, 1.0), pose),
         rtol=1e-6,
         atol=1e-9,
         err_msg="F = d pose' / d pose",
     )
     np.testing.assert_allclose(
         G,
-        _fd_jacobian(lambda u: unicycle_step(pose, u[0], u[1], 1.0), np.array([distance, turn])),
+        fd_jacobian(lambda u: unicycle_step(pose, u[0], u[1], 1.0), np.array([distance, turn])),
         rtol=1e-6,
         atol=1e-9,
         err_msg="G = d pose' / d (Delta s, Delta theta)",
@@ -133,8 +121,8 @@ def test_an_arcs_process_noise_follows_the_wheels():
     def moved(wheels):
         return unicycle_step(pose, *ODOMETRY.increments(wheels), 1.0)
 
-    J = _fd_jacobian(moved, travel)
-    F = _fd_jacobian(lambda p: unicycle_step(p, *ODOMETRY.increments(travel), 1.0), pose)
+    J = fd_jacobian(moved, travel)
+    F = fd_jacobian(lambda p: unicycle_step(p, *ODOMETRY.increments(travel), 1.0), pose)
     expected = 1e-9 * F @ F.T + J @ np.diag(2.5e-4 * travel) @ J.T
     np.testing.assert_allclose(ekf.covariance, expected, rtol=1e-6, atol=1e-15)
 

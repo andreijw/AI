@@ -6,7 +6,8 @@ https://github.com/andreijw/AI/actions/workflows/ci.yml)
 A pure-NumPy reinforcement-learning framework and a NumPy robot navigation library, built toward a Jetson robot.
 
 **Works:** ten benchmark challenges with agents from REINFORCE to SAC, and localization (EKF and Monte Carlo) in
-simulation. **Not yet:** nothing has run on a real robot; SLAM, planning and the hardware are open.
+simulation. **Not yet:** nothing has run on a real robot; SLAM is in progress (landmark EKF-SLAM runs in simulation
+and failed 2 of its 9 judged gates), and planning and the hardware are open.
 
 ## What's inside
 
@@ -60,7 +61,8 @@ Where this is going, from the roadmap ([docs/roadmap.md](docs/roadmap.md)):
 
 - **Learning in simulation: done.** Classic control, Box2D and navigation challenges, REINFORCE to SAC.
 - **Knowing where it is: current.** Odometry, EKF and MCL work in simulation, and so does mapping with known poses;
-  SLAM is planned.
+  landmark EKF-SLAM on a 360-beam lidar runs in simulation, 6.4 cm aligned error on fresh seeds, but
+  failed 2 of its 9 judged gates.
 - **Planning and driving: planned.** A* and a path follower as a classical baseline for the learned policy.
 - **The real robot: planned, nothing run yet.** HC-SR04 and lidar on the Jetson, ROS 2 nodes, fitting the simulated
   noise to real readings. Beyond it, proposed only: MuJoCo robots and arms, GPU-parallel simulation, Isaac Lab,

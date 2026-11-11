@@ -149,6 +149,8 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.slam",
         "rl_navigation.slam.features",
         "rl_navigation.slam.feature_evaluation",
+        "rl_navigation.slam.ekf_slam",
+        "rl_navigation.slam.evaluation",
     ],
 )
 def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
@@ -237,7 +239,7 @@ def test_the_slam_core_imports_only_the_simulator_and_the_estimation_core():
     estimators' desk tools. A fresh process."""
     code = (
         "import sys; sys.path.insert(0, 'src'); "
-        "import rl_navigation.slam, rl_navigation.slam.features; "
+        "import rl_navigation.slam, rl_navigation.slam.features, rl_navigation.slam.ekf_slam; "
         "print(' '.join(sorted({m.split('.')[1] for m in sys.modules "
         "if m.startswith('rl_navigation.')})), "
         "[m for m in ('rl_navigation.estimation.evaluation', 'rl_navigation.estimation.comparison', "
@@ -253,21 +255,31 @@ def test_the_slam_core_imports_only_the_simulator_and_the_estimation_core():
     )
 
 
-def test_the_slam_feature_evaluation_desk_tool_stays_inside_the_navigation_library():
-    loaded = _loaded_navigation_packages("rl_navigation.slam.feature_evaluation")
+@pytest.mark.parametrize(
+    "tool", ["rl_navigation.slam.feature_evaluation", "rl_navigation.slam.evaluation"]
+)
+def test_the_slam_desk_tools_stay_inside_the_navigation_library(tool):
+    loaded = _loaded_navigation_packages(tool)
     assert set(loaded) <= {"estimation", "mapping", "sim", "slam"}, f"loaded rl_navigation.{loaded}"
 
 
-def test_the_slam_package_does_not_import_its_desk_tool():
+def test_the_slam_package_does_not_import_its_desk_tools():
     code = (
         "import sys; sys.path.insert(0, 'src'); import rl_navigation.slam; "
-        "print('rl_navigation.slam.feature_evaluation' in sys.modules)"
+        "print(any(m in sys.modules for m in ('rl_navigation.slam.feature_evaluation', "
+        "'rl_navigation.slam.evaluation', 'rl_navigation.mapping')))"
     )
     result = subprocess.run(
         [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "False", "rl_navigation/slam/__init__.py imported a desk tool"
+
+
+def test_the_slam_package_exports_the_filter():
+    import rl_navigation.slam as slam
+
+    assert {"EkfSlam", "SlamSettings", "SlamUpdate"} <= set(slam.__all__)
 
 
 @pytest.mark.parametrize(

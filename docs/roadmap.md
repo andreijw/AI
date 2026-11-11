@@ -185,8 +185,19 @@ steps 3 to 5 are sketches to turn into full items when picked.
     for the robot's 360° lidar at about 1° per beam (the maintainer's choice, 2026-11-09; the HC-SR04 cannot see
     landmarks). `rl_navigation.slam.features` fits circles to scan segments with a covariance; on fresh seeds 101 to
     150 it passes every `CIRC-1` gate (fit NEES 3.22, false fits 0.0005, detection 0.76, centre error 5.7 mm median,
-    6.4 ms a scan; CHANGELOG.md, 2026-11-10). Left for PR 2b: `EkfSlam`, `SLAM-1` and `SLAM-2`, gates set after a
-    tuning pass on the production code, and the bound on lost runs, which is the maintainer's.
+    6.4 ms a scan; CHANGELOG.md, 2026-11-10).
+  - **Progress (PR 2b, 2026-11-10)**: `rl_navigation.slam.EkfSlam`, landmark EKF-SLAM with first-estimate Jacobians,
+    judged once on seeds 101 to 150 against gates registered beforehand: 7 of 9 pass (error after alignment 0.064 m
+    mean, 11 mm median); it fails the ratio to dead reckoning (0.443 against ≤ 0.40) and the count of runs above 0.10 m
+    after alignment (9 against ≤ 8). Shipped with the failure recorded (the maintainer's decision; CHANGELOG.md,
+    2026-11-10).
+  - **Follow-ups**:
+    - **Association drift**: 4 of the 9 aligned failures are association errors (the oracle row has 5), with first
+      estimates drifting 0.05 to 0.60 m; a fix is judged on new seeds 151 to 200, as 101 to 150 are spent.
+    - **Dropped beams split arcs**: `segment_scan` splits at every unusable beam, so at 30 % dropout detection
+      falls from 75 to 10 % and false fits rise to 28 % (4 seeds); bridging isolated dropped beams should let
+      the 30 % dropout row be gated (lost 25 of 50 today).
+    - Left for later PRs: lidar scan matching and the grid as a `RangeMap` (PR 3), grid FastSLAM (PR 4).
   - **Description**: Occupancy-grid mapping from range readings with known poses (log-odds, an inverse sensor
     model for both presets), then SLAM without them: landmark EKF-SLAM, then a particle-filter grid SLAM
     (FastSLAM-style) with scan matching for the lidar preset. Judged by map and pose error against ground truth,
