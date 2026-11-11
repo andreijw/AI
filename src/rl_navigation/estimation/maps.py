@@ -39,12 +39,19 @@ class RangeMap(Protocol):
         ``inf`` where a beam meets nothing."""
         ...
 
+    def free(self, points: ArrayLike, margin: float) -> NDArray[np.bool_]:
+        """``(P,)``: whether each of the ``(P, 2)`` points is more than ``margin`` metres from
+        every obstacle and wall (a robot of that radius could stand there). Points inside an
+        obstacle or beyond the walls are never free. The EKF asks it with margin 0 to tell an
+        estimate no robot could have."""
+        ...
+
 
 class ParticleMap(RangeMap, Protocol):
     """A :class:`RangeMap` that a particle filter can also sample and cast a few beams of.
 
     Global localization draws poses over the map's free space, and the filter casts only the
-    beams it uses from thousands of poses, so it needs these four more than the EKF does.
+    beams it uses from thousands of poses, so it needs these three more than the EKF does.
     """
 
     @property
@@ -55,11 +62,6 @@ class ParticleMap(RangeMap, Protocol):
     @property
     def bounds(self) -> tuple[float, float, float, float]:
         """``(x_min, y_min, x_max, y_max)`` in metres: every free point lies inside."""
-        ...
-
-    def free(self, points: ArrayLike, margin: float) -> NDArray[np.bool_]:
-        """``(P,)``: whether each of the ``(P, 2)`` points is more than ``margin`` metres from
-        every obstacle and wall (a robot of that radius could stand there)."""
         ...
 
     def expected_beam_ranges(self, poses: ArrayLike, beams: ArrayLike) -> FloatArray:

@@ -11,6 +11,7 @@ import pytest
 from rl_navigation.estimation import EkfLocalizer, MclSettings
 from rl_navigation.estimation import comparison as comparison_module
 from rl_navigation.estimation.comparison import (
+    COLLAPSED_POSITION_STD,
     ComparisonRow,
     EkfReset,
     TrialRecord,
@@ -62,6 +63,7 @@ KIDNAP_KEYS = (
     "seconds_to_recover",
     "confidently_wrong",
     "confidently_wrong_localized",
+    "wrong_small_sigma",
     "trials",
     "ms_per_step",
 )
@@ -186,6 +188,23 @@ def test_confidently_wrong_needs_a_large_error_an_uncovered_one_and_no_recent_re
     )
 
 
+def test_wrong_with_small_sigma_needs_a_small_position_std():
+    """With ``max_position_std`` a confidently wrong step also needs a position sigma under it:
+    the square root of the larger eigenvalue of P[:2, :2]. At 1 m of error, sigma 0.2 m (the EKF's
+    reset floor; NEES 25, still uncovered) does not count, 0.01 m does, and so does neither when
+    only one axis is small (sigma 0.01 m in x, 0.2 m in y: the larger axis decides)."""
+    trial = _trial([1.0] * 6, [0.04, 1e-4, 0.04, 1e-4, 1e-4, 1e-4], kidnap_at=0)
+    trial.covariances[5] = np.diag([1e-4, 0.04, 1e-4])
+    for reset_steps in (None, []):  # MCL, and an EKF that never reset
+        np.testing.assert_array_equal(
+            confidently_wrong(trial, reset_steps, 3, max_position_std=COLLAPSED_POSITION_STD),
+            [False, True, False, True, True, False],
+            err_msg="only the steps whose larger position sigma is under 5 cm count",
+        )
+    assert confidently_wrong(trial, None, 3).all(), "without the limit every step is wrong"
+    assert COLLAPSED_POSITION_STD == 0.05, "a quarter of the EKF's 0.2 m reset floor"
+
+
 def test_confidently_wrong_needs_a_kidnapped_trial():
     with pytest.raises(ValueError, match="kidnap"):
         confidently_wrong(_trial([1.0] * 3, [1e-4] * 3, kidnap_at=None), None, 3)
@@ -226,6 +245,7 @@ def _metrics(**changes):
         "mcl_kidnap_seconds_to_recover": 4.0,
         "mcl_kidnap_confidently_wrong": 0.0124,
         "mcl_kidnap_confidently_wrong_localized": 0.0062,
+        "mcl_kidnap_wrong_small_sigma": 0.0111,
         "mcl_kidnap_trials": 2.0,
         "mcl_kidnap_ms_per_step": 44.0,
         "ekf_kidnap_global_share": 1.0,
@@ -236,6 +256,7 @@ def _metrics(**changes):
         "ekf_kidnap_seconds_to_recover": math.nan,
         "ekf_kidnap_confidently_wrong": 0.9,
         "ekf_kidnap_confidently_wrong_localized": math.nan,
+        "ekf_kidnap_wrong_small_sigma": 0.25,
         "ekf_kidnap_trials": 2.0,
         "ekf_kidnap_ms_per_step": 1.1,
         "ekf_kidnap_max_recent_resets": 4.0,
@@ -257,6 +278,7 @@ REPORT_META = {
         "reset_std": [0.2, 0.2, 0.1],
         "reset_window": 20,
         "nis_quantile": 0.999,
+        "count_off_map": True,
     },
     "machines": ["Linux-aarch64"],
     "blas_threads": ["OPENBLAS_NUM_THREADS=1"],
@@ -277,6 +299,8 @@ EKF reset: after 3 counting scans of at least 2 candidates, variance floor (0.2,
 squared, window 20 scans.
 EKF hold: an update that does not converge or has an NIS over the chi-square 0.999 quantile \
 keeps P.
+EKF off-map count: a scan with no candidate beam while the estimate is not in free space counts \
+toward the reset.
 
 ## Tracking from the noisy start
 
@@ -297,19 +321,21 @@ position error over 0.5 m,
 NEES over 9.35 and, for the EKF, no reset in the last 20 scans.
 Localized runs: the same share over only the runs that had localized before the kidnapping \
 (n/a when none had).
+Wrong with σ < 5 cm: the confidently wrong steps whose position standard deviation (larger axis) \
+is under 0.05 m.
 
 | Sensor | Dropout | Filter | Start | Localized | Median to localize | Recovered | Median to \
-recover | Confidently wrong (all runs) | Confidently wrong (localized runs) | Max recent \
-resets | ms/step |
-| :--- | :--- | :--- | :--- | ---: | :--- | ---: | :--- | ---: | ---: | ---: | ---: |
+recover | Confidently wrong (all runs) | Confidently wrong (localized runs) | Wrong with σ < 5 \
+cm (all runs) | Max recent resets | ms/step |
+| :--- | :--- | :--- | :--- | ---: | :--- | ---: | :--- | ---: | ---: | ---: | ---: | ---: |
 | lidar | own | MCL | anywhere | 1.00 | 31 steps (3.1 s) | 0.50 | 40 steps (4.0 s) | 0.012 | \
-0.006 | - | 44.00 |
-| lidar | own | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.00 | n/a | 0.900 | n/a | 4 | \
-1.10 |
-| hc_sr04 | 0.3 | MCL | anywhere | 0.00 | n/a | 0.50 | 40 steps (4.0 s) | 0.012 | 0.006 | - | \
-44.00 |
-| hc_sr04 | 0.3 | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.00 | n/a | 0.900 | n/a | 4 | \
-1.10 |
+0.006 | 0.011 | - | 44.00 |
+| lidar | own | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.00 | n/a | 0.900 | n/a | 0.250 | \
+4 | 1.10 |
+| hc_sr04 | 0.3 | MCL | anywhere | 0.00 | n/a | 0.50 | 40 steps (4.0 s) | 0.012 | 0.006 | \
+0.011 | - | 44.00 |
+| hc_sr04 | 0.3 | EKF | noisy start | 1.00 | 0 steps (0.0 s) | 0.00 | n/a | 0.900 | n/a | \
+0.250 | 4 | 1.10 |
 
 Timings: Linux-aarch64; OPENBLAS_NUM_THREADS=1; concurrent jobs: 2 jobs. ms/step: the \
 filter's predict, update, pose and
@@ -373,6 +399,7 @@ SETTINGS = {
         "reset_std": [0.2, 0.2, 0.1],
         "reset_window": 20,
         "nis_quantile": 0.999,
+        "count_off_map": True,
     },
     "mcl_settings": {"num_particles": 150, "covariance_scale": [1.0, 1.0, 1.0]},
 }
@@ -456,8 +483,12 @@ def test_check_records_rejects_mismatched_settings(change):
         check_records([_record(seed=1), _record(seed=2, **change)])
 
 
-# The EKF's settings as records written before the hold (2026-11-09) carry them.
-RESET_BEFORE_THE_HOLD = {k: v for k, v in SETTINGS["ekf_reset"].items() if k != "nis_quantile"}
+# The EKF's settings as records written before the hold (2026-11-09) carry them, and as records
+# written before the off-map count (2026-11-10).
+RESET_BEFORE_THE_HOLD = {
+    k: v for k, v in SETTINGS["ekf_reset"].items() if k not in {"nis_quantile", "count_off_map"}
+}
+RESET_BEFORE_OFF_MAP = {k: v for k, v in SETTINGS["ekf_reset"].items() if k != "count_off_map"}
 
 
 def test_check_records_ignores_the_ekf_settings_of_mcl_records():
@@ -470,12 +501,46 @@ def test_check_records_ignores_the_ekf_settings_of_mcl_records():
 
 def test_a_record_without_nis_quantile_ran_without_the_hold():
     """A missing ``nis_quantile`` reads as None (the hold off), which is what such a run did."""
-    off = {**SETTINGS["ekf_reset"], "nis_quantile": None}
+    off = {**SETTINGS["ekf_reset"], "nis_quantile": None, "count_off_map": False}
     check_records(
         [_record(seed=1, ekf_reset=RESET_BEFORE_THE_HOLD), _record(seed=2, ekf_reset=off)]
     )
     with pytest.raises(ValueError, match="settings"):
         check_records([_record(seed=1, ekf_reset=RESET_BEFORE_THE_HOLD), _record(seed=2)])
+
+
+def test_a_record_without_count_off_map_ran_without_it():
+    """A missing ``count_off_map`` reads as False (the off-map count off), as such a run was."""
+    off = {**SETTINGS["ekf_reset"], "count_off_map": False}
+    check_records([_record(seed=1, ekf_reset=RESET_BEFORE_OFF_MAP), _record(seed=2, ekf_reset=off)])
+
+
+def test_old_and_new_ekf_records_do_not_merge():
+    """EKF records from before the off-map count cannot be merged with records run with it: an
+    EST-3 rerun that left an old EKF record in ``--records`` would otherwise mix two filters."""
+    with pytest.raises(ValueError, match="EKF settings") as refused:
+        check_records([_record(seed=1, ekf_reset=RESET_BEFORE_OFF_MAP), _record(seed=2)])
+    message = str(refused.value)
+    assert "'count_off_map': False" in message and "'count_off_map': True" in message, message
+
+
+@pytest.mark.parametrize(
+    ("count_off_map", "text"),
+    [
+        (
+            True,
+            "EKF off-map count: a scan with no candidate beam while the estimate is not in free",
+        ),
+        (False, "EKF off-map count: off."),
+        ("missing", "EKF off-map count: off."),
+    ],
+)
+def test_format_markdown_names_the_off_map_count(count_off_map, text):
+    """Records written before the off-map count have no key; they ran without it."""
+    reset = {**REPORT_META["ekf_reset"], "count_off_map": count_off_map}
+    if count_off_map == "missing":
+        del reset["count_off_map"]
+    assert text in format_markdown([], {**REPORT_META, "ekf_reset": reset})
 
 
 def test_check_records_allows_each_sensor_its_own_mcl_scale():
@@ -706,6 +771,9 @@ def test_merge_records_computes_each_sets_figures_by_hand():
         # EKF: the reset covers rows 4-5, leaving rows 6-7 of seed 2: 2 of 12; seed 1 none.
         "ekf_kidnap_confidently_wrong": 1.0 / 6.0,
         "ekf_kidnap_confidently_wrong_localized": 0.0,
+        # Every kidnap record's sigma is 0.01 m, under 5 cm: the same shares as above.
+        "mcl_kidnap_wrong_small_sigma": 0.5,
+        "ekf_kidnap_wrong_small_sigma": 1.0 / 6.0,
         "ekf_kidnap_seconds_to_localize": 0.0,
     }
     for key, value in expected.items():
@@ -713,6 +781,25 @@ def test_merge_records_computes_each_sets_figures_by_hand():
     assert "max_recent_resets" not in {key.removeprefix("mcl_") for key in metrics}, (
         "MCL has no resets, so no reset column"
     )
+
+
+def test_wrong_with_small_sigma_leaves_out_a_filter_at_the_reset_floor():
+    """The hand-built records again with every kidnap covariance at the EKF's reset floor
+    (sigma 0.2 m): the 1 m errors stay uncovered (NEES 25), so confidently wrong is unchanged,
+    but none of those steps has a sigma under 5 cm."""
+    records = []
+    for seed in (2, 1):
+        for mode in KNOWN_MODES:
+            record = _known_record(seed, mode)
+            if mode.endswith("kidnap"):
+                record.trial.covariances[:] = 0.04 * np.eye(3)
+            records.append(record)
+    (row,) = merge_records(records, deadline=2, hold=2).rows
+    for prefix, wrong in (("mcl_kidnap_", 0.5), ("ekf_kidnap_", 1.0 / 6.0)):
+        assert row.metrics[prefix + "confidently_wrong"] == pytest.approx(wrong), prefix
+        assert row.metrics[prefix + "wrong_small_sigma"] == 0.0, (
+            f"{prefix}: sigma 0.2 m is not small"
+        )
 
 
 def test_merge_records_takes_the_ekf_settings_from_an_ekf_record():

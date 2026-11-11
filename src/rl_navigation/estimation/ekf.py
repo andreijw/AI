@@ -191,7 +191,8 @@ class UpdateResult:
             none was used).
         iterations: Accepted iterations (0 when no beam was used).
         reset: Whether this scan completed ``reset_after`` consecutive counting scans (mostly
-            gated, or held) and raised the covariance (see :class:`EkfLocalizer`).
+            gated, held, or blind off the map) and raised the covariance (see
+            :class:`EkfLocalizer`).
         held: Whether the update was held: it did not converge, or its NIS exceeded the
             ``nis_quantile`` quantile, so the mean moved but the covariance was kept.
     """
@@ -212,14 +213,18 @@ class EkfLocalizer:
     few centimetres, every beam then fails the gate and the filter never moves again. A scan
     *counts* when it has at least ``min_candidates`` candidate beams (used after the last
     iteration, or gated) and either at least half of them are gated or its update was held (see
-    the module docstring). After ``reset_after`` consecutive counting scans the filter raises
-    each variance to at least ``reset_std**2`` (``P[i, i] <- max(P[i, i], reset_std[i]^2)``,
-    off-diagonals kept), and the count starts again. The floor is idempotent, so a filter that
-    keeps resetting does not grow ``P`` without bound. :attr:`recent_resets` counts the resets
-    in the last ``reset_window`` scans: **2 or more means the filter is lost** (it keeps
-    resetting and cannot find a pose that explains the scans), 0 that the last reset, if any,
-    recovered it. Because a held scan counts, a filter whose scans keep contradicting it keeps
-    resetting, and so keeps reporting itself lost, until a scan converges and agrees.
+    the module docstring). A scan with no candidate at all also counts when the estimate is not
+    in free space (``range_map.free`` at margin 0 is False: inside an obstacle or beyond a wall,
+    where no robot can be), the *off-map count*: a lost estimate that has left the arena sees no
+    usable beam there (each is nonlinear or reads no echo), so without it no scan counted and
+    the filter stayed quiet while metres off. After ``reset_after`` consecutive counting scans
+    the filter raises each variance to at least ``reset_std**2`` (``P[i, i] <- max(P[i, i],
+    reset_std[i]^2)``, off-diagonals kept), and the count starts again. The floor is idempotent,
+    so a filter that keeps resetting does not grow ``P`` without bound. :attr:`recent_resets`
+    counts the resets in the last ``reset_window`` scans: **2 or more means the filter is lost**
+    (it keeps resetting and cannot find a pose that explains the scans), 0 that the last reset,
+    if any, recovered it. Because a held scan counts, a filter whose scans keep contradicting it
+    keeps resetting, and so keeps reporting itself lost, until a scan converges and agrees.
 
     Limits: in a symmetric room a reset can lock onto a pose that explains the scans as well as
     the true one (a 90 degree alias of a square room); its covariance shrinks again and
@@ -228,7 +233,9 @@ class EkfLocalizer:
     0.3 rad on the HC-SR04's five sonars fires none, because three of its sonars change by under
     3 cm and stay used, one turns nonlinear and only one is gated. A wrong association that a
     scan explains (a beam linearized on the wrong wall near a corner, consistent with its prior)
-    is not caught either; the hold acts on the next scan that contradicts it.
+    is not caught either; the hold acts on the next scan that contradicts it. A reset raises
+    ``P`` and never moves the estimate, so the off-map count makes a filter that has left the map
+    report itself lost; it does not bring it back.
 
     Args:
         range_map: The known map seen through the robot's range sensor; its ``noise_std`` is the
@@ -253,6 +260,9 @@ class EkfLocalizer:
         nis_quantile: The chi-square quantile above which an update's NIS holds it (in (0, 1));
             0.999 holds about 0.5 % of scans in tracking. None turns the hold off entirely, a
             refused iteration included: the filter as it was before the hold.
+        count_off_map: Whether a scan with no candidate counts while the estimate is not in
+            free space (the off-map count). Only such a scan asks ``range_map.free``, so tracking
+            is unchanged. False is the filter as it was before the off-map count.
 
     Raises:
         ValueError: A pose or covariance of the wrong shape or not finite, a covariance that is
@@ -276,6 +286,7 @@ class EkfLocalizer:
         reset_std: ArrayLike = (0.2, 0.2, 0.1),
         reset_window: int = 20,
         nis_quantile: float | None = 0.999,
+        count_off_map: bool = True,
     ) -> None:
         pose, covariance = checked_start(pose, covariance, "EkfLocalizer")
         if not range_map.noise_std > 0.0:
@@ -291,6 +302,9 @@ class EkfLocalizer:
                 f"EkfLocalizer nis_quantile must be in (0, 1) or None, got {nis_quantile}."
             )
         self.nis_quantile = nis_quantile
+        if not isinstance(count_off_map, bool):
+            raise ValueError(f"EkfLocalizer count_off_map must be a bool, got {count_off_map!r}.")
+        self.count_off_map = count_off_map
         for name, value in settings.items():
             if not value > 0.0:
                 raise ValueError(f"EkfLocalizer {name} must be positive, got {value}.")
@@ -346,6 +360,8 @@ class EkfLocalizer:
         num_gated = int(np.count_nonzero(gated))
         candidates = int(np.count_nonzero(used)) + num_gated
         counts = candidates >= self.min_candidates and (held or 2 * num_gated >= candidates)
+        if candidates == 0 and self.count_off_map:
+            counts = not bool(self.range_map.free(self._pose[None, :2], 0.0)[0])
         self._counting_scans = self._counting_scans + 1 if counts else 0
         reset = self._counting_scans >= self.reset_after
         if reset:

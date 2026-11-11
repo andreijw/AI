@@ -81,9 +81,10 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
      package does not import; the `rl_navigation.localization_video` command, outside the package, writes them to an
      MP4). It imports NumPy and `rl_navigation.sim` only, never `gym_env`, the framework's layer, Gymnasium or
      `rl_core`, and no environment, wrapper or benchmark challenge calls it (the maintainer's decision, 2026-11-06).
-     Its seam to the map is the `RangeMap` protocol in `maps` (`min_range`, `max_range`, `noise_std`, and
-     `expected_ranges` from `(P, 3)` poses to `(P, N)` ranges, `inf` where a beam meets nothing); the particle filter
-     asks for `ParticleMap`, a `RangeMap` that also gives `num_readings`, `bounds`, `free` and `expected_beam_ranges`.
+     Its seam to the map is the `RangeMap` protocol in `maps` (`min_range`, `max_range`, `noise_std`,
+     `expected_ranges` from `(P, 3)` poses to `(P, N)` ranges, `inf` where a beam meets nothing, and `free`, which the
+     EKF asks of a blind scan's estimate); the particle filter asks for `ParticleMap`, a `RangeMap` that also gives
+     `num_readings`, `bounds` and `expected_beam_ranges`.
      `SensorMap` implements both with the simulator's ray casts on a known `Arena`; an occupancy grid (Phase 8, step 3)
      is meant to plug in the same way, so the filters never name the map's type. The encoders are a simulator object,
      `WheelOdometry`, which the filter also uses as its motion model; it draws from its own generator, so adding it

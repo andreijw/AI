@@ -390,6 +390,7 @@ def test_a_scan_of_the_wrong_length_is_refused():
         ([1.0, 1.0, 0.0], np.eye(3), {"nis_quantile": 0.0}),
         ([1.0, 1.0, 0.0], np.eye(3), {"nis_quantile": 1.0}),
         ([1.0, 1.0, 0.0], np.eye(3), {"nis_quantile": np.nan}),
+        ([1.0, 1.0, 0.0], np.eye(3), {"count_off_map": 1}),
     ],
 )
 def test_invalid_filter_settings_are_refused(pose, covariance, kwargs):
@@ -408,17 +409,24 @@ class _LinearMap:
 
     min_range, max_range, noise_std = 0.02, 4.0, 0.01
 
-    def __init__(self, offset, slope, finite_below_x=np.inf):
+    def __init__(self, offset, slope, finite_below_x=np.inf, on_map=True):
         self.offset, self.slope, self.finite_below_x = (
             offset,
             np.asarray(slope, float),
             finite_below_x,
         )
+        self.on_map = on_map
+        self.free_calls = 0
 
     def expected_ranges(self, poses):
         poses = np.asarray(poses, dtype=np.float64).reshape(-1, 3)
         ranges = self.offset + poses @ self.slope
         return np.where(poses[:, 0] < self.finite_below_x, ranges, np.inf)[:, None]
+
+    def free(self, points, margin):
+        """Every point is free when ``on_map``, none otherwise; counts the calls."""
+        self.free_calls += 1
+        return np.full(len(np.asarray(points).reshape(-1, 2)), self.on_map)
 
 
 def test_a_beam_expected_near_max_range_is_not_used():
@@ -964,6 +972,132 @@ def test_a_held_scan_needs_min_candidates_to_count(min_candidates, fires):
     result = ekf.update([1.25])
     assert result.reset is fires, result
     assert result.held, result
+
+
+# HC-SR04 seed 94 (own dropout), run_trial(94, hc_sr04(), steps=330, kidnap_at=300), recorded at
+# #203's head (c85e3d7), before the off-map count existed.
+_SEED94_STEPS = (100, 299, 305, 312, 313, 329)
+_SEED94_ESTIMATES = np.array(
+    [
+        [0.2329974513688819, 0.8614149992349731, -1.6905714911986625],
+        [4.750037206591102, 1.6825319720818241, 1.543466446303519],
+        [5.586591518567488, 1.2444908521897686, 1.3586444454368554],
+        [6.732872757871282, 1.6800583452649818, 1.1722000498103604],
+        [6.744119115629759, 1.7083568058243463, 1.2128330822545994],
+        [6.898107464356389, 2.1733488498611746, 1.1986338593519141],
+    ]
+)
+_SEED94_COV_312 = np.array(
+    [
+        [0.01021132491825088, 0.01253644554677795, 0.0064148167761099465],
+        [0.01253644554677795, 0.015538543454813513, 0.008066866893636782],
+        [0.0064148167761099465, 0.008066866893636782, 0.0062702309703077],
+    ]
+)
+_SEED94_COV_329 = np.array(
+    [
+        [0.005939419860604414, 0.008945279934051795, 0.0017206244105699992],
+        [0.008945279934051795, 0.018495765108921425, 0.009651712510121122],
+        [0.0017206244105699992, 0.009651712510121122, 0.012779112568394117],
+    ]
+)
+
+
+@pytest.mark.parametrize(("on_map", "fired"), [(False, [False, False, True]), (True, [False] * 3)])
+def test_blind_scans_off_the_map_count_toward_the_reset(on_map, fired):
+    """A dropout (NaN) leaves a scan with no candidate. With the estimate off the map (inside an
+    obstacle or beyond a wall, where no robot can stand) such a scan counts, so the third resets
+    and the filter reports itself lost; on the map it is a plain dropout and never counts."""
+    range_map = _LinearMap(2.0, [-1.0, 0.0, 0.0], on_map=on_map)
+    ekf = _ekf(range_map, [0.0, 0.0, 0.0], 1e-4 * np.eye(3))
+    results = [ekf.update([np.nan]) for _ in range(3)]
+    assert [r.reset for r in results] == fired, [r.reset for r in results]
+    assert ekf.recent_resets == (0 if on_map else 1), ekf.recent_resets
+
+
+def test_a_blind_scan_beside_a_wall_is_on_the_map():
+    """The off-map test has no margin: an estimate whose centre is only 0.05 m from the west wall,
+    closer than a robot's 0.1 m radius, is still inside the arena and so on the map; with a margin
+    of the robot's radius it would count as lost. A blind scan (every reading a dropout) from there
+    does not count, so with ``reset_after=1`` no reset."""
+    range_map = SensorMap(ROOM, hc_sr04())
+    ekf = _ekf(range_map, [0.05, 2.0, 0.0], 1e-4 * np.eye(3), reset_after=1)
+    result = ekf.update(np.full(range_map.num_readings, np.nan))
+    assert not (result.used.any() or result.gated.any()), f"The scan should be blind: {result}"
+    assert not result.reset, (
+        "An estimate beside a wall is on the map; its blind scan must not count."
+    )
+
+
+def test_a_scan_with_candidates_off_the_map_counts_as_before():
+    """Off the map, a scan whose beam is used and agrees counts as it always did: not at all.
+    The filter does not even ask whether its estimate is on the map; only a blind scan does."""
+    range_map = _LinearMap(2.0, [-1.0, 0.0, 0.0], on_map=False)
+    ekf = _ekf(range_map, [0.0, 0.0, 0.0], 1e-4 * np.eye(3), reset_after=1)
+    result = ekf.update([2.0])
+    assert result.used[0] and not result.reset, f"A consistent used beam does not count: {result}"
+    assert range_map.free_calls == 0, (
+        "A scan with candidates must not ask whether it is on the map."
+    )
+
+
+def test_count_off_map_false_is_the_filter_before():
+    """``count_off_map=False`` is the filter before the off-map count: HC-SR04 seed 94 (own
+    dropout), kidnapped at step 300, gives the estimates and covariances recorded at #203's head
+    (c85e3d7). The default first counts a blind off-map scan at step 311 and resets at 313: equal
+    to the record before, different after."""
+    steps = list(_SEED94_STEPS)
+    old = run_trial(
+        94, hc_sr04(), steps=330, kidnap_at=300, make_localizer=ekf_factory(count_off_map=False)
+    )
+    np.testing.assert_allclose(old.estimates[steps], _SEED94_ESTIMATES, rtol=1e-9, atol=1e-12)
+    np.testing.assert_allclose(old.covariances[312], _SEED94_COV_312, rtol=1e-9, atol=1e-15)
+    np.testing.assert_allclose(old.covariances[329], _SEED94_COV_329, rtol=1e-9, atol=1e-15)
+    new = run_trial(94, hc_sr04(), steps=330, kidnap_at=300)
+    np.testing.assert_allclose(new.estimates[steps[:4]], _SEED94_ESTIMATES[:4], rtol=1e-9)
+    np.testing.assert_allclose(new.covariances[312], _SEED94_COV_312, rtol=1e-9, atol=1e-15)
+    assert not np.allclose(new.covariances[329], _SEED94_COV_329, rtol=1e-6), (
+        "The default should reset at step 313 and so differ from the filter before."
+    )
+
+
+def test_an_estimate_outside_the_walls_reports_itself_lost():
+    """An HC-SR04 filter whose estimate sits beyond the east wall (5.6 m in a 5 m room) while the
+    robot stands inside: every sonar is nonlinear or reads no echo there, so no scan has a
+    candidate. Before the off-map count none of them counted and the filter stayed quiet."""
+    sensor = hc_sr04()
+    range_map = SensorMap(ROOM, sensor)
+    estimate = np.array([5.6, 2.0, 0.3])
+    assert not range_map.free(estimate[None, :2], 0.0)[0], "The estimate must be off the map."
+    ekf = _ekf(range_map, estimate, np.diag([0.04, 0.04, 0.01]))
+    for step in range(30):
+        result = ekf.update(sensor.read(ROOM, TRUTH, np.random.default_rng(step))[0])
+        assert not (result.used.any() or result.gated.any()), f"Scan {step} has candidates."
+    assert ekf.recent_resets >= 2, f"Off the map the filter should report itself lost: {ekf}"
+
+
+def test_tracking_never_asks_whether_the_estimate_is_on_the_map(monkeypatch):
+    """Tracking (EST-1 seed 1, HC-SR04 at 30 % dropout): the filter asks ``free`` only on a scan
+    with no candidate, and every answer is yes, so the off-map count never fires."""
+    scans, asked, answers = [], [], []
+    update, free = EkfLocalizer.update, SensorMap.free
+
+    def recorded_update(self, readings):
+        result = update(self, readings)
+        scans.append(not (result.used.any() or result.gated.any()))
+        return result
+
+    def recorded_free(self, points, margin):
+        answer = free(self, points, margin)
+        asked.append(len(scans))  # the scan being updated is the next one appended
+        answers.extend(answer.tolist())
+        return answer
+
+    monkeypatch.setattr(EkfLocalizer, "update", recorded_update)
+    monkeypatch.setattr(SensorMap, "free", recorded_free)
+    run_trial(1, hc_sr04(), dropout_prob=0.3)
+    assert all(answers), "A tracked estimate should always be on the map."
+    assert all(scans[index] for index in asked), "free was asked on a scan with candidates."
 
 
 def test_the_hold_off_is_the_filter_before_the_hold():

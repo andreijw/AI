@@ -75,10 +75,10 @@ cannot, though the EKF recovers from a small bump while standing still (below; [
 - **Encoders**: `rl_navigation.sim.WheelOdometry` models them. A reading is a `(2,)` array, the left and the right
   wheel's travel in metres since the previous reading, with noise variance `k × |travel|` per wheel. Its wheel base
   (0.2 m) and `k` (2.5e-4 m) are placeholders until they are calibrated on the robot.
-- **Map**: the EKF reads the map only through the `RangeMap` protocol (`min_range`, `max_range`, `noise_std` and
-  `expected_ranges(poses)`), and the particle filter only through `ParticleMap`, which extends it with
-  `num_readings`, `bounds`, `free` and `expected_beam_ranges`. `SensorMap(arena, sensor)` provides both for a known
-  `Arena` and a `RangeSensor`.
+- **Map**: the EKF reads the map only through the `RangeMap` protocol (`min_range`, `max_range`, `noise_std`,
+  `expected_ranges(poses)` and `free(points, margin)`), and the particle filter only through `ParticleMap`, which
+  extends it with `num_readings`, `bounds` and `expected_beam_ranges`. `SensorMap(arena, sensor)` provides both for
+  a known `Arena` and a `RangeSensor`.
 - **Loop**: call `predict(wheel_travel)` with each encoder reading, then `update(readings)` with the scan taken at
   that pose; `pose` and `covariance` hold the estimate. A reading at or beyond `max_range`, at or below `min_range`,
   or NaN counts as a dropout. `update` returns an `UpdateResult` saying which beams it used, gated as outliers, or
@@ -88,13 +88,17 @@ cannot, though the EKF recovers from a small bump while standing still (below; [
   bumps up to about 0.3 m and 0.1 to 0.3 rad with the lidar; the HC-SR04 sonars recover from position bumps up to
   0.3 m and 0.1 rad. Two or more resets in `EkfLocalizer.recent_resets` (the last 20 scans) mean the filter is lost.
   An update whose iteration does not converge, or whose scan is inconsistent with the prediction (its NIS above the
-  chi-square 0.999 quantile), is *held*: the estimate moves but the covariance keeps its prior instead of shrinking,
-  and the scan counts toward the reset (`UpdateResult.held`; `nis_quantile=None` turns it off). Without the hold a
-  kidnapped or wrongly matched EKF reset and, on the very next scan, collapsed onto a wrong pose; with it the lost
-  HC-SR04 run of `EST-3` is gone and kidnap recovery roughly doubles with the lidar. The HC-SR04 does not recover from
-  a 0.3 rad heading bump: three of its four candidate sonars happen to agree with the wrong heading, so no reset fires
-  (a documented limit). A large heading bump can settle it on a symmetric room's alias (the lidar, after 1.5 rad in a
-  square room), and once its resets stop nothing signals it, as with MCL.
+  chi-square 0.999 quantile), is *held*: the estimate moves but the covariance keeps its prior instead of shrinking, and
+  the scan counts toward the reset (`UpdateResult.held`; `nis_quantile=None` turns it off). A scan with no usable beam
+  counts too when the estimate is not in free space (`RangeMap.free` at margin 0: inside an obstacle or beyond a wall,
+  where no robot can be): a lost estimate that has left the arena sees no usable beam, and before this off-map count
+  (`count_off_map=False` turns it off) it reported itself fine while metres off. A reset raises the covariance and never
+  moves the estimate, so this changes what the filter reports, not where it is. Without the hold a kidnapped or wrongly
+  matched EKF reset and, on the very next scan, collapsed onto a wrong pose; with it the lost HC-SR04 run of `EST-3` is
+  gone and kidnap recovery roughly doubles with the lidar. The HC-SR04 does not recover from a 0.3 rad heading bump:
+  three of its four candidate sonars happen to agree with the wrong heading, so no reset fires (a documented limit). A
+  large heading bump can settle it on a symmetric room's alias (the lidar, after 1.5 rad in a square room), and once its
+  resets stop nothing signals it, as with MCL.
 
 In the simulator, `World` stands in for the robot (run from the repository with the package installed):
 
@@ -163,15 +167,18 @@ for `run_trial(make_localizer=...)`.
 
 **EKF against MCL.** `python -m rl_navigation.estimation.comparison` runs both filters on the same seeded trials (each
 sensor, with its own dropout and with 30 %) and prints a Markdown report: tracking accuracy and consistency (position
-and heading RMSE, NEES, per-axis error against the reported variance), then a global start and a kidnapping at step
-300 (shares localized and recovered, steps to get there, and how often a filter is confidently wrong). It saves one
-record per trial with `--records`, so an interrupted run resumes and jobs run apart merge with `--from-records`; it
-writes no file unless `--report` is given. Run with the `TESTING.md` `EST-3` settings (seeds 101 to 150, 600 steps;
-the report is [`docs/benchmarks/localization_results.md`](benchmarks/localization_results.md)), the EKF tracks more
-accurately from the noisy start (lidar position RMSE about 2 mm against MCL's 7 mm) but recovers from the kidnapping
-in only 14 to 30 % of runs against MCL's 86 to 98 %, at about 2 to 4 ms a step against MCL's 37 to 51 ms; no EKF
-tracking run is lost since the hold (2026-11-09; before it the HC-SR04 lost one of 50 at 30 % dropout). The module is
-a desk tool and `rl_navigation.estimation` does not import it.
+and heading RMSE, NEES, per-axis error against the reported variance), then a global start and a kidnapping at step 300
+(shares localized and recovered, steps to get there, how often a filter is confidently wrong, and how often it is so
+with a position σ under 5 cm). It saves one record per trial with `--records`, so an interrupted run resumes and jobs
+run apart merge with `--from-records`; it writes no file unless `--report` is given. Run with the `TESTING.md` `EST-3`
+settings (seeds 101 to 150, 600 steps; the report is
+[`docs/benchmarks/localization_results.md`](benchmarks/localization_results.md)), the EKF tracks more accurately from
+the noisy start (lidar position RMSE about 2 mm against MCL's 7 mm) but recovers from the kidnapping in only 12 to 28 %
+of runs against MCL's 86 to 98 %, at about 2.5 to 4.4 ms a step against MCL's 37 to 51 ms; no EKF tracking run is lost
+since the hold (2026-11-09; before it the HC-SR04 lost one of 50 at 30 % dropout). Since the off-map count (2026-11-10)
+a lost EKF whose estimate has left the arena reports itself lost, and its HC-SR04 share of confidently wrong steps after
+a kidnapping fell from 0.35 and 0.34 to 0.16 and 0.19. The module is a desk tool and `rl_navigation.estimation` does not
+import it.
 
 **Watching one trial.** `python -m rl_navigation.localization_video --seed 101 --mcl-scale 0.130 0.124 0.308 --output
 <scratch>/seed101.mp4` writes one seeded lidar trial as a video: the true robot, its scan and path, MCL's particles
