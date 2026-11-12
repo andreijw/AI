@@ -4,6 +4,8 @@ import ast
 import re
 from pathlib import Path
 
+from tests.helpers import FIRST_PARTY_DISCOVERY
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_FILES = sorted((REPO_ROOT / "src").rglob("*.py")) + [
     REPO_ROOT / "train.py",
@@ -277,12 +279,16 @@ PRIVATE_ACCESS_EXEMPT = {
     "test_environment.py": "environment wrapper internals (action noise, domain randomization)",
     "test_pendulum.py": "environment wrapper internals (action noise)",
     "test_replay_buffer.py": "the buffer's write index",
-    "test_challenge_registry.py": "the registry's default search directory",
     "test_visualization.py": "a private plotting helper",
 }
+# The shared fixtures and helpers too: what they reach into, every test reaches into.
 AGENT_TEST_FILES = sorted(
     path
-    for path in (REPO_ROOT / "tests").glob("test_*.py")
+    for path in [
+        *(REPO_ROOT / "tests").glob("test_*.py"),
+        REPO_ROOT / "tests" / "conftest.py",
+        REPO_ROOT / "tests" / "helpers.py",
+    ]
     if path.name not in PRIVATE_ACCESS_EXEMPT
 )
 
@@ -545,7 +551,8 @@ def test_importing_the_framework_does_not_load_torch():
     code = (
         "import sys; sys.path.insert(0, 'src'); "
         "import rl_core, rl_core.agents, rl_core.training, rl_core.challenges; "
-        "rl_core.challenges.discover_challenges(); "
+        + FIRST_PARTY_DISCOVERY
+        + "rl_core.challenges.discover_challenges(); "
         "print('torch' in sys.modules)"
     )
     result = subprocess.run(

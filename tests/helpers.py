@@ -197,6 +197,71 @@ def unique_name(prefix=FAKE_PACKAGE_PREFIX):
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
 
+def write_dist(root, dist, entry_points):
+    """Write the installed metadata of distribution ``dist`` under ``root``: a ``.dist-info``
+    directory declaring ``entry_points`` (name to module) in the challenge entry-point group."""
+    from rl_core.challenges import registry
+
+    info = root / f"{dist.replace('-', '_')}-0.1.0.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: {dist}\nVersion: 0.1.0\n", encoding="utf-8"
+    )
+    lines = "".join(f"{name} = {module}\n" for name, module in entry_points.items())
+    (info / "entry_points.txt").write_text(
+        f"[{registry.ENTRY_POINT_GROUP}]\n{lines}", encoding="utf-8"
+    )
+
+
+def entry_points_under(*roots):
+    """The challenge entry points of the distributions written under ``roots``, in that order."""
+    from importlib.metadata import distributions
+
+    from rl_core.challenges import registry
+
+    return [
+        ep
+        for root in roots
+        for dist in distributions(path=[str(root)])
+        for ep in dist.entry_points.select(group=registry.ENTRY_POINT_GROUP)
+    ]
+
+
+def first_party_entry_points(source):
+    """``source``'s challenge entry points restricted to this repository's distributions, so a
+    plugin installed in the same environment (the maintainer's game) never enters the tests."""
+    from rl_core.challenges import registry
+
+    def first_party():
+        return [ep for ep in source() if registry.dist_name(ep) in registry.FIRST_PARTY_DISTS]
+
+    return first_party
+
+
+# Prefix for the code of a child Python process that runs discovery: the same first-party restriction
+# conftest.py applies to this process, without importing this module (which a footprint test must not).
+FIRST_PARTY_DISCOVERY = (
+    "from rl_core.challenges import registry as _registry; "
+    "_all_entry_points = _registry.challenge_entry_points; "
+    "_registry.challenge_entry_points = lambda: [ep for ep in _all_entry_points() "
+    "if _registry.dist_name(ep) in _registry.FIRST_PARTY_DISTS]; "
+)
+
+
+def foreign_checkout_message(rootpath, module_file):
+    """Why tests under ``rootpath`` must not run when rl_core comes from ``module_file``, or None.
+
+    A git worktree whose tools run from the main checkout's environment imports the main
+    checkout's code: its tests would pass or fail on code they were not written against."""
+    root, module = Path(rootpath).resolve(), Path(module_file).resolve()
+    if root in module.parents:
+        return None
+    return (
+        f"tests under {root} are importing another checkout's code (rl_core from {module}): "
+        "use this worktree's own environment, made by scripts/worktree_venv.sh"
+    )
+
+
 # A committed config that sets ``backend: torch`` builds only where PyTorch is installed (.venv-gpu),
 # never in .venv or CI.
 needs_torch = pytest.mark.skipif(

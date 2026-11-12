@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from tests.export_cases import make_checkpoint  # noqa: E402
-from tests.helpers import minimal_config  # noqa: E402
+from tests.helpers import FIRST_PARTY_DISCOVERY, minimal_config  # noqa: E402
 
 
 def test_trainer_and_challenges_do_not_import_matplotlib():
@@ -21,7 +21,8 @@ def test_trainer_and_challenges_do_not_import_matplotlib():
     code = (
         "import sys; sys.path.insert(0, 'src'); "
         "import rl_core.training, rl_core.utils, rl_core.utils.video; "
-        "from rl_core.challenges import CHALLENGES, discover_challenges, import_failures_text; "
+        + FIRST_PARTY_DISCOVERY
+        + "from rl_core.challenges import CHALLENGES, discover_challenges, import_failures_text; "
         "discover_challenges(); "
         "assert CHALLENGES and not import_failures_text(), import_failures_text(); "
         "print(sorted(m for m in sys.modules if m.split('.')[0] == 'matplotlib')[:5])"
@@ -63,7 +64,8 @@ def test_discovering_the_challenges_does_not_import_box2d():
     the environment needs it. A fresh process, because this session may have built one."""
     code = (
         "import sys; sys.path.insert(0, 'src'); "
-        "from rl_core.challenges import CHALLENGES, discover_challenges, import_failures_text; "
+        + FIRST_PARTY_DISCOVERY
+        + "from rl_core.challenges import CHALLENGES, discover_challenges, import_failures_text; "
         "discover_challenges(); "
         "assert 'lunarlander' in CHALLENGES, sorted(CHALLENGES); "
         "assert not import_failures_text(), import_failures_text(); "

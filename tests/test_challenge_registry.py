@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,14 @@ from rl_core.challenges import (
     registry,
     unknown_challenge_message,
 )
-from tests.helpers import unique_name, write_package
+from tests.helpers import (
+    entry_points_under,
+    first_party_entry_points,
+    foreign_checkout_message,
+    unique_name,
+    write_dist,
+    write_package,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -196,11 +204,221 @@ def test_cli_help_names_a_challenge_package_that_failed_to_import(
 
     broken = unique_name()
     write_package(isolated_registry, broken, "raise RuntimeError('boom')\n")
-    monkeypatch.setattr(registry, "_DEFAULT_SEARCH_DIR", isolated_registry)
+    write_dist(isolated_registry, "broken-plugin", {broken: f"{broken}.benchmark"})
+    monkeypatch.setattr(
+        registry, "challenge_entry_points", lambda: entry_points_under(isolated_registry)
+    )
     monkeypatch.setattr(sys, "argv", ["benchmark", "--help"])
     with pytest.warns(UserWarning), pytest.raises(SystemExit):
         benchmark.main()
     assert f"{broken} (RuntimeError: boom)" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Entry points: what an installed distribution declares
+# ---------------------------------------------------------------------------
+
+
+def _plugin(root, dist, key, package=None, entry=None, body=FAKE_CHALLENGE):
+    """A fake challenge package under ``root`` and the distribution metadata that declares it."""
+    package = package or unique_name()
+    write_package(root, package, body.format(key=key))
+    write_dist(root, dist, {entry or package: f"{package}.benchmark"})
+    return package
+
+
+def _use_entry_points(monkeypatch, *roots):
+    monkeypatch.setattr(registry, "challenge_entry_points", lambda: entry_points_under(*roots))
+
+
+def test_an_installed_plugin_is_discovered_through_its_entry_point(isolated_registry, monkeypatch):
+    """What another project (a game) does: declare one entry point, edit nothing here."""
+    key = unique_name("key")
+    package = _plugin(isolated_registry, "my-game", key)
+    _use_entry_points(monkeypatch, isolated_registry)
+
+    found = discover_challenges()
+
+    assert found[key].__module__ == f"{package}.benchmark"
+    assert registry.IMPORT_FAILURES == {}
+
+
+def test_a_plugin_cannot_take_a_first_party_key(isolated_registry, monkeypatch):
+    """This repository's distributions load first, so a plugin claiming one of their keys is the
+    one recorded as failed, although its name sorts first."""
+    key = unique_name("key")
+    ours = _plugin(isolated_registry, "zz-first-party", key)
+    theirs = _plugin(isolated_registry, "aa-plugin", key)
+    _use_entry_points(monkeypatch, isolated_registry)
+    monkeypatch.setattr(registry, "FIRST_PARTY_DISTS", frozenset({"zz-first-party"}))
+
+    with pytest.warns(UserWarning, match=f"{theirs}.*already registered"):
+        found = discover_challenges()
+
+    assert found[key].__module__ == f"{ours}.benchmark"
+    assert set(registry.IMPORT_FAILURES) == {theirs}
+
+
+@pytest.mark.parametrize("reverse", [False, True], ids=["a-first-on-path", "b-first-on-path"])
+def test_the_load_order_does_not_depend_on_sys_path(
+    tmp_path, isolated_registry, monkeypatch, reverse
+):
+    key = unique_name("key")
+    roots = [tmp_path / "a", tmp_path / "b"]
+    for root in roots:
+        root.mkdir()
+    first = _plugin(roots[0], "plugin-a", key)
+    _plugin(roots[1], "plugin-b", key)
+    for root in roots:
+        monkeypatch.syspath_prepend(str(root))
+    _use_entry_points(monkeypatch, *(reversed(roots) if reverse else roots))
+
+    with pytest.warns(UserWarning, match="already registered"):
+        found = discover_challenges()
+
+    assert found[key].__module__ == f"{first}.benchmark", "plugin-a sorts before plugin-b"
+
+
+def test_a_module_declared_by_two_distributions_loads_once(
+    tmp_path, isolated_registry, monkeypatch
+):
+    """Two distributions shipping one package (an old monolithic install beside the split ones):
+    the module is imported once, not reported as clashing with itself."""
+    key, package = unique_name("key"), unique_name()
+    write_package(isolated_registry, package, FAKE_CHALLENGE.format(key=key))
+    other = tmp_path / "other"
+    other.mkdir()
+    write_dist(isolated_registry, "old-monolith", {package: f"{package}.benchmark"})
+    write_dist(other, "new-split", {package: f"{package}.benchmark"})
+    _use_entry_points(monkeypatch, isolated_registry, other)
+
+    found = discover_challenges()
+
+    assert found[key].__module__ == f"{package}.benchmark"
+    assert registry.IMPORT_FAILURES == {}
+
+
+def test_a_failure_is_kept_when_another_module_of_its_package_loads(isolated_registry, monkeypatch):
+    package, key = unique_name(), unique_name("key")
+    write_package(isolated_registry, package, "raise RuntimeError('boom')\n")
+    (isolated_registry / package / "zz_good.py").write_text(
+        FAKE_CHALLENGE.format(key=key), encoding="utf-8"
+    )
+    write_dist(
+        isolated_registry,
+        "plugin",
+        {"a_broken": f"{package}.benchmark", "b_good": f"{package}.zz_good"},
+    )
+    _use_entry_points(monkeypatch, isolated_registry)
+
+    with pytest.warns(UserWarning, match="RuntimeError: boom"):
+        found = discover_challenges()
+
+    assert key in found
+    assert list(registry.IMPORT_FAILURES.items()) == [(package, "RuntimeError: boom")]
+
+
+def test_an_entry_name_reused_for_another_module_is_a_recorded_clash(
+    isolated_registry, monkeypatch
+):
+    first_key, second_key, name = unique_name("key"), unique_name("key"), unique_name()
+    first = _plugin(isolated_registry, "plugin-a", first_key, entry=name)
+    second = _plugin(isolated_registry, "plugin-b", second_key, entry=name)
+    _use_entry_points(monkeypatch, isolated_registry)
+
+    with pytest.warns(UserWarning, match=f"entry point plugin-b:{name} was not loaded.*clashes"):
+        found = discover_challenges()
+
+    assert found[first_key].__module__ == f"{first}.benchmark"
+    assert second_key not in found and f"{second}.benchmark" not in sys.modules
+    assert set(registry.IMPORT_FAILURES) == {f"plugin-b:{name}"}
+
+
+def test_a_plugin_that_exits_on_import_is_recorded_not_fatal(isolated_registry, monkeypatch):
+    """A third-party module calling sys.exit at import must not end train.py or the benchmark."""
+    exiting, key = unique_name(), unique_name("key")
+    write_package(isolated_registry, exiting, "import sys\nsys.exit(3)\n")
+    good = _plugin(isolated_registry, "zz-plugin", key)
+    write_dist(isolated_registry, "aa-plugin", {exiting: f"{exiting}.benchmark"})
+    _use_entry_points(monkeypatch, isolated_registry)
+
+    with pytest.warns(UserWarning, match=f"{exiting} failed to import \\(SystemExit: 3\\)"):
+        found = discover_challenges()
+
+    assert found[key].__module__ == f"{good}.benchmark", "the challenges after it still load"
+    assert list(registry.IMPORT_FAILURES) == [exiting]
+
+
+def test_a_failure_is_recorded_under_the_module_package_not_the_entry_name(
+    isolated_registry, monkeypatch
+):
+    package = unique_name()
+    write_package(isolated_registry, package, "raise RuntimeError('boom')\n")
+    write_dist(isolated_registry, "plugin", {"anything": f"{package}.benchmark"})
+    _use_entry_points(monkeypatch, isolated_registry)
+
+    with pytest.warns(UserWarning, match=f"Challenge package {package} failed to import"):
+        discover_challenges()
+
+    assert list(registry.IMPORT_FAILURES.items()) == [(package, "RuntimeError: boom")]
+
+
+def test_with_no_challenge_installed_the_message_says_how_to_install(monkeypatch):
+    monkeypatch.setattr(registry, "CHALLENGES", {})
+    monkeypatch.setattr(registry, "IMPORT_FAILURES", {})
+
+    assert registry.INSTALL_HINT in unknown_challenge_message("cartpole")
+    with pytest.raises(ValueError, match="No challenge package is installed"):
+        registry.select_challenge("CartPole-v1", None)
+
+
+def test_the_hint_is_left_out_once_a_challenge_is_registered():
+    assert discover_challenges()
+    assert registry.INSTALL_HINT not in unknown_challenge_message("missing")
+
+
+def _declared_entry_points():
+    with open(REPO_ROOT / "pyproject.toml", "rb") as f:
+        project = tomllib.load(f)["project"]
+    return project.get("entry-points", {}).get(registry.ENTRY_POINT_GROUP, {})
+
+
+def test_every_challenge_package_declares_an_entry_point():
+    """The one edit a new challenge package needs: an entry point named after it."""
+    packages = sorted(path.parent.name for path in (REPO_ROOT / "src").glob("rl_*/benchmark.py"))
+    declared = _declared_entry_points()
+    assert sorted(declared) == packages, (
+        'Every src/rl_<name>/benchmark.py needs `rl_<name> = "rl_<name>.benchmark"` under '
+        f'[project.entry-points."{registry.ENTRY_POINT_GROUP}"] in pyproject.toml, and nothing else'
+    )
+    assert all(module == f"{name}.benchmark" for name, module in declared.items())
+
+
+def test_the_installed_metadata_has_the_declared_entry_points():
+    """A stale editable install (made before an entry point was added) finds too few challenges."""
+    installed = {ep.name: ep.value for ep in registry.challenge_entry_points()}
+    assert installed == _declared_entry_points(), (
+        "The installed metadata is stale: re-run the editable install "
+        "(pip install -e ., or scripts/worktree_venv.sh in a worktree)"
+    )
+
+
+def test_the_tests_see_only_first_party_entry_points(isolated_registry, monkeypatch):
+    """An installed game never enters the suite: conftest.py restricts the entry-point source."""
+    write_dist(isolated_registry, "my-game", {"my_game": "my_game.benchmark"})
+    source = first_party_entry_points(lambda: entry_points_under(isolated_registry))
+    assert source() == []
+    monkeypatch.setattr(registry, "FIRST_PARTY_DISTS", frozenset({"my-game"}))
+    assert [ep.name for ep in source()] == ["my_game"]
+
+
+def test_tests_refuse_another_checkouts_code(tmp_path):
+    worktree, main = tmp_path / "worktree", tmp_path / "main"
+    inside = worktree / "src" / "rl_core" / "__init__.py"
+    outside = main / "src" / "rl_core" / "__init__.py"
+    assert foreign_checkout_message(worktree, inside) is None
+    message = foreign_checkout_message(worktree, outside)
+    assert message is not None and "scripts/worktree_venv.sh" in message
 
 
 class _TableOnly(BenchmarkChallenge):

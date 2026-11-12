@@ -241,8 +241,10 @@ as a peer, since it sees only your prompt:
 
 - the skill it follows (`algorithm-crafter`, `training-doctor`, `test-crafter` ...) and the roadmap item;
 - its own worktree, branched from `develop` (`git worktree add -b <branch> ~/rl-experiments/<item>-repo
-  origin/develop`), with `PYTHONPATH=$PWD/src` for every Python tool, since the editable install points at the
-  main checkout;
+  origin/develop`), with its own environment from `scripts/worktree_venv.sh <worktree>` and every Python tool
+  run as `<worktree>/.venv/bin/python`: `.venv`'s editable install and challenge entry points are the main
+  checkout's, and `tests/conftest.py` refuses to run against them. Never `pip install -e` a worktree into
+  `.venv`;
 - what it must not touch: `CHANGELOG.md` and `docs/roadmap.md` (you write them for every item at hand-off,
   so parallel branches do not conflict), the maintainer's `checkpoints/`, `logs/`, `videos/` and `plots/`, and
   `git commit`;

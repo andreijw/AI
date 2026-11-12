@@ -56,6 +56,8 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 - **Parallel work** (`dev-loop`, "Working in parallel"): spawn subagents, each in its own worktree, when work
   splits into independent parts; propose a workflow in the plan, and run one only when the maintainer says
   "use a workflow".
+- Each worktree gets its own venv layered on `.venv`: `scripts/worktree_venv.sh <worktree>`, then run every tool as
+  `<worktree>/.venv/bin/python`; never `pip install -e` a worktree into `.venv`.
 - Run `architect` and `pr-reviewer` in a **fresh agent**: tell it to read the skill's `SKILL.md` and give it the plan
   or branch, since it cannot see the conversation.
 - If the plugin is missing, the skills still run with the project checks; say so and point to

@@ -4,8 +4,24 @@ import sys
 
 import pytest
 
+import rl_core
 from rl_core.challenges import CHALLENGES, registry
-from tests.helpers import FAKE_PACKAGE_PREFIX, uses_onnx
+from tests.helpers import (
+    FAKE_PACKAGE_PREFIX,
+    first_party_entry_points,
+    foreign_checkout_message,
+    uses_onnx,
+)
+
+
+def pytest_configure(config):
+    """Refuse to run against another checkout's code (a worktree using the main environment), then
+    let discovery see this repository's challenges only, never a plugin installed beside them (a
+    game). Before collection, because some test modules run discovery when they are imported."""
+    message = foreign_checkout_message(config.rootpath, rl_core.__file__)
+    if message is not None:
+        pytest.exit(message, returncode=pytest.ExitCode.USAGE_ERROR)
+    registry.challenge_entry_points = first_party_entry_points(registry.challenge_entry_points)
 
 
 def pytest_collection_modifyitems(items):
@@ -34,15 +50,17 @@ def isolated_registry(monkeypatch, tmp_path):
     """Put tmp_path on the import path and undo every registration and import afterwards."""
     monkeypatch.syspath_prepend(str(tmp_path))
     challenges, failures = dict(CHALLENGES), dict(registry.IMPORT_FAILURES)
+    # Read before the test can replace the entry-point source.
+    first_party = {ep.module.partition(".")[0] for ep in registry.challenge_entry_points()}
     modules = set(sys.modules)
     yield tmp_path
     # A real challenge first imported during the test stays in sys.modules, so it would never
-    # register again: keep it, and drop only what the test's fake packages registered (fake packages
-    # are named by tests.helpers.unique_name, with FAKE_PACKAGE_PREFIX).
+    # register again: keep it, and drop what the test registered. Real means a module of this
+    # repository's entry points, whatever its package is called.
     real = {
         key: cls
         for key, cls in CHALLENGES.items()
-        if cls.__module__.startswith("rl_") and not cls.__module__.startswith(FAKE_PACKAGE_PREFIX)
+        if cls.__module__.partition(".")[0] in first_party
     }
     CHALLENGES.clear()
     CHALLENGES.update({**real, **challenges})

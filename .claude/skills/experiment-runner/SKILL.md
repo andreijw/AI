@@ -56,8 +56,8 @@ python src/benchmark.py --challenge cartpole --agents dqn ppo --seeds 1 2 3 4 5 
 - **To try a hyperparameter**, copy `configs/` to `<scratch>/configs`, edit the copy, and pass
   `--config-dir <scratch>/configs`. The committed config changes only with the maintainer's agreement.
 - **To compare against unchanged code**, check `develop` out beside the work without disturbing it:
-  `git worktree add <scratch>/base develop`, run the same command from there with the working tree's
-  virtual environment, then `git worktree remove <scratch>/base`.
+  `git worktree add <scratch>/base develop` and `scripts/worktree_venv.sh <scratch>/base`, run the same command
+  from there with `<scratch>/base/.venv/bin/python`, then `git worktree remove <scratch>/base`.
 
 Use `train.py` instead when you need what only it does (video, plots, a checkpoint to record from). It
 writes to the `checkpoint_dir` and `log_dir` in the config and overwrites an agent's earlier checkpoints,
@@ -74,11 +74,12 @@ CartPole agent improves, so expect the full run to cost more than the linear est
   an hour writes its driver, per-seed curves and results under `~/rl-experiments/<item>/`, not the session
   scratch directory under `/tmp`: a reboot on 2026-10-30 wiped `/tmp`, taking a night's runs and the
   baseline curves they were to be compared with. Run it from a frozen worktree
-  (`git worktree add --detach ~/rl-experiments/<item>/repo HEAD`) when you will edit `src/` meanwhile: each
+  (`git worktree add --detach ~/rl-experiments/<item>/repo HEAD`, then
+  `scripts/worktree_venv.sh ~/rl-experiments/<item>/repo`) when you will edit the code meanwhile: each
   seed imports the code when it starts, so later seeds would otherwise train on half-written changes.
-  A queued job imports `src` when it starts, which can be long after `submit`: point its `PYTHONPATH` at a
-  frozen copy of `src` (a detached worktree, or `cp -r src ~/rl-experiments/<item>/snap/`), never at a
-  worktree a mutation check or an editor may change mid-run. On 2026-11-10 PR 2's first parallel-environment
+  A queued job imports the code when it starts, which can be long after `submit`: run it with the frozen
+  worktree's own interpreter (`<frozen>/.venv/bin/python`), never with that of a worktree a mutation check or
+  an editor may change mid-run. On 2026-11-10 PR 2's first parallel-environment
   runs started while `mutation_check.py` had a break applied in the worktree and had to be cancelled.
 - More than about half an hour in total, or anything that would occupy the machine while the maintainer is
   using it: say what you want to run and why, and ask.
@@ -94,7 +95,7 @@ workers and `wait` look at the queue every second, `RL_QUEUE_POLL` changes that)
 ```bash
 Q=.claude/skills/experiment-runner/scripts/run_queue.py
 python $Q submit --name ppo-s1 --item <roadmap-item> --cwd <worktree> --log <results>/ppo-s1.log \
-    --env PYTHONPATH=<worktree>/src -- /data/AI/.venv/bin/python src/benchmark.py \
+    -- <worktree>/.venv/bin/python src/benchmark.py \
     --challenge cartpole ... --output-dir <results>
 python $Q status [--item <roadmap-item>]    # one line per job: state, pid, exit code, log
 python $Q wait --item <roadmap-item>        # blocks; run it in the background to be told once
@@ -105,11 +106,12 @@ python $Q prune [--older-than 7]            # move finished records older than 7
 - **Environment.** A job runs with exactly the environment of the shell that submitted it (stored in its
   record), minus secret-looking names, plus any `--env K=V`, with the three single-thread variables
   (`OPENBLAS_`, `OMP_`, `MKL_NUM_THREADS=1`) forced. The worker's environment is not used, so another
-  agent's `PYTHONPATH` cannot leak into your job: submit from your worktree's shell with
-  `PYTHONPATH=<worktree>/src` set. Variables whose names contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD`,
+  agent's `PYTHONPATH` cannot leak into your job. Which code a job runs is decided by its interpreter: the
+  worktree's `.venv/bin/python` (made by `scripts/worktree_venv.sh`) imports that worktree's code, and
+  `/data/AI/.venv/bin/python` the main checkout's. Variables whose names contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD`,
   `PASSWD`, `CREDENTIAL`, `AUTH` or `COOKIE` (any case) are left out of the record and so out of the job;
   pass one on purpose with `--env NAME=value`. The queue directory is owner-only and records are created
-  0600. Use an absolute interpreter (`/data/AI/.venv/bin/python`) in the command, since `PATH` lookup is
+  0600. Use an absolute interpreter (`<worktree>/.venv/bin/python`) in the command, since `PATH` lookup is
   the submitter's and a bare `python` may be another interpreter. `submit` exits 2 if `--cwd` is not a
   directory or the `--log` folder cannot be created.
 - **Jobs and workers.** `submit` queues the job and starts a detached worker if nobody holds
