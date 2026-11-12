@@ -146,8 +146,9 @@ tags are in [docs/releasing.md](docs/releasing.md).
      neither `estimation` nor the challenge imports `mapping`. The grid is not yet a `RangeMap`: that arrives with the
      first filter to localize on a built map (Phase 8, step 3, PR 3).
    - `rl_navigation.slam` is a layer above `estimation`: simultaneous localization and mapping. `features` cuts a
-     lidar scan into segments and fits circles to them (an algebraic start, a geometric Gauss-Newton fit weighted by
-     each beam's incidence, a residual test, a two-line test against box corners and checks that a result is sound);
+     lidar scan into segments (bridging up to 3° of dropped beams) and fits circles to them (an algebraic start, a
+     geometric Gauss-Newton fit weighted by each beam's incidence, a residual test, a two-line test against box
+     corners and checks that a result is sound);
      `ekf_slam` (`EkfSlam`) estimates the pose and a map of those circles in one Gaussian: Thrun's EKF-SLAM (Tables
      10.1 and 10.2, with the provisional list) with first-estimate Jacobians (FEJ, Huang et al. 2008), one batch
      Joseph update per scan, a 15 mm model-error floor per feature, and guards so that it never raises on a scan's

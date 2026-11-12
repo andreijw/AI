@@ -207,10 +207,8 @@ steps 3 to 5 are sketches to turn into full items when picked.
     2026-11-10).
   - **Follow-ups**:
     - **Association drift**: 4 of the 9 aligned failures are association errors (the oracle row has 5), with first
-      estimates drifting 0.05 to 0.60 m; a fix is judged on new seeds 151 to 200, as 101 to 150 are spent.
-    - **Dropped beams split arcs**: `segment_scan` splits at every unusable beam, so at 30 % dropout detection
-      falls from 75 to 10 % and false fits rise to 28 % (4 seeds); bridging isolated dropped beams should let
-      the 30 % dropout row be gated (lost 25 of 50 today).
+      estimates drifting 0.05 to 0.60 m; a fix is judged on new seeds 201 to 250, as 101 to 200 are spent
+      (151 to 200 by the dropout bridging, CHANGELOG.md, 2026-11-12).
     - Left for later PRs: lidar scan matching and the grid as a `RangeMap` (PR 3), grid FastSLAM (PR 4).
   - **Description**: Occupancy-grid mapping from range readings with known poses (log-odds, an inverse sensor
     model for both presets), then SLAM without them: landmark EKF-SLAM, then a particle-filter grid SLAM

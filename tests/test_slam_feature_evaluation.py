@@ -37,6 +37,19 @@ def test_visible_circles_counts_the_beams_that_reach_each_circle():
     assert visible_circles(arena, sensor, pose, true, 13).tolist() == [0]
 
 
+def test_reachable_circles_count_only_the_beams_the_scan_kept():
+    """The small circle 1 m to the left spans about 12 beams; with every other beam dropped it
+    keeps about 6, below 8, while the large one keeps about 11 of its 23."""
+    arena = Arena(8.0, 6.0, circle_centers=[[3.0, 3.0], [1.0, 4.0]], circle_radii=[0.4, 0.1])
+    sensor = lidar(num_beams=360)
+    pose = np.array([1.0, 3.0, 0.0])
+    true = sensor.true_ranges(arena, pose)[0]
+    readings = np.clip(true, sensor.min_range, sensor.max_range)
+    readings[::2] = sensor.max_range  # a dropout reads max_range
+    assert visible_circles(arena, sensor, pose, true, 8).tolist() == [0, 1]
+    assert visible_circles(arena, sensor, pose, true, 8, readings=readings).tolist() == [0]
+
+
 def test_match_features_names_the_true_circle_or_minus_one():
     arena = Arena(6.0, 6.0, circle_centers=[[4.0, 3.0], [2.0, 5.0]], circle_radii=[0.3, 0.3])
     pose = np.array([2.0, 3.0, math.pi / 2])  # facing +y: circle 0 is 2 m to the right
@@ -69,6 +82,7 @@ def run(**overrides):
         "false_fits": 1,
         "visible": 3,
         "detected": 2,
+        "reachable": 3,
         "points": np.array([8, 12, 25]),
         "centre_errors": np.array([0.01, 0.02, 0.03]),
         "radius_errors": np.array([-0.002, 0.001, 0.003]),
@@ -82,8 +96,11 @@ def run(**overrides):
 
 
 def test_summarize_features_counts_detections_and_false_fits():
-    summary = summarize_features([run(), run(seed=2, fits=6, false_fits=0, visible=1, detected=1)])
+    summary = summarize_features(
+        [run(), run(seed=2, fits=6, false_fits=0, visible=1, detected=1, reachable=1)]
+    )
     assert summary["detection_rate"] == pytest.approx(3 / 4)
+    assert summary["reachable_rate"] == pytest.approx(4 / 4)
     assert summary["false_fit_rate"] == pytest.approx(1 / 10)
     assert summary["fits_per_scan"] == pytest.approx(10 / 20)
     assert summary["centre_error_median"] == pytest.approx(0.02)
@@ -105,6 +122,10 @@ def test_a_short_seeded_trial_scores_finite_figures():
     trial = feature_trial(1, lidar(num_beams=360), steps=40)
     assert trial.scans == 40
     assert trial.fits >= len(trial.nees) and trial.detected <= trial.visible
+    assert trial.reachable == trial.visible, "without dropout every visible circle is reachable"
+    dropped = feature_trial(1, lidar(num_beams=360), steps=40, dropout_prob=0.3)
+    assert dropped.visible == trial.visible, "visibility ignores dropout"
+    assert dropped.reachable < dropped.visible, "dropout leaves some circles under 8 beams"
     summary = summarize_features([trial])
     assert all(np.isfinite(v) or math.isnan(v) for v in summary.values())
     assert np.isfinite(summary["false_fit_rate"])
