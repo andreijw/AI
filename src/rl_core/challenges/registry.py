@@ -1,29 +1,46 @@
 """The registry of benchmark challenges, and discovery of the packages that provide them.
 
-A challenge package is a top-level package named ``rl_<something>`` with a ``benchmark`` module
-that defines a :class:`~rl_core.challenges.BenchmarkChallenge` subclass decorated with
-:func:`register_challenge`. :func:`discover_challenges` imports every such module it finds, so
-adding a challenge needs no edit anywhere else.
+A challenge package defines a :class:`~rl_core.challenges.BenchmarkChallenge` subclass decorated
+with :func:`register_challenge` in a module that its distribution declares as an entry point in the
+:data:`ENTRY_POINT_GROUP` group, named after the package::
+
+    [project.entry-points."rl_core.challenges"]
+    rl_cartpole = "rl_cartpole.benchmark"
+
+:func:`discover_challenges` imports every such module, so another project (a game) adds a challenge
+by declaring one entry point, with no edit here.
 """
 
 from __future__ import annotations
 
 import importlib
+import re
 import warnings
+from collections.abc import Iterable
+from importlib.metadata import EntryPoint, entry_points
 from pathlib import Path
 
-import rl_core
-
 from .challenge import BenchmarkChallenge
+
+#: The entry-point group a distribution declares its challenge modules in.
+ENTRY_POINT_GROUP = "rl_core.challenges"
+
+#: This repository's distributions: their challenges load before any other project's, so a plugin
+#: can never take an in-repo challenge's key.
+FIRST_PARTY_DISTS = frozenset({"rl-cartpole"})
+
+#: How to make the challenges visible when none is found: entry points are installed metadata.
+INSTALL_HINT = (
+    "No challenge package is installed: run `pip install -e .` in the checkout "
+    "(in a git worktree, scripts/worktree_venv.sh)"
+)
 
 #: Registered challenge classes by key (``"cartpole"``, ``"pendulum"``, ...).
 CHALLENGES: dict[str, type[BenchmarkChallenge]] = {}
 
-#: Challenge packages whose ``benchmark`` module failed to import, with the error.
+#: Challenge packages whose module failed to import, with the error, and entry points that clashed
+#: with an earlier one (keyed ``<distribution>:<entry name>``).
 IMPORT_FAILURES: dict[str, str] = {}
-
-# The directory that holds rl_core and the challenge packages beside it (``src/``).
-_DEFAULT_SEARCH_DIR = Path(rl_core.__file__).resolve().parent.parent
 
 
 def register_challenge(cls: type[BenchmarkChallenge]) -> type[BenchmarkChallenge]:
@@ -62,31 +79,100 @@ def _challenge_packages(search_dir: Path) -> list[str]:
     return names
 
 
+def dist_name(entry_point: EntryPoint) -> str:
+    """The normalized name (PEP 503) of the distribution that declares ``entry_point``, or ``""``."""
+    dist = entry_point.dist
+    return re.sub(r"[-_.]+", "-", dist.name).lower() if dist is not None else ""
+
+
+def challenge_entry_points() -> Iterable[EntryPoint]:
+    """
+    Every installed entry point in :data:`ENTRY_POINT_GROUP`: the source
+    :func:`discover_challenges` reads.
+
+    It is looked up on this module at each call, so a caller may replace it, as the test suite
+    does to see this repository's distributions only (``tests/conftest.py``).
+    """
+    return entry_points(group=ENTRY_POINT_GROUP)
+
+
+def _select_entry_points(
+    found: Iterable[EntryPoint],
+) -> tuple[list[EntryPoint], dict[str, str]]:
+    """
+    The entry points to load, in load order, and the clashes to record as failures.
+
+    First-party distributions come first, then the rest by ``(distribution, entry name)``, so
+    whichever class registers a key first does not depend on the order of ``sys.path``. An entry
+    whose module an earlier one already names is dropped (two distributions shipping one package, as
+    an old monolithic install beside the split ones). An entry
+    that reuses an earlier entry's name for a different module is not loaded: it is a clash, keyed
+    ``<distribution>:<name>``.
+    """
+    ordered = sorted(
+        found, key=lambda ep: (dist_name(ep) not in FIRST_PARTY_DISTS, dist_name(ep), ep.name)
+    )
+    selected: list[EntryPoint] = []
+    by_name: dict[str, EntryPoint] = {}
+    clashes: dict[str, str] = {}
+    for ep in ordered:
+        if any(ep.value == chosen.value for chosen in selected):
+            continue
+        first = by_name.get(ep.name)
+        if first is not None:
+            clashes[f"{dist_name(ep)}:{ep.name}"] = (
+                f"entry point {ep.name} = {ep.value} clashes with "
+                f"{dist_name(first)}'s {ep.name} = {first.value}"
+            )
+            continue
+        by_name[ep.name] = ep
+        selected.append(ep)
+    return selected, clashes
+
+
+def _record_failure(name: str, reason: str, *, clash: bool = False) -> None:
+    """Record and warn about a challenge package that failed to import, or (``clash``) an entry
+    point that was not loaded; the warning names :func:`discover_challenges`'s caller."""
+    IMPORT_FAILURES[name] = reason
+    what = "entry point {} was not loaded" if clash else "package {} failed to import"
+    warnings.warn(f"Challenge {what.format(name)} ({reason})", stacklevel=3)
+
+
 def discover_challenges(search_dir: Path | None = None) -> dict[str, type[BenchmarkChallenge]]:
     """
-    Import every challenge package's ``benchmark`` module so that its challenges register.
+    Import every challenge module so that its challenges register.
 
-    Modules are imported by their dotted name (``rl_cartpole.benchmark``), so ``search_dir``
-    must be on ``sys.path`` and a module imported twice is not registered twice. A package
-    whose module raises is skipped with a warning and recorded in :data:`IMPORT_FAILURES`.
-    With a non-editable install the default directory is ``site-packages``, where any
-    third-party ``rl_*`` package with a ``benchmark`` module would also be imported.
+    With no ``search_dir``, the modules are the installed entry points in
+    :data:`ENTRY_POINT_GROUP`, in :func:`_select_entry_points`'s order. With ``search_dir``, they
+    are the ``benchmark`` modules of the ``rl_*`` packages directly inside it (``search_dir`` must
+    be on ``sys.path``). A module imported twice is not registered twice. A module that raises,
+    or exits (``SystemExit``), is skipped with a warning and recorded in :data:`IMPORT_FAILURES`
+    under its top-level package.
 
     Args:
-        search_dir: Directory to scan. Defaults to the one that holds ``rl_core``.
+        search_dir: Directory to scan instead of the entry points (the tests' fake packages).
 
     Returns:
         :data:`CHALLENGES`, after discovery.
     """
-    for name in _challenge_packages(search_dir or _DEFAULT_SEARCH_DIR):
+    if search_dir is not None:
+        modules = [(name, f"{name}.benchmark") for name in _challenge_packages(search_dir)]
+    else:
+        selected, clashes = _select_entry_points(challenge_entry_points())
+        for name, reason in clashes.items():
+            _record_failure(name, reason, clash=True)
+        modules = [(ep.module.partition(".")[0], ep.module) for ep in selected]
+    failed: set[str] = set()
+    for package, module in modules:
         try:
-            importlib.import_module(f"{name}.benchmark")
-        except Exception as error:  # a broken challenge must not hide the others
-            reason = f"{type(error).__name__}: {error}"
-            IMPORT_FAILURES[name] = reason
-            warnings.warn(f"Challenge package {name} failed to import ({reason})", stacklevel=2)
+            importlib.import_module(module)
+        # A broken challenge must not hide the others, nor a plugin that calls sys.exit end the run.
+        except (Exception, SystemExit) as error:
+            _record_failure(package, f"{type(error).__name__}: {error}")
+            failed.add(package)
         else:
-            IMPORT_FAILURES.pop(name, None)
+            if package not in failed:  # another module of the package failed in this pass
+                IMPORT_FAILURES.pop(package, None)
     return CHALLENGES
 
 
@@ -99,9 +185,12 @@ def import_failures_text() -> str:
 
 
 def _with_import_failures(message: str) -> str:
-    """``message``, followed by the challenge packages that failed to import, if any."""
+    """``message``, followed by the challenge packages that failed to import, if any, or by
+    :data:`INSTALL_HINT` when no challenge is registered at all."""
     failures = import_failures_text()
-    return f"{message}. {failures}" if failures else message
+    if failures:
+        return f"{message}. {failures}"
+    return message if CHALLENGES else f"{message}. {INSTALL_HINT}"
 
 
 def unknown_challenge_message(name: str) -> str:

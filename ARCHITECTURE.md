@@ -13,7 +13,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
                                       │
                                       ↓
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│      Challenge packages: src/rl_<name>/  (found by discover_challenges)     │
+│   Challenge packages: src/rl_<name>/  (entry points, discover_challenges)   │
 │                                                                             │
 │  rl_cartpole     CartPoleEnv     CartPoleChallenge     discrete; noise, DR  │
 │  rl_pendulum     PendulumEnv     PendulumChallenge     continuous; noise, DR│
@@ -671,10 +671,16 @@ plots/
      One package may hold several challenges sharing a wrapper, each with its own `ENV_DEFAULTS`-style table and
      factory (`rl_mountaincar`, `rl_lunarlander` and `rl_navigation`: `make_env_from_config` and
      `make_continuous_env_from_config`).
-     `discover_challenges()` imports every `src/rl_*/benchmark.py`, so the runner needs no edit; a package that fails to
-     import is reported with a warning, in `run_benchmark`'s unknown-challenge error and at the end of `src/benchmark.py
-     --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the base class provides
-     one), and its `key` must not already be registered.
+     Declare the module as an entry point, the package's one edit outside itself: `rl_<challenge> =
+     "rl_<challenge>.benchmark"` under `[project.entry-points."rl_core.challenges"]` in `pyproject.toml`
+     (`test_every_challenge_package_declares_an_entry_point` fails without it), then re-run the editable install, which
+     is what writes entry points into the installed metadata. `discover_challenges()` imports every module in that
+     group, so the runner needs no edit, and another project (a game) adds a challenge the same way from its own
+     `pyproject.toml`. This repository's distributions load first and the rest by distribution and entry name, so a
+     plugin cannot take an in-repo key: its clash is recorded as its own failure. A package that fails to import is
+     reported with a warning, under its package name, in `run_benchmark`'s unknown-challenge error and at the end of
+     `src/benchmark.py --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the
+     base class provides one), and its `key` must not already be registered.
 2. Add reference YAML configurations under `configs/<challenge>_<agent>.yaml`.
 3. Add corresponding test suites in `tests/test_<challenge>.py`, and the challenge's rows to the per-challenge
    tables in `tests/test_challenge_selection.py` (`EXPECTED_AGENTS`, `ENV_CLASSES`, `CONFIGURED`) and

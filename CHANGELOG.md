@@ -14,7 +14,27 @@ Acrobot-v1) and
 
 ## 2026-11-11
 
+### Added
+
+- **Per-worktree environments** (`feature/challenge-entry-points`). `scripts/worktree_venv.sh <worktree>` makes
+  `<worktree>/.venv`, layered on the main checkout's `.venv` (one `.pth` line) and holding an editable install of
+  the worktree, offline in about 10 s. `tests/conftest.py` stops a run whose `rl_core` comes from outside the
+  repository it tests, so a worktree can no longer pass or fail on the main checkout's code. The `dev-loop` and
+  `experiment-runner` skills and CLAUDE.md use the worktree's interpreter instead of `PYTHONPATH=<worktree>/src`.
+
 ### Changed
+
+- **Challenges are found through entry points** (`feature/challenge-entry-points`). `discover_challenges()` imports the
+  modules declared in the `rl_core.challenges` entry-point group (`pyproject.toml`, one line per package) instead of
+  scanning the directory beside `rl_core`, so a challenge can live in another distribution or project. This repository's
+  distributions load first and the rest by distribution and entry name, so the order no longer depends on `sys.path` and
+  a plugin cannot take an in-repo key; a module declared twice loads once, an entry name reused for another module is
+  recorded as a clash, a module that raises or calls `sys.exit` on import is recorded rather than ending the run, and
+  failures are keyed by the module's package, so the messages are unchanged. With no challenge registered the
+  unknown-challenge error says how to install them. The tests see only this repository's entry points (they replace the
+  public `registry.challenge_entry_points`), and the private-access scan now reads `tests/conftest.py` and
+  `tests/helpers.py` too. An existing environment must re-run `pip install -e ".[dev]"` once, since entry points are
+  installed metadata.
 
 - **Docs and diagrams are a step of every PR** (`fix/review-doc-fixes`). The `doc-sync` skill gains a "Diagrams"
   step: update every Mermaid diagram a change makes false, and add one where it explains the change better than

@@ -64,6 +64,17 @@ dev = [
     "pre-commit>=4.3.0",
 ]
 
+# Challenge discovery (rl_core.challenges.discover_challenges): one entry per package, named after it.
+# A new challenge package adds its line here; tests/test_challenge_registry.py checks none is missing.
+[project.entry-points."rl_core.challenges"]
+rl_acrobot = "rl_acrobot.benchmark"
+rl_bipedalwalker = "rl_bipedalwalker.benchmark"
+rl_cartpole = "rl_cartpole.benchmark"
+rl_lunarlander = "rl_lunarlander.benchmark"
+rl_mountaincar = "rl_mountaincar.benchmark"
+rl_navigation = "rl_navigation.benchmark"
+rl_pendulum = "rl_pendulum.benchmark"
+
 [project.urls]
 Homepage = "https://github.com/andreijw/AI"
 Repository = "https://github.com/andreijw/AI"

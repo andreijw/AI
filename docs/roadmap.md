@@ -37,7 +37,22 @@ BipedalWalker or navigation).
 
 ### Workflow Tooling
 
-No open items.
+- [~] **Importable libraries with GitHub Releases** (the maintainer's request and approved plan, 2026-11-11).
+  The code becomes three distributions with unchanged import names: `rl-core`
+  (the framework a game project imports), `rl-navigation` (the robot's libraries, NumPy only, with the Gymnasium
+  environment and the navigation challenge as extras) and `rl-challenges` (the six classic and Box2D challenges).
+  Acceptance criteria:
+  - Challenges register through the `rl_core.challenges` entry-point group, in a fixed order with this
+    repository's distributions first; another project registers one from its own `pyproject.toml`.
+  - Each distribution has its own `pyproject.toml`, version (`__version__`, SemVer 0.x from 0.1.0) and
+    `CHANGELOG.md` under `packages/<dist>/`; one editable install of all three is the development environment.
+  - The installed `rl-navigation` wheel needs only NumPy; a git worktree tests its own code, never the main
+    checkout's.
+  - A pushed `<dist>-v<version>` tag builds, tests and smoke-tests that distribution and opens a draft GitHub
+    Release with the wheel, the sdist, `SHA256SUMS` and the notes from its CHANGELOG section.
+  - A guide shows a game project registering its own challenge and training here.
+
+  Progress: PR 1 (`feature/challenge-entry-points`): entry-point discovery and per-worktree environments.
 
 ### Training
 
