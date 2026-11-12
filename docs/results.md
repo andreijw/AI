@@ -21,7 +21,7 @@ SAC and TD3 on 2026-11-05 in [`docs/benchmarks/bipedalwalker_results.md`](benchm
 navigation on 2026-11-07 in [`docs/benchmarks/navigation_results.md`](benchmarks/navigation_results.md) and
 [`docs/benchmarks/navigation_continuous_results.md`](benchmarks/navigation_continuous_results.md)).
 `train.py` uses seed 42, which the published benchmarks do not include (BipedalWalker's one seed-42 run is below;
-`src/benchmark.py` itself defaults to seeds 42 and 123 when `--seeds` is not given), so a single `train.py` run may
+`benchmark.py` itself defaults to seeds 42 and 123 when `--seeds` is not given), so a single `train.py` run may
 land on the unlucky side of these numbers:
 
 | Challenge | Agent | Config | Budget (steps) | Seeds solved | Steps to solve | Held |

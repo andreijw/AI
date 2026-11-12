@@ -1,9 +1,9 @@
 # How Each Agent Works
 
-A short technical guide to every agent in `src/rl_core/agents/`: the idea, the update as this code computes it, what
-this repo's version adds or leaves out, what was measured, and what was learned the hard way. It is kept current: a
-new agent adds its section, and a change to an agent's update, options, committed config or measured result updates
-its section, in the same pull request (the `doc-sync` skill).
+A short technical guide to every agent in `packages/rl-core/src/rl_core/agents/`: the idea, the update as this code
+computes it, what this repo's version adds or leaves out, what was measured, and what was learned the hard way. It is
+kept current: a new agent adds its section, and a change to an agent's update, options, committed config or measured
+result updates its section, in the same pull request (the `doc-sync` skill).
 
 Terms used throughout:
 
@@ -13,7 +13,7 @@ Terms used throughout:
   **Greedy evaluation** plays the policy without exploration on a separate environment.
 - **Terminated** is a true end (the pole fell, the lander crashed); **truncated** is a time-limit cut. A value target
   bootstraps from the next state after a cut and not after a termination, unless a section says otherwise.
-- Results come from `src/benchmark.py` on seeds 1 to 5 unless they say otherwise; the dated `(CHANGELOG.md, <date>)`
+- Results come from `benchmark.py` on seeds 1 to 5 unless they say otherwise; the dated `(CHANGELOG.md, <date>)`
   entry has the full numbers.
 
 | Agent | Actions | Learns | Committed configs |
@@ -40,8 +40,8 @@ The `BaseAgent` abstract class defines the interface for all RL agents:
   except those an older format or another setting did not save, which each agent lists in
   `_OPTIONAL_CHECKPOINT_PREFIXES` (the Adam state of an SGD or older continuous file, DQN's counters, any replay buffer)
 
-Implemented agents (in `src/rl_core/agents/`; the sections below say how each one works, its update and what it
-measured):
+Implemented agents (in `packages/rl-core/src/rl_core/agents/`; the sections below say how each one works, its update and
+what it measured):
 
 - **Discrete Control Agents**:
   - `RandomAgent`: Random action baseline policy
@@ -63,7 +63,7 @@ measured):
     entropy temperature (`ent_coef`, `target_entropy`; `configs/pendulum_sac.yaml`, and on the PyTorch backend
     `configs/lunarlander_continuous_sac.yaml` and `configs/bipedalwalker_sac.yaml`)
 
-## REINFORCE (`ReinforceAgent`, `src/rl_core/agents/reinforce_agent.py`)
+## REINFORCE (`ReinforceAgent`, `rl_core/agents/reinforce_agent.py`)
 
 **Idea.** Learns a softmax policy directly from sampled episodes (Williams 1992): after each episode it raises the
 probability of actions followed by above-average return and lowers the others. No value function is needed. The
@@ -90,7 +90,7 @@ greedy evaluation 497 ± 5 (`docs/benchmarks/cartpole_results.md`).
 Seeding moved to named random streams per concern after a seed was found sharing numbers with Gymnasium's
 `reset(seed=)`, and the benchmarks were republished (CHANGELOG.md, 2026-10-19).
 
-## Actor-Critic, discrete (`ActorCriticAgent`, `src/rl_core/agents/actor_critic_agent.py`)
+## Actor-Critic, discrete (`ActorCriticAgent`, `rl_core/agents/actor_critic_agent.py`)
 
 **Idea.** REINFORCE plus a learned critic V(s), subtracted from the return as a state-dependent baseline, which cuts
 the gradient's variance far more than a single mean. Actor and critic share a hidden layer.
@@ -117,7 +117,7 @@ scalar value head; the hand-written backward pass meets in the shared layer. Onl
 "collapse" in a test was the test's fault: a fixed batch kept an action the policy had stopped choosing, so the
 -A·log π term had no lower bound. Tests now sample each batch from the current policy (CHANGELOG.md, 2026-10-29).
 
-## Actor-Critic, continuous (`ContinuousActorCriticAgent`, `src/rl_core/agents/continuous_actor_critic.py`)
+## Actor-Critic, continuous (`ContinuousActorCriticAgent`, `rl_core/agents/continuous_actor_critic.py`)
 
 **Idea.** The same actor-critic with a diagonal Gaussian policy for continuous actions (Pendulum's torque): the
 network gives a state-dependent mean, and a separate learned log standard deviation sets the exploration noise.
@@ -198,7 +198,7 @@ the partly filled rollout and the annealing counter, so a resumed run continues 
   on, then 5 of 5 (2026-11-02). On Pendulum, normalisation made it worse (held 2 of 5 against 4): one seed learned and
   then slid to about -1,000, cause open (2026-11-04; roadmap, "Why Pendulum PPO collapses").
 
-## DQN (`DQNAgent`, `src/rl_core/agents/dqn_agent.py`)
+## DQN (`DQNAgent`, `rl_core/agents/dqn_agent.py`)
 
 **Idea.** Learns the action value Q(s, a), the discounted return of taking a in s and then acting greedily, with a
 small network trained off-policy by regression onto a one-step Bellman target. A replay buffer (random mini-batches
@@ -286,7 +286,7 @@ fresh mini-batch.
   on MountainCar (2026-10-23), prioritised replay on MountainCar and LunarLander (2026-10-27, 2026-11-04). Compare
   paired by seed, then confirm on held-out seeds.
 
-## Replay buffer (`ReplayBuffer`, `src/rl_core/agents/replay_buffer.py`)
+## Replay buffer (`ReplayBuffer`, `rl_core/agents/replay_buffer.py`)
 
 A fixed-capacity ring buffer of (observation, action, reward, next observation, done) in pre-allocated NumPy arrays,
 shared by DQN, DDPG, TD3 and SAC. When full it overwrites the oldest transition; `sample` draws indices uniformly
@@ -296,7 +296,7 @@ vectors (`action_dim`). With an agent's observation statistics it stores raw obs
 batch (CHANGELOG.md, 2026-11-04). The checkpoint holds the filled part, the write index and the generator state, at
 about 40 bytes a transition compressed (CHANGELOG.md, 2026-10-21).
 
-## Updating during the episode (`MidEpisodeUpdates`, `src/rl_core/agents/mid_episode.py`)
+## Updating during the episode (`MidEpisodeUpdates`, `rl_core/agents/mid_episode.py`)
 
 By default the trainer hands an off-policy agent its transitions once per episode. With `training.update_every: N` it
 calls `update` every N steps and once more at the episode's end, as SB3's `train_freq` does, so the data comes from a
@@ -315,7 +315,7 @@ the action bounds), drawn on their own streams, and no learning (`update` return
 CartPole about 23, Pendulum -1293, Acrobot -500, MountainCar -200, LunarLander -178 to -194, Navigation about -11
 with 1% of episodes at the goal (`docs/benchmarks/` and CHANGELOG.md).
 
-## DDPG (`DDPGAgent`, `src/rl_core/agents/ddpg_agent.py`)
+## DDPG (`DDPGAgent`, `rl_core/agents/ddpg_agent.py`)
 
 **Idea.** Deep Deterministic Policy Gradient (Lillicrap et al. 2016) learns a deterministic actor mu(s) that outputs
 one action and a critic Q(s, a) that scores it. The critic is trained by bootstrapped regression on replayed
@@ -337,12 +337,12 @@ gradient steps per stored transition (1.0). A time-limit cut bootstraps.
 
 **In this repo.** ReLU networks of `hidden_sizes` ([400, 300] by default, rl-zoo's; the committed configs use [64, 64],
 since 400×300 is about 16 times slower in NumPy). The critic takes `[obs, action]`. Adam only, one per network.
-Exploration is added in the scaled [-1, 1] space: Gaussian (`noise_std` 0.1) or, with `noise_type:
-ornstein_uhlenbeck`, SB3's OU process (`ou_theta` 0.15, `ou_dt` 0.01), whose state decays by only 0.15% a step, so a
-push persists like a held throttle; it resets at each episode's end. Evaluation plays mu(s). The checkpoint holds the
-four networks, both Adams, the counters and the replay buffer. The replay buffer, warm-up, update scheduling, critic
-loss, Polyak averaging and checkpoints live in `OffPolicyAgent` (`src/rl_core/agents/off_policy.py`), which TD3 shares;
-DDPG adds the actor, its target and the exploration noise.
+Exploration is added in the scaled [-1, 1] space: Gaussian (`noise_std` 0.1) or, with `noise_type: ornstein_uhlenbeck`,
+SB3's OU process (`ou_theta` 0.15, `ou_dt` 0.01), whose state decays by only 0.15% a step, so a push persists like a
+held throttle; it resets at each episode's end. Evaluation plays mu(s). The checkpoint holds the four networks, both
+Adams, the counters and the replay buffer. The replay buffer, warm-up, update scheduling, critic loss, Polyak averaging
+and checkpoints live in `OffPolicyAgent` (`packages/rl-core/src/rl_core/agents/off_policy.py`), which TD3 shares; DDPG
+adds the actor, its target and the exploration noise.
 
 **What was measured.**
 
@@ -354,7 +354,7 @@ DDPG adds the actor, its target and the exploration noise.
 **Lessons.** Exploration noise must fit the task: on MountainCarContinuous, Gaussian noise of the same 0.5 solved 0 of
 5, four seeds learning to stand still; temporally correlated OU noise solved 5 of 5 (CHANGELOG.md, 2026-10-23).
 
-## TD3 (`TD3Agent`, `src/rl_core/agents/td3_agent.py`)
+## TD3 (`TD3Agent`, `rl_core/agents/td3_agent.py`)
 
 **Idea.** Twin Delayed DDPG (Fujimoto et al. 2018) fixes DDPG's overestimation and brittleness three ways: two
 critics with the smaller target taken, clipped noise on the target action so the critic cannot be exploited at a
@@ -400,7 +400,7 @@ replay match DDPG's. One Adam per critic. A TD3 agent refuses a DDPG checkpoint;
 once per episode it held on 3 of 5 seeds, every step on 5 of 5 (CHANGELOG.md, 2026-10-30; adopted 2026-11-01). TD3
 is not faster on an easy task; its gain shows on the long ones.
 
-## SAC (`SACAgent`, `src/rl_core/agents/sac_agent.py`)
+## SAC (`SACAgent`, `rl_core/agents/sac_agent.py`)
 
 **Idea.** Soft Actor-Critic (Haarnoja et al. 2018, with the learned temperature of their follow-up paper) maximises
 reward plus `alpha` times the policy's entropy. The actor is a Gaussian squashed by tanh into the bounds, trained
@@ -491,7 +491,7 @@ Through the benchmark on seeds 1 to 5 (500,000 steps): every seed reaches 200 at
 it (final 100-episode averages 266 to 284), greedy evaluation 282 ± 5, all 5 at 200 or more; TD3's published
 run reaches 200 at 174,000 to 294,000 steps, with greedy evaluation 182 ± 69 (2026-11-04).
 
-## Exporting a policy (`src/rl_core/agents/inference.py`, `src/rl_core/export/`, `export.py`)
+## Exporting a policy (`rl_core/agents/inference.py`, `rl_core/export/`, `export.py`)
 
 Every agent with a network describes its greedy policy as an `InferencePolicy`: dense ReLU layers, the observation
 statistics when it normalises, and a head (`argmax` for discrete agents, `clip` for a Gaussian mean, or `tanh_scale` for

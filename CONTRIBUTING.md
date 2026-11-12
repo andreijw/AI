@@ -13,7 +13,7 @@ contributing, writing code, refactoring components, or submitting pull requests.
   built-in generics (`list[int]`) is available natively.
 - **Explicit Type Hinting**: All public classes, methods, and functions must declare explicit argument and return types
   using `typing` (`Dict`, `List`, `Tuple`, `Optional`, `Union`, `Callable`, `Any`) and `numpy.typing` (`NDArray`).
-- **Type Checking**: Code must pass `mypy src/` without errors before submission.
+- **Type Checking**: Code must pass `mypy` without errors before submission.
 
 ### Gymnasium API Conventions
 
@@ -31,15 +31,16 @@ contributing, writing code, refactoring components, or submitting pull requests.
   version of every agent is the default and the reference. The one exception is an optional PyTorch backend for
   off-policy agents, DDPG, TD3 and SAC so far (`TorchDDPGAgent`, `TorchTD3Agent`, `TorchSACAgent` on the shared
   `TorchOffPolicyAgent`, chosen with `backend: torch`):
-  - It lives only in `src/rl_core/agents/torch_*.py`, subclasses the NumPy agent and overrides only its gradient
-    steps; nothing imports those modules except `BaseAgent.class_for_config`, through the agent's `BACKENDS`
+  - It lives only in `packages/rl-core/src/rl_core/agents/torch_*.py`, subclasses the NumPy agent and overrides only its
+    gradient steps; nothing imports those modules except `BaseAgent.class_for_config`, through the agent's `BACKENDS`
     (`tests/test_source_conventions.py` enforces both).
   - It must train as the NumPy agent does: in float64 on the CPU it matches it to rounding
     (`tests/test_torch_ddpg_agent.py`), and its checkpoints are the NumPy agent's format.
   - PyTorch is never a required dependency: it is the `[torch]` extra, and CI does not install it.
   - TensorFlow, JAX and other frameworks remain out.
-  - Exporting is not training: the ONNX export's `onnx` and `onnxruntime` (the `[onnx]` extra) are imported only
-    inside the functions of `src/rl_core/export/onnx_model.py` (`tests/test_source_conventions.py` enforces it).
+  - Exporting is not training: the ONNX export's `onnx` and `onnxruntime` (the `[onnx]` extra) are imported only inside
+    the functions of `packages/rl-core/src/rl_core/export/onnx_model.py` (`tests/test_source_conventions.py` enforces
+    it).
 - **Numerical Stability**:
   - Use the shared numerically stable softmax, `rl_core.agents.softmax.stable_softmax`, which computes
     `exp(z - max(z))` per row to prevent overflow; do not write another copy.
@@ -75,7 +76,7 @@ ruff check --fix .
 ruff format .
 
 # Check static typing
-mypy src
+mypy
 ```
 
 - **Line Length**: Max 100 characters for Python source code.
@@ -162,10 +163,10 @@ git checkout -b feature/<kebab-case-name>   # or fix/<kebab-case-name> for bugs
 ### Step 3 — Plan the solution
 
 - Identify every file, class, function, and configuration that needs to change.
-- **Check existing components first** — search `src/rl_core/` and the challenge packages for similar logic before
-  writing anything new (e.g. `rl_core/agents/base_agent.py` `BaseAgent`, `rl_core/agents/actor_critic_base.py`
-  `ActorCriticBase`, the `environments/make_env.py` factories, `rl_core/utils/`). Plan to reuse or extend rather than
-  duplicate.
+- **Check existing components first** — search `packages/rl-core/src/rl_core/` and the challenge packages for similar
+  logic before writing anything new (e.g. `rl_core/agents/base_agent.py` `BaseAgent`,
+  `rl_core/agents/actor_critic_base.py` `ActorCriticBase`, the `environments/make_env.py` factories, `rl_core/utils/`).
+  Plan to reuse or extend rather than duplicate.
 - Design clean abstractions; avoid one-off inline logic for anything with a natural architectural boundary.
 - For a change to a hyperparameter, a schedule or an update rule, walk the numbers through a typical run before
   proposing them. For new maths, write down the array shapes and the hand-derived gradients.
@@ -199,7 +200,7 @@ pytest tests/test_<area>.py
 ```bash
 ruff check .
 ruff format --check .
-mypy src
+mypy
 pytest
 ```
 
@@ -213,17 +214,17 @@ pytest
 - Run the security and duplication audits that CI's `Checks` job runs on every pull request:
 
 ```bash
-bandit -r src/ -ll
-pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes
+bandit -r packages/ benchmark.py -ll
+pylint packages/*/src benchmark.py --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes
 ```
 
 - **Prove the tests can fail** (mutation check): break each new rule in the smallest way, confirm a named test
   fails, and undo the break (`.claude/skills/test-crafter/scripts/mutation_check.py` automates this). List the
   mutations in the PR.
 - **Show that it still learns** when the change touches an update rule, a loss, a network, the trainer or a committed
-  config: seeded runs through `src/benchmark.py` with `--output-dir` and `--report` pointing outside the repository,
+  config: seeded runs through `benchmark.py` with `--output-dir` and `--report` pointing outside the repository,
   so saved runs and `docs/benchmarks/` are untouched. A few-episode smoke run is not evidence of learning.
-- **Pass every gate** before asking for a commit: `ruff check .`, `ruff format --check .`, `mypy src`, `pytest`, the
+- **Pass every gate** before asking for a commit: `ruff check .`, `ruff format --check .`, `mypy`, `pytest`, the
   two audits above, and a review of the final diff by someone who did not write it (the `pr-reviewer` skill in a
   fresh agent).
 

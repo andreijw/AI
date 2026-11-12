@@ -18,7 +18,7 @@ found in seconds with the right check. Work down this ladder: each rung is cheap
 and each one rules something out.
 
 Commands are written `python …`, meaning the virtual environment's interpreter: `.venv/Scripts/python` on
-Windows, `.venv/bin/python` elsewhere. Diagnostic scripts live in your scratch directory, never in `src/`.
+Windows, `.venv/bin/python` elsewhere. Diagnostic scripts live in your scratch directory, never in `packages/`.
 
 ## 0. Pin it down
 
@@ -35,12 +35,12 @@ the mean of each metric `agent.update()` returned (losses, entropy, epsilon, mea
 non-finite value of each metric is logged as a `WARNING` naming the episode, the value becomes `null` in
 the file, and its name is listed under `non_finite`. Read those before anything else: a loss that climbs,
 an entropy that hits zero, or an epsilon that never moves usually names the rung to start on. That file
-comes from `train.py`; `src/benchmark.py` passes a plain logger, so there the same record is only an INFO
+comes from `train.py`; `benchmark.py` passes a plain logger, so there the same record is only an INFO
 line and the warning is what reaches the console.
 
 The log is a ten-episode average, and a run shorter than ten episodes writes no record. To see single
 updates, or to find the exact operation that produces a NaN, drive the agent from a scratch script instead
-of adding prints to `src/`:
+of adding prints to `packages/`:
 
 ```python
 import numpy as np

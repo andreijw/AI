@@ -61,9 +61,9 @@ the item in `docs/roadmap.md`: description, acceptance criteria, known edge case
 ### 3. Plan
 
 Explore before designing. Search for what already does part of the job: the base classes in
-`src/rl_core/agents/` (`BaseAgent`, `ActorCriticBase`, `ContinuousActorCriticBase`), `ReplayBuffer`, the
-`make_env` factories, `rl_core/utils/`, and the setup helpers in `train.py`. Reusing them is the default.
-Check Gymnasium and NumPy signatures in Context7, not from memory.
+`packages/rl-core/src/rl_core/agents/` (`BaseAgent`, `ActorCriticBase`, `ContinuousActorCriticBase`), `ReplayBuffer`,
+the `make_env` factories, `rl_core/utils/`, and the setup helpers in `train.py`. Reusing them is the default. Check
+Gymnasium and NumPy signatures in Context7, not from memory.
 
 For anything that changes a hyperparameter, a schedule or an update rule, **walk the numbers** before
 proposing them: play the real values through a typical run. Until 2026-10-16 `configs/cartpole_dqn.yaml`
@@ -115,11 +115,11 @@ Run them in this order, fix what they find, and rerun whatever a fix could have 
 | :--- | :--- | :--- |
 | Lint | `python -m ruff check .` | no findings |
 | Format | `python -m ruff format --check .` | exit code 0 |
-| Types | `python -m mypy src` | "Success: no issues found" |
+| Types | `python -m mypy` | "Success: no issues found" |
 | Tests | `python -m pytest` | 0 failed, and coverage of the files you touched did not fall |
 | Smoke run | each entry point the change can reach, for a few episodes, writing to a scratch directory | exit code 0 and every logged metric is finite |
-| Security | `python -m bandit -r src/ -ll` | no medium or high findings |
-| Duplication | `python -m pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes` | nothing new |
+| Security | `python -m bandit -r packages/ benchmark.py -ll` | no medium or high findings |
+| Duplication | `python -m pylint packages/*/src benchmark.py --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes` | nothing new |
 | Mutation checks | `test-crafter` skill (`scripts/mutation_check.py`) | every new rule has a test that fails when the rule is broken |
 | Cleanup | `cleanup` skill, then rerun the gates above | no duplicated rule, no leftovers |
 | Review | fresh agent following `.claude/skills/pr-reviewer/SKILL.md` on the diff against `develop` | verdict is Approve; no Critical findings left |
@@ -128,7 +128,7 @@ Run them in this order, fix what they find, and rerun whatever a fix could have 
 | Markdown | `python .claude/skills/doc-sync/scripts/check_md_width.py` (line length only), and `npx markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules` where Node is installed; without Node, `pymarkdownlnt` from a scratch virtual environment (`pymarkdown --disable-rules md013,md024,md033,md041,md040,md029 scan <files>`, matching `.markdownlint.json`; skip `.claude/` files, whose YAML front matter it misreads and which CI's glob does not reach). Deleting a roadmap item must keep the blank line before the next heading: on 2026-11-09 a removal failed CI's MD022 | CI's markdownlint job would pass |
 
 **Smoke runs must not touch the maintainer's results.** `train.py` writes to the `checkpoint_dir` and
-`log_dir` named in the config and overwrites an agent's earlier checkpoints, and `src/benchmark.py` rewrites
+`log_dir` named in the config and overwrites an agent's earlier checkpoints, and `benchmark.py` rewrites
 the tracked report `docs/benchmarks/<challenge>_results.md` by default. Copy the config to your scratch
 directory with those two paths changed and run that with `--num-episodes`; give the benchmark
 `--output-dir` and `--report` in the scratch directory. After the gates, `git status` must show no change
@@ -150,7 +150,7 @@ them" (Pass 4), also run `TESTING.md` `TR-15` from `.venv-gpu`: CI has no PyTorc
 `backend: torch` config.
 
 Run `/security-review` as well when the diff touches checkpoint loading, config parsing, the `subprocess`
-call in `rl_core/utils/video.py`, dependencies in `pyproject.toml`, or `.github/`.
+call in `rl_core/utils/video.py`, dependencies in `packages/*/pyproject.toml` or `requirements-dev.txt`, or `.github/`.
 
 Findings: fix every Critical. Fix Warnings unless there is a reason not to, and write that reason in the PR
 description. Suggestions are optional. After three rounds, stop looping and report what is left.
@@ -179,12 +179,13 @@ bullets are in the `pr-reviewer` skill's Report section), updated for the fixes 
   `.claude/settings.json` turns off); you push after they commit
 
 Complete the roadmap item in the hand-off commit: remove it from `docs/roadmap.md` and add a condensed entry to
-`CHANGELOG.md` under today's date (`## <date>`, created if it is not already the newest section; `Added`,
-`Changed` or `Fixed`): what changed, the branch, and the numbers a reader would quote (config, seeds, result).
-The PR then merges complete, and nothing has to be dated after the merge. Stage it with the rest and say so in the hand-off,
-so the maintainer can unstage it if they do not agree. For work that spans several PRs, the item stays `[~]`
-with a progress note until the last one. Anything still live in the item (a follow-up, a deferred idea) moves to
-the open item it belongs to, or a new one, before the item is removed.
+`CHANGELOG.md` under today's date (`## <date>`, created if it is not already the newest section; `Added`, `Changed` or
+`Fixed`): what changed, the branch, and the numbers a reader would quote (config, seeds, result). A change to a
+distribution's code also adds a line under `## [Unreleased]` in that distribution's `packages/<dist>/CHANGELOG.md`,
+which becomes its release notes (`docs/releasing.md`). The PR then merges complete, and nothing has to be dated after
+the merge. Stage it with the rest and say so in the hand-off, so the maintainer can unstage it if they do not agree. For
+work that spans several PRs, the item stays `[~]` with a progress note until the last one. Anything still live in the
+item (a follow-up, a deferred idea) moves to the open item it belongs to, or a new one, before the item is removed.
 
 After they have committed: push the branch, then open the PR against `develop` with `gh pr create`, following
 `.github/pull_request_template.md`, with the quick summary as the first lines of its Description and every
@@ -258,9 +259,9 @@ as a peer, since it sees only your prompt:
 - `doc-sync` in a subagent, in the branch's worktree: give it the diff (`git diff origin/develop`) and the facts
   that changed (a key, a default, a result and its seeds). It edits the docs and reports what it changed and
   what it could not settle. Meanwhile you run the mutation, duplication and cleanup gates.
-- Then the `pr-reviewer` agent on code and docs together. Beside it, for a PR that quotes results, a second
-  agent that checks every number in `CHANGELOG.md`, `README.md`, `docs/results.md`, `TESTING.md` and config comments against
-  the results files (`benchmark_metrics.json`, the metrics logs), and for a large test change a third that runs
+- Then the `pr-reviewer` agent on code and docs together. Beside it, for a PR that quotes results, a second agent that
+  checks every number in `CHANGELOG.md`, `README.md`, `docs/results.md`, `TESTING.md` and config comments against the
+  results files (`benchmark_metrics.json`, the metrics logs), and for a large test change a third that runs
   `brooks-lint:brooks-test` on the changed test files.
 
 Review the edits yourself (`git diff`), fix what the reports find, and rerun the gates the fixes could affect.

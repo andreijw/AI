@@ -60,13 +60,13 @@ What the table shows:
 
 ## Is It the Same Computation?
 
-When this was measured, the PyTorch step was a script, `scripts/pytorch_timing/torch_ddpg.py`, checked against the
-NumPy agent by `tests/test_ddpg_torch_reference.py`: one step on one batch in float64 on the CPU agreed with the NumPy
-agent's `update` to a relative 1e-10, Adam and Polyak included. Both are in git history at commit `8afafc5`, and the
-tables above were measured with them. That step is now `TorchDDPGAgent` (`src/rl_core/agents/torch_ddpg_agent.py`),
-and `tests/test_torch_ddpg_agent.py` checks it more widely: several episodes of training against the NumPy agent in
-float64, with and without gradient clipping; checkpoints in both directions; and on CUDA, the graph against the same
-step run eagerly, and loading into an agent whose graph is captured.
+When this was measured, the PyTorch step was a script, `scripts/pytorch_timing/torch_ddpg.py`, checked against the NumPy
+agent by `tests/test_ddpg_torch_reference.py`: one step on one batch in float64 on the CPU agreed with the NumPy agent's
+`update` to a relative 1e-10, Adam and Polyak included. Both are in git history at commit `8afafc5`, and the tables
+above were measured with them. That step is now `TorchDDPGAgent`
+(`packages/rl-core/src/rl_core/agents/torch_ddpg_agent.py`), and `tests/test_torch_ddpg_agent.py` checks it more widely:
+several episodes of training against the NumPy agent in float64, with and without gradient clipping; checkpoints in both
+directions; and on CUDA, the graph against the same step run eagerly, and loading into an agent whose graph is captured.
 
 ## Through the Agent (2026-10-25)
 
@@ -137,8 +137,8 @@ compute capability 8.0 run on 8.7, so this works without a warning. Jetson AI La
 (`pypi.jetson-ai-lab.io`) had no JetPack 7 PyTorch wheels on 2026-10-25, so it was not needed. The wheel brings its
 own CUDA 13.2 libraries (cuBLAS, cuDNN 9.24), so the system toolkit is not used.
 
-In the repository, `./setup.sh --profile gpu` does all of this: it builds `.venv-gpu` with
-`.[dev,video,torch,box2d,onnx]` from that index and runs the checks. `.venv` stays the CPU profile, without
+In the repository, `./setup.sh --profile gpu` does all of this: it builds `.venv-gpu` with `requirements-dev.txt`, the
+video and box2d extras and `rl-core[torch]` from that index and runs the checks. `.venv` stays the CPU profile, without
 PyTorch, as CI is.
 
 To reproduce the agent table (the first table's scripts are at commit `8afafc5`):
@@ -161,11 +161,11 @@ maintainer approved it on 2026-10-25; DDPG's is `TorchDDPGAgent`, TD3's `TorchTD
   DQN here uses small networks, so it would gain less.
 - **Where it does not.** PPO, Actor-Critic and REINFORCE on CartPole or Pendulum use small networks and few updates,
   and NumPy is already fast for them.
-- **Shape.** A `[torch]` extra in `pyproject.toml`, chosen per agent in the config. The NumPy agents stay the default
-  and the gradient reference, with a test that both take the same step. That test has to run the PyTorch agent in
-  float64, or compare with a stated tolerance, because float32 is not bit-exact. (Built: `TorchDDPGAgent`,
-  `TorchTD3Agent` and `TorchSACAgent` on a shared `TorchOffPolicyAgent`, tested by `tests/test_torch_ddpg_agent.py`
-  on the board; CI never installs PyTorch.)
+- **Shape.** A `[torch]` extra in `packages/rl-core/pyproject.toml`, chosen per agent in the config. The NumPy agents
+  stay the default and the gradient reference, with a test that both take the same step. That test has to run the
+  PyTorch agent in float64, or compare with a stated tolerance, because float32 is not bit-exact. (Built:
+  `TorchDDPGAgent`, `TorchTD3Agent` and `TorchSACAgent` on a shared `TorchOffPolicyAgent`, tested by
+  `tests/test_torch_ddpg_agent.py` on the board; CI never installs PyTorch.)
 - **Rules to keep.**
   - Act on the CPU: copy the actor's weights to NumPy after each update, or keep a CPU copy of the actor.
   - Keep the replay buffer on the GPU, so sampling stays inside the graph. (Built otherwise: the agent samples from

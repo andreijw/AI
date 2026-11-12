@@ -104,7 +104,7 @@ Avg Length (last 10): 500.00`, evaluates every 100 episodes and saves a checkpoi
 in [docs/usage.md](docs/usage.md).
 
 ```bash
-python src/benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42   # compare agents
+python benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42       # compare agents
 python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt
 pytest -q                                                                                 # the tests
 ```
@@ -127,7 +127,7 @@ The checks CI runs, from the virtual environment:
 
 ```bash
 ruff check . && ruff format --check .   # lint and format
-mypy src                                # types
+mypy                                    # types
 pytest -q                               # tests (CI enforces 50% line coverage)
 python scripts/check_doc_links.py       # every Markdown link resolves
 ```

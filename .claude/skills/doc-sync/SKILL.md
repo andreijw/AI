@@ -45,6 +45,8 @@ CONTRIBUTING.md, GEMINI.md and ARCHITECTURE.md.
 | :--- | :--- | :--- |
 | `docs/roadmap.md` | Open and in-progress items: description, acceptance criteria, status, follow-ups | Always. Record what was built and what was dropped while the item is open |
 | `CHANGELOG.md` | One condensed entry per completed item, newest first, under the date it was handed off | When an item completes, in its hand-off commit; the item leaves the roadmap at the same time |
+| `packages/<dist>/CHANGELOG.md` | The distribution's release notes: `## [Unreleased]`, then one `## [<version>] - <date>` section per version (`scripts/release.py check` and `tests/test_packages.py` need the current version's) | The distribution's code, requirements or behaviour changed (a line under `[Unreleased]`), or its version was bumped (the section) |
+| `packages/<dist>/README.md` | What the distribution is, how to install it, its extras (the wheel's long description) | An extra, a requirement, an install command or what the distribution holds changed |
 | `TESTING.md` | Manual checks a person runs, as rows with an ID (`ENV-`, `TR-`, `VID-`, `OUT-`, `BM-`, `CKPT-`, `LOG-`, `CI-`), a command and an expected result | A command, flag, output path or expected behaviour was added or changed |
 | `README.md` | The front page: what the repo is, what works and what does not, the challenge table (one row per registered challenge, named by its environment id, with its report), the robotics ladder, the quick start, the documentation map | A challenge was added, its result changed, a headline feature or the quick-start command changed, or the ladder moved |
 | `docs/usage.md` | Install (including Box2D), every train, record, export, benchmark and robustness command, configuration, curriculum, environment settings and checkpoints, the development commands | A command, flag, prerequisite, config key or output path changed |
@@ -66,7 +68,7 @@ Two things are generated, so run the generator and never edit by hand:
 - **The workflow list in `README.md`**, between `<!-- WORKFLOWS:START -->` and `<!-- WORKFLOWS:END -->`:
   run `python scripts/sync_workflow_docs.py` (the virtual environment's Python) when `.github/workflows/`
   changed.
-- **`docs/benchmarks/<challenge>_results.md`**: written by `src/benchmark.py`. Regenerate it in the same PR
+- **`docs/benchmarks/<challenge>_results.md`**: written by `benchmark.py`. Regenerate it in the same PR
   whenever the change alters what one of its rows measures: a committed config of an agent the report lists, or
   that agent's training (the maintainer's decision, 2026-11-04: every document a PR makes stale is updated in
   it). Rerun the report's own agents and seeds (its header names them), on the branch's code, as a full run

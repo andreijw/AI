@@ -35,11 +35,11 @@ Change one thing at a time. Two changes and a better curve do not say which one 
 
 ## 2. Run it through the benchmark
 
-`src/benchmark.py` already does seeded sweeps, evaluates each run, and applies the challenge's solve rule.
+`benchmark.py` already does seeded sweeps, evaluates each run, and applies the challenge's solve rule.
 Give it its own output directory and report path, always:
 
 ```bash
-python src/benchmark.py --challenge cartpole --agents dqn ppo --seeds 1 2 3 4 5 \
+python benchmark.py --challenge cartpole --agents dqn ppo --seeds 1 2 3 4 5 \
     --output-dir <scratch>/exp1 --report <scratch>/exp1/report.md --no-plot
 ```
 
@@ -95,7 +95,7 @@ workers and `wait` look at the queue every second, `RL_QUEUE_POLL` changes that)
 ```bash
 Q=.claude/skills/experiment-runner/scripts/run_queue.py
 python $Q submit --name ppo-s1 --item <roadmap-item> --cwd <worktree> --log <results>/ppo-s1.log \
-    -- <worktree>/.venv/bin/python src/benchmark.py \
+    -- <worktree>/.venv/bin/python benchmark.py \
     --challenge cartpole ... --output-dir <results>
 python $Q status [--item <roadmap-item>]    # one line per job: state, pid, exit code, log
 python $Q wait --item <roadmap-item>        # blocks; run it in the background to be told once

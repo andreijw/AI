@@ -11,7 +11,8 @@
 
 ## Project Standards
 
-Stack: **Python** package `rl_cartpole` (src layout, `src/rl_cartpole/`) · CI on **Python 3.12** · **Gymnasium ≥1.0**
+Stack: **Python** distributions `rl-core`, `rl-navigation`, `rl-challenges` (`packages/<dist>/src/`) · CI on
+**Python 3.12** · **Gymnasium ≥1.0**
 · **NumPy** agents, with an optional **PyTorch** backend for DDPG, TD3 and SAC only (`backend: torch`; see
 CONTRIBUTING.md "Framework Independence") · optional **Box2D** for LunarLander and BipedalWalker (`box2d` extra) ·
 optional **onnx** and **onnxruntime** for the ONNX export (`onnx` extra) · **pytest** · **Ruff** (line length 100)
@@ -63,7 +64,7 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 - If the plugin is missing, the skills still run with the project checks; say so and point to
   [docs/ai-assistants.md → AI Assistant Skills](docs/ai-assistants.md#ai-assistant-skills).
 - **Training runs never write into the maintainer's results.** Send experiment output to the scratch directory:
-  `src/benchmark.py` with `--output-dir` and `--report`, `train.py` with a copied config whose `checkpoint_dir` and
+  `benchmark.py` with `--output-dir` and `--report`, `train.py` with a copied config whose `checkpoint_dir` and
   `log_dir` point there. The benchmark rewrites the tracked `docs/benchmarks/*.md` by default; it does so on
   purpose only as a PR's full rerun of a report the change made stale (`doc-sync`).
 - **A smoke run is not evidence of learning.** Report which config, how many episodes and how many seeds; say
@@ -92,23 +93,24 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 ## Environment
 
 - First-time setup on Windows: `.\setup.ps1` (installs Python 3.12 via winget, creates `.venv`, installs
-  `.[dev,video,onnx]`, runs the CI checks). Flags: `-Update`, `-NonInteractive`, `-SkipChecks`, `-InstallHooks`.
+  `requirements-dev.txt` with the video extras, runs the CI checks). Flags: `-Update`, `-NonInteractive`, `-SkipChecks`,
+  `-InstallHooks`.
 - **Run every Python tool from `.venv`**: `.venv/Scripts/python -m pytest`, `.venv/Scripts/python -m ruff check .`,
-  `.venv/Scripts/python -m mypy src`. Never use bare `python` — on this machine it is the Microsoft Store stub.
+  `.venv/Scripts/python -m mypy`. Never use bare `python` — on this machine it is the Microsoft Store stub.
   On Linux and macOS the interpreter is `.venv/bin/python`; the skills write `python` and mean whichever applies.
 - If `.venv` is missing, ask the user to run `.\setup.ps1`; do not `pip install` into a global interpreter.
-- Linux and macOS: `./setup.sh --profile cpu|gpu`. **`cpu`** (the default) builds `.venv` with
-  `.[dev,video,box2d,onnx]`: no PyTorch, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with
-  `.[dev,video,torch,box2d,onnx]` from PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests
+- Linux and macOS: `./setup.sh --profile cpu|gpu`. **`cpu`** (the default) builds `.venv` with `requirements-dev.txt`
+  plus the `video` and `box2d` extras: no PyTorch, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with
+  the same and `rl-core[torch]` from PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests
   (`tests/test_torch_ddpg_agent.py`, skipped elsewhere) and for `train.py` runs with `backend: torch`. Both build Box2D
   (`box2d-py` from source with `swig`) before the extras. CI installs neither PyTorch nor Box2D, and their tests skip
   there (`needs_torch`, `needs_box2d`/`env_marks` in `tests/helpers.py`; maintainer's decisions, 2026-10-25 and
-  2026-10-27). The C export tests (`needs_cc`) skip on Windows and where no `CC`, `cc`, `gcc` or `clang` is found;
-  CI's Linux runner has gcc, and `test_ci_has_a_c_compiler` fails there if it ever does not. CI's test job installs
-  the `onnx` extra (maintainer's decision, 2026-11-02), so the ONNX tests (`needs_onnx`) run there.
-  `tests/conftest.py` runs them after every other test, and the tests that render through pygame (fixture
-  `clear_sdl`) just before them: importing onnxruntime or starting SDL starts a native thread, and a fork after it
-  (an async vector environment) may deadlock.
+  2026-10-27). The C export tests (`needs_cc`) skip on Windows and where no `CC`, `cc`, `gcc` or `clang` is found; CI's
+  Linux runner has gcc, and `test_ci_has_a_c_compiler` fails there if it ever does not. CI's test job installs the
+  `onnx` extra (maintainer's decision, 2026-11-02), so the ONNX tests (`needs_onnx`) run there. `tests/conftest.py` runs
+  them after every other test, and the tests that render through pygame (fixture `clear_sdl`) just before them:
+  importing onnxruntime or starting SDL starts a native thread, and a fork after it (an async vector environment) may
+  deadlock.
 
 ## Tool Mapping (GEMINI.md → Claude Code)
 
@@ -166,8 +168,6 @@ Treat the repository as the source of truth when docs disagree:
 - `.pre-commit-config.yaml` pins Ruff `v0.1.15` while CI installs the latest Ruff, so the two formatters can disagree
   (commit `645f4a8` fixed one such drift). Its mypy hook depends on the deprecated `types-all`. Trust CI's
   `ruff format --check .`; `setup.ps1` only installs the hooks with `-InstallHooks`.
-- `requirements.txt` lists `matplotlib>=3.5.0` and `pytest-cov>=4.0.0`, lagging `pyproject.toml`
-  (`matplotlib>=3.9.4`, `pytest-cov>=7.1.0`). Install from `pyproject.toml` (`pip install -e ".[dev,video]"`).
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
 - Older PR descriptions and commits say `configs/pendulum_ppo.yaml` solves Pendulum-v1. It did under the 10-episode
   rule, then solved 0 of 5 under the 100-episode rule (2026-10-16), and since 2026-10-18 solves 5 of 5 with

@@ -56,14 +56,14 @@ A duplicate rarely shares a name with the original. For each candidate, search f
 | Builds an environment or agent from config | `gym.make(`, a class lookup by name | `train.select_run_challenge`, then the challenge's `make_env` / `make_agent` (the base class's, over `AGENT_CLASSES`); a package's `make_env_from_config` over its `ENV_DEFAULTS` with `read_env_settings` |
 | Builds a per-challenge, per-agent output path | `os.path.join(` with the agent type | `train.agent_output_dir`; all four of a run's folders: `train.output_dirs` |
 | Smooths a reward curve, finds the solve episode | `np.convolve`, a rolling mean | `rl_core.utils.smoothing.rolling_average`, `benchmark.find_solved_episode` |
-| Reports progress | `print(` under `src/` | `Logger` / `setup_logger` |
+| Reports progress | `print(` under `packages/` | `Logger` / `setup_logger` |
 | Runs a script inside a test | `sys.argv`, a config written inline | `tests/helpers.run_main`, `minimal_config` |
 
 The table goes stale; the habit does not. When a candidate is not listed, list what exists and read the
 names:
 
 ```bash
-ls src/rl_core/agents src/rl_core/utils
+ls packages/rl-core/src/rl_core/agents packages/rl-core/src/rl_core/utils
 ```
 
 then `Grep` for `def ` in the two or three files whose names fit, underscore-prefixed methods on the base
@@ -72,7 +72,7 @@ classes included: most of the reusable maths lives there. For tests, read `tests
 Then let the tool CI's `Checks` job uses look for long copies:
 
 ```bash
-python -m pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes
+python -m pylint packages/*/src benchmark.py --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes
 ```
 
 It only sees blocks of twenty similar lines or more. A five-line rule written twice is still a duplicate,
@@ -103,7 +103,7 @@ at the config or is checked by the `doc-sync` skill.
   `discounted_returns`; the stable softmax was written three times and is now `stable_softmax` (2026-10-19);
   each challenge's `make_agent` and config-reading factory, three times each, are now the base class's
   `make_agent` and `read_env_settings` (2026-10-22).
-- Shared maths with no state becomes a module-level function under `src/rl_core/` with its own unit test.
+- Shared maths with no state becomes a module-level function under `packages/rl-core/src/rl_core/` with its own unit test.
   Shared state and behaviour for a family of agents goes on the family's base class.
 
 ## 5. Leftovers
@@ -115,7 +115,7 @@ at the config or is checked by the `doc-sync` skill.
 - Commented-out code, debug `print` calls, and `# noqa`, `# type: ignore` or `# nosec` added to silence a
   finding instead of fixing it
 - Training outputs outside the ignored folders: a stray `.npz`, `.pt`, `.mp4`, `.png` or `.jsonl` in the
-  repository root or under `src/`; and an unintended change to `docs/benchmarks/*.md`, which the benchmark
+  repository root or under `packages/`; and an unintended change to `docs/benchmarks/*.md`, which the benchmark
   rewrites by default
 - Throwaway scripts and scratch configs in the working tree
 - `TODO` notes with no roadmap item behind them: either do it, or add the item
@@ -131,7 +131,7 @@ Cleanup must not change behaviour. After the edits:
 ```bash
 python -m ruff check .
 python -m ruff format --check .
-python -m mypy src
+python -m mypy
 python -m pytest
 ```
 

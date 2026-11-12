@@ -34,7 +34,7 @@ A step budget finishes the episode that crosses it, so a run can overshoot its b
 
 Measured 2026-11-05 on the Jetson (`backend: torch`, CUDA) with `configs/bipedalwalker_sac.yaml`,
 `configs/bipedalwalker_td3.yaml` and `configs/bipedalwalker_default.yaml` (random). Each seed ran as
-its own `src/benchmark.py --challenge bipedalwalker --agents <agent> --seeds <seed>` process, three at
+its own `benchmark.py --challenge bipedalwalker --agents <agent> --seeds <seed>` process, three at
 a time, and the per-seed metrics were merged into this table. **Mean Time** is therefore the time per
 seed with three runs sharing the GPU and the six CPU cores; one run alone is faster. SAC trains without
 the gSDE exploration rl-zoo uses for this environment (the configs' headers list the departures).

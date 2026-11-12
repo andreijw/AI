@@ -29,8 +29,8 @@ To optimize token usage and context window limits:
 
 ## 2. Codebase Directory Layout
 
-* **`src/rl_core/`**: Algorithm-agnostic reinforcement learning framework.
-  * `src/rl_core/agents/`: Base agent interfaces (`BaseAgent`, `ActorCriticBase`, `ContinuousActorCriticBase`),
+* **`packages/rl-core/src/rl_core/`**: Algorithm-agnostic reinforcement learning framework.
+  * `rl_core/agents/`: Base agent interfaces (`BaseAgent`, `ActorCriticBase`, `ContinuousActorCriticBase`),
     discrete agents (`RandomAgent`, `ReinforceAgent`, `ActorCriticAgent`, `PPOAgent`, `DQNAgent`),
     continuous agents (`ContinuousRandomAgent`, `ContinuousActorCriticAgent`, `ContinuousPPOAgent`, `DDPGAgent`,
     `TD3Agent`, `SACAgent`) and their replay-buffer base `OffPolicyAgent` (`off_policy.py`), the optional
@@ -41,57 +41,59 @@ To optimize token usage and context window limits:
     Ornstein-Uhlenbeck noise), `observation_normalizer.py` (running observation statistics and `standardize`)
     and `inference.py` (`InferencePolicy`, the frozen greedy network that `BaseAgent.inference_policy()` returns
     for export).
-  * `src/rl_core/export/`: `export.py`'s back end: the C header writer (`c_header.py`), the ONNX model writer and
+  * `rl_core/export/`: `export.py`'s back end: the C header writer (`c_header.py`), the ONNX model writer and
     its onnxruntime check (`onnx_model.py`, the only module importing onnx), the comparison with NumPy and the C
     compile-and-compare check (`verify.py`), and the greedy rollout they are checked on (`rollout.py`).
-  * `src/rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
+  * `rl_core/environments/`: `BaseEnvWrapper`, the base of every challenge's environment wrapper (seeding,
     observation noise, episode statistics, `wrap_env`, and the checks of the shared noise settings `obs_noise_std`,
     `action_noise_std` and `action_noise_prob`), `checked_range` for one domain randomization range, and
     `checked_randomization` with `ParameterBounds` and `POSITIVE`, which checks a whole randomization mapping against
     a table of each parameter's bounds.
-  * `src/rl_core/training/`: Training pipeline orchestration (`trainer.py`), the checkpoint's trainer file
+  * `rl_core/training/`: Training pipeline orchestration (`trainer.py`), the checkpoint's trainer file
     (`checkpoints.py`), curriculum scheduling of the training environment's noise and randomization
     (`curriculum.py`), the pool of training environments `training.num_envs` steps in lockstep
     (`parallel.py`) and the robustness benchmark's perturbations and greedy rows (`robustness.py`).
-  * `src/rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
+  * `rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
     settings that agents, trainer and environments share (`config_values.py`), structured logging (`logger.py`),
     video recording (`video.py`), visualization helpers (`visualization.py`, imported directly: the package does
-    not re-export them, and `train.py` and `src/benchmark.py` import them only inside the code that plots, so a run
+    not re-export them, and `train.py` and `benchmark.py` import them only inside the code that plots, so a run
     without plots never loads matplotlib), and the rolling average behind solve numbers and plots (`smoothing.py`).
-* **`src/rl_cartpole/`**: CartPole-v1 discrete balance control challenge.
-  * `src/rl_cartpole/environments/`: Gymnasium wrapper implementations, observation/action noise injections,
+* **`packages/rl-challenges/src/rl_cartpole/`**: CartPole-v1 discrete balance control challenge.
+  * `rl_cartpole/environments/`: Gymnasium wrapper implementations, observation/action noise injections,
     domain randomization configurations, and vectorized environment factories.
-  * `src/rl_cartpole/benchmark.py`: CartPole benchmark challenge implementation.
-* **`src/rl_pendulum/`**: Pendulum-v1 continuous torque control challenge.
-  * `src/rl_pendulum/environments/`: Pendulum wrappers, observation/action noise, domain
+  * `rl_cartpole/benchmark.py`: CartPole benchmark challenge implementation.
+* **`packages/rl-challenges/src/rl_pendulum/`**: Pendulum-v1 continuous torque control challenge.
+  * `rl_pendulum/environments/`: Pendulum wrappers, observation/action noise, domain
     randomization, and vectorization.
-  * `src/rl_pendulum/benchmark.py`: Pendulum benchmark challenge implementation.
-* **`src/rl_acrobot/`**: Acrobot-v1 discrete swing-up challenge.
-  * `src/rl_acrobot/environments/`: Acrobot wrapper (observation noise only) and its factories.
-  * `src/rl_acrobot/benchmark.py`: Acrobot benchmark challenge implementation.
-* **`src/rl_mountaincar/`**: MountainCar-v0 (discrete) and MountainCarContinuous-v0 exploration challenges.
-  * `src/rl_mountaincar/environments/`: mountain car wrapper (observation noise only), shared by both ids, and a
+  * `rl_pendulum/benchmark.py`: Pendulum benchmark challenge implementation.
+* **`packages/rl-challenges/src/rl_acrobot/`**: Acrobot-v1 discrete swing-up challenge.
+  * `rl_acrobot/environments/`: Acrobot wrapper (observation noise only) and its factories.
+  * `rl_acrobot/benchmark.py`: Acrobot benchmark challenge implementation.
+* **`packages/rl-challenges/src/rl_mountaincar/`**: MountainCar-v0 (discrete) and MountainCarContinuous-v0 exploration
+  challenges.
+  * `rl_mountaincar/environments/`: mountain car wrapper (observation noise only), shared by both ids, and a
     factory for each.
-  * `src/rl_mountaincar/benchmark.py`: both MountainCar benchmark challenge implementations.
-* **`src/rl_lunarlander/`**: LunarLander-v3 (discrete) and LunarLanderContinuous-v3 challenges, which need Box2D
-  (the `box2d` extra, built by `./setup.sh`; docs/usage.md, LunarLander (Box2D)).
-  * `src/rl_lunarlander/environments/`: lunar lander wrapper (observation noise only), shared by both ids, and a
+  * `rl_mountaincar/benchmark.py`: both MountainCar benchmark challenge implementations.
+* **`packages/rl-challenges/src/rl_lunarlander/`**: LunarLander-v3 (discrete) and LunarLanderContinuous-v3 challenges,
+  which need Box2D (the `box2d` extra, built by `./setup.sh`; docs/usage.md, LunarLander (Box2D)).
+  * `rl_lunarlander/environments/`: lunar lander wrapper (observation noise only), shared by both ids, and a
     factory for each.
-  * `src/rl_lunarlander/benchmark.py`: both LunarLander benchmark challenge implementations.
-* **`src/rl_bipedalwalker/`**: BipedalWalker-v3 four-joint walking challenge (random, SAC and TD3), which needs
-  Box2D as LunarLander does.
-  * `src/rl_bipedalwalker/environments/`: bipedal walker wrapper (observation noise only) and its factory.
-  * `src/rl_bipedalwalker/benchmark.py`: BipedalWalker benchmark challenge implementation.
-* **`src/rl_navigation/`**: Navigation-v0 (discrete) and NavigationContinuous-v0 range-sensor navigation challenges
-  (Phase 8); `__init__.py` imports nothing, so each layer below can be imported without the ones above it.
-  * `src/rl_navigation/sim/`: the simulator, NumPy and the standard library only (never Gymnasium or `rl_core`):
+  * `rl_lunarlander/benchmark.py`: both LunarLander benchmark challenge implementations.
+* **`packages/rl-challenges/src/rl_bipedalwalker/`**: BipedalWalker-v3 four-joint walking challenge (random, SAC and
+  TD3), which needs Box2D as LunarLander does.
+  * `rl_bipedalwalker/environments/`: bipedal walker wrapper (observation noise only) and its factory.
+  * `rl_bipedalwalker/benchmark.py`: BipedalWalker benchmark challenge implementation.
+* **`packages/rl-navigation/src/rl_navigation/`**: Navigation-v0 (discrete) and NavigationContinuous-v0 range-sensor
+  navigation challenges (Phase 8); `__init__.py` imports nothing, so each layer below can be imported without the ones
+  above it.
+  * `rl_navigation/sim/`: the simulator, NumPy and the standard library only (never Gymnasium or `rl_core`):
     `geometry.py` (arena, batched ray casting, swept-disc collision, occupancy grid), `kinematics.py` (unicycle),
     `sensors.py` (range sensors with `mount_origins` and `ray_angles`, `hc_sr04` and `lidar` presets, and
     `usable_readings`), `odometry.py` (`WheelOdometry`: noisy left and
     right wheel travel), `layouts.py` (random layouts with a reachable goal), `world.py` (`World`: pose, motion
     with wheel slip, collision, goal, sensors) and `render.py` (the arena as an RGB array, and the overlay painters
     `paint_points`, `paint_path` and `paint_pose`).
-  * `src/rl_navigation/estimation/`: pose estimation on a known map for the robot's own program, NumPy and
+  * `rl_navigation/estimation/`: pose estimation on a known map for the robot's own program, NumPy and
     `rl_navigation.sim` only (never Gymnasium, `gym_env` or `rl_core`): `maps.py` (the `RangeMap` and `ParticleMap`
     protocols and `SensorMap`), `kalman.py` (the Kalman update in Joseph form), `ekf.py` (`EkfLocalizer`, iterated
     EKF localization), `mcl.py` (`MclLocalizer`, augmented Monte Carlo localization), `evaluation.py`
@@ -100,14 +102,14 @@ To optimize token usage and context window limits:
     `python -m rl_navigation.estimation.comparison` command; not imported by the package) and `recording.py` (snapshots
     of the EKF and MCL on one seeded trial and the frames painted from them; not imported by the package). No
     environment or benchmark challenge uses it.
-  * `src/rl_navigation/mapping/`: occupancy-grid mapping with known poses, a peer of `estimation`: `beams.py`
+  * `rl_navigation/mapping/`: occupancy-grid mapping with known poses, a peer of `estimation`: `beams.py`
     (`traverse_cells`, the exact vectorised cell traversal, `endpoint_visits`, the inverse sensor model's free and
     occupied cells, and `sensor_rays`) and `grid.py` (`OccupancyGrid`, the log-odds grid, and `LogOddsModel` with the
     `LIDAR_LOG_ODDS` and `HC_SR04_LOG_ODDS` presets) import NumPy and `rl_navigation.sim` only; `evaluation.py`
     (`record_run`, `build_map`, `score_map`, `map_trial`, `summarize_maps`: seeded runs on `run_trial`'s trajectory
     scored against the true map) is a desk tool, the one module that imports `estimation`, and the package does not
     import it.
-  * `src/rl_navigation/slam/`: simultaneous localization and mapping, a layer above `estimation`: `features.py`
+  * `rl_navigation/slam/`: simultaneous localization and mapping, a layer above `estimation`: `features.py`
     (`FeatureSettings`, `CircleFeature`, `scan_points`, `segment_scan`, `fit_circle`, `extract_circles`: circles fitted
     to the segments of a lidar scan, the landmarks) and `ekf_slam.py` (`SlamSettings`, `SlamUpdate`, `EkfSlam`, and the
     Jacobians `fej_motion_jacobian`, `landmark_measurement`, `initialize_landmark` and the association `associate_ml`:
@@ -115,16 +117,17 @@ To optimize token usage and context window limits:
     `feature_evaluation.py` (`feature_trial`, `summarize_features`: `TESTING.md` `CIRC-1`) and `evaluation.py`
     (`slam_trial`, `SlamFactory`, `align_se2`, `score_landmarks`, `loop_closures`, `summarize_slam`: `TESTING.md`
     `SLAM-1`) are desk tools the package does not import.
-  * `src/rl_navigation/localization_video.py`: `python -m rl_navigation.localization_video`, which writes a
+  * `rl_navigation/localization_video.py`: `python -m rl_navigation.localization_video`, which writes a
     `recording` to an MP4 (imageio-ffmpeg, the `video` extra) and PNG stills (matplotlib); never overwrites a file.
-  * `src/rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.
+  * `rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.
     It imports Gymnasium and `rl_navigation.sim` only, never `rl_core`, so it works outside this framework.
-  * `src/rl_navigation/environments/`: `NavigationEnv`, the framework wrapper shared by both ids (action noise,
+  * `rl_navigation/environments/`: `NavigationEnv`, the framework wrapper shared by both ids (action noise,
     domain randomization of wheel slip, sensor noise, dropout and obstacle count), and a factory for each id.
-  * `src/rl_navigation/benchmark.py`: both navigation benchmark challenge implementations (random, PPO and DQN
+  * `rl_navigation/benchmark.py`: both navigation benchmark challenge implementations (random, PPO and DQN
     on `Navigation-v0`; random, PPO and TD3 on `NavigationContinuous-v0`).
-* **`src/rl_core/challenges/`**: The `BenchmarkChallenge` interface, the challenge registry and `discover_challenges`.
-* **`src/benchmark.py`**: The benchmark runner and its command line, for every discovered challenge.
+* **`packages/rl-core/src/rl_core/challenges/`**: The `BenchmarkChallenge` interface, the challenge registry and
+  `discover_challenges`.
+* **`benchmark.py`**: The benchmark runner and its command line, for every discovered challenge.
 * **`tests/`** (located at [tests/](tests/)): Pytest unit and integration test suite
   targeting environments, agents, logging, configurations, and visualization.
 * **`configs/`** (located at [configs/](configs/)): YAML files specifying hyperparameter
@@ -143,13 +146,15 @@ To optimize token usage and context window limits:
   (reuses `train.py`'s config loading and challenge selection).
 * **`export.py`**: Exports a trained agent's greedy policy from a checkpoint into one standalone C header, or an
   ONNX model with `--format onnx`, and checks it by compiling it or running it in onnxruntime
-  (`src/rl_core/export/`; the same config loading and challenge selection).
+  (`packages/rl-core/src/rl_core/export/`; the same config loading and challenge selection).
 * **`robustness.py`**: Plays a checkpoint greedily on environments perturbed one setting at a time and reports
-  each row inside or beyond its training range (`src/rl_core/training/robustness.py`).
+  each row inside or beyond its training range (`packages/rl-core/src/rl_core/training/robustness.py`).
 * **`example.py`**: Minimal standalone usage example of the framework.
 * **`ARCHITECTURE.md`** / **`TESTING.md`**: Component architecture reference and manual test procedures.
 * **`setup.ps1`**: Windows developer setup (installs Python 3.12, creates `.venv`, runs CI checks).
-* **`pyproject.toml`**: Packaging metadata, dependencies, and tool settings (Ruff, Mypy, Pytest, Bandit).
+* **`pyproject.toml`**: Tool settings only (Ruff, Mypy, Pytest, coverage, Bandit). Packaging metadata and
+  dependencies are per distribution, in `packages/*/pyproject.toml`; the development install is
+  `requirements-dev.txt`.
 * **`.github/workflows/`**: CI/CD: `ci.yml` (`Checks` and `Unit Tests` on every PR), `codeql.yml`,
   `weekly-maintenance.yml`; rules enforced by `tests/test_ci_policy.py`.
 
@@ -192,12 +197,14 @@ Run these commands in the root workspace directory:
 # Windows: one-shot setup (Python 3.12 + .venv + dependencies + CI checks)
 .\setup.ps1
 
-# Linux and macOS: .venv with .[dev,video,box2d,onnx], Box2D built first (--profile gpu adds PyTorch)
+# Linux and macOS: .venv with requirements-dev.txt plus the video and box2d extras, Box2D built first
+# (--profile gpu adds PyTorch)
 ./setup.sh
 
-# Any OS: install dependencies in editable development mode inside an activated venv
-# (LunarLander's and BipedalWalker's Box2D needs the extra steps in docs/usage.md, LunarLander (Box2D))
-pip install -e ".[dev,video,onnx]"
+# Any OS, from the repository root inside an activated venv: the three distributions under packages/,
+# editable, and the dev tools (LunarLander's and BipedalWalker's Box2D needs the extra steps in docs/usage.md,
+# LunarLander (Box2D))
+pip install -r requirements-dev.txt
 ```
 
 ### Code Formatting & Linting
@@ -218,7 +225,7 @@ ruff format .
 
 ```bash
 # Check static typing with mypy
-mypy src
+mypy
 ```
 
 ### Unit & Integration Testing
@@ -235,10 +242,10 @@ pytest -q
 
 ```bash
 # Run bandit security check
-bandit -r src/ -ll
+bandit -r packages/ benchmark.py -ll
 
 # Check for duplicate code
-pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes
+pylint packages/*/src benchmark.py --disable=all --enable=duplicate-code --min-similarity-lines=20 --ignore-imports=yes --ignore-signatures=yes
 ```
 
 ### Documentation Synchronization

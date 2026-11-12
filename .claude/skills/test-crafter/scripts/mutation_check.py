@@ -9,7 +9,7 @@ Usage (from the repository root, with the virtual environment's Python):
 
     [
       {
-        "file": "src/rl_core/agents/dqn_agent.py",
+        "file": "packages/rl-core/src/rl_core/agents/dqn_agent.py",
         "old": "(1.0 - dones)",
         "new": "1.0",
         "tests": ["tests/test_dqn_agent.py"],

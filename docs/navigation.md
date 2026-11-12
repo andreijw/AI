@@ -5,6 +5,24 @@ state-estimation library meant to run on a Jetson robot. Phase 8 of [roadmap.md]
 open (SLAM, planning, the real robot). How to train and benchmark the navigation agents is in
 [usage.md](usage.md); their numbers are in [results.md](results.md).
 
+## Installing on the robot
+
+All of this is the `rl-navigation` distribution (`packages/rl-navigation/`). On its own it needs NumPy only: the
+simulator, `estimation`, `mapping` and `slam` import nothing else. Its extras add the rest: `gym` (Gymnasium, for
+`rl_navigation.gym_env`), `challenge` (`rl-core`, for the navigation challenge on the framework) and `video`
+(`rl_navigation.localization_video`). Ubuntu 24.04's system Python is externally managed (PEP 668), so a ROS 2
+node uses a virtual environment created with `--system-site-packages`, which keeps `rclpy` and the apt NumPy
+visible, and installs `rl-navigation` from its tag into it (from the first release on; until
+`rl-navigation-v0.1.0` is tagged, `@develop` instead of the tag):
+
+```bash
+python3 -m venv --system-site-packages ~/robot-venv
+~/robot-venv/bin/pip install \
+    "rl-navigation @ git+https://github.com/andreijw/AI@rl-navigation-v0.1.0#subdirectory=packages/rl-navigation"
+```
+
+ROS 2 Jazzy runs Python 3.12, which the distribution requires.
+
 ## Range-Sensor Navigation
 
 `Navigation-v0` and `NavigationContinuous-v0` are this project's own Gymnasium environments (Phase 8 of

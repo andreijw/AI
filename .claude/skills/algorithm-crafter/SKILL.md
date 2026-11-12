@@ -107,7 +107,7 @@ Each step is cheap and rules out a class of error before the next (details in th
 A new agent is known in more than one place. Miss one and it works in a test and not from the command
 line:
 
-- `src/rl_core/agents/__init__.py` (import and export)
+- `packages/rl-core/src/rl_core/agents/__init__.py` (import and export)
 - `AGENT_CLASSES` and `CONFIG_MAP`, class variables of each challenge in its `benchmark.py` that supports it. `train.py`,
   `record.py` and the benchmark build agents through the challenge's `make_agent`, so they need no edit
 - `configs/<challenge>_<agent>.yaml`, every key commented with its meaning and unit

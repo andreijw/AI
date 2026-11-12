@@ -2,7 +2,8 @@
 #
 # This script automates environment verification and installation from scratch.
 # It checks/installs Git and Python 3.12 (the version CI uses), creates the
-# .venv virtual environment, installs the package with dev/video extras, and
+# .venv virtual environment, installs requirements-dev.txt (the three distributions
+# under packages/, editable, with the dev tools) and the video extras, and
 # runs the same checks as CI (ruff, mypy, pytest).
 #
 # Usage:
