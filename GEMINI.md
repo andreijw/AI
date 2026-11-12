@@ -266,7 +266,8 @@ one source of truth. Follow it **in order** for every new feature or bug fix, st
 `feature/<name>` (or `fix/<name>`) branch off `develop`.
 
 Each step has a detailed checklist in [`.claude/skills/<name>/SKILL.md`](.claude/skills/) (`dev-loop`, `architect`,
-`algorithm-crafter`, `test-crafter`, `experiment-runner`, `training-doctor`, `cleanup`, `pr-reviewer`, `doc-sync`).
+`algorithm-crafter`, `test-crafter`, `experiment-runner`, `training-doctor`, `cleanup`, `pr-reviewer`, `doc-sync`,
+`release`).
 They are written for Claude Code but are plain Markdown: read the one for the step you are on and follow it.
 
 ---

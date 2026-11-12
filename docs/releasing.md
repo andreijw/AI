@@ -80,8 +80,8 @@ publish its draft first: the dependents' runs refuse to release against an `rl-c
 
 ## Repository settings (the maintainer's)
 
-Two settings protect the releases. Neither is on yet; each is one command with an owner's token (`gh auth login`), or
-a few clicks.
+Two settings protect the releases; both are on (2026-11-12). Each is one command with an owner's token
+(`gh auth login`), or a few clicks.
 
 - **Immutable releases**: a published release's tag and files can no longer be changed or replaced.
 
