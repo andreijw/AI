@@ -1,7 +1,7 @@
 # ── RL and Robot Navigation Developer Setup Script (Windows Edition) ───────
 #
 # This script automates environment verification and installation from scratch.
-# It checks/installs Git and Python 3.12 (the version CI uses), creates the
+# It checks/installs Git and Python (the version in .python-version, as CI), creates the
 # .venv virtual environment, installs requirements-dev.txt (the three distributions
 # under packages/, editable, with the dev tools) and the video extras, and
 # runs the same checks as CI (ruff, mypy, pytest).
@@ -10,11 +10,12 @@
 #   .\setup.ps1 [-Update] [-NonInteractive] [-SkipChecks] [-InstallHooks]
 #
 # Parameters:
-#   -Update          Upgrade Git/Python via winget and upgrade pip packages in .venv.
+#   -Update          Upgrade Git/Python via winget, and re-sync .venv to requirements-lock.txt
+#                    (packages move only to the lock's versions).
 #   -NonInteractive  Run without prompting, automatically installing missing tools.
 #   -SkipChecks      Skip the lint, type-check, and test run at the end.
-#   -InstallHooks    Also run `pre-commit install` (hook versions in
-#                    .pre-commit-config.yaml lag behind CI; see CLAUDE.md).
+#   -InstallHooks    Also run `pre-commit install`. The hooks run this .venv's ruff, mypy and
+#                    bandit (the lock's versions, as CI): commit from the activated .venv.
 #
 
 param (
@@ -26,9 +27,12 @@ param (
 
 $ErrorActionPreference = "Stop"
 
-$PythonVersion = "3.12"
-$PythonWingetId = "Python.Python.3.12"
 $RepoRoot = $PSScriptRoot
+# Defined once, in .python-version (CI and setup.sh read the same file).
+$PythonVersion = (Get-Content (Join-Path $RepoRoot ".python-version") -TotalCount 1).Trim()
+$PythonWingetId = "Python.Python.$PythonVersion"
+# Every package version: requirements-lock.txt, passed to each pip install as constraints.
+$LockArgs = @("-c", (Join-Path $RepoRoot "requirements-lock.txt"))
 $VenvDir = Join-Path $RepoRoot ".venv"
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 
@@ -200,7 +204,7 @@ function Initialize-Venv([string]$Python) {
     }
 
     Write-Host "[*] Upgrading pip..." -ForegroundColor Cyan
-    & $VenvPython -m pip install --upgrade pip | Out-Host
+    & $VenvPython -m pip install --upgrade pip @LockArgs | Out-Host
 
     # The single rl-cartpole distribution came before the split into packages/ (2026-11-11); its editable
     # .pth points at src/, which no longer holds the code.
@@ -210,8 +214,8 @@ function Initialize-Venv([string]$Python) {
     }
 
     Write-Host "[*] Installing the distributions under packages/ in editable mode, with the dev tools..." -ForegroundColor Cyan
-    $pipArgs = @("-m", "pip", "install", "-r", "requirements-dev.txt", "-e", "./packages/rl-core[video,onnx]",
-        "-e", "./packages/rl-navigation[gym,challenge,video]")
+    $pipArgs = @("-m", "pip", "install", "-r", "requirements-dev.txt") + $LockArgs + @(
+        "-e", "./packages/rl-core[video,onnx]", "-e", "./packages/rl-navigation[gym,challenge,video]")
     if ($Update) {
         $pipArgs += "--upgrade"
     }

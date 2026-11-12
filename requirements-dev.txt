@@ -1,17 +1,21 @@
 # The development environment: every distribution in this repository, editable, and the dev tools.
 # Run from the repository root (pip resolves ./packages/... against the current directory):
 #   python -m pip install -r requirements-dev.txt
-# ./setup.sh and setup.ps1 add the video and box2d extras, and the gpu profile the torch extra.
+# ./setup.sh and setup.ps1 add the video and box2d extras, and the gpu profile the torch extra. Versions are not
+# written here: requirements-lock.txt pins every one exactly (the line below makes it the constraints of any install
+# that reads this file, extras included; pip resolves it next to this file), and the packages' pyproject.toml files
+# hold the floors.
+-c requirements-lock.txt
 -e ./packages/rl-core[onnx]
 -e ./packages/rl-navigation[gym,challenge]
 -e ./packages/rl-challenges
-pytest>=7.0.0
-pytest-cov>=7.1.0
-mypy>=1.0.0
-types-PyYAML>=6.0.0
-ruff>=0.1.0
-bandit[toml]>=1.8.6
-pylint>=4.0.0
-pre-commit>=4.3.0
+pytest
+pytest-cov
+mypy
+types-PyYAML
+ruff
+bandit[toml]
+pylint
+pre-commit
 # Builds the sdists and wheels (scripts/release.py, the Packages CI job and the Release workflow).
-build>=1.2
+build

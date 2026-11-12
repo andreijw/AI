@@ -12,7 +12,8 @@
 # the onnx extra.
 #
 # Usage: ./setup.sh [--profile cpu|gpu] [--skip-checks]
-# An existing environment is reused and its packages upgraded. Then the CI checks run (unless --skip-checks).
+# An existing environment is reused and re-synced to requirements-lock.txt (--upgrade moves packages only to the
+# lock's versions). Then the CI checks run (unless --skip-checks).
 set -euo pipefail
 
 profile="cpu"
@@ -36,22 +37,25 @@ case "$profile" in
 esac
 
 cd "$(dirname "$0")"
-python="${PYTHON:-python3.12}"
+# The Python version is defined once, in .python-version (CI reads the same file); every package version in
+# requirements-lock.txt, used below as constraints.
+py_version="$(tr -d '[:space:]' < .python-version)"
+lock=(-c requirements-lock.txt)
+python="${PYTHON:-python$py_version}"
 command -v "$python" >/dev/null || python="python3"
 version="$("$python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
-[[ "$version" == "3.12" ]] || echo "Warning: $python is Python $version; CI uses 3.12." >&2
+[[ "$version" == "$py_version" ]] || echo "Warning: $python is Python $version; CI uses $py_version." >&2
 
 [[ -x "$venv/bin/python" ]] || "$python" -m venv "$venv"
-"$venv/bin/python" -m pip install --upgrade pip
+"$venv/bin/python" -m pip install --upgrade pip "${lock[@]}"
 # Box2D before the extras: Gymnasium's box2d extra pins box2d==2.3.10, which has no aarch64 build, so the
-# box2d extra names box2d-py, which builds from source with swig; pip's isolated build cannot see swig.
-# Build tools at the versions box2d-py 2.3.8 was verified with on 2026-11-06 (2.3.5 on 2026-10-27); --no-binary keeps
-# it on the reviewed source release.
-"$venv/bin/python" -m pip install swig==4.5.1 "setuptools<85" "wheel<0.49"
+# box2d extra names box2d-py, which builds from source with swig; pip's isolated build cannot see swig. The build
+# tools and box2d-py come at the lock's versions; --no-binary keeps it on the reviewed source release.
+"$venv/bin/python" -m pip install swig setuptools wheel "${lock[@]}"
 if ! PATH="$PWD/$venv/bin:$PATH" "$venv/bin/python" -m pip install --no-build-isolation --no-binary box2d-py \
-        box2d-py==2.3.8; then
-    echo "Building box2d-py failed: it needs a C++ compiler and the Python 3.12 headers" \
-        "(Debian/Ubuntu: sudo apt install build-essential python3.12-dev)." >&2
+        box2d-py "${lock[@]}"; then
+    echo "Building box2d-py failed: it needs a C++ compiler and the Python $py_version headers" \
+        "(Debian/Ubuntu: sudo apt install build-essential python$py_version-dev)." >&2
     exit 1
 fi
 # The single rl-cartpole distribution came before the split into packages/ (2026-11-11); its editable .pth
@@ -59,7 +63,8 @@ fi
 if "$venv/bin/python" -m pip show --quiet rl-cartpole > /dev/null 2>&1; then
     "$venv/bin/python" -m pip uninstall -y rl-cartpole
 fi
-"$venv/bin/python" -m pip install --upgrade -r requirements-dev.txt -e "./packages/rl-core[$core_extras]" \
+# PyTorch (the gpu profile's torch extra) is the one package outside the lock: it comes from PyTorch's CUDA index.
+"$venv/bin/python" -m pip install --upgrade -r requirements-dev.txt "${lock[@]}" -e "./packages/rl-core[$core_extras]" \
     -e "./packages/rl-navigation[gym,challenge,video]" -e "./packages/rl-challenges[box2d]" "${index_args[@]}"
 if [[ -d src ]] && [[ -z "$(git ls-files src)" ]]; then
     echo "src/ holds no tracked file since the split into packages/: review \`git clean -ndX src/\`," \

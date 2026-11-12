@@ -123,7 +123,8 @@ The questions a training run, not an interpreter, would raise:
   run (a smoke-run rewrite is Critical). A report the change makes stale (a listed agent's committed config or
   training changed) and did not rerun is a Warning: doc-sync regenerates it in the same PR.
 - No import of PyTorch, TensorFlow, JAX or another learning framework; no new dependency in a
-  `packages/*/pyproject.toml` or `requirements-dev.txt` that the plan did not announce (the root
+  `packages/*/pyproject.toml`, `requirements-dev.txt` or `requirements-lock.txt` (a new pin, or a bumped one, is the
+  maintainer's call) that the plan did not announce (the root
   `pyproject.toml` holds tool settings only).
 - A config key added or renamed is updated in every `configs/*.yaml` that uses the agent, and old
   checkpoints still load or the PR says they do not.

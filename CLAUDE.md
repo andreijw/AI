@@ -92,13 +92,17 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 
 ## Environment
 
-- First-time setup on Windows: `.\setup.ps1` (installs Python 3.12 via winget, creates `.venv`, installs
-  `requirements-dev.txt` with the video extras, runs the CI checks). Flags: `-Update`, `-NonInteractive`, `-SkipChecks`,
-  `-InstallHooks`.
+- First-time setup on Windows: `.\setup.ps1` (installs the Python of `.python-version` via winget, creates `.venv`,
+  installs `requirements-dev.txt` with the video extras at the versions in `requirements-lock.txt`, runs the CI checks).
+  Flags: `-Update`, `-NonInteractive`, `-SkipChecks`, `-InstallHooks`.
 - **Run every Python tool from `.venv`**: `.venv/Scripts/python -m pytest`, `.venv/Scripts/python -m ruff check .`,
   `.venv/Scripts/python -m mypy`. Never use bare `python` — on this machine it is the Microsoft Store stub.
   On Linux and macOS the interpreter is `.venv/bin/python`; the skills write `python` and mean whichever applies.
 - If `.venv` is missing, ask the user to run `.\setup.ps1`; do not `pip install` into a global interpreter.
+- **Every version is defined once** (`tests/test_versions.py`): third-party packages pinned exactly in
+  `requirements-lock.txt`, which every install uses as constraints (`-c requirements-lock.txt`); floors in
+  `packages/*/pyproject.toml`, one per package; Python in `.python-version`; markdownlint-cli in `ci.yml`'s
+  `MARKDOWNLINT_CLI_VERSION`. PyTorch alone comes from its CUDA index, outside the lock.
 - Linux and macOS: `./setup.sh --profile cpu|gpu`. **`cpu`** (the default) builds `.venv` with `requirements-dev.txt`
   plus the `video` and `box2d` extras: no PyTorch, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with
   the same and `rl-core[torch]` from PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests
@@ -165,9 +169,6 @@ Treat the repository as the source of truth when docs disagree:
 
 - CONTRIBUTING.md asks for ≥80% **branch** coverage; CI enforces 50% **line** coverage (`--cov-fail-under=50`, no
   `--cov-branch`).
-- `.pre-commit-config.yaml` pins Ruff `v0.1.15` while CI installs the latest Ruff, so the two formatters can disagree
-  (commit `645f4a8` fixed one such drift). Its mypy hook depends on the deprecated `types-all`. Trust CI's
-  `ruff format --check .`; `setup.ps1` only installs the hooks with `-InstallHooks`.
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
 - Older PR descriptions and commits say `configs/pendulum_ppo.yaml` solves Pendulum-v1. It did under the 10-episode
   rule, then solved 0 of 5 under the 100-episode rule (2026-10-16), and since 2026-10-18 solves 5 of 5 with
@@ -175,7 +176,8 @@ Treat the repository as the source of truth when docs disagree:
   2026-10-18). Continuous Actor-Critic beats the random agent in evaluation since 2026-10-18 but does not solve
   under the 100-episode rule (CHANGELOG.md, 2026-10-18). CartPole PPO does solve CartPole-v1: 5 of 5 seeds within
   200,000 steps, holding on all 5 (TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
-- The `box2d` extra names `box2d-py==2.3.8`, not the `box2d==2.3.10` Gymnasium 1.4's own `box2d` extra pins: that
+- The `box2d` extra names `box2d-py` (pinned in `requirements-lock.txt`), not the `box2d==2.3.10` Gymnasium 1.4's own
+  `box2d` extra pins: that
   has no aarch64 build, and `box2d-py` builds on the Jetson with `swig` and `--no-build-isolation` (docs/usage.md,
   LunarLander (Box2D)). Rendering uses `pygame-ce`, as Gymnasium does; never install plain `pygame` beside it.
 - CONTRIBUTING.md §5 and TESTING.md `CKPT-*` describe `.npz` checkpoints; `Trainer` names them

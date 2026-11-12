@@ -16,6 +16,8 @@ runs these steps for it, and the ``Packages`` CI job runs ``smoke-all`` on every
     python scripts/release.py smoke-all <wheel dir>
         ``smoke`` for every distribution under packages/, each with the wheels of the in-repo
         distributions it requires from the same directory (the CI job, on code not yet released).
+    python scripts/release.py floor <dist> <package>
+        The version <dist> requires of <package> at least (the Packages job's NumPy leg tests it).
     python scripts/release.py sums <dir>
         Write <dir>/SHA256SUMS for the files in <dir>.
 
@@ -43,6 +45,7 @@ from packaging.version import InvalidVersion, Version
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = REPO_ROOT / "packages"
+LOCK = REPO_ROOT / "requirements-lock.txt"
 LINK_REFERENCE = re.compile(r"^\[[^\]]+\]:\s")
 TAG = re.compile(r"^(?P<dist>[a-z0-9][a-z0-9-]*)-v(?P<version>[0-9][0-9a-z.]*)$")
 
@@ -244,13 +247,18 @@ def footprint_violations(dist: str, loaded: Iterable[str], packages: list[str]) 
 
 
 def smoke(dist: str, wheels: list[Path], packages: Path = PACKAGES) -> list[str]:
-    """Install ``wheels`` in a fresh environment and import ``dist``; return the modules imported."""
+    """Install ``wheels`` in a fresh environment, with ``requirements-lock.txt`` as constraints, and
+    import ``dist``; return the modules imported."""
+    if not LOCK.is_file():
+        raise ReleaseError(f"{LOCK} is missing: every install here uses it as constraints")
     with tempfile.TemporaryDirectory() as tmp:
         env = Path(tmp) / "venv"
         venv.create(env, with_pip=True)
         python = env / ("Scripts" if sys.platform == "win32" else "bin") / "python"
+        # The lock's versions of everything the wheels require, as every other install here.
         subprocess.run(  # nosec B603
-            [str(python), "-m", "pip", "install", "--quiet", *map(str, wheels)], check=True
+            [str(python), "-m", "pip", "install", "--quiet", *map(str, wheels), "-c", str(LOCK)],
+            check=True,
         )
         names = import_packages(dist, packages)
         result = subprocess.run(  # nosec B603
@@ -276,6 +284,17 @@ def smoke(dist: str, wheels: list[Path], packages: Path = PACKAGES) -> list[str]
     if bad:
         raise ReleaseError(f"{dist} loaded {bad} beyond its footprint {sorted(FOOTPRINT[dist])}")
     return report["imported"]
+
+
+def floor(dist: str, package: str, packages: Path = PACKAGES) -> str:
+    """The version ``dist`` requires of ``package`` at least (its ``>=``), as written: the Packages
+    job installs exactly this floor of NumPy for rl-navigation, so the test follows the floor."""
+    for spec in project(dist, packages).get("dependencies", []):
+        requirement = Requirement(spec)
+        if canonicalize_name(requirement.name) == canonicalize_name(package):
+            (lower,) = [s.version for s in requirement.specifier if s.operator == ">="]
+            return lower
+    raise ReleaseError(f"{dist} does not require {package}")
 
 
 def wheel_of(dist: str, directory: Path) -> Path:
@@ -323,6 +342,9 @@ def main(argv: list[str] | None = None) -> int:
     smoke_parser.add_argument("dist")
     smoke_parser.add_argument("wheels", nargs="+", type=Path)
     commands.add_parser("smoke-all").add_argument("directory", type=Path)
+    floor_parser = commands.add_parser("floor")
+    floor_parser.add_argument("dist")
+    floor_parser.add_argument("package")
     commands.add_parser("sums").add_argument("directory", type=Path)
     args = parser.parse_args(argv)
     try:
@@ -339,6 +361,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "smoke":
             imported = smoke(args.dist, args.wheels)
             print(f"{args.dist}: imported {len(imported)} modules from the installed wheel")
+        elif args.command == "floor":
+            print(floor(args.dist, args.package))
         elif args.command == "smoke-all":
             for dist, count in smoke_all(args.directory).items():
                 print(f"{dist}: imported {count} modules from the installed wheel")
