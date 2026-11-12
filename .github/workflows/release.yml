@@ -1,0 +1,154 @@
+name: Release
+
+# A pushed tag <dist>-v<version> (rl-navigation-v0.1.0) releases that distribution under packages/: check the
+# tag against the version, the CHANGELOG and the tags of the distributions it requires; run the tests; build
+# the sdist and wheel; install the wheel in a fresh environment and import it; then open a draft GitHub
+# Release with the files, SHA256SUMS and the CHANGELOG section as notes. The maintainer reads the draft and
+# publishes it (docs/releasing.md). Only the publish job can write, and only to releases.
+on:
+  push:
+    tags: ['*-v[0-9]*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  build:
+    name: Build and check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # No pip cache: a release job should not restore files another run wrote.
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # A release comes from develop's history: a tag on an unmerged branch is refused.
+      - name: Check the tagged commit is on develop
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/develop || {
+            echo "::error::the tagged commit $GITHUB_SHA is not on develop: tag a commit develop has merged"
+            exit 1
+          }
+
+      # Before installing anything from the repository, so a bad tag fails in seconds.
+      - name: Check the tag, the version, the CHANGELOG and the released dependencies
+        id: check
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python -m pip install --upgrade pip packaging
+          python scripts/release.py check "$TAG" --notes notes.md --github-output "$GITHUB_OUTPUT"
+
+      - name: Install the distributions with dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest -q --cov-fail-under=50
+
+      - name: Build the sdist and wheel
+        env:
+          DIST: ${{ steps.check.outputs.dist }}
+        run: python -m build "packages/$DIST" --outdir dist/
+
+      # The distributions it requires come from their own releases, as a user installs them.
+      - name: Download the released dependencies
+        env:
+          DIST: ${{ steps.check.outputs.dist }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p deps
+          for tag in $(python scripts/release.py dependency-tags "$DIST"); do
+            # This token cannot see a draft: the dependency's release must be published first.
+            if ! out=$(gh release view "$tag" --json tagName 2>&1); then
+              if [[ "$out" == *"release not found"* ]]; then
+                echo "::error::$tag has no published release: publish its draft, then re-run this workflow"
+              else
+                echo "$out" >&2
+                echo "::error::gh could not look up $tag (its error is above)"
+              fi
+              exit 1
+            fi
+            gh release download "$tag" --pattern '*.whl' --dir deps
+          done
+
+      - name: Install the wheel in a fresh environment and import it
+        env:
+          DIST: ${{ steps.check.outputs.dist }}
+        run: python scripts/release.py smoke "$DIST" dist/*.whl $(find deps -name '*.whl')
+
+      - name: Write the checksums
+        run: python scripts/release.py sums dist
+
+      - name: Upload the release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: |
+            dist/
+            notes.md
+          retention-days: 3
+          if-no-files-found: error
+
+  publish:
+    name: Draft the release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download the release files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+
+      # No checkout here, so gh is told the repository. A re-run (after a fix, the tag pushed again) brings an
+      # existing draft in line with this run: notes, title, prerelease flag and files. A published release is
+      # never changed.
+      - name: Create or refresh the draft release
+        env:
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2> view-error.txt); then
+            if [[ "$draft" != "true" ]]; then
+              echo "::error::$TAG is already published; a published release is not changed"
+              exit 1
+            fi
+            gh release edit "$TAG" --title "$TAG" --notes-file notes.md --prerelease="$PRERELEASE"
+            # Listed first: a gh failure inside a for list would not stop the step.
+            assets=$(gh release view "$TAG" --json assets --jq '.assets[].name') || exit 1
+            for asset in $assets; do
+              if [[ ! -e "dist/$asset" ]]; then gh release delete-asset "$TAG" "$asset" --yes; fi
+            done
+            gh release upload "$TAG" dist/* --clobber
+          elif grep -q "release not found" view-error.txt; then
+            prerelease=()
+            if [[ "$PRERELEASE" == "true" ]]; then prerelease=(--prerelease); fi
+            gh release create "$TAG" dist/* --verify-tag --draft --title "$TAG" --notes-file notes.md \
+              "${prerelease[@]}"
+          else
+            cat view-error.txt >&2
+            echo "::error::gh could not look up $TAG (its error is above)"
+            exit 1
+          fi

@@ -155,8 +155,9 @@ To optimize token usage and context window limits:
 * **`pyproject.toml`**: Tool settings only (Ruff, Mypy, Pytest, coverage, Bandit). Packaging metadata and
   dependencies are per distribution, in `packages/*/pyproject.toml`; the development install is
   `requirements-dev.txt`.
-* **`.github/workflows/`**: CI/CD: `ci.yml` (`Checks` and `Unit Tests` on every PR), `codeql.yml`,
-  `weekly-maintenance.yml`; rules enforced by `tests/test_ci_policy.py`.
+* **`.github/workflows/`**: CI/CD: `ci.yml` (`Checks` and `Unit Tests` on every PR, and the non-required `Packages`),
+  `codeql.yml`, `weekly-maintenance.yml`, `release.yml` (a draft GitHub Release from a `<dist>-v<version>` tag); rules
+  enforced by `tests/test_ci_policy.py`.
 
 ---
 

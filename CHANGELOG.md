@@ -16,6 +16,25 @@ Acrobot-v1) and
 
 ### Added
 
+- **Releases from a pushed tag** (`feature/release-workflow`). `.github/workflows/release.yml` runs on a tag
+  `<dist>-v<version>`: `scripts/release.py check` refuses a tag off `develop`, one that differs from the distribution's
+  version (spelled out: `v0.1` is not `0.1.0`), a version without a CHANGELOG section, and a distribution whose in-repo
+  requirements, its extras' included, have no tag at their in-tree versions; then the tests run, `python -m build`
+  makes the sdist and wheel, `release.py smoke` installs the wheel (with the published wheels of what a plain install
+  requires) in a fresh environment, imports every module a plain install can and checks each package's `py.typed`,
+  `SHA256SUMS` is written, and a **draft** GitHub Release is opened, a prerelease (`rc`, `.dev`) marked as one. A run on
+  a tag whose draft exists refreshes its notes, title, prerelease flag and files; a published release is never changed.
+  A dependency whose release is still a draft stops the run with "has no published release", and any other `gh` error
+  is printed as it is. Only the publish job can write, to releases; `gh` is told the repository with `GH_REPO`, which a
+  new `tests/test_ci_policy.py` rule checks. The non-required `Packages` CI job builds the three distributions on every
+  pull request and smoke-tests each (rl-core imported 54 modules, rl-navigation 28 with only NumPy loaded,
+  rl-challenges 30, measured locally), then runs the 19 robot-side test files from the rl-navigation wheel alone on
+  NumPy 1.26 (783 passed locally, `pytest --noconftest -o addopts=""` with only that wheel, NumPy 1.26.4 and pytest
+  installed). `rl-navigation` now requires NumPy 1.26 or newer, and its `challenge` extra Gymnasium too. `build` joins
+  the dev tools. `docs/releasing.md` has installing by release URL (every `rl-*` wheel in one command, since there is
+  no index to fall back on), the steps, the order of the first tags, a breaking `rl-core` change and the two
+  repository settings for the maintainer (immutable releases, a tag ruleset).
+
 - **Per-worktree environments** (`feature/challenge-entry-points`). `scripts/worktree_venv.sh <worktree>` makes
   `<worktree>/.venv`, layered on the main checkout's `.venv` (one `.pth` line) and holding an editable install of
   the worktree, offline in about 10 s. `tests/conftest.py` stops a run whose `rl_core` comes from outside the

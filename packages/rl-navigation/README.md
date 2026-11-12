@@ -9,7 +9,9 @@ only. Part of [andreijw/AI](https://github.com/andreijw/AI).
 pip install "rl-navigation @ git+https://github.com/andreijw/AI@rl-navigation-v0.1.0#subdirectory=packages/rl-navigation"
 ```
 
-(From the first release on; until `rl-navigation-v0.1.0` is tagged, use `@develop`.)
+(From the first release on; until `rl-navigation-v0.1.0` is tagged, use `@develop`.) The `challenge` extra requires
+`rl-core`, which is not on PyPI: name rl-core's release wheel in the same command (the repository's
+`docs/releasing.md`).
 
 Extras: `gym` (the Gymnasium environments `Navigation-v0` and `NavigationContinuous-v0`), `challenge` (the
 navigation challenge on `rl-core`), `video` (a localization trial as an MP4). Changes: [CHANGELOG.md](CHANGELOG.md).

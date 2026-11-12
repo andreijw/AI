@@ -252,7 +252,9 @@ def foreign_checkout_message(rootpath, module_file):
     """Why tests under ``rootpath`` must not run when rl_core comes from ``module_file``, or None.
 
     A git worktree whose tools run from the main checkout's environment imports the main
-    checkout's code: its tests would pass or fail on code they were not written against."""
+    checkout's code: its tests would pass or fail on code they were not written against. An
+    installed (not editable) copy is refused as well: CI's Packages job tests the built
+    rl-navigation wheel with ``--noconftest``, without this guard and without rl_core."""
     root, module = Path(rootpath).resolve(), Path(module_file).resolve()
     if root in module.parents:
         return None

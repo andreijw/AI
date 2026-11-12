@@ -428,6 +428,14 @@ def test_tests_refuse_another_checkouts_code(tmp_path):
     assert message is not None and "scripts/worktree_venv.sh" in message
 
 
+def test_tests_refuse_an_installed_copy_too(tmp_path):
+    """A non-editable install in site-packages is not this checkout's code either."""
+    import sysconfig
+
+    installed = Path(sysconfig.get_path("purelib")) / "rl_core" / "__init__.py"
+    assert foreign_checkout_message(tmp_path / "checkout", installed) is not None
+
+
 class _TableOnly(BenchmarkChallenge):
     """A challenge that declares only its agent table."""
 
