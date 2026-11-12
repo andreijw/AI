@@ -27,12 +27,13 @@ ENTRY_POINT_GROUP = "rl_core.challenges"
 
 #: This repository's distributions: their challenges load before any other project's, so a plugin
 #: can never take an in-repo challenge's key.
-FIRST_PARTY_DISTS = frozenset({"rl-cartpole"})
+FIRST_PARTY_DISTS = frozenset({"rl-core", "rl-navigation", "rl-challenges"})
 
 #: How to make the challenges visible when none is found: entry points are installed metadata.
 INSTALL_HINT = (
-    "No challenge package is installed: run `pip install -e .` in the checkout "
-    "(in a git worktree, scripts/worktree_venv.sh)"
+    "No challenge package is installed: run `pip install -r requirements-dev.txt` in the checkout "
+    "(in a git worktree, scripts/worktree_venv.sh); an environment from before the split into "
+    "packages/ needs `pip uninstall rl-cartpole` first"
 )
 
 #: Registered challenge classes by key (``"cartpole"``, ``"pendulum"``, ...).

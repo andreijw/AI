@@ -7,15 +7,10 @@ Run them from the gpu profile's environment (./setup.sh --profile gpu):
     .venv-gpu/bin/python -m pytest tests/test_torch_ddpg_agent.py --no-cov
 """
 
-import os
-import sys
-
 import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_core.agents import DDPGAgent, SACAgent, TD3Agent  # noqa: E402
 from rl_core.agents.continuous_actor_critic import LOG_STD_MAX, LOG_STD_MIN  # noqa: E402

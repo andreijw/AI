@@ -7,7 +7,18 @@ from pathlib import Path
 from tests.helpers import FIRST_PARTY_DISCOVERY
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SOURCE_FILES = sorted((REPO_ROOT / "src").rglob("*.py")) + [
+# Each distribution's import packages live in packages/<dist>/src/; rl_core's in CORE_SRC.
+SRC_ROOTS = sorted((REPO_ROOT / "packages").glob("*/src"))
+CORE_SRC = REPO_ROOT / "packages" / "rl-core" / "src"
+
+
+def _glob_src(pattern: str) -> list[Path]:
+    """Every file matching ``pattern`` (relative to a src root) in any distribution, sorted."""
+    return sorted(path for root in SRC_ROOTS for path in root.glob(pattern))
+
+
+SOURCE_FILES = _glob_src("**/*.py") + [
+    REPO_ROOT / "benchmark.py",
     REPO_ROOT / "train.py",
     REPO_ROOT / "record.py",
     REPO_ROOT / "export.py",
@@ -141,7 +152,7 @@ def _imported_modules(source: str) -> list[tuple[int, str]]:
 
 
 def _source_files_under(package_glob: str) -> list[Path]:
-    return sorted(p for p in (REPO_ROOT / "src").glob(f"{package_glob}/**/*.py"))
+    return _glob_src(f"{package_glob}/**/*.py")
 
 
 def test_challenge_packages_do_not_import_the_benchmark_script():
@@ -183,7 +194,8 @@ def _resolved_imports(source: str, package: list[str]) -> list[tuple[int, str]]:
 
 
 def _package_of(path: Path) -> list[str]:
-    return list(path.relative_to(REPO_ROOT / "src").parent.parts)
+    (root,) = [root for root in SRC_ROOTS if root in path.parents]
+    return list(path.relative_to(root).parent.parts)
 
 
 def test_environment_packages_do_not_import_the_agents_package():
@@ -249,7 +261,7 @@ def seeded_default_rng_calls(source: str) -> list[int]:
 def test_agents_seed_generators_through_named_streams():
     """An agent's generators come from rl_core.seeding.derive_rng(seed, <stream>): default_rng(seed) would repeat
     the environment's start-state numbers (CHANGELOG.md, 2026-10-19)."""
-    agent_files = sorted((REPO_ROOT / "src" / "rl_core" / "agents").glob("*.py"))
+    agent_files = sorted((CORE_SRC / "rl_core" / "agents").glob("*.py"))
     offenders = [
         f"{path.relative_to(REPO_ROOT)}:{line}"
         for path in agent_files
@@ -453,7 +465,7 @@ def torch_imports(source: str) -> list[tuple[int, str]]:
 
 
 def test_only_the_torch_backend_modules_import_torch():
-    torch_modules = set((REPO_ROOT / "src").glob(TORCH_MODULE_GLOB))
+    torch_modules = set(_glob_src(TORCH_MODULE_GLOB))
     offenders = [
         f"{path.relative_to(REPO_ROOT)}:{line} imports {module}"
         for path in SOURCE_FILES
@@ -480,9 +492,7 @@ def test_the_torch_import_scan_sees_every_spelling():
 
 
 def test_the_torch_scan_covers_a_backend_module():
-    assert sorted((REPO_ROOT / "src").glob(TORCH_MODULE_GLOB)), (
-        "the scan should see the torch modules"
-    )
+    assert _glob_src(TORCH_MODULE_GLOB), "the scan should see the torch modules"
 
 
 # onnx and onnxruntime are the optional onnx extra: only this module imports them, and only inside
@@ -510,7 +520,7 @@ def onnx_imports(source: str) -> list[tuple[int, str, bool]]:
 
 
 def test_only_the_onnx_module_imports_onnx_and_only_inside_functions():
-    onnx_module = REPO_ROOT / "src" / ONNX_MODULE
+    onnx_module = CORE_SRC / ONNX_MODULE
     offenders = [
         f"{path.relative_to(REPO_ROOT)}:{line} imports {module}"
         for path in SOURCE_FILES
@@ -540,7 +550,7 @@ def test_the_onnx_import_scan_sees_every_spelling():
 
 
 def test_the_onnx_scan_covers_the_onnx_module():
-    assert (REPO_ROOT / "src" / ONNX_MODULE) in SOURCE_FILES
+    assert (CORE_SRC / ONNX_MODULE) in SOURCE_FILES
 
 
 def test_importing_the_framework_does_not_load_torch():
@@ -549,7 +559,7 @@ def test_importing_the_framework_does_not_load_torch():
     import sys
 
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         "import rl_core, rl_core.agents, rl_core.training, rl_core.challenges; "
         + FIRST_PARTY_DISCOVERY
         + "rl_core.challenges.discover_challenges(); "

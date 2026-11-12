@@ -36,15 +36,15 @@ repos:
       - id: mypy
         additional_dependencies: [types-all]
         args: [--ignore-missing-imports]
-        files: ^src/
+        files: ^(packages/|benchmark\.py$)
 
   # Security check with bandit
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.6
     hooks:
       - id: bandit
-        args: [-ll, -r, src/]
-        files: ^src/
+        args: [-ll, -r, packages/, benchmark.py]
+        files: ^(packages/|benchmark\.py$)
 
   # Markdown linting
   - repo: https://github.com/igorshubovych/markdownlint-cli

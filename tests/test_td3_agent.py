@@ -1,16 +1,12 @@
 """TD3: twin critics, target-policy smoothing and delayed actor and target updates (SB3's TD3)."""
 
 import copy
-import os
-import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from rl_core.agents import DDPGAgent, TD3Agent  # noqa: E402
-from rl_core.challenges import discover_challenges  # noqa: E402
+from rl_core.agents import DDPGAgent, TD3Agent
+from rl_core.challenges import discover_challenges
 from tests.agent_internals import (
     actor_forward,
     actor_loss_and_grads,
@@ -20,7 +16,7 @@ from tests.agent_internals import (
     critic_loss_and_grads,
     draw_target_noise,
     exploration_generator,
-    make_constant,  # noqa: E402
+    make_constant,
     off_policy_networks,
     replay_generator,
     target_actions,
@@ -28,7 +24,7 @@ from tests.agent_internals import (
     td3_targets,
     weights,
 )
-from tests.helpers import ReferenceAdam, assert_gradients_match  # noqa: E402
+from tests.helpers import ReferenceAdam, assert_gradients_match
 
 OBS_DIM, ACT_DIM = 3, 2
 LOW, HIGH = np.array([-2.0, -1.0]), np.array([1.0, 3.0])  # scale [1.5, 2], bias [-0.5, 1]

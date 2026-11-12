@@ -5,9 +5,6 @@ import argparse
 import os
 import sys
 
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-
 from rl_core.export import c_header, onnx_model, verify
 from rl_core.export.rollout import greedy_rollout, policy_disagreements
 from rl_core.seeding import eval_seed_for
@@ -21,6 +18,9 @@ from train import (
 )
 
 WHAT = {"c": "C header", "onnx": "ONNX model"}
+
+# In this checkout; an installed rl-core installs the same extra from its release.
+ONNX_INSTALL_COMMAND = 'pip install -e "./packages/rl-core[onnx]"'
 
 
 def _source(checkpoint):
@@ -58,8 +58,8 @@ def _check_onnx_packages(verify_episodes):
         else ""
     )
     _fail(
-        f"--format onnx needs the onnx extra ({', '.join(missing)} not installed): "
-        f"{onnx_model.INSTALL_COMMAND}{skip}."
+        f"--format onnx needs {onnx_model.EXTRA}; {', '.join(missing)} not installed: "
+        f"{ONNX_INSTALL_COMMAND}{skip}."
     )
 
 

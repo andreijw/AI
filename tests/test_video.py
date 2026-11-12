@@ -10,9 +10,6 @@ import numpy as np
 import pytest
 from gymnasium.wrappers import RecordVideo
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 from rl_cartpole.environments import CartPoleEnv
 from rl_core.utils.video import TrainingVideoRecorder, merge_episode_clips
 

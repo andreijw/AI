@@ -1,8 +1,18 @@
 version: 2
 updates:
   # Python dependencies
+  # requirements-dev.txt at the root and each distribution's pyproject.toml.
   - package-ecosystem: "pip"
-    directory: "/"
+    directories:
+      - "/"
+      - "/packages/rl-core"
+      - "/packages/rl-navigation"
+      - "/packages/rl-challenges"
+    # This repository's own distributions: not on PyPI, where anyone could register the names.
+    ignore:
+      - dependency-name: "rl-core"
+      - dependency-name: "rl-navigation"
+      - dependency-name: "rl-challenges"
     schedule:
       interval: "weekly"
       day: "monday"

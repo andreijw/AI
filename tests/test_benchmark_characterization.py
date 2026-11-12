@@ -9,13 +9,10 @@ recording run fails on purpose, so it can never pass by accepting any output).
 """
 
 import os
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import benchmark
 from benchmark import BenchmarkRunner, BenchmarkSettings

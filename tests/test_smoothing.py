@@ -1,10 +1,5 @@
 """Tests for rl_core.utils.smoothing, the rolling average behind the solve numbers and the plots."""
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 import pytest
 
 from rl_core.utils.smoothing import rolling_average

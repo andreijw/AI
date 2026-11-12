@@ -29,9 +29,10 @@ def test_markdown_and_docs_changes_are_docs_only(paths):
     "paths",
     [
         [],
-        ["src/rl_core/agents/dqn.py"],
+        ["packages/rl-core/src/rl_core/agents/dqn.py"],
         ["README.md", "pyproject.toml"],
-        ["src/rl_core/NOTES.md"],
+        ["packages/rl-core/src/rl_core/NOTES.md"],
+        ["packages/rl-navigation/CHANGELOG.md"],
         ["tests/data/fixture.md"],
         [".github/workflows/ci.yml"],
         ["docs/roadmap.md", "scripts/docs_only.py"],
@@ -45,7 +46,7 @@ def test_anything_else_runs_everything(paths):
 
 @pytest.mark.parametrize(
     ("stdin", "expected"),
-    [("docs/a.md\nREADME.md\n", "true"), ("README.md\nsrc/x.py\n", "false"), ("\n", "false")],
+    [("docs/a.md\nREADME.md\n", "true"), ("README.md\npackages/x.py\n", "false"), ("\n", "false")],
 )
 def test_main_reads_paths_from_stdin_and_prints_the_verdict(monkeypatch, capsys, stdin, expected):
     monkeypatch.setattr("sys.stdin", io.StringIO(stdin))

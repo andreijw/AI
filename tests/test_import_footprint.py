@@ -6,11 +6,10 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
+from tests.export_cases import make_checkpoint
+from tests.helpers import FIRST_PARTY_DISCOVERY, minimal_config
 
-from tests.export_cases import make_checkpoint  # noqa: E402
-from tests.helpers import FIRST_PARTY_DISCOVERY, minimal_config  # noqa: E402
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_trainer_and_challenges_do_not_import_matplotlib():
@@ -19,7 +18,7 @@ def test_trainer_and_challenges_do_not_import_matplotlib():
     A fresh process, because this pytest session has already imported matplotlib.
     """
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         "import rl_core.training, rl_core.utils, rl_core.utils.video; "
         + FIRST_PARTY_DISCOVERY
         + "from rl_core.challenges import CHALLENGES, discover_challenges, import_failures_text; "
@@ -45,7 +44,7 @@ def test_entry_points_do_not_import_matplotlib(module):
     """train.py, record.py, export.py and src/benchmark.py load matplotlib only when they plot: pyplot costs
     about 0.8 s of start-up on the Jetson. A fresh process, as users get the modules."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         f"import {module}; "
         "print(sorted(m for m in sys.modules if m.split('.')[0] == 'matplotlib')[:5])"
     )
@@ -63,7 +62,7 @@ def test_discovering_the_challenges_does_not_import_box2d():
     """LunarLander's challenges register without Box2D, which CI does not install: only building
     the environment needs it. A fresh process, because this session may have built one."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         + FIRST_PARTY_DISCOVERY
         + "from rl_core.challenges import CHALLENGES, discover_challenges, import_failures_text; "
         "discover_challenges(); "
@@ -89,7 +88,7 @@ ONNX_PACKAGES = ("onnx", "onnxruntime")
 def test_entry_points_do_not_import_onnx(module):
     """onnx and onnxruntime are an optional extra, loaded only when an ONNX export asks for them."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         f"import {module}; "
         f"print(sorted(m for m in sys.modules if m.split('.')[0] in {ONNX_PACKAGES!r})[:5])"
     )
@@ -110,7 +109,7 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
     argv += ["--format", "c", "--checkpoint", checkpoint, "--output", str(tmp_path / "p.h")]
     argv += ["--verify-episodes", "0"]
     code = (
-        f"import sys; sys.path.insert(0, 'src'); sys.argv = {argv!r}; "
+        f"import sys; sys.argv = {argv!r}; "
         "import export; export.main(); "
         f"print(sorted(m for m in sys.modules if m.split('.')[0] in {ONNX_PACKAGES!r})[:5])"
     )
@@ -159,7 +158,7 @@ def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
     """The simulator is a plain NumPy library that a robot imports: Gymnasium and the training
     framework stay out of it. A fresh process, because this session has imported both."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         f"import {module}; "
         "print(sorted(m for m in sys.modules if m.split('.')[0] in ('gymnasium', 'rl_core'))[:5])"
     )
@@ -177,7 +176,7 @@ def test_navigation_estimation_imports_only_the_simulator():
     """The estimators run on the robot beside the simulator's geometry and nothing else of
     rl_navigation: not the Gymnasium layer, not the challenge's environments. A fresh process."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         "import rl_navigation.estimation, rl_navigation.estimation.evaluation, "
         "rl_navigation.estimation.mcl, rl_navigation.estimation.comparison, "
         "rl_navigation.estimation.recording; "
@@ -197,7 +196,7 @@ def test_navigation_estimation_imports_only_the_simulator():
 def _loaded_navigation_packages(imports: str) -> list[str]:
     """The ``rl_navigation`` subpackages a fresh process has loaded after ``imports``."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         f"import {imports}; "
         "print(' '.join(sorted({m.split('.')[1] for m in sys.modules "
         "if m.startswith('rl_navigation.')})))"
@@ -225,7 +224,7 @@ def test_the_mapping_evaluation_desk_tool_imports_only_sim_and_estimation():
 
 def test_the_mapping_package_does_not_import_its_evaluation():
     code = (
-        "import sys; sys.path.insert(0, 'src'); import rl_navigation.mapping; "
+        "import sys; import rl_navigation.mapping; "
         "print('rl_navigation.mapping.evaluation' in sys.modules)"
     )
     result = subprocess.run(
@@ -240,7 +239,7 @@ def test_the_slam_core_imports_only_the_simulator_and_the_estimation_core():
     chi-square quantile it shares), with neither the mapper, the Gymnasium layer nor the
     estimators' desk tools. A fresh process."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         "import rl_navigation.slam, rl_navigation.slam.features, rl_navigation.slam.ekf_slam; "
         "print(' '.join(sorted({m.split('.')[1] for m in sys.modules "
         "if m.startswith('rl_navigation.')})), "
@@ -267,7 +266,7 @@ def test_the_slam_desk_tools_stay_inside_the_navigation_library(tool):
 
 def test_the_slam_package_does_not_import_its_desk_tools():
     code = (
-        "import sys; sys.path.insert(0, 'src'); import rl_navigation.slam; "
+        "import sys; import rl_navigation.slam; "
         "print(any(m in sys.modules for m in ('rl_navigation.slam.feature_evaluation', "
         "'rl_navigation.slam.evaluation', 'rl_navigation.mapping')))"
     )
@@ -318,7 +317,7 @@ def test_the_navigation_challenge_does_not_load_the_estimators(module):
     """The estimators are the robot's library: the challenge (its environments and benchmark)
     trains a policy without them. A fresh process."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         f"import {module}; "
         "print(sorted(m for m in sys.modules if m.startswith('rl_navigation.estimation')))"
     )
@@ -333,7 +332,7 @@ def test_the_navigation_gymnasium_env_registers_its_ids_without_rl_core():
     """rl_navigation.gym_env is the Gymnasium layer another project can use without the trainer:
     importing it registers both ids and loads no rl_core module. A fresh process."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         "import gymnasium as gym; import rl_navigation.gym_env; "
         "env = gym.make('NavigationContinuous-v0'); env.reset(seed=0); env.close(); "
         "assert 'Navigation-v0' in gym.registry, sorted(gym.registry)[-5:]; "
@@ -352,7 +351,7 @@ def test_the_navigation_gymnasium_env_registers_its_ids_without_rl_core():
 def test_importing_rl_navigation_loads_none_of_its_subpackages():
     """rl_navigation/__init__.py imports nothing, so the robot's code pays only for what it uses."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); import rl_navigation; "
+        "import sys; import rl_navigation; "
         "print(sorted(m for m in sys.modules if m.startswith('rl_navigation.')))"
     )
     result = subprocess.run(
@@ -367,7 +366,7 @@ def test_the_estimation_package_does_not_import_its_desk_tools(tool):
     """The comparison report and the recording are tools, not part of the library a robot
     imports. A fresh process."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); import rl_navigation.estimation; "
+        "import sys; import rl_navigation.estimation; "
         f"print('rl_navigation.estimation.{tool}' in sys.modules)"
     )
     result = subprocess.run(
@@ -389,7 +388,7 @@ def test_the_localization_recording_loads_no_plotting_or_video_stack(module):
     """The recording paints with NumPy; the command line loads matplotlib and imageio-ffmpeg only
     when it writes stills or the MP4. A fresh process."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); "
+        "import sys; "
         f"import {module}; "
         f"print(sorted(m for m in sys.modules if m.split('.')[0] in {VIDEO_STACK!r})[:5])"
     )

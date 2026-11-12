@@ -1,12 +1,7 @@
 """Unit tests for DQNAgent implementation."""
 
-import os
-import sys
-
 import numpy as np
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_core.agents.dqn_agent import DQNAgent
 from tests.agent_internals import bellman_targets, counters, q_values, weights

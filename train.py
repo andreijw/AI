@@ -2,11 +2,7 @@
 
 import argparse
 import os
-import sys
 from contextlib import contextmanager
-
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from rl_core.challenges import (
     CHALLENGES,
@@ -118,7 +114,7 @@ def require_moviepy():
         raise ImportError(
             "The 'moviepy' package is required for --record-video. "
             "Install it with: pip install moviepy  "
-            "or: pip install -e '.[video]'"
+            "or: pip install -e './packages/rl-core[video]'"
         ) from exc
 
 

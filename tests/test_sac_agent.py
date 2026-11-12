@@ -2,19 +2,15 @@
 
 import copy
 import math
-import os
-import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from rl_core.agents import DDPGAgent, SACAgent, TD3Agent  # noqa: E402
-from rl_core.agents.continuous_actor_critic import LOG_STD_MAX, LOG_STD_MIN  # noqa: E402
-from rl_core.agents.sac_agent import log_one_minus_tanh_squared  # noqa: E402
-from rl_core.challenges import discover_challenges  # noqa: E402
-from tests.agent_internals import (  # noqa: E402
+from rl_core.agents import DDPGAgent, SACAgent, TD3Agent
+from rl_core.agents.continuous_actor_critic import LOG_STD_MAX, LOG_STD_MIN
+from rl_core.agents.sac_agent import log_one_minus_tanh_squared
+from rl_core.challenges import discover_challenges
+from tests.agent_internals import (
     assert_same_weights,
     counters,
     critic_forward,
@@ -30,7 +26,7 @@ from tests.agent_internals import (  # noqa: E402
     soft_targets,
     weights,
 )
-from tests.helpers import (  # noqa: E402
+from tests.helpers import (
     ReferenceAdam,
     assert_gradients_match,
     assert_same_checkpoint,

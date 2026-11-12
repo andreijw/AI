@@ -9,8 +9,8 @@ one. It computes what the C header computes: the observation normalisation clipp
 layers (``Gemm``, then ``Relu`` on hidden layers), and the head. Weights are float32 initializers;
 the agent, the checkpoint and the observation settings are in the model's metadata.
 
-onnx and onnxruntime are the optional ``onnx`` extra (``pip install -e ".[onnx]"``): this is the only
-module that imports them, and only inside its functions.
+onnx and onnxruntime are rl-core's optional ``onnx`` extra: this is the only module that imports them,
+and only inside its functions.
 """
 
 from __future__ import annotations
@@ -30,7 +30,8 @@ from rl_core.export.verify import VerificationReport, compare_with_policy
 # onnxruntime (IR 8 is opset 17's, onnx 1.12; onnxruntime has loaded both since 1.14).
 OPSET = 17
 IR_VERSION = 8
-INSTALL_COMMAND = 'pip install -e ".[onnx]"'
+#: What a missing onnx or onnxruntime needs, for an installed rl-core as for a checkout.
+EXTRA = "rl-core's onnx extra (onnx and onnxruntime)"
 
 
 def missing_packages(verify: bool) -> list[str]:

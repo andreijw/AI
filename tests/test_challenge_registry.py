@@ -121,9 +121,9 @@ def test_every_challenge_accepts_a_config_dir():
 
 
 def test_running_the_benchmark_script_directly_lists_every_challenge():
-    """src/benchmark.py run as __main__ still sees the challenges (the old sys.modules alias case)."""
+    """benchmark.py run as __main__ still sees the challenges (the old sys.modules alias case)."""
     result = subprocess.run(
-        [sys.executable, "src/benchmark.py", "--help"],
+        [sys.executable, "benchmark.py", "--help"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -137,7 +137,7 @@ def test_running_the_benchmark_script_directly_trains(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
-            "src/benchmark.py",
+            "benchmark.py",
             "--challenge",
             "cartpole",
             "--agents",
@@ -166,7 +166,7 @@ def test_running_the_benchmark_script_directly_trains(tmp_path):
 def test_run_benchmark_discovers_challenges_in_a_fresh_process(tmp_path):
     """Called from Python with nothing imported first, run_benchmark still finds the challenges."""
     code = (
-        "import sys; sys.path.insert(0, 'src'); import benchmark; "
+        "import sys; import benchmark; "
         "benchmark.run_benchmark(challenge_name='pendulum', settings=benchmark.BenchmarkSettings("
         f"agents=('random',), episodes=1, seeds=(1,), output_dir={str(tmp_path / 'out')!r}, "
         "eval_episodes=1), report_path=None, save_plot=False); print('ran')"
@@ -378,18 +378,25 @@ def test_the_hint_is_left_out_once_a_challenge_is_registered():
 
 
 def _declared_entry_points():
-    with open(REPO_ROOT / "pyproject.toml", "rb") as f:
-        project = tomllib.load(f)["project"]
-    return project.get("entry-points", {}).get(registry.ENTRY_POINT_GROUP, {})
+    """Every distribution's challenge entry points, from the pyproject.toml files under packages/."""
+    declared = {}
+    for path in sorted((REPO_ROOT / "packages").glob("*/pyproject.toml")):
+        with open(path, "rb") as f:
+            project = tomllib.load(f)["project"]
+        declared.update(project.get("entry-points", {}).get(registry.ENTRY_POINT_GROUP, {}))
+    return declared
 
 
 def test_every_challenge_package_declares_an_entry_point():
     """The one edit a new challenge package needs: an entry point named after it."""
-    packages = sorted(path.parent.name for path in (REPO_ROOT / "src").glob("rl_*/benchmark.py"))
+    packages = sorted(
+        path.parent.name for path in (REPO_ROOT / "packages").glob("*/src/*/benchmark.py")
+    )
     declared = _declared_entry_points()
     assert sorted(declared) == packages, (
-        'Every src/rl_<name>/benchmark.py needs `rl_<name> = "rl_<name>.benchmark"` under '
-        f'[project.entry-points."{registry.ENTRY_POINT_GROUP}"] in pyproject.toml, and nothing else'
+        'Every packages/<dist>/src/<package>/benchmark.py needs `<package> = "<package>.benchmark"` '
+        f'under [project.entry-points."{registry.ENTRY_POINT_GROUP}"] in its pyproject.toml, '
+        "and nothing else"
     )
     assert all(module == f"{name}.benchmark" for name, module in declared.items())
 
@@ -399,7 +406,7 @@ def test_the_installed_metadata_has_the_declared_entry_points():
     installed = {ep.name: ep.value for ep in registry.challenge_entry_points()}
     assert installed == _declared_entry_points(), (
         "The installed metadata is stale: re-run the editable install "
-        "(pip install -e ., or scripts/worktree_venv.sh in a worktree)"
+        "(pip install -r requirements-dev.txt, or scripts/worktree_venv.sh in a worktree)"
     )
 
 
@@ -414,8 +421,8 @@ def test_the_tests_see_only_first_party_entry_points(isolated_registry, monkeypa
 
 def test_tests_refuse_another_checkouts_code(tmp_path):
     worktree, main = tmp_path / "worktree", tmp_path / "main"
-    inside = worktree / "src" / "rl_core" / "__init__.py"
-    outside = main / "src" / "rl_core" / "__init__.py"
+    inside = worktree / "packages" / "rl-core" / "src" / "rl_core" / "__init__.py"
+    outside = main / "packages" / "rl-core" / "src" / "rl_core" / "__init__.py"
     assert foreign_checkout_message(worktree, inside) is None
     message = foreign_checkout_message(worktree, outside)
     assert message is not None and "scripts/worktree_venv.sh" in message

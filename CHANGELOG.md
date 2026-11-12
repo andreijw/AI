@@ -24,6 +24,21 @@ Acrobot-v1) and
 
 ### Changed
 
+- **Three distributions under `packages/`** (`feature/split-distributions`). The single `rl-cartpole` distribution is
+  split, with unchanged import names, into `rl-core` (`packages/rl-core/src/rl_core`), `rl-navigation`
+  (`rl_navigation`: NumPy only, extras `gym`, `challenge` and `video`) and `rl-challenges` (the six challenge
+  packages, extra `box2d`), each with its own `pyproject.toml`, README, CHANGELOG, LICENSE and `py.typed` marker, at
+  version 0.1.0 (`rl_core.__version__`, `rl_navigation.__version__`). `src/benchmark.py` is now `benchmark.py` at
+  the root. The root `pyproject.toml` holds only tool configuration, and `requirements-dev.txt` (which replaces the
+  stale `requirements.txt`) installs all three editable with the dev tools; `setup.sh`, `setup.ps1`, CI, Dependabot
+  (which now ignores the three `rl-*` names, unregistered on PyPI) and pre-commit follow. The scripts and tests no
+  longer put `src/` on `sys.path`. Coverage names each `src/` root, since `--cov=packages` would leave out every
+  module no test imports. A library's missing-extra message names the extra (rl-core's `onnx` or `torch`,
+  rl-navigation's `video`) rather than a checkout path. An environment made before this change runs `./setup.sh` (or
+  `setup.ps1`) again, which removes the old `rl-cartpole`; the untracked `src/` left behind is safe to delete. **This
+  PR merges together with the next one** (`feature/package-docs-sweep`): until then the docs, skills and review rules
+  still name `src/` paths and `pip install -e ".[...]"`, which no longer installs the code.
+
 - **Challenges are found through entry points** (`feature/challenge-entry-points`). `discover_challenges()` imports the
   modules declared in the `rl_core.challenges` entry-point group (`pyproject.toml`, one line per package) instead of
   scanning the directory beside `rl_core`, so a challenge can live in another distribution or project. This repository's

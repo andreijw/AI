@@ -10,20 +10,18 @@ import sys
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from rl_core.agents import DDPGAgent, PPOAgent  # noqa: E402
-from rl_core.export import onnx_model, verify  # noqa: E402
-from tests.export_cases import (  # noqa: E402
+from rl_core.agents import DDPGAgent, PPOAgent
+from rl_core.export import onnx_model, verify
+from tests.export_cases import (
     BOUNDS,
     OBS_DIM,
     make_agent,
     random_observations,
     run_export,
 )
-from tests.helpers import needs_onnx  # noqa: E402
+from tests.helpers import needs_onnx
 
-INSTALL = 'pip install -e ".[onnx]"'
+INSTALL = 'pip install -e "./packages/rl-core[onnx]"'
 
 
 def _discrete_policy():

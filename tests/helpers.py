@@ -282,21 +282,21 @@ needs_cc = pytest.mark.skipif(
     reason="no C compiler (set CC, or install gcc or clang)",
 )
 
-# The ONNX export needs the onnx extra (pip install -e ".[onnx]"): onnx builds the model, onnxruntime
+# The ONNX export needs the onnx extra (pip install -e "./packages/rl-core[onnx]"): onnx builds the model, onnxruntime
 # checks it. CI installs it. Importing onnxruntime starts a thread that never ends, and a fork after it
 # (an async vector environment) may deadlock, so tests/conftest.py runs these tests last.
-NEEDS_ONNX_REASON = 'the onnx extra is not installed (pip install -e ".[onnx]")'
+NEEDS_ONNX_REASON = 'the onnx extra is not installed (pip install -e "./packages/rl-core[onnx]")'
 needs_onnx = pytest.mark.skipif(
     importlib.util.find_spec("onnx") is None or importlib.util.find_spec("onnxruntime") is None,
     reason=NEEDS_ONNX_REASON,
 )
 
 
-# Writing an MP4 needs imageio-ffmpeg, from the video extra (pip install -e ".[video]"); CI does not
+# Writing an MP4 needs imageio-ffmpeg, from the video extra (pip install -e "./packages/rl-core[video]"); CI does not
 # install it.
 needs_video = pytest.mark.skipif(
     importlib.util.find_spec("imageio_ffmpeg") is None,
-    reason='the video extra is not installed (pip install -e ".[video]")',
+    reason='the video extra is not installed (pip install -e "./packages/rl-core[video]")',
 )
 
 

@@ -31,7 +31,7 @@ from rl_navigation.estimation.recording import (
 )
 from rl_navigation.sim.render import Image
 
-VIDEO_EXTRA = 'pip install -e ".[video]"'
+VIDEO_EXTRA = "rl-navigation's video extra (imageio-ffmpeg and matplotlib)"
 
 
 def require_imageio_ffmpeg() -> ModuleType:
@@ -39,9 +39,7 @@ def require_imageio_ffmpeg() -> ModuleType:
     try:
         import imageio_ffmpeg
     except ImportError as error:
-        raise ImportError(
-            f"Writing an MP4 needs imageio-ffmpeg, from the video extra: {VIDEO_EXTRA}."
-        ) from error
+        raise ImportError(f"Writing an MP4 needs imageio-ffmpeg: install {VIDEO_EXTRA}.") from error
     return imageio_ffmpeg
 
 

@@ -18,9 +18,9 @@ from rl_core.utils.config_values import flag
 # What to tell someone whose config chooses a backend whose library is missing.
 BACKEND_INSTALL_HINTS = {
     "torch": (
-        "backend: torch needs PyTorch: pip install -e '.[torch]' (on the Jetson, add "
-        "--index-url https://download.pytorch.org/whl/cu132 --extra-index-url "
-        "https://pypi.org/simple; see docs/pytorch_jetson_timing.md)"
+        "backend: torch needs PyTorch: install rl-core's torch extra (on the Jetson from PyTorch's own "
+        "index, --index-url https://download.pytorch.org/whl/cu132 --extra-index-url "
+        "https://pypi.org/simple; see the repository's docs/pytorch_jetson_timing.md)"
     ),
 }
 
