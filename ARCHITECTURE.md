@@ -196,7 +196,9 @@ tags are in [docs/releasing.md](docs/releasing.md).
    on load; a rollout still partly filled when training ends is not trained on. Each episode ends its GAE trace, and
    an episode cut by the time limit (or by `max_steps_per_episode`) adds γ·V(next state) to its last reward, so
    CartPole's 500-step limit is not a terminal state. Continuous PPO buffers whole episodes the same way with its own
-   `rollout_steps` and applies the same rule; both read it from `episode_end` in `rl_core/agents/returns.py`. DQN and
+   `rollout_steps` and applies the same rule; both read it from `episode_end` in `rl_core/agents/returns.py`. The
+   discrete Actor-Critic, and the continuous one with `n_steps` 0, apply it only with `bootstrap_truncation: true`
+   (default false); REINFORCE has no critic and treats a cut as an end. DQN and
    DDPG store the trainer's `terminated` flag, so they bootstrap through time limits too. The continuous Actor-Critic
    replays each episode in `n_steps` chunks, each with GAE targets bootstrapped from the chunk's next state unless the
    episode truly terminated; with `training.update_every` equal to `n_steps` it trains each chunk as the Trainer hands
@@ -349,9 +351,11 @@ classDiagram
         <<abstract>>
         #ndarray _W1, _b1, _W_pi, _b_pi, _W_v, _b_v
         +select_action(obs, training) int
+        #_bootstrap_cut(batch, rewards) tuple
     }
 
     class ActorCriticAgent {
+        +bool bootstrap_truncation
         +update(batch) dict
     }
 
@@ -384,9 +388,11 @@ classDiagram
         +forward_actor(obs) tuple
         +forward_critic(obs) float
         +select_action(obs, training) ndarray
+        #_add_bootstrap(rewards, bootstrap_obs) ndarray
     }
 
     class ContinuousActorCriticAgent {
+        +bool bootstrap_truncation
         +update(trajectory) dict
     }
 

@@ -12,6 +12,7 @@ from rl_core.utils.config_values import positive_int
 from .base_agent import BaseAgent
 from .inference import DenseLayer, InferencePolicy
 from .optim import Optimizer, optimizer_from_config
+from .returns import episode_end
 from .softmax import stable_softmax
 
 
@@ -152,6 +153,33 @@ class ActorCriticBase(BaseAgent):
                 f"rewards={n_steps}"
             )
         return observations, actions, rewards, n_steps
+
+    def _bootstrap_cut(
+        self, batch: dict[str, Any], rewards: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        One episode's end flags, and its rewards with a time-limit cut bootstrapped.
+
+        The last step always ends the advantage estimate (see :func:`episode_end`). If the episode
+        was cut rather than terminated (its final ``terminated``, or else ``done``, is False) and
+        its next state is known, ``gamma * V(next_observations[-1])`` is added to a copy of its
+        last reward, as Stable-Baselines3 does for timeouts; without a next state the cut is
+        treated as an end. ``rewards`` is not modified.
+
+        Returns:
+            ``(dones, rewards)``, each of shape (n_steps,).
+        """
+        dones, bootstrap_obs = episode_end(
+            len(rewards),
+            batch.get("dones"),
+            batch.get("terminated"),
+            batch.get("next_observations"),
+        )
+        if bootstrap_obs is not None:
+            _, next_value, _ = self._forward(bootstrap_obs)
+            rewards = rewards.copy()
+            rewards[-1] += self.gamma * next_value
+        return dones, rewards
 
     def _zero_ac_gradients(self) -> dict[str, Any]:
         """

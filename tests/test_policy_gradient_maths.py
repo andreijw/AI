@@ -320,6 +320,83 @@ def test_actor_critic_update_descends_the_gradient_scaled_by_learning_rate_over_
 
 
 # ---------------------------------------------------------------------------
+# bootstrap_truncation: a time-limit cut adds gamma^(T-t) * V(s_T) to the Actor-Critic's returns
+# ---------------------------------------------------------------------------
+# The next states are drawn apart from the observations, so V(next_observations[-1]) differs from
+# V(observations[-1]) and a bootstrap from the wrong state changes the weights.
+
+
+def _cut_batch(**overrides) -> dict[str, np.ndarray]:
+    """_step_batch's episode ended by a time limit: done at the end, never terminated."""
+    batch = {
+        **_step_batch(),
+        "next_observations": np.random.default_rng(29).standard_normal((N_STEPS, OBS_DIM)),
+        "terminated": np.zeros(N_STEPS, dtype=bool),
+    }
+    return {**batch, **overrides}
+
+
+def _terminated_batch() -> dict[str, np.ndarray]:
+    return _cut_batch(terminated=np.array([False] * (N_STEPS - 1) + [True]))
+
+
+@pytest.mark.parametrize(
+    "cut",
+    [
+        pytest.param({}, id="terminated-false"),
+        pytest.param(
+            {"terminated": None, "dones": np.zeros(N_STEPS, dtype=bool)}, id="no-terminated"
+        ),
+    ],
+)
+def test_actor_critic_bootstraps_a_cut_episode_from_the_value_of_its_next_state(cut):
+    config = {"gamma": 0.5, "learning_rate": 0.05}
+    agent = _agent(ActorCriticAgent, bootstrap_truncation=True, **config)
+    reference = _agent(ActorCriticAgent, **config)
+    batch = {k: v for k, v in _cut_batch(**cut).items() if v is not None}
+    next_value = float(state_value(reference, batch["next_observations"][-1]))
+    last_value = float(state_value(reference, batch["observations"][-1]))
+    assert abs(next_value - last_value) > 0.1, "The fixture must tell the two states apart."
+
+    agent.update(batch)
+
+    # G_t + gamma^(T - t) * V(s_T): 0.5^6 * V at the first step, ..., 0.5 * V at the last.
+    expected_returns = STEP_RETURNS + 0.5 ** np.arange(N_STEPS, 0, -1) * next_value
+    _, grads = loss_and_grads(reference, batch["observations"], batch["actions"], expected_returns)
+    _descend(reference, grads, scale=0.05 / N_STEPS)
+    assert_same_weights(agent, reference)
+
+
+def _cut_without_next_state() -> dict[str, np.ndarray]:
+    return {k: v for k, v in _cut_batch().items() if k != "next_observations"}
+
+
+@pytest.mark.parametrize(
+    ("agent_cls", "config", "make_batch"),
+    [
+        pytest.param(
+            ActorCriticAgent, {"bootstrap_truncation": True}, _terminated_batch, id="terminated"
+        ),
+        pytest.param(
+            ActorCriticAgent,
+            {"bootstrap_truncation": True},
+            _cut_without_next_state,
+            id="cut-without-next-state",
+        ),
+        pytest.param(ActorCriticAgent, {}, _cut_batch, id="actor-critic-default"),
+        pytest.param(ReinforceAgent, {}, _cut_batch, id="reinforce"),
+    ],
+)
+def test_episodes_that_must_not_bootstrap_train_as_a_termination(agent_cls, config, make_batch):
+    """A true termination never bootstraps; nor does a cut whose next state is unknown, a cut with
+    bootstrap_truncation off (the default), or any cut for REINFORCE, which has no critic."""
+    agent, terminated = _agent(agent_cls, **config), _agent(agent_cls)
+    agent.update(make_batch())
+    terminated.update(_terminated_batch())
+    assert_weights_unchanged(agent, weights(terminated), "from those of a terminated episode")
+
+
+# ---------------------------------------------------------------------------
 # The Adam option: `optimizer: adam` steps the mean gradient with Adam instead of SGD
 # ---------------------------------------------------------------------------
 # The clip of 0.05 is below the mean gradient's norm for this batch, so it scales every step.

@@ -16,6 +16,7 @@ from rl_core.agents import ContinuousActorCriticAgent, ContinuousPPOAgent
 from rl_core.agents.returns import gae
 from tests.agent_internals import (
     assert_same_weights,
+    assert_weights_unchanged,
     chunk_targets,
     gaussian_forward,
     optimizer,
@@ -97,10 +98,11 @@ def test_bounded_mean_must_be_true_or_false(agent_cls, quoted):
         agent_cls(3, 1, config={"seed": 1, "bounded_mean": quoted, **BOUNDS})
 
 
+@pytest.mark.parametrize("key", ["normalize_advantages", "bootstrap_truncation"])
 @pytest.mark.parametrize("quoted", ["false", "true", 1, None])
-def test_normalize_advantages_must_be_true_or_false(quoted):
-    with pytest.raises(ValueError, match="normalize_advantages must be true or false"):
-        _ac(normalize_advantages=quoted)
+def test_actor_critic_flags_must_be_true_or_false(key, quoted):
+    with pytest.raises(ValueError, match=f"{key} must be true or false"):
+        _ac(**{key: quoted})
 
 
 def test_a_checkpoint_keeps_its_bounded_mean_setting(tmp_path):
@@ -408,3 +410,55 @@ def test_an_empty_or_unrecognised_episode_trains_nothing(trajectory):
 def test_anneal_steps_must_be_a_positive_integer(bad):
     with pytest.raises(ValueError, match="anneal_steps must be a positive integer"):
         _ac(anneal_steps=bad)
+
+
+# ---------------------------------------------------------------------------
+# bootstrap_truncation with Monte Carlo returns (n_steps 0); chunks always bootstrap a cut
+# ---------------------------------------------------------------------------
+
+
+# Each case: the agent's config, its episode (terminated?) and a key removed from that episode, then
+# the reference's config and episode (terminated?).
+@pytest.mark.parametrize(
+    ("config", "terminated", "drop", "reference_config", "reference_terminated"),
+    [
+        pytest.param({"bootstrap_truncation": True}, True, None, {}, True, id="terminated"),
+        pytest.param({}, False, None, {}, True, id="cut-by-default"),
+        pytest.param(
+            {"bootstrap_truncation": True, "n_steps": 8},
+            False,
+            None,
+            {"n_steps": 8},
+            False,
+            id="chunks",
+        ),
+        # Without terminated the final done (True in _episode) decides: an end.
+        pytest.param(
+            {"bootstrap_truncation": True}, False, "terminated", {}, True, id="no-terminated"
+        ),
+        pytest.param(
+            {"bootstrap_truncation": True},
+            False,
+            "next_observations",
+            {},
+            True,
+            id="cut-without-next-state",
+        ),
+    ],
+)
+@pytest.mark.parametrize("normalize_advantages", [True, False])
+def test_what_bootstrap_truncation_leaves_unchanged(
+    config, terminated, drop, reference_config, reference_terminated, normalize_advantages
+):
+    """A true termination never bootstraps; nor does a Monte Carlo cut by default, a batch whose
+    final done ends it when it has no terminated flags, or a cut whose next state is unknown. Each
+    trains as a termination. n_steps chunks bootstrap a cut already, so the key reaches only the
+    Monte Carlo path."""
+    episode = _episode(terminated=terminated)
+    if drop is not None:
+        del episode[drop]
+    agent = _ac(normalize_advantages=normalize_advantages, **config)
+    agent.update(episode)
+    reference = _ac(normalize_advantages=normalize_advantages, **reference_config)
+    reference.update(_episode(terminated=reference_terminated))
+    assert_weights_unchanged(agent, weights(reference), "from the reference agent's")

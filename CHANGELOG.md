@@ -12,6 +12,23 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-12
+
+### Fixed
+
+- **Actor-Critic bootstraps a time-limit cut** (`fix/ac-time-limit-bootstrap`; review of 2026-11-11, W2 and W3).
+  A new agent key `bootstrap_truncation` (default false) makes the discrete Actor-Critic, and the continuous one
+  with `n_steps: 0`, add γ^(T−t)·V(s_T) to the Monte Carlo returns of an episode cut by a time limit or
+  `max_steps_per_episode`, with V at the true next state. A termination is unchanged bit for bit. The bootstrap is
+  written once per base class (`ActorCriticBase._bootstrap_cut`, `ContinuousActorCriticBase._add_bootstrap`), and
+  PPO and continuous PPO now use it. REINFORCE has no critic and still treats a cut as an end, which a test now
+  pins. On `configs/cartpole_actor_critic.yaml`, seeds 1 to 5 paired, 500,000 steps: it held 475 on 5 of 5 seeds
+  against 4 of 5, and the final average was better on all 5 (mean 495.9 against 481.3; +6.8 to +23.5). Steps to
+  solve fell from 374,332 to 231,271 on average. The committed config turns it on (the maintainer's decision), and
+  `docs/benchmarks/cartpole_results.md` was rerun in full: the Actor-Critic row is now 945.6 episodes to solve and
+  100% held, and the other agents' learning figures are unchanged. Not verified: Pendulum with `n_steps: 0` (the
+  committed Pendulum config uses `n_steps: 8`, which already bootstrapped), and seeds other than 1 to 5.
+
 ## 2026-11-11
 
 ### Added
