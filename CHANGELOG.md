@@ -16,6 +16,13 @@ Acrobot-v1) and
 
 ### Added
 
+- **A `release` skill** (`feature/release-skill`; the maintainer's request, 2026-11-12). `.claude/skills/release/`
+  runs `docs/releasing.md` in order: the version bump and CHANGELOG section in a pull request, the local
+  `scripts/release.py check`, the maintainer's signed tag commands in dependency order, watching the Release
+  workflow, and checking the draft (assets, `SHA256SUMS`, notes against the CHANGELOG, prerelease flag). Signing the
+  tag and publishing the draft stay the maintainer's. First used on `rl-core-v0.1.0` (run 43286857713, green; draft
+  checked). `docs/releasing.md` no longer says the two release settings are off.
+
 - **Circle extraction bridges dropped beams** (`feature/segment-scan-bridging`; roadmap, Phase 8 SLAM follow-up).
   `segment_scan` joins two usable beams across up to `FeatureSettings.max_bridged_angle` of unusable ones (default
   3°: 3 beams of the robot's 1° lidar, none of the 5.6° 64-beam lidar), with the breakpoint scaled by the angle
@@ -30,6 +37,21 @@ Acrobot-v1) and
   64-beam lidar a 3-beam bridge spans 22° and gave overconfident fits (NEES 24); the cap gives the judged segments
   exactly on 360 beams (0 of 4,800 scans differ) and no bridging on 64. Not verified: SLAM-1 on the 64-beam lidar, and
   the extraction timing alone on the machine (it was timed under shared load: 6.1 ms median, 10.8 ms p99).
+
+### Fixed
+
+- **Actor-Critic bootstraps a time-limit cut** (`fix/ac-time-limit-bootstrap`; review of 2026-11-11, W2 and W3).
+  A new agent key `bootstrap_truncation` (default false) makes the discrete Actor-Critic, and the continuous one
+  with `n_steps: 0`, add γ^(T−t)·V(s_T) to the Monte Carlo returns of an episode cut by a time limit or
+  `max_steps_per_episode`, with V at the true next state. A termination is unchanged bit for bit. The bootstrap is
+  written once per base class (`ActorCriticBase._bootstrap_cut`, `ContinuousActorCriticBase._add_bootstrap`), and
+  PPO and continuous PPO now use it. REINFORCE has no critic and still treats a cut as an end, which a test now
+  pins. On `configs/cartpole_actor_critic.yaml`, seeds 1 to 5 paired, 500,000 steps: it held 475 on 5 of 5 seeds
+  against 4 of 5, and the final average was better on all 5 (mean 495.9 against 481.3; +6.8 to +23.5). Steps to
+  solve fell from 374,332 to 231,271 on average. The committed config turns it on (the maintainer's decision), and
+  `docs/benchmarks/cartpole_results.md` was rerun in full: the Actor-Critic row is now 945.6 episodes to solve and
+  100% held, and the other agents' learning figures are unchanged. Not verified: Pendulum with `n_steps: 0` (the
+  committed Pendulum config uses `n_steps: 8`, which already bootstrapped), and seeds other than 1 to 5.
 
 ## 2026-11-11
 

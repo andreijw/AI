@@ -197,3 +197,11 @@ def test_actor_critic_agent_value_loss_decreases():
     assert np.mean(losses[-10:]) < np.mean(losses[:10]), (
         "Value loss should trend downward with repeated updates on the same batch"
     )
+
+
+def test_actor_critic_agent_bootstrap_truncation_must_be_true_or_false():
+    """A quoted "false" from a hand-written YAML file would otherwise switch it on."""
+    import pytest
+
+    with pytest.raises(ValueError, match="bootstrap_truncation must be true or false"):
+        ActorCriticAgent(4, 2, config={**_AC_CONFIG, "bootstrap_truncation": "false"})

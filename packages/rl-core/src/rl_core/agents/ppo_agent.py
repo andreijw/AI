@@ -9,7 +9,7 @@ from rl_core.utils.config_values import optional_positive_int, positive_int
 
 from .actor_critic_base import ActorCriticBase
 from .optim import anneal_fraction, anneal_steps_from_config
-from .returns import episode_end, gae
+from .returns import gae
 from .rollout import EpisodeRollout, RolloutColumns, RolloutWindows
 
 
@@ -110,9 +110,8 @@ class PPOAgent(RolloutWindows, ActorCriticBase):
         """
         One episode as ``(observations, actions, rewards, dones)`` ready to join a rollout.
 
-        The last step always ends the advantage estimate (see :func:`episode_end`). If the episode
-        was cut rather than terminated and its next state is known, ``gamma * V(next state)`` is
-        added to a copy of its last reward. The caller's arrays are not modified.
+        A cut episode is bootstrapped by :meth:`_bootstrap_cut`. The caller's arrays are not
+        modified.
 
         Returns:
             The four arrays, or None for an empty episode.
@@ -120,13 +119,7 @@ class PPOAgent(RolloutWindows, ActorCriticBase):
         observations, actions, rewards, n_steps = self._parse_trajectory(batch)
         if n_steps == 0:
             return None
-        dones, bootstrap_obs = episode_end(
-            n_steps, batch.get("dones"), batch.get("terminated"), batch.get("next_observations")
-        )
-        if bootstrap_obs is not None:
-            _, next_value, _ = self._forward(bootstrap_obs)
-            rewards = rewards.copy()
-            rewards[-1] += self.gamma * next_value
+        dones, rewards = self._bootstrap_cut(batch, rewards)
         return RolloutColumns(observations, actions, rewards, dones)
 
     def _train_on_rollout(

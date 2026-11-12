@@ -466,6 +466,39 @@ def test_actor_critic_update_takes_one_adam_step_on_its_gradients():
     assert metrics["loss"] == pytest.approx(components["total"], rel=1e-12)
 
 
+@pytest.mark.parametrize("normalize_advantages", [True, False])
+def test_actor_critic_bootstraps_a_cut_episode_from_the_value_of_its_next_state(
+    normalize_advantages,
+):
+    """With bootstrap_truncation and n_steps 0, a cut's returns are G_t + gamma^(T-t) * V(s_T).
+
+    Rewards are scaled before the bootstrap is added (reward_scale 0.5 here), so V(s_T) is not
+    scaled; V is taken at next_observations[-1], held constant.
+    """
+    config = {"gamma": 0.5, "learning_rate": 0.01, "reward_scale": 0.5}
+    config["normalize_advantages"] = normalize_advantages
+    agent = _agent(ContinuousActorCriticAgent, bootstrap_truncation=True, **config)
+    reference = _agent(ContinuousActorCriticAgent, **config)
+    batch = {**_step_batch(), "terminated": np.zeros(N_STEPS, dtype=bool)}
+    _, _, next_value, _ = gaussian_forward(reference, batch["next_observations"][-1])
+    _, _, last_value, _ = gaussian_forward(reference, batch["observations"][-1])
+    assert abs(float(next_value) - float(last_value)) > 0.1, "The fixture must tell them apart."
+
+    agent.update(batch)
+
+    # Scaled rewards are STEP_REWARDS / 2, so their returns are STEP_RETURNS / 2.
+    expected = STEP_RETURNS / 2 + 0.5 ** np.arange(N_STEPS, 0, -1) * float(next_value)
+    advantages = None
+    if not normalize_advantages:
+        _, _, values, _ = gaussian_forward(reference, batch["observations"])
+        advantages = expected - values
+    _, grads = loss_and_grads(
+        reference, batch["observations"], batch["actions"], expected, advantages
+    )
+    _ReferenceAdam(0.01, reference.max_grad_norm).step(reference, grads)
+    assert_same_weights(agent, reference)
+
+
 def _with_biases(agent):
     """Give every bias a non-zero value, so a forward pass that drops one is visible."""
     set_weights(agent, b1=np.linspace(-0.3, 0.3, HIDDEN_DIM), b_mu=np.array([0.2, -0.1]), b_v=0.4)

@@ -49,6 +49,7 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 | `cleanup` | After implementing, before review |
 | `pr-reviewer` | As the last gate before the hand-off; for any review request |
 | `doc-sync` | Before the hand-off |
+| `release` | To release, tag or publish a distribution; when a Release workflow run finishes or fails |
 
 - `architect`, `cleanup` and `pr-reviewer` build on the **brooks-lint** plugin (pinned in
   [.claude/settings.json](.claude/settings.json)) and add this project's knowledge. Project review rules C1–C6 live

@@ -21,12 +21,16 @@ class ReinforceAgent(BaseAgent):
 
     Uses a two-layer MLP policy network (obs → ReLU hidden → softmax output)
     trained entirely with NumPy.  After each episode the policy parameters are
-    updated using the REINFORCE gradient estimate with a mean-return baseline to
-    reduce variance.
+    updated using the REINFORCE gradient estimate, its discounted returns
+    standardised over the episode (mean subtracted, divided by the standard
+    deviation) to reduce variance.
 
     This is the natural first step beyond a random agent: the agent observes its
     own returns and adjusts action probabilities accordingly, without needing a
-    value-function approximator or importance sampling.
+    value-function approximator or importance sampling. Having no critic, it
+    cannot bootstrap an episode cut by a time limit: the returns stop at the
+    last step, exactly as for a true termination, and ``terminated`` and
+    ``next_observations`` are not read.
 
     References:
         Williams, R. J. (1992). Simple Statistical Gradient-Following Algorithms

@@ -243,6 +243,20 @@ class ContinuousActorCriticBase(BaseAgent):
                 param -= step
         np.clip(self._log_std, LOG_STD_MIN, LOG_STD_MAX, out=self._log_std)
 
+    def _add_bootstrap(self, rewards: np.ndarray, bootstrap_obs: np.ndarray | None) -> np.ndarray:
+        """
+        ``rewards`` with ``gamma * V(bootstrap_obs)`` added to a copy of the last one, as
+        Stable-Baselines3 does for timeouts; unchanged when ``bootstrap_obs`` is None (a true end,
+        or a cut whose next state is unknown). Pass rewards already scaled by ``reward_scale``:
+        the value is on that scale. ``rewards`` is not modified.
+        """
+        if bootstrap_obs is None:
+            return rewards
+        _, _, next_value, _ = self._forward(bootstrap_obs)
+        rewards = rewards.copy()
+        rewards[-1] += self.gamma * float(next_value)
+        return rewards
+
     def _bounded_log_std(self) -> np.ndarray:
         """``log_std`` clipped to its bounds. Construction, every step and ``load`` keep the
         parameter inside them; this guards a value set directly."""
@@ -358,6 +372,8 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
       A(s, a) = G_t - V(s)   (normalised over the episode)
       L_policy = -log_prob(a|s) * A(s, a) - entropy_coef * H
       L_critic = 0.5 * (G_t - V(s))^2
+    An episode cut by a time limit is then treated as ended, unless ``bootstrap_truncation`` adds
+    gamma^(T-t) * V(s_T) to its returns, V taken at ``next_observations[-1]`` and held constant.
 
     With ``n_steps`` > 0 the episode is replayed in consecutive chunks of that many steps (the last
     may be shorter). Each chunk takes GAE targets (``gamma``, ``gae_lambda``) from the current critic,
@@ -375,6 +391,9 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         normalize_advantages (bool): Normalise advantages over each update. Default: True.
         anneal_steps (int): Decay the learning rate linearly to zero over this many trained
             transitions; unset keeps it constant. Default: unset.
+        bootstrap_truncation (bool): With ``n_steps`` 0, bootstrap a cut episode's Monte Carlo
+            returns from the value of its next state. ``n_steps`` chunks always bootstrap a cut,
+            so it changes nothing there. Default: False.
     """
 
     def __init__(
@@ -389,6 +408,7 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
         if not 0.0 <= self.gae_lambda <= 1.0:
             raise ValueError(f"gae_lambda must be in [0, 1], got {self.gae_lambda!r}")
         self.normalize_advantages: bool = flag(config, "normalize_advantages", True)
+        self.bootstrap_truncation: bool = flag(config, "bootstrap_truncation", False)
         self.anneal_steps: int | None = anneal_steps_from_config(config)
         self._steps_trained = 0
 
@@ -455,6 +475,8 @@ class ContinuousActorCriticAgent(ContinuousActorCriticBase):
             saturation = None if u is None else float(np.mean(np.abs(u) > 0.99))
 
         if self.n_steps == 0:
+            if self.bootstrap_truncation and not terminated_last and next_obs is not None:
+                rewards = self._add_bootstrap(rewards, next_obs[-1])
             returns = discounted_returns(rewards, self.gamma)
             advantages = None
             if not self.normalize_advantages:
