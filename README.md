@@ -72,7 +72,9 @@ Where this is going, from the roadmap ([docs/roadmap.md](docs/roadmap.md)):
 
 ## Quick start
 
-Requirements: Python 3.12; the extras are `dev`, `video`, `box2d`, `onnx` and `torch` (see `pyproject.toml`).
+Requirements: Python 3.12. The setup scripts install the three distributions under `packages/` in editable mode
+with the dev tools (`requirements-dev.txt`) and the extras: `video` and `onnx` (`rl-core`), `torch` with the gpu
+profile, and `box2d` (`rl-challenges`) except on Windows.
 
 ```bash
 ./setup.sh                  # Linux and macOS: .venv with the CPU profile, then the CI checks
@@ -109,10 +111,27 @@ python record.py --config configs/cartpole_ppo.yaml --checkpoint checkpoints/car
 pytest -q                                                                                 # the tests
 ```
 
+## Using the libraries elsewhere
+
+The code is three distributions, released on GitHub (not PyPI) from tags `<dist>-v<version>`
+([docs/releasing.md](docs/releasing.md)):
+
+| Distribution | What it is | Needs |
+| :--- | :--- | :--- |
+| `rl-core` | the framework: agents, trainer, challenge interface, export | Gymnasium, NumPy, PyYAML, Matplotlib |
+| `rl-navigation` | the robot's simulator, localization, mapping and SLAM | NumPy only (Gymnasium and `rl-core` as extras) |
+| `rl-challenges` | CartPole to BipedalWalker on `rl-core` | `rl-core` |
+
+A robot installs `rl-navigation` alone ([docs/navigation.md](docs/navigation.md#installing-on-the-robot)); another
+project, such as a game, trains agents on its own environment by depending on `rl-core` and declaring one entry point
+([docs/external-challenges.md](docs/external-challenges.md)).
+
 ## Documentation
 
 - [docs/usage.md](docs/usage.md): install, train, record, export, benchmark, configure, develop
 - [docs/navigation.md](docs/navigation.md): the navigation simulator and state estimation
+- [docs/external-challenges.md](docs/external-challenges.md): training on another project's environment (a game)
+- [docs/releasing.md](docs/releasing.md): the distributions' versions, releases and installing them
 - [docs/results.md](docs/results.md): which agents solve which challenge, with the caveats
 - [docs/agents.md](docs/agents.md): how each agent works
 - [docs/roadmap.md](docs/roadmap.md): open work and the robotics ladder
