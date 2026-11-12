@@ -14,6 +14,15 @@ Acrobot-v1) and
 
 ## 2026-11-12
 
+### Added
+
+- **A `release` skill** (`feature/release-skill`; the maintainer's request, 2026-11-12). `.claude/skills/release/`
+  runs `docs/releasing.md` in order: the version bump and CHANGELOG section in a pull request, the local
+  `scripts/release.py check`, the maintainer's signed tag commands in dependency order, watching the Release
+  workflow, and checking the draft (assets, `SHA256SUMS`, notes against the CHANGELOG, prerelease flag). Signing the
+  tag and publishing the draft stay the maintainer's. First used on `rl-core-v0.1.0` (run 43286857713, green; draft
+  checked). `docs/releasing.md` no longer says the two release settings are off.
+
 ### Fixed
 
 - **Actor-Critic bootstraps a time-limit cut** (`fix/ac-time-limit-bootstrap`; review of 2026-11-11, W2 and W3).

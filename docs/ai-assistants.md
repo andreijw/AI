@@ -77,6 +77,7 @@ person makes three decisions: which work to do, whether the plan is right, and w
 | `cleanup` | Finds and merges duplication against the whole codebase; removes leftovers | After the implementation |
 | `pr-reviewer` | Final review: acceptance criteria, numerical correctness, soundness of the learning, what gets committed, whether the docs still describe every changed file; opens with a quick summary for you | Before you are asked to commit |
 | `doc-sync` | Brings roadmap, TESTING, README, ARCHITECTURE and assistant docs back in line | Before you are asked to commit |
+| `release` | Takes a distribution to a draft GitHub Release: version bump, local check, your tag commands in dependency order, watching the run, checking the draft | When you ask to release a distribution; you sign the tag and publish the draft |
 
 `architect`, `cleanup` and `pr-reviewer` build on the [brooks-lint](https://github.com/hyhmrright/brooks-lint) plugin
 (MIT), which supplies a general code-quality rubric. The rules specific to this project live in
@@ -114,7 +115,7 @@ the project checks only.
 
 3. **Restart Claude Code** so the plugin and skills are loaded.
 
-4. **Verify.** Type `/` in Claude Code: the nine skills above should be listed, along with
+4. **Verify.** Type `/` in Claude Code: the ten skills above should be listed, along with
    `brooks-lint:brooks-review`, `brooks-lint:brooks-audit` and `brooks-lint:brooks-test`.
 
 5. **Use it.** Ask in plain words ("what should we work on next?", "PPO stopped learning on Pendulum, find out
