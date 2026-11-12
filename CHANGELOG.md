@@ -16,6 +16,23 @@ Acrobot-v1) and
 
 ### Added
 
+- **Importable libraries with GitHub Releases** (roadmap, Workflow Tooling; the maintainer's request and approved
+  plan of 2026-11-11; PRs 1 to 5 below). The code is three distributions with unchanged import names: `rl-core` (the
+  framework a game project imports), `rl-navigation` (the robot's libraries, NumPy only) and `rl-challenges` (the six
+  classic and Box2D challenges), each with its own version from 0.1.0 and CHANGELOG under `packages/<dist>/`.
+  Challenges register through the `rl_core.challenges` entry-point group, a pushed `<dist>-v<version>` tag drafts a
+  GitHub Release, and a worktree tests its own code in its own layered environment. The deferred follow-ups (CLIs as
+  console scripts, configs as package data, an optional `rl-core[plots]`, native ROS 2 packaging) are the roadmap's
+  "Library follow-ups". Not verified: a real tag run of `release.yml` (it first runs on the first tag), the `Packages`
+  job on GitHub's runners, `setup.ps1` on Windows, and the repository settings `docs/releasing.md` lists for the
+  maintainer.
+- **Training on another project's environment** (`feature/external-challenge-guide`). `docs/external-challenges.md`
+  builds a toy game project end to end: a Gymnasium environment, a `BaseEnvWrapper`, a `@register_challenge`
+  challenge declared as one entry point, a config, and training from the game's own virtual environment with this
+  checkout's `train.py` and `benchmark.py` (run as written: 20 PPO episodes, a 50-episode benchmark report). README
+  gains a section on using the distributions elsewhere. Not verified: installing from a release URL (no release
+  yet), a continuous-action game, Windows.
+
 - **Releases from a pushed tag** (`feature/release-workflow`). `.github/workflows/release.yml` runs on a tag
   `<dist>-v<version>`: `scripts/release.py check` refuses a tag off `develop`, one that differs from the distribution's
   version (spelled out: `v0.1` is not `0.1.0`), a version without a CHANGELOG section, and a distribution whose in-repo

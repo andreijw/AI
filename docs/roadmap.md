@@ -37,25 +37,21 @@ BipedalWalker or navigation).
 
 ### Workflow Tooling
 
-- [~] **Importable libraries with GitHub Releases** (the maintainer's request and approved plan, 2026-11-11).
-  The code becomes three distributions with unchanged import names: `rl-core`
-  (the framework a game project imports), `rl-navigation` (the robot's libraries, NumPy only, with the Gymnasium
-  environment and the navigation challenge as extras) and `rl-challenges` (the six classic and Box2D challenges).
-  Acceptance criteria:
-  - Challenges register through the `rl_core.challenges` entry-point group, in a fixed order with this
-    repository's distributions first; another project registers one from its own `pyproject.toml`.
-  - Each distribution has its own `pyproject.toml`, version (`__version__`, SemVer 0.x from 0.1.0) and
-    `CHANGELOG.md` under `packages/<dist>/`; one editable install of all three is the development environment.
-  - The installed `rl-navigation` wheel needs only NumPy; a git worktree tests its own code, never the main
-    checkout's.
-  - A pushed `<dist>-v<version>` tag builds, tests and smoke-tests that distribution and opens a draft GitHub
-    Release with the wheel, the sdist, `SHA256SUMS` and the notes from its CHANGELOG section.
-  - A guide shows a game project registering its own challenge and training here.
-
-  Progress: PR 1 (`feature/challenge-entry-points`): entry-point discovery and per-worktree environments.
-  PR 2 (`feature/split-distributions`): the three distributions under `packages/`.
-  PR 3 (`feature/package-docs-sweep`): docs, skills and review rules on the new layout; `tests/test_packages.py`.
-  PR 4 (`feature/release-workflow`): `release.yml`, `scripts/release.py`, the `Packages` CI job, `docs/releasing.md`.
+- [ ] **Library follow-ups** (deferred from the importable-libraries item, 2026-11-11; not picked). Each waits for a
+  consumer that needs it:
+  - **The CLIs as `rl-core` console scripts** (`rl-train`, `rl-record`, `rl-benchmark`, ...): a game project then
+    trains without this checkout. Deferred because `train.py` and the benchmark are tested as root modules and
+    nothing outside the repository runs them yet; the guide (`docs/external-challenges.md`) runs this checkout's
+    scripts instead.
+  - **The committed configs as package data** of `rl-challenges`: an installed wheel could then benchmark without
+    a checkout. Deferred because `config_dir` defaults to `configs` under the current directory and every run so far
+    starts from a checkout.
+  - **Matplotlib as an optional `rl-core[plots]` extra**: training never imports it (`tests/test_import_footprint.py`),
+    so a game or robot need not install it. Deferred because making a required dependency optional changes every
+    install command and the plotting entry points.
+  - **Native ROS 2 packaging** (`ament_python`, rosdep keys) for `rl-navigation`: the Jetson's ROS 2 node then builds
+    it with colcon. Deferred until the hardware step (Phase 8) has a ROS 2 node; until then a `--system-site-packages`
+    venv installs the wheel (`docs/navigation.md`, Installing on the robot).
 
 ### Training
 
