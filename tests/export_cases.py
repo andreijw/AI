@@ -1,15 +1,10 @@
 """The agents and exporters the export tests share: ``tests/test_export.py`` (the NumPy reference, the C
 header and the checks common to every format) and ``tests/test_export_onnx.py`` (the ONNX model)."""
 
-import os
-import sys
-
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from rl_core.agents import (  # noqa: E402
+from rl_core.agents import (
     ActorCriticAgent,
     ContinuousActorCriticAgent,
     ContinuousPPOAgent,
@@ -20,9 +15,9 @@ from rl_core.agents import (  # noqa: E402
     SACAgent,
     TD3Agent,
 )
-from rl_core.agents.inference import DenseLayer  # noqa: E402
-from rl_core.export import c_header, onnx_model, verify  # noqa: E402
-from tests.helpers import minimal_config, needs_cc, needs_onnx, run_main  # noqa: E402
+from rl_core.agents.inference import DenseLayer
+from rl_core.export import c_header, onnx_model, verify
+from tests.helpers import minimal_config, needs_cc, needs_onnx, run_main
 
 OBS_DIM = 5
 BOUNDS = {"action_low": [-2.0, -0.5], "action_high": [2.0, 1.5]}

@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Iterable
 
-CODE_DIRS = ("src/", "tests/")
+CODE_DIRS = ("packages/", "tests/")
 
 
 def is_docs_only(paths: Iterable[str]) -> bool:

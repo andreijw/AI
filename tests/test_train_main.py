@@ -6,8 +6,6 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 import rl_core.training
 from rl_cartpole.environments import CartPoleEnv
 from tests.helpers import minimal_config, run_main

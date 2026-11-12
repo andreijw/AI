@@ -42,6 +42,11 @@ echo "$main_site" > "$site/_main_checkout.pth"
 
 projects=("$worktree")
 if [[ -d "$worktree/packages" ]]; then
+    # Only when this re-runs into a venv made before the split into packages/: it holds the old single
+    # distribution, whose .pth points at src/. A fresh venv never has it.
+    if compgen -G "$site/rl_cartpole-*.dist-info" > /dev/null; then
+        "$python" -m pip uninstall --quiet -y rl-cartpole
+    fi
     projects=()
     for pyproject in "$worktree"/packages/*/pyproject.toml; do
         projects+=("$(dirname "$pyproject")")

@@ -6,18 +6,15 @@ measurement, and this test makes that change visible in review.
 """
 
 import os
-import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from rl_cartpole.benchmark import CartPoleChallenge  # noqa: E402
-from rl_core.agents import TD3Agent  # noqa: E402
-from rl_core.agents.optim import Adam  # noqa: E402
-from rl_core.challenges import discover_challenges  # noqa: E402
-from rl_core.utils.config import load_config  # noqa: E402
+from rl_cartpole.benchmark import CartPoleChallenge
+from rl_core.agents import TD3Agent
+from rl_core.agents.optim import Adam
+from rl_core.challenges import discover_challenges
+from rl_core.utils.config import load_config
 from tests.agent_internals import optimizer, weights
 from tests.helpers import env_marks, needs_torch
 

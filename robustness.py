@@ -3,10 +3,6 @@ beyond the range it trained on, and report how it holds up."""
 
 import argparse
 import os
-import sys
-
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from rl_core.seeding import eval_seed_for
 from rl_core.training.checkpoints import file_sha256

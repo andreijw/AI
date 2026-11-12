@@ -53,6 +53,7 @@ BipedalWalker or navigation).
   - A guide shows a game project registering its own challenge and training here.
 
   Progress: PR 1 (`feature/challenge-entry-points`): entry-point discovery and per-worktree environments.
+  PR 2a (`feature/split-distributions`): the three distributions under `packages/`.
 
 ### Training
 

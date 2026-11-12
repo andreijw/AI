@@ -1,0 +1,15 @@
+# The development environment: every distribution in this repository, editable, and the dev tools.
+# Run from the repository root (pip resolves ./packages/... against the current directory):
+#   python -m pip install -r requirements-dev.txt
+# ./setup.sh and setup.ps1 add the video and box2d extras, and the gpu profile the torch extra.
+-e ./packages/rl-core[onnx]
+-e ./packages/rl-navigation[gym,challenge]
+-e ./packages/rl-challenges
+pytest>=7.0.0
+pytest-cov>=7.1.0
+mypy>=1.0.0
+types-PyYAML>=6.0.0
+ruff>=0.1.0
+bandit[toml]>=1.8.6
+pylint>=4.0.0
+pre-commit>=4.3.0

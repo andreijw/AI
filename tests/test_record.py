@@ -1,12 +1,8 @@
 """Tests for record.py: recording a trained agent from a checkpoint into one video."""
 
 import os
-import sys
 
 import pytest
-
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rl_core.agents import DQNAgent, ReinforceAgent
 from tests.helpers import minimal_config, run_main

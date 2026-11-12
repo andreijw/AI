@@ -1,93 +1,11 @@
-[build-system]
-requires = ["setuptools>=82.0.1", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "rl-cartpole"
-version = "0.1.0"
-description = "A pure-NumPy reinforcement-learning framework and robot navigation library, built toward a Jetson robot"
-readme = "README.md"
-requires-python = ">=3.12"
-license = {text = "MIT"}
-authors = [
-    {name = "andreijw"}
-]
-keywords = ["reinforcement-learning", "cartpole", "gym", "gymnasium", "rl"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
-
-dependencies = [
-    "gymnasium>=1.0.0",
-    "numpy>=1.21.0",
-    "pyyaml>=6.0",
-    "matplotlib>=3.9.4",
-]
-
-[project.optional-dependencies]
-video = [
-    "moviepy>=1.0.0",
-    "imageio-ffmpeg>=0.4.0",
-    "gymnasium[classic-control]>=1.0.0",
-]
-# The optional PyTorch backend (backend: torch). On the Jetson it installs from PyTorch's own index:
-# see docs/pytorch_jetson_timing.md.
-torch = [
-    "torch>=2.14",
-]
-# LunarLander and BipedalWalker (Box2D). Gymnasium's own box2d extra pins box2d==2.3.10, which has no aarch64 build;
-# box2d-py builds from source with swig, which pip's isolated build cannot find, so install it first
-# as ./setup.sh does (docs/usage.md, LunarLander (Box2D)). Rendering uses pygame-ce, as Gymnasium does.
-box2d = [
-    "box2d-py==2.3.8",
-    "pygame-ce>=2.1.3",
-]
-# ONNX export (export.py --format onnx): onnx builds and checks the model, onnxruntime verifies it.
-onnx = [
-    "onnx>=1.17",
-    "onnxruntime>=1.20",
-]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=7.1.0",
-    "mypy>=1.0.0",
-    "types-PyYAML>=6.0.0",
-    "ruff>=0.1.0",
-    "bandit[toml]>=1.8.6",
-    "pylint>=4.0.0",
-    "pre-commit>=4.3.0",
-]
-
-# Challenge discovery (rl_core.challenges.discover_challenges): one entry per package, named after it.
-# A new challenge package adds its line here; tests/test_challenge_registry.py checks none is missing.
-[project.entry-points."rl_core.challenges"]
-rl_acrobot = "rl_acrobot.benchmark"
-rl_bipedalwalker = "rl_bipedalwalker.benchmark"
-rl_cartpole = "rl_cartpole.benchmark"
-rl_lunarlander = "rl_lunarlander.benchmark"
-rl_mountaincar = "rl_mountaincar.benchmark"
-rl_navigation = "rl_navigation.benchmark"
-rl_pendulum = "rl_pendulum.benchmark"
-
-[project.urls]
-Homepage = "https://github.com/andreijw/AI"
-Repository = "https://github.com/andreijw/AI"
-Issues = "https://github.com/andreijw/AI/issues"
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
+# Tool configuration for the whole repository. It is not a distribution: the distributions are
+# packages/rl-core, packages/rl-navigation and packages/rl-challenges, each with its own pyproject.toml
+# (which must not have a [tool.ruff] table: Ruff uses the closest one that does, without merging).
+# Development environment: python -m pip install -r requirements-dev.txt (./setup.sh does it).
 
 [tool.mypy]
 python_version = "3.12"
+files = ["packages/*/src", "benchmark.py"]
 warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -103,7 +21,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=src --cov-report=term-missing"
+# Coverage names each src/ root, not packages/: coverage looks for never-imported files only below a
+# source directory's packages, so --cov=packages would silently drop modules no test imports (torch_*).
+addopts = "-v --cov=packages/rl-core/src --cov=packages/rl-navigation/src --cov=packages/rl-challenges/src --cov=benchmark --cov-report=term-missing"
 filterwarnings = [
     "error::pytest.PytestUnraisableExceptionWarning",
     # RecordVideo warns, in colour, when its folder already exists: a test or train.py made it.
@@ -113,6 +33,8 @@ filterwarnings = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# First-party code for import sorting: every distribution's src/ and the root scripts.
+src = ["packages/*/src", "."]
 
 [tool.ruff.lint]
 select = [
@@ -133,8 +55,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Unused imports in __init__.py files
 # Matrices keep the Kalman filter's names (F, G, H, P, Q, R, K, S), as in the literature.
-"src/rl_navigation/estimation/*.py" = ["N803", "N806"]
-"src/rl_navigation/slam/{ekf_slam,evaluation}.py" = ["N803", "N806"]
+"packages/rl-navigation/src/rl_navigation/estimation/*.py" = ["N803", "N806"]
+"packages/rl-navigation/src/rl_navigation/slam/{ekf_slam,evaluation}.py" = ["N803", "N806"]
 "tests/test_{ekf_localization,kalman,slam_evaluation}.py" = ["N806"]
 "tests/test_ekf_slam.py" = ["N803", "N806"]
 

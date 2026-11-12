@@ -201,8 +201,16 @@ function Initialize-Venv([string]$Python) {
     Write-Host "[*] Upgrading pip..." -ForegroundColor Cyan
     & $VenvPython -m pip install --upgrade pip | Out-Host
 
-    Write-Host "[*] Installing rl-cartpole in editable mode with [dev,video,onnx] extras..." -ForegroundColor Cyan
-    $pipArgs = @("-m", "pip", "install", "-e", ".[dev,video,onnx]")
+    # The single rl-cartpole distribution came before the split into packages/ (2026-11-11); its editable
+    # .pth points at src/, which no longer holds the code.
+    & $VenvPython -m pip show --quiet rl-cartpole *> $null
+    if ($LASTEXITCODE -eq 0) {
+        & $VenvPython -m pip uninstall -y rl-cartpole | Out-Host
+    }
+
+    Write-Host "[*] Installing the distributions under packages/ in editable mode, with the dev tools..." -ForegroundColor Cyan
+    $pipArgs = @("-m", "pip", "install", "-r", "requirements-dev.txt", "-e", "./packages/rl-core[video,onnx]",
+        "-e", "./packages/rl-navigation[gym,challenge,video]")
     if ($Update) {
         $pipArgs += "--upgrade"
     }
@@ -212,6 +220,11 @@ function Initialize-Venv([string]$Python) {
         return $false
     }
     Write-Host "[+] Dependencies installed." -ForegroundColor Green
+    # The code moved to packages/ (2026-11-11): an older checkout keeps an untracked src/ of caches.
+    if ((Test-Path "src") -and -not (git ls-files src)) {
+        Write-Host "[!] src/ holds no tracked file since the split into packages/: review ``git clean -ndX src/``," -ForegroundColor Yellow
+        Write-Host "    then remove it with ``Remove-Item -Recurse src``." -ForegroundColor Yellow
+    }
     Write-Host "[!] Box2D (LunarLander, BipedalWalker) is not installed on Windows: box2d-py needs swig and a C++ build;" -ForegroundColor Yellow
     Write-Host "    the LunarLander and BipedalWalker tests are skipped (docs/usage.md, LunarLander (Box2D))." -ForegroundColor Yellow
 
@@ -227,7 +240,7 @@ function Invoke-CiCheck {
     $checks = @(
         @{ Name = "ruff check"; Args = @("-m", "ruff", "check", ".") },
         @{ Name = "ruff format --check"; Args = @("-m", "ruff", "format", "--check", ".") },
-        @{ Name = "mypy src"; Args = @("-m", "mypy", "src") },
+        @{ Name = "mypy"; Args = @("-m", "mypy") },
         @{ Name = "pytest"; Args = @("-m", "pytest", "-q") }
     )
 

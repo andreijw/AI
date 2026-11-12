@@ -9,9 +9,7 @@ import sys
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from rl_core.agents import (  # noqa: E402
+from rl_core.agents import (
     ContinuousActorCriticAgent,
     ContinuousPPOAgent,
     ContinuousRandomAgent,
@@ -21,16 +19,16 @@ from rl_core.agents import (  # noqa: E402
     RandomAgent,
     TD3Agent,
 )
-from rl_core.agents.inference import DenseLayer, InferencePolicy  # noqa: E402
-from rl_core.export import c_header, rollout, verify  # noqa: E402
-from tests.agent_internals import (  # noqa: E402
+from rl_core.agents.inference import DenseLayer, InferencePolicy
+from rl_core.export import c_header, rollout, verify
+from tests.agent_internals import (
     actor_forward,
     gaussian_forward,
     off_policy_networks,
     probabilities,
     q_values,
 )
-from tests.export_cases import (  # noqa: E402
+from tests.export_cases import (
     BOUNDS,
     CONTINUOUS,
     DISCRETE,
@@ -46,7 +44,7 @@ from tests.export_cases import (  # noqa: E402
     random_observations,
     run_export,
 )
-from tests.helpers import minimal_config, needs_cc, needs_torch, run_main  # noqa: E402
+from tests.helpers import minimal_config, needs_cc, needs_torch, run_main
 
 
 def _greedy(agent, raw_obs):

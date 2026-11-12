@@ -236,7 +236,7 @@ def test_without_box2d_an_environment_that_does_not_use_it_still_builds(monkeypa
 
 
 def test_the_box2d_install_hint_setup_and_the_extra_name_one_box2d_py_version():
-    """pyproject's ``box2d`` extra, the version ./setup.sh builds and the hint's manual command must
+    """rl-challenges' ``box2d`` extra, the version ./setup.sh builds and the hint's manual command must
     agree: setup.sh installs the extras after building Box2D, so a different pin there makes pip
     replace the build. (A Dependabot bump of the extra alone left them apart, 2026-11.)"""
     import re
@@ -246,7 +246,8 @@ def test_the_box2d_install_hint_setup_and_the_extra_name_one_box2d_py_version():
     from rl_core.environments.base_env import BOX2D_INSTALL_HINT
 
     root = Path(__file__).resolve().parents[1]
-    extra = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    pyproject = root / "packages" / "rl-challenges" / "pyproject.toml"
+    extra = tomllib.loads(pyproject.read_text(encoding="utf-8"))
     (pin,) = [
         dep
         for dep in extra["project"]["optional-dependencies"]["box2d"]

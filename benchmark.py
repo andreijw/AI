@@ -11,13 +11,9 @@ import argparse
 import json
 import logging
 import os
-import sys
 import time
 from dataclasses import dataclass
 from typing import Any
-
-# Ensure src is in Python path
-sys.path.insert(0, os.path.dirname(__file__))
 
 import numpy as np
 

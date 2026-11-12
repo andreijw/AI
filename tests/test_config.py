@@ -1,13 +1,8 @@
 """Tests for configuration utilities."""
 
-import os
-import sys
-import tempfile
-
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 import json
+import os
+import tempfile
 from unittest.mock import patch
 
 import pytest

@@ -4,16 +4,13 @@ These run with or without PyTorch: the torch backend's own tests are in
 tests/test_torch_ddpg_agent.py.
 """
 
-import os
 import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from rl_core.agents import DDPGAgent, PPOAgent, SACAgent, TD3Agent  # noqa: E402
-from rl_core.challenges import discover_challenges  # noqa: E402
-from tests.test_agent_harness import ALL_AGENTS, CONTINUOUS_AGENTS  # noqa: E402
+from rl_core.agents import DDPGAgent, PPOAgent, SACAgent, TD3Agent
+from rl_core.challenges import discover_challenges
+from tests.test_agent_harness import ALL_AGENTS, CONTINUOUS_AGENTS
 
 NUMPY_AGENTS = sorted(
     {cls for cls, _ in ALL_AGENTS + CONTINUOUS_AGENTS if cls.BACKEND == "numpy"},
@@ -72,7 +69,8 @@ def test_backend_torch_without_pytorch_names_the_install_command(agent_cls, monk
     for module in [name for name in sys.modules if name.startswith("rl_core.agents.torch_")]:
         monkeypatch.delitem(sys.modules, module)
     with pytest.raises(
-        ImportError, match=r"backend: torch needs PyTorch.*pip install -e '\.\[torch\]'"
+        ImportError,
+        match=r"backend: torch needs PyTorch: install rl-core's torch extra",
     ):
         agent_cls.class_for_config({"backend": "torch"})
 

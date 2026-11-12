@@ -6,12 +6,6 @@ This script shows how to:
 2. Run a continuous control episode (Pendulum-v1 with ContinuousRandomAgent)
 """
 
-import os
-import sys
-
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-
 from rl_cartpole.environments import CartPoleEnv
 from rl_core.agents import ContinuousRandomAgent, RandomAgent
 from rl_pendulum.environments import PendulumEnv

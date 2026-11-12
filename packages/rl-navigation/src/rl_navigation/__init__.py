@@ -4,3 +4,5 @@
 ``rl_navigation.estimation`` the robot's pose estimation over it (NumPy and the simulator only).
 This module imports nothing, so importing a subpackage loads only what that subpackage needs.
 """
+
+__version__ = "0.1.0"

@@ -8,16 +8,12 @@ silently and Adam assigned them before its moments raised.
 """
 
 import copy
-import os
 import re
-import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from rl_core.agents import (  # noqa: E402
+from rl_core.agents import (
     ActorCriticAgent,
     ContinuousActorCriticAgent,
     ContinuousPPOAgent,
@@ -30,8 +26,8 @@ from rl_core.agents import (  # noqa: E402
     SACAgent,
     TD3Agent,
 )
-from tests.agent_internals import weights  # noqa: E402
-from tests.helpers import assert_same_checkpoint  # noqa: E402
+from tests.agent_internals import weights
+from tests.helpers import assert_same_checkpoint
 
 OBS, ACT = 4, 2
 DISCRETE = (ReinforceAgent, ActorCriticAgent, PPOAgent, DQNAgent)

@@ -7,9 +7,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 import rl_cartpole.benchmark
 from rl_cartpole.environments import CartPoleEnv
 from rl_core.environments import OBSERVATION_DEFAULTS

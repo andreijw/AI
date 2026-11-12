@@ -1,11 +1,6 @@
 """Record a trained agent from a checkpoint into one video, on any registered challenge."""
 
 import argparse
-import os
-import sys
-
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from gymnasium.wrappers import RecordVideo
 

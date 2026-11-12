@@ -60,14 +60,17 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            requirements-dev.txt
+            packages/*/pyproject.toml
 
-      - name: Install project with dev dependencies
+      # Every distribution under packages/, editable, and the dev tools (requirements-dev.txt).
+      - name: Install the distributions with dev dependencies
         id: install
         if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -r requirements-dev.txt
 
       - name: Run Ruff linter
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
@@ -79,14 +82,14 @@ jobs:
 
       - name: Run MyPy
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: mypy src/
+        run: mypy
 
       - name: Run Bandit security scanner
         id: bandit
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           rc=0
-          bandit -r src/ -ll -f json -o bandit-report.json || rc=$?
+          bandit -r packages/ benchmark.py -ll -f json -o bandit-report.json || rc=$?
           cat bandit-report.json
           exit "$rc"
 
@@ -102,7 +105,7 @@ jobs:
       - name: Check for duplicate code
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: >-
-          pylint src --disable=all --enable=duplicate-code --min-similarity-lines=20
+          pylint packages/*/src benchmark.py --disable=all --enable=duplicate-code --min-similarity-lines=20
           --ignore-imports=yes --ignore-signatures=yes
 
   tests:
@@ -126,16 +129,19 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            requirements-dev.txt
+            packages/*/pyproject.toml
 
-      # The onnx extra is small prebuilt wheels, so the ONNX export tests run here (unlike torch and box2d).
-      - name: Install project with dev and onnx dependencies
+      # requirements-dev.txt includes rl-core's onnx extra: small prebuilt wheels, so the ONNX export tests
+      # run here (unlike torch and box2d).
+      - name: Install the distributions with dev and onnx dependencies
         if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,onnx]"
+          pip install -r requirements-dev.txt
 
-      # --cov=src and --cov-report=term-missing come from addopts in pyproject.toml.
+      # The --cov sources (each package's src/ and benchmark) and --cov-report come from addopts in pyproject.toml.
       - name: Run tests with coverage
         id: pytest
         if: ${{ steps.docs.outputs.docs_only != 'true' }}

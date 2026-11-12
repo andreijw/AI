@@ -174,7 +174,7 @@ def test_the_cli_writes_stills_into_a_new_directory(tmp_path, frames_written):
 def test_write_video_names_the_video_extra_when_imageio_ffmpeg_is_missing(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "imageio_ffmpeg", None)  # import fails
     frame = np.zeros((4, 4, 3), dtype=np.uint8)
-    with pytest.raises(ImportError, match=r"\.\[video\]"):
+    with pytest.raises(ImportError, match="rl-navigation's video extra"):
         video_module.write_video(tmp_path / "a.mp4", iter([frame]), fps=10)
     assert not (tmp_path / "a.mp4").exists()
 
@@ -184,7 +184,7 @@ def test_the_cli_checks_for_imageio_ffmpeg_before_running(tmp_path, monkeypatch,
     monkeypatch.setattr(video_module, "record_trials", None)  # nothing may run
     with pytest.raises(SystemExit):
         video_module.main([*SMALL, "--output", str(tmp_path / "a.mp4")])
-    assert ".[video]" in capsys.readouterr().err
+    assert "rl-navigation's video extra" in capsys.readouterr().err
 
 
 def test_pad_to_even_pads_odd_sides_with_the_edge_and_keeps_even_ones():
