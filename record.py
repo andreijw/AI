@@ -21,6 +21,7 @@ from train import (
     close_env,
     headless_rendering,
     load_run_config,
+    numpy_agent_config,
     require_moviepy,
     select_run_challenge,
 )
@@ -58,7 +59,7 @@ def main():
     with headless_rendering():
         env = run_challenge.make_env(config["environment"], render_mode="rgb_array")
         try:
-            agent = run_challenge.make_agent(agent_type, config["agent"]["config"], env)
+            agent = run_challenge.make_agent(agent_type, numpy_agent_config(config), env)
             agent.load(args.checkpoint)
             logger.info(f"Loaded {agent_type} agent from '{args.checkpoint}'")
 

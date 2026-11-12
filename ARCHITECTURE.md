@@ -276,6 +276,7 @@ classDiagram
         +inference_policy() InferencePolicy
         #_inference_network() InferencePolicy
         #_checkpoint_arrays()* dict
+        #_check_checkpoint_arrays(data, path)
         #_load_checkpoint_arrays(data)*
     }
 

@@ -58,6 +58,32 @@ def _setting_text(name: str, value: bool | int | None) -> str:
     return f"{name}={str(value).lower() if isinstance(value, bool) else value}"
 
 
+def check_checkpoint_shapes(
+    data: Mapping[str, Any], expected: Mapping[str, Any], path: str
+) -> None:
+    """
+    Check that each checkpoint entry has the shape of the array this agent keeps under its key.
+
+    An entry only one side holds is not checked: a legacy checkpoint may lack optimizer moments,
+    and an agent ignores entries it does not use.
+
+    Args:
+        data: The checkpoint's arrays by key.
+        expected: The agent's own arrays (or scalars) by checkpoint key.
+        path: The checkpoint's path, for the message.
+
+    Raises:
+        ValueError: Naming the first entry whose shape differs, with both shapes.
+    """
+    for key, own in expected.items():
+        if key in data and np.shape(data[key]) != np.shape(own):
+            raise ValueError(
+                f"{path}: {key} has shape {np.shape(data[key])}, expected {np.shape(own)} (this "
+                "agent's): the checkpoint was saved with another hidden_dim or hidden_sizes, "
+                "observation_dim or action_dim"
+            )
+
+
 class BaseAgent(ABC):
     """
     Abstract base class for RL agents.
@@ -76,6 +102,14 @@ class BaseAgent(ABC):
     # Checkpoint keys an older format used for a generator attribute, read when the current key is
     # absent: {attribute name: key}.
     _LEGACY_GENERATOR_KEYS: ClassVar[dict[str, str]] = {}
+    # Prefixes of checkpoint keys whose shape varies with the agent's contents (a replay buffer),
+    # which :meth:`_check_checkpoint_arrays` does not compare with the agent's own.
+    _UNSIZED_CHECKPOINT_PREFIXES: ClassVar[tuple[str, ...]] = ()
+    # Prefixes (or whole keys) of entries the agent saves that a checkpoint may lack, because an
+    # older format or another setting did not save them; every other entry must be present. By
+    # default the Adam state ("adam_"): a checkpoint saved with plain SGD has none, and continuous
+    # ones from before 2026-10 hold only adam_t. A subclass extends this, never guesses per key.
+    _OPTIONAL_CHECKPOINT_PREFIXES: ClassVar[tuple[str, ...]] = ("adam_",)
     # Exploration generator, created by each subclass that samples through
     # :meth:`_select_action_from_probs` (AGENT_EXPLORATION_STREAM).
     _explore_rng: np.random.Generator
@@ -543,9 +577,41 @@ class BaseAgent(ABC):
         """The arrays :meth:`save` writes beyond generators and extras: weights, optimizer state,
         counters, buffers."""
 
+    def _checkpoint_kind(self) -> str:
+        """The agent's name in "not a <kind> checkpoint" messages."""
+        return type(self).__name__
+
+    def _check_checkpoint_arrays(self, data: Mapping[str, Any], path: str) -> None:
+        """
+        Raise ValueError unless every entry this agent saves (:meth:`_checkpoint_arrays`) is in the
+        checkpoint, except those under :attr:`_OPTIONAL_CHECKPOINT_PREFIXES`, and each present one
+        has the shape this agent keeps under its key; called before anything is loaded. Entries
+        under :attr:`_UNSIZED_CHECKPOINT_PREFIXES` (a replay buffer's filled part, whose length
+        varies) are left to their owner's check.
+
+        Raises:
+            ValueError: Naming the first missing entries (another agent's checkpoint), checked
+                first; else naming the entry, the checkpoint's shape and this agent's.
+        """
+        own = self._checkpoint_arrays()
+        missing = [
+            k for k in own if k not in data and not k.startswith(self._OPTIONAL_CHECKPOINT_PREFIXES)
+        ]
+        if missing:
+            more = ", ..." if len(missing) > 2 else ""
+            raise ValueError(
+                f"{path} is not a {self._checkpoint_kind()} checkpoint: it has no "
+                f"{', '.join(missing[:2])}{more}"
+            )
+        sized = {
+            k: v for k, v in own.items() if not k.startswith(self._UNSIZED_CHECKPOINT_PREFIXES)
+        }
+        check_checkpoint_shapes(data, sized, path)
+
     @abstractmethod
     def _load_checkpoint_arrays(self, data: Mapping[str, Any]) -> None:
-        """Restore what :meth:`_checkpoint_arrays` saved, validating what must match."""
+        """Restore what :meth:`_checkpoint_arrays` saved, validating what must match.
+        :meth:`_check_checkpoint_arrays` has checked every entry's shape already."""
 
     @final
     def save(self, path: str) -> None:
@@ -596,9 +662,12 @@ class BaseAgent(ABC):
         Load a checkpoint written by :meth:`save`, or by an older version.
 
         Without an extension and no such file, ``.npz`` is appended; a ``.pt`` path also finds a
-        legacy ``<name>.pt.npz``. Generator states are checked before anything is assigned; the
-        agent's own arrays are checked as its ``_load_checkpoint_arrays`` documents. A generator the
-        checkpoint does not hold keeps its current state.
+        legacy ``<name>.pt.npz``. The whole checkpoint is checked before anything is assigned, so
+        a refused one leaves the agent as it was: generator states; that every weight, optimizer
+        moment and counter the agent itself saves is present (except what an older format or
+        another setting did not save, :attr:`_OPTIONAL_CHECKPOINT_PREFIXES`) with this agent's
+        shape (an entry it does not save is ignored); and the agent's own checks, which its
+        ``_load_checkpoint_arrays`` documents. A generator the checkpoint does not hold keeps its current state.
 
         Before anything else, the observation settings the checkpoint records are compared with the
         ones this agent records (:meth:`record_observation_settings`); a setting the checkpoint
@@ -613,7 +682,10 @@ class BaseAgent(ABC):
             ValueError: If the checkpoint was saved with other observation settings, naming each
                 one with its saved and current value, or a saved setting is not one boolean or
                 integer; if it was saved with the other ``normalize_observations``, or its
-                statistics are incomplete or malformed (naming the entry). Nothing is loaded then.
+                statistics are incomplete or malformed (naming the entry); if it lacks an entry
+                this agent needs (naming it), or an entry has another shape than this agent's (another ``hidden_dim`` or ``hidden_sizes``,
+                ``observation_dim`` or ``action_dim``), naming it with both shapes. Nothing is
+                loaded then.
         """
         load_path = self._resolve_load_path(path)
         with np.load(load_path) as data:
@@ -621,6 +693,7 @@ class BaseAgent(ABC):
             statistics = self._saved_observation_statistics(data, load_path)
             generator_states = self._saved_generator_states(data)  # checked before any change
             self._check_extra_checkpoint_state(data)
+            self._check_checkpoint_arrays(data, load_path)
             self._load_checkpoint_arrays(data)
             self._load_extra_checkpoint_state(data)
             if self._obs_normalizer is not None and statistics is not None:

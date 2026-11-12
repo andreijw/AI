@@ -73,6 +73,8 @@ class ContinuousActorCriticBase(BaseAgent):
     # updates arrays in place and special-cases b_v by name: a new scalar parameter needs the
     # same, or ``param -= step`` would rebind a local name and silently lose its update.
     _PARAM_NAMES: ClassVar[tuple[str, ...]] = ("W1", "b1", "W_mu", "b_mu", "log_std", "W_v", "b_v")
+    # Older checkpoints hold only adam_t of the Adam state, and no bounded_mean (saved unbounded).
+    _OPTIONAL_CHECKPOINT_PREFIXES: ClassVar[tuple[str, ...]] = ("adam_", "bounded_mean")
 
     def __init__(
         self,

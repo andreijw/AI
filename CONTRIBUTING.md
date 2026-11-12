@@ -284,6 +284,9 @@ Training runs and the test suite write bulky outputs that must never be committe
   keys), and for DQN and DDPG the filled part of the replay buffer (`replay_*`), so a loaded agent continues exactly as
   the saved one would have. An agent built by `make_agent` adds its environment's observation settings
   (`observation_setting_*`), which `load` checks, and one with `normalize_observations` its running statistics
-  (`obs_norm_*`); no other key may use those prefixes. A generator held inside another
-  object is that object's to save. Beside each agent checkpoint the trainer writes `trainer_episode_<n>.npz`, which
+  (`obs_norm_*`); no other key may use those prefixes. `load` checks the whole file before assigning anything,
+  including that every entry the agent itself saves is present (except its `_OPTIONAL_CHECKPOINT_PREFIXES`) with
+  the agent's shape (`_check_checkpoint_arrays`; a replay buffer's columns are the buffer's to check), so a
+  refused checkpoint leaves the agent as it was. A generator held inside another object is that object's to save.
+  Beside each agent checkpoint the trainer writes `trainer_episode_<n>.npz`, which
   `train.py --resume` needs.
