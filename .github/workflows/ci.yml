@@ -168,3 +168,58 @@ jobs:
           path: coverage.xml
           retention-days: 3
           if-no-files-found: ignore
+
+  # Not a required check. Builds every distribution under packages/, installs each wheel in a fresh environment
+  # and imports it (scripts/release.py smoke-all: rl-navigation's plain install may load only NumPy), then runs
+  # the robot-side tests from the rl-navigation wheel alone on NumPy 1.26, ROS 2 Jazzy's.
+  packages:
+    name: Packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Detect docs-only change
+        id: docs
+        uses: ./.github/actions/docs-only
+
+      - name: Set up Python
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements-dev.txt
+            packages/*/pyproject.toml
+
+      - name: Build every distribution
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
+        run: |
+          python -m pip install --upgrade pip "build>=1.2" packaging
+          for package in packages/*/; do python -m build "$package" --outdir dist/; done
+
+      - name: Install each wheel in a fresh environment and import it
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
+        run: python scripts/release.py smoke-all dist/
+
+      # NumPy deliberately overridden to 1.26, ROS 2 Jazzy's. Only the rl-navigation wheel is installed (no rl-core,
+      # no Gymnasium), and --noconftest skips tests/conftest.py, which imports rl_core: the robot side must work with
+      # NumPy alone.
+      - name: Robot-side tests from the rl-navigation wheel alone on NumPy 1.26
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
+        run: |
+          python -m venv "$RUNNER_TEMP/numpy126"
+          "$RUNNER_TEMP/numpy126/bin/pip" install "numpy==1.26.*" dist/rl_navigation-*.whl pytest
+          "$RUNNER_TEMP/numpy126/bin/python" -m pytest -q --noconftest -o addopts="" \
+            tests/test_ekf_localization.py tests/test_ekf_slam.py tests/test_estimation_evaluation.py \
+            tests/test_kalman.py tests/test_localization_comparison.py tests/test_localization_recording.py \
+            tests/test_mapping_beams.py tests/test_mapping_evaluation.py tests/test_mapping_grid.py \
+            tests/test_mcl_localization.py tests/test_navigation_geometry.py tests/test_navigation_layouts.py \
+            tests/test_navigation_motion.py tests/test_navigation_odometry.py tests/test_navigation_render.py \
+            tests/test_navigation_sensors.py tests/test_slam_evaluation.py tests/test_slam_feature_evaluation.py \
+            tests/test_slam_features.py

@@ -86,7 +86,9 @@ flowchart LR
     NavGym --> Gymnasium["gymnasium"]
     NavChallenge -. imports .-> NavGym
     NavChallenge --> RlCore
+    NavChallenge --> Gymnasium
     Classic --> RlCore
+    Classic --> Gymnasium
     Game --> RlCore
     RlCore --> Gymnasium
     RlCore --> NumPy
@@ -98,7 +100,8 @@ flowchart LR
 ```
 
 A robot imports `rl-navigation` alone and gets NumPy only. A dependent pins `rl-core` with `~=0.x.0` (`~=0.1.0` stops
-before 0.2): in 0.x a minor version may break, and `~=0.1` would admit it.
+before 0.2): in 0.x a minor version may break, and `~=0.1` would admit it. Releases and the order of
+tags are in [docs/releasing.md](docs/releasing.md).
 
 ---
 

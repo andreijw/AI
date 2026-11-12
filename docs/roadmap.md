@@ -53,8 +53,9 @@ BipedalWalker or navigation).
   - A guide shows a game project registering its own challenge and training here.
 
   Progress: PR 1 (`feature/challenge-entry-points`): entry-point discovery and per-worktree environments.
-  PR 2a (`feature/split-distributions`): the three distributions under `packages/`.
-  PR 2b (`feature/package-docs-sweep`): docs, skills and review rules on the new layout; `tests/test_packages.py`.
+  PR 2 (`feature/split-distributions`): the three distributions under `packages/`.
+  PR 3 (`feature/package-docs-sweep`): docs, skills and review rules on the new layout; `tests/test_packages.py`.
+  PR 4 (`feature/release-workflow`): `release.yml`, `scripts/release.py`, the `Packages` CI job, `docs/releasing.md`.
 
 ### Training
 

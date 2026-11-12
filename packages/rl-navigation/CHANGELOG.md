@@ -11,3 +11,4 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 ### Added
 
 - First release as its own distribution, split out of `rl-cartpole` 0.1.0 with unchanged import names.
+- Requires NumPy 1.26 or newer (ROS 2 Jazzy's), the oldest the robot-side tests are run with.

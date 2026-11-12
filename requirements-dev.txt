@@ -13,3 +13,5 @@ ruff>=0.1.0
 bandit[toml]>=1.8.6
 pylint>=4.0.0
 pre-commit>=4.3.0
+# Builds the sdists and wheels (scripts/release.py, the Packages CI job and the Release workflow).
+build>=1.2

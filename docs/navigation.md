@@ -21,7 +21,9 @@ python3 -m venv --system-site-packages ~/robot-venv
     "rl-navigation @ git+https://github.com/andreijw/AI@rl-navigation-v0.1.0#subdirectory=packages/rl-navigation"
 ```
 
-ROS 2 Jazzy runs Python 3.12, which the distribution requires.
+ROS 2 Jazzy runs Python 3.12, which the distribution requires, and its apt NumPy is 1.26, the oldest it allows:
+the `Packages` CI job runs the robot-side tests from the rl-navigation wheel alone, without rl-core or Gymnasium, on
+NumPy 1.26.
 
 ## Range-Sensor Navigation
 

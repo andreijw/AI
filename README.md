@@ -141,6 +141,7 @@ stale:
 
 - **ci.yml** - CI
 - **codeql.yml** - CodeQL Advanced
+- **release.yml** - Release
 - **weekly-maintenance.yml** - Weekly Maintenance
 
 <!-- WORKFLOWS:END -->

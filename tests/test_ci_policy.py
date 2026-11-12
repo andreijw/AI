@@ -29,9 +29,14 @@ REQUIRED_CHECKS = {"Checks", "Unit Tests"}
 # The only secret any workflow may read (fork and Dependabot PRs receive none). Every workflow is held
 # to this, not only pull_request ones: ci.yml is also callable through workflow_call.
 ALLOWED_SECRETS = {"CODECOV_TOKEN"}
-# (workflow file, job id, scope): the only write any job may hold. CodeQL must upload each PR's SARIF for
+# (workflow file, job id, scope): the only writes any job may hold. CodeQL must upload each PR's SARIF for
 # the ruleset's code_scanning rule, and security-events cannot change code.
-WRITE_ALLOWLIST = {("codeql.yml", "analyze", "security-events")}
+# release.yml's publish job creates or refreshes the draft GitHub Release (gh release view, create, edit,
+# upload, delete-asset), which needs contents: write; it checks nothing out and runs no repository code.
+WRITE_ALLOWLIST = {
+    ("codeql.yml", "analyze", "security-events"),
+    ("release.yml", "publish", "contents"),
+}
 
 PR_EVENTS = {"pull_request", "pull_request_target"}
 _USES = re.compile(r"^\s*(?:-\s*)?uses:\s*(\S+)(.*)$", re.MULTILINE)
@@ -210,6 +215,20 @@ def rule_no_event_text_in_run(name, workflow, raw):
     ]
 
 
+def rule_gh_knows_its_repository(name, workflow, raw):
+    """`gh` finds the repository from .git: in a job with no checkout it fails unless GH_REPO is set."""
+    violations = []
+    for job_id, job in jobs(workflow):
+        job_steps = job.get("steps") or []
+        if any(str(step.get("uses", "")).startswith("actions/checkout@") for step in job_steps):
+            continue
+        for step in job_steps:
+            env = {**(job.get("env") or {}), **(step.get("env") or {})}
+            if re.search(r"(^|[\s;&|(])gh\s", step.get("run", "")) and "GH_REPO" not in env:
+                violations.append(f"{name}: job `{job_id}` runs gh without a checkout or GH_REPO")
+    return violations
+
+
 WORKFLOW_RULES = [
     rule_top_level_read_only,
     rule_pr_concurrency,
@@ -223,6 +242,7 @@ WORKFLOW_RULES = [
     rule_upload_retention,
     rule_checkout_drops_credentials,
     rule_no_event_text_in_run,
+    rule_gh_knows_its_repository,
 ]
 
 
@@ -397,6 +417,15 @@ BREAKS = [
         rule_no_event_text_in_run,
         ('echo "$TITLE"', "git tag ${{ github.ref_name }}"),
         "interpolates",
+    ),
+    (
+        rule_gh_knows_its_repository,
+        (
+            "      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567 # v7.0.1\n"
+            "        with:\n          persist-credentials: false\n",
+            "      - run: gh release view v1\n",
+        ),
+        "runs gh without a checkout or GH_REPO",
     ),
 ]
 

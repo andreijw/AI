@@ -20,9 +20,10 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering",
 ]
-# The robot's libraries (sim, estimation, mapping, slam) need NumPy only.
+# The robot's libraries (sim, estimation, mapping, slam) need NumPy only. 1.26 is ROS 2 Jazzy's (Ubuntu 24.04's
+# apt NumPy) and the oldest the Packages CI job tests them with.
 dependencies = [
-    "numpy>=1.21.0",
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +34,7 @@ gym = [
 # rl_navigation.environments and rl_navigation.benchmark: the navigation challenge on the framework.
 challenge = [
     "rl-core~=0.1.0",
+    "gymnasium>=1.0.0",
 ]
 # rl_navigation.localization_video: an MP4 of a localization trial, and its stills.
 video = [

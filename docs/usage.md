@@ -701,14 +701,21 @@ Every pull request runs two jobs in `ci.yml`, which are the required status chec
 - **Checks**: Ruff lint and format, MyPy, Bandit, the pylint duplicate-code audit, markdownlint, the Markdown link
   check (`scripts/check_doc_links.py`), and a check that the workflow list in the README is current
 - **Unit Tests**: pytest with coverage (50% minimum) and the Codecov upload
+- **Packages** (not required): builds the three distributions, installs each wheel in a fresh environment and
+  imports it (`scripts/release.py smoke-all`; `rl-navigation` may load only NumPy), and runs the robot-side tests
+  from the rl-navigation wheel alone on NumPy 1.26
 - **CodeQL**: security analysis, also on every push to `develop` and weekly
+
+A pushed tag `<dist>-v<version>` runs `release.yml`, which drafts that distribution's GitHub Release
+([releasing.md](releasing.md)).
 
 A pull request that changes only `docs/**` or Markdown files (outside `packages/` and `tests/`) skips the Python
 steps but still reports both checks; markdownlint, the link check and the workflow-list check always run. A new
 push to a pull request cancels its older run. Weekly Maintenance re-runs `ci.yml` on `develop` every Monday.
 
-Every action is pinned to a commit SHA, every workflow has a read-only token (CodeQL's results upload is the
-one write), and no workflow reads a secret other than `CODECOV_TOKEN` or calls a paid LLM API.
+Every action is pinned to a commit SHA, every workflow has a read-only token (CodeQL's results upload and
+`release.yml`'s draft release are the two writes), and no workflow reads a secret other than `CODECOV_TOKEN` or calls a
+paid LLM API.
 `tests/test_ci_policy.py` fails when a workflow breaks any of these rules. Dependabot opens one grouped pull
 request per week for pip and one for GitHub Actions.
 
