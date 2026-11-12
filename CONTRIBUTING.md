@@ -79,6 +79,14 @@ ruff format .
 mypy
 ```
 
+- **Versions are defined once** (`tests/test_versions.py`). Every third-party package the development environments, CI
+  and the Release workflow install is pinned exactly in `requirements-lock.txt`, and every install passes it as
+  constraints (`pip install -r requirements-dev.txt -c requirements-lock.txt`). To bump one, change its line there,
+  or merge Dependabot's weekly pull request, and let CI run on it; a pin must still satisfy the floor its distribution
+  declares. `requirements-dev.txt` names the tools without versions. The distributions' `pyproject.toml` files hold
+  floors only, one per package across all three, so a robot or a game installing a release is not held to the pins.
+  Python's version is `.python-version`. Pre-commit runs this `.venv`'s Ruff, mypy and Bandit, so it agrees with CI;
+  the hooks call `ruff`, `mypy` and `bandit` from PATH, so **commit from the activated virtual environment**.
 - **Line Length**: Max 100 characters for Python source code.
 - **Import Sorting**: Handled automatically by Ruff (`I` rules).
 - **Documentation**: All public modules, classes, and methods must have descriptive docstrings explaining parameters,

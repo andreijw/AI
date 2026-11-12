@@ -36,9 +36,12 @@ anyone could publish one. Upgrade by installing the new release's URL instead.
 
 ## Making a release
 
-1. **In a pull request**, bump the version (`__version__` in `rl_core/__init__.py` or `rl_navigation/__init__.py`;
-   `version` in `packages/rl-challenges/pyproject.toml`) and turn the package CHANGELOG's `## [Unreleased]` notes
-   into a `## [<version>] - <date>` section. `tests/test_packages.py` checks that the section exists.
+1. **In a pull request**, bump the version where it is defined, once per distribution: `__version__` in
+   `rl_core/__init__.py`, `rl_navigation/__init__.py` or (for all six challenge packages) `rl_cartpole/__init__.py`;
+   each pyproject reads it with `version = {attr = ...}`. Turn the package CHANGELOG's `## [Unreleased]` notes into a
+   `## [<version>] - <date>` section. `tests/test_packages.py` checks that the section exists, and that every
+   `rl-core~=0.x.0` requirement of the other distributions still admits rl-core's `__version__`: a breaking bump that
+   forgets them fails CI (below).
 2. **After it merges**, the maintainer pushes a signed tag on the merge commit:
 
    ```bash

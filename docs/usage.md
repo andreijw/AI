@@ -32,9 +32,9 @@ From PowerShell in the repository root, run:
 
 The script installs Git and Python 3.12 via `winget` if they are missing, creates a `.venv` virtual environment,
 installs `requirements-dev.txt` (the three distributions, editable, with the dev tools) and the video extras, and runs
-the same checks as CI (Ruff, mypy, pytest). Flags: `-NonInteractive` (no prompts), `-SkipChecks`, `-Update` (upgrade
-tools and packages), and `-InstallHooks` (`pre-commit install`). Activate the environment afterwards with
-`.\.venv\Scripts\Activate.ps1`.
+the same checks as CI (Ruff, mypy, pytest). Flags: `-NonInteractive` (no prompts), `-SkipChecks`, `-Update` (upgrade Git
+and Python with winget, and re-sync the packages to `requirements-lock.txt`), and `-InstallHooks` (`pre-commit
+install`). Activate the environment afterwards with `.\.venv\Scripts\Activate.ps1`.
 
 If script execution is disabled, run it once with `powershell -ExecutionPolicy Bypass -File .\setup.ps1`.
 
@@ -45,7 +45,8 @@ If script execution is disabled, run it once with `powershell -ExecutionPolicy B
 ./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG, TD3 and SAC backend (backend: torch); ~5 GiB
 ```
 
-Each creates its environment if missing, upgrades its packages and runs the CI checks (`--skip-checks` to skip). Both
+Each creates its environment if missing, brings its packages to the versions in `requirements-lock.txt` and runs the
+CI checks (`--skip-checks` to skip). Both
 build Box2D for LunarLander and BipedalWalker first (see [LunarLander (Box2D)](#lunarlander-box2d) below); CI
 installs neither PyTorch nor Box2D and skips their
 tests. Both profiles, `setup.ps1` and CI's test job install the `onnx` extra (`onnx` and `onnxruntime`) for the ONNX
@@ -59,9 +60,10 @@ with `swig` (about 90 seconds; it needs a C++ compiler and the Python headers, o
 build-essential python3.12-dev`). `./setup.sh` does it; by hand, inside the virtual environment:
 
 ```bash
-pip install swig==4.5.1 "setuptools<85" "wheel<0.49"   # the versions it was verified with
-PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.8
-pip install -r requirements-dev.txt -e "./packages/rl-core[video,onnx]" -e "./packages/rl-challenges[box2d]"
+pip install swig setuptools wheel -c requirements-lock.txt   # the lock holds the versions it was verified with
+PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-py box2d-py -c requirements-lock.txt
+pip install -r requirements-dev.txt -c requirements-lock.txt -e "./packages/rl-core[video,onnx]" \
+    -e "./packages/rl-challenges[box2d]"
 ```
 
 `setup.ps1` does not install it on Windows. Without Box2D the LunarLander and BipedalWalker challenges are still
@@ -81,8 +83,10 @@ cd AI
    repository root (pip reads the `./packages/...` paths relative to the current directory):
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements-dev.txt -c requirements-lock.txt
 ```
+
+`requirements-lock.txt` pins every package's version (the lock); `requirements-dev.txt` names what to install.
 
 ## Training
 
@@ -691,7 +695,7 @@ bandit -r packages/ benchmark.py -ll
 Lint markdown documentation:
 
 ```bash
-npx --yes markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules
+npx --yes markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules   # the version in ci.yml's MARKDOWNLINT_CLI_VERSION
 ```
 
 ### CI/CD
@@ -703,7 +707,7 @@ Every pull request runs two jobs in `ci.yml`, which are the required status chec
 - **Unit Tests**: pytest with coverage (50% minimum) and the Codecov upload
 - **Packages** (not required): builds the three distributions, installs each wheel in a fresh environment and
   imports it (`scripts/release.py smoke-all`; `rl-navigation` may load only NumPy), and runs the robot-side tests
-  from the rl-navigation wheel alone on NumPy 1.26
+  from the rl-navigation wheel alone on its NumPy floor (1.26)
 - **CodeQL**: security analysis, also on every push to `develop` and weekly
 
 A pushed tag `<dist>-v<version>` runs `release.yml`, which drafts that distribution's GitHub Release
@@ -724,9 +728,12 @@ request per week for pip and one for GitHub Actions.
 Pre-commit hooks are available for local development. Install them with:
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements-dev.txt -c requirements-lock.txt
 pre-commit install
 ```
+
+The Ruff, mypy and Bandit hooks run this environment's tools (`language: system`), at the lock's versions, as CI does:
+commit from the activated `.venv`.
 
 The pre-commit hooks will automatically run:
 

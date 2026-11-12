@@ -18,8 +18,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The Python version is in .python-version and every package version in requirements-lock.txt; this file defines
+# only markdownlint-cli's (tests/test_versions.py holds .pre-commit-config.yaml to it).
 env:
-  PYTHON_VERSION: '3.12'
+  MARKDOWNLINT_CLI_VERSION: '0.39.0'
 
 jobs:
   # Required status checks are these job names: "Checks" and "Unit Tests". Renaming one blocks merges
@@ -52,16 +54,17 @@ jobs:
 
       - name: Run markdownlint
         if: ${{ !cancelled() }}
-        run: npx --yes markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules
+        run: npx --yes "markdownlint-cli@$MARKDOWNLINT_CLI_VERSION" '**/*.md' --ignore node_modules
 
       - name: Set up Python
         if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version-file: .python-version
           cache: 'pip'
           cache-dependency-path: |
             requirements-dev.txt
+            requirements-lock.txt
             packages/*/pyproject.toml
 
       # Every distribution under packages/, editable, and the dev tools (requirements-dev.txt).
@@ -69,8 +72,8 @@ jobs:
         id: install
         if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          python -m pip install --upgrade pip -c requirements-lock.txt
+          pip install -r requirements-dev.txt -c requirements-lock.txt
 
       - name: Run Ruff linter
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
@@ -127,10 +130,11 @@ jobs:
         if: ${{ steps.docs.outputs.docs_only != 'true' }}
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version-file: .python-version
           cache: 'pip'
           cache-dependency-path: |
             requirements-dev.txt
+            requirements-lock.txt
             packages/*/pyproject.toml
 
       # requirements-dev.txt includes rl-core's onnx extra: small prebuilt wheels, so the ONNX export tests
@@ -138,8 +142,8 @@ jobs:
       - name: Install the distributions with dev and onnx dependencies
         if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          python -m pip install --upgrade pip -c requirements-lock.txt
+          pip install -r requirements-dev.txt -c requirements-lock.txt
 
       # The --cov sources (each package's src/ and benchmark) and --cov-report come from addopts in pyproject.toml.
       - name: Run tests with coverage
@@ -171,7 +175,7 @@ jobs:
 
   # Not a required check. Builds every distribution under packages/, installs each wheel in a fresh environment
   # and imports it (scripts/release.py smoke-all: rl-navigation's plain install may load only NumPy), then runs
-  # the robot-side tests from the rl-navigation wheel alone on NumPy 1.26, ROS 2 Jazzy's.
+  # the robot-side tests from the rl-navigation wheel alone on its NumPy floor (1.26, ROS 2 Jazzy's).
   packages:
     name: Packages
     runs-on: ubuntu-latest
@@ -191,31 +195,36 @@ jobs:
         if: ${{ steps.docs.outputs.docs_only != 'true' }}
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version-file: .python-version
           cache: 'pip'
           cache-dependency-path: |
             requirements-dev.txt
+            requirements-lock.txt
             packages/*/pyproject.toml
 
       - name: Build every distribution
         if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: |
-          python -m pip install --upgrade pip "build>=1.2" packaging
+          python -m pip install --upgrade pip build packaging -c requirements-lock.txt
           for package in packages/*/; do python -m build "$package" --outdir dist/; done
 
       - name: Install each wheel in a fresh environment and import it
         if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python scripts/release.py smoke-all dist/
 
-      # NumPy deliberately overridden to 1.26, ROS 2 Jazzy's. Only the rl-navigation wheel is installed (no rl-core,
-      # no Gymnasium), and --noconftest skips tests/conftest.py, which imports rl_core: the robot side must work with
-      # NumPy alone.
-      - name: Robot-side tests from the rl-navigation wheel alone on NumPy 1.26
+      # NumPy deliberately overrides the lock's: rl-navigation's own NumPy floor (ROS 2 Jazzy's), read from its
+      # pyproject.toml so the leg follows the floor; pytest still comes from the lock. Only the
+      # rl-navigation wheel is installed (no rl-core, no Gymnasium), and --noconftest skips tests/conftest.py, which
+      # imports rl_core: the robot side must work with NumPy alone.
+      - name: Robot-side tests from the rl-navigation wheel alone on its NumPy floor
         if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: |
-          python -m venv "$RUNNER_TEMP/numpy126"
-          "$RUNNER_TEMP/numpy126/bin/pip" install "numpy==1.26.*" dist/rl_navigation-*.whl pytest
-          "$RUNNER_TEMP/numpy126/bin/python" -m pytest -q --noconftest -o addopts="" \
+          numpy_floor=$(python scripts/release.py floor rl-navigation numpy)
+          python -m venv "$RUNNER_TEMP/numpy-floor"
+          grep -v '^numpy==' requirements-lock.txt > "$RUNNER_TEMP/lock-without-numpy.txt"
+          "$RUNNER_TEMP/numpy-floor/bin/pip" install "numpy==$numpy_floor.*" dist/rl_navigation-*.whl pytest \
+            -c "$RUNNER_TEMP/lock-without-numpy.txt"
+          "$RUNNER_TEMP/numpy-floor/bin/python" -m pytest -q --noconftest -o addopts="" \
             tests/test_ekf_localization.py tests/test_ekf_slam.py tests/test_estimation_evaluation.py \
             tests/test_kalman.py tests/test_localization_comparison.py tests/test_localization_recording.py \
             tests/test_mapping_beams.py tests/test_mapping_evaluation.py tests/test_mapping_grid.py \

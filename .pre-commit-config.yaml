@@ -1,6 +1,5 @@
 # Pre-commit hooks for code quality
-# Install with: pip install pre-commit
-# Setup with: pre-commit install
+# pre-commit itself comes with requirements-dev.txt; set up with: pre-commit install
 # Run manually: pre-commit run --all-files
 
 repos:
@@ -19,34 +18,35 @@ repos:
       - id: debug-statements
       - id: mixed-line-ending
 
-  # Python code formatting with Ruff
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.15
+  # Ruff, mypy and Bandit run from this checkout's virtual environment (language: system), so pre-commit uses the
+  # versions in requirements-lock.txt, as CI does. The entries are the tools' own commands, found on PATH: commit from
+  # the activated .venv.
+  - repo: local
     hooks:
-      # Run the linter
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-      # Run the formatter
+        name: ruff check
+        entry: ruff check --fix --exit-non-zero-on-fix --force-exclude
+        language: system
+        types_or: [python, pyi]
       - id: ruff-format
-
-  # Type checking with mypy
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
-    hooks:
+        name: ruff format
+        entry: ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
       - id: mypy
-        additional_dependencies: [types-all]
-        args: [--ignore-missing-imports]
+        name: mypy
+        entry: mypy
+        language: system
+        pass_filenames: false
         files: ^(packages/|benchmark\.py$)
-
-  # Security check with bandit
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.6
-    hooks:
       - id: bandit
-        args: [-ll, -r, packages/, benchmark.py]
+        name: bandit
+        entry: bandit -ll -r packages/ benchmark.py
+        language: system
+        pass_filenames: false
         files: ^(packages/|benchmark\.py$)
 
-  # Markdown linting
+  # Markdown linting, at the version ci.yml's MARKDOWNLINT_CLI_VERSION names (tests/test_versions.py)
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.39.0
     hooks:

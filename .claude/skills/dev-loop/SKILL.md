@@ -150,7 +150,7 @@ them" (Pass 4), also run `TESTING.md` `TR-15` from `.venv-gpu`: CI has no PyTorc
 `backend: torch` config.
 
 Run `/security-review` as well when the diff touches checkpoint loading, config parsing, the `subprocess`
-call in `rl_core/utils/video.py`, dependencies in `packages/*/pyproject.toml` or `requirements-dev.txt`, or `.github/`.
+call in `rl_core/utils/video.py`, dependencies in `packages/*/pyproject.toml`, `requirements-dev.txt` or `requirements-lock.txt`, or `.github/`.
 
 Findings: fix every Critical. Fix Warnings unless there is a reason not to, and write that reason in the PR
 description. Suggestions are optional. After three rounds, stop looping and report what is left.

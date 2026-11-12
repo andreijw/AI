@@ -1,7 +1,7 @@
 version: 2
 updates:
   # Python dependencies
-  # requirements-dev.txt at the root and each distribution's pyproject.toml.
+  # requirements-lock.txt (the exact pins) and requirements-dev.txt at the root, and each distribution's pyproject.toml.
   - package-ecosystem: "pip"
     directories:
       - "/"
@@ -13,6 +13,10 @@ updates:
       - dependency-name: "rl-core"
       - dependency-name: "rl-navigation"
       - dependency-name: "rl-challenges"
+      # moviepy 2.2.1 (rl-core's video extra) requires pillow<12, so the lock holds pillow 11.x; a pillow 12 bump
+      # would fail every weekly group. Drop this once moviepy allows pillow 12.
+      - dependency-name: "pillow"
+        versions: [">=12"]
     schedule:
       interval: "weekly"
       day: "monday"

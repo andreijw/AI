@@ -60,6 +60,27 @@ Acrobot-v1) and
 
 ### Changed
 
+- **Every version is defined once** (`feature/pin-dependencies`; the maintainer's request, 2026-11-11). A new
+  `requirements-lock.txt` pins the 70 third-party packages the development environments, CI and the Release workflow
+  install, at the versions of CI's last green run (run 43092816464) plus the local environment's for what CI does not
+  install (the video and box2d extras, the box2d build tools; pillow 11.3.0, which moviepy 2.2.1 needs, so Dependabot
+  ignores pillow 12 until moviepy allows it), and colorama for Windows. `requirements-dev.txt` starts with
+  `-c requirements-lock.txt`, so every `pip install -r requirements-dev.txt` is pinned, extras included; `setup.sh`,
+  `setup.ps1`, every `ci.yml` job, `release.yml` and `release.py smoke` (which now refuses to run without the lock)
+  install through it. The Packages job's NumPy leg overrides only NumPy, on purpose, with rl-navigation's floor read
+  from its `pyproject.toml`. PyTorch stays outside the lock, from PyTorch's CUDA index. The distributions keep floors,
+  one per package (NumPy 1.26 everywhere; box2d-py a floor, its exact version now the lock's), so a robot or a game is
+  not tied to the pins. rl-challenges' version comes from `rl_cartpole.__version__`, the same `attr` style as the
+  other two. Python's version is `.python-version` (setup-python's `python-version-file`, `setup.sh`, `setup.ps1`),
+  and markdownlint-cli's is `ci.yml`'s `MARKDOWNLINT_CLI_VERSION`. Pre-commit's Ruff, mypy and Bandit hooks run the
+  activated environment's own tools (`repo: local`), which retires the drift between pre-commit's Ruff 0.1.15 and
+  CI's. `-Update` and `--upgrade` now re-sync an environment to the lock. `tests/test_versions.py` holds all of it: one
+  exact pin per package, one floor per package, every pin within every floor, every package the dev install pulls in
+  pinned, no version written in a script, workflow or module outside these places, every install through the lock,
+  one Python and one markdownlint version. Not verified: `setup.ps1` on Windows (and Windows wheels for every pin), the
+  gpu profile with the lock, Dependabot's first run on the lock (GitHub's docs say its pip updater reads any `.txt`
+  file; they do not say how it treats the `-c` line).
+
 - **Docs, skills and review rules follow the `packages/` layout** (`feature/package-docs-sweep`). Every path to the
   code (in the skills, CLAUDE.md, GEMINI.md, ARCHITECTURE.md, CONTRIBUTING.md, TESTING.md, `docs/` and
   `.brooks-lint.yaml`) and every install and gate command now names `packages/<dist>/src/`,

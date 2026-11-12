@@ -205,7 +205,7 @@ Run these commands in the root workspace directory:
 # Any OS, from the repository root inside an activated venv: the three distributions under packages/,
 # editable, and the dev tools (LunarLander's and BipedalWalker's Box2D needs the extra steps in docs/usage.md,
 # LunarLander (Box2D))
-pip install -r requirements-dev.txt
+pip install -r requirements-dev.txt -c requirements-lock.txt
 ```
 
 ### Code Formatting & Linting

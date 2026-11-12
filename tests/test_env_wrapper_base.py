@@ -235,25 +235,17 @@ def test_without_box2d_an_environment_that_does_not_use_it_still_builds(monkeypa
         env.close()
 
 
-def test_the_box2d_install_hint_setup_and_the_extra_name_one_box2d_py_version():
-    """rl-challenges' ``box2d`` extra, the version ./setup.sh builds and the hint's manual command must
-    agree: setup.sh installs the extras after building Box2D, so a different pin there makes pip
-    replace the build. (A Dependabot bump of the extra alone left them apart, 2026-11.)"""
+def test_the_box2d_install_hint_names_no_version_and_setup_builds_the_locked_one():
+    """box2d-py's version is defined once, in requirements-lock.txt: setup.sh builds it with the lock
+    as constraints, so the extras installed afterwards keep that build, and the hint names no
+    version that could fall behind. (A Dependabot bump of one copy alone left them apart, 2026-11.)"""
     import re
-    import tomllib
     from pathlib import Path
 
     from rl_core.environments.base_env import BOX2D_INSTALL_HINT
 
     root = Path(__file__).resolve().parents[1]
-    pyproject = root / "packages" / "rl-challenges" / "pyproject.toml"
-    extra = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-    (pin,) = [
-        dep
-        for dep in extra["project"]["optional-dependencies"]["box2d"]
-        if dep.startswith("box2d-py")
-    ]
-    assert re.fullmatch(r"box2d-py==[\d.]+", pin), "an exact pin"
-    built = re.findall(r"box2d-py==[\d.]+", (root / "setup.sh").read_text(encoding="utf-8"))
-    assert built == [pin], "setup.sh builds exactly the extra's version"
-    assert re.findall(r"box2d-py==[\d.]+", BOX2D_INSTALL_HINT) == [pin]
+    setup = (root / "setup.sh").read_text(encoding="utf-8")
+    assert re.search(r"--no-binary box2d-py \\\n\s+box2d-py \"\$\{lock\[@\]\}\"", setup)
+    assert not re.search(r"\d+\.\d+", BOX2D_INSTALL_HINT), "the hint names no version"
+    assert "requirements-lock.txt" in BOX2D_INSTALL_HINT

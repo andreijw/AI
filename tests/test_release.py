@@ -395,3 +395,39 @@ def test_publish_creates_a_draft_only_when_none_exists(tmp_path):
     code, calls = _publish(tmp_path, "missing")
     assert code == 0
     assert any(c.startswith("gh release create rl-core-v0.1.0") and "--draft" in c for c in calls)
+
+
+def test_smoke_installs_the_wheels_with_the_lock_as_constraints(tmp_path, monkeypatch):
+    """The Packages job and the Release workflow decide whether a wheel ships: no floating version."""
+    import json as json_module
+    import subprocess
+
+    calls = []
+
+    def run(args, **kwargs):
+        calls.append([str(a) for a in args])
+        out = {"imported": ["rl_core"], "loaded": ["numpy"], "untyped": []}
+        return subprocess.CompletedProcess(args, 0, stdout=json_module.dumps(out), stderr="")
+
+    monkeypatch.setattr(release.venv, "create", lambda *a, **k: None)
+    monkeypatch.setattr(release.subprocess, "run", run)
+    release.smoke("rl-core", [tmp_path / "rl_core-0.1.0-py3-none-any.whl"])
+    (install,) = [c for c in calls if "install" in c]
+    assert install[-2:] == ["-c", str(release.LOCK)]
+
+
+def test_smoke_refuses_to_run_without_the_lock(tmp_path, monkeypatch):
+    monkeypatch.setattr(release, "LOCK", tmp_path / "requirements-lock.txt")
+    with pytest.raises(release.ReleaseError, match="is missing"):
+        release.smoke("rl-core", [])
+
+
+def test_the_numpy_leg_reads_rl_navigations_floor(tmp_path):
+    _dist(tmp_path, "rl-navigation", dependencies=["numpy>=1.26"])
+    assert release.floor("rl-navigation", "numpy", tmp_path) == "1.26"
+    with pytest.raises(release.ReleaseError, match="does not require scipy"):
+        release.floor("rl-navigation", "scipy", tmp_path)
+    ci = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text())
+    (step,) = [s for s in ci["jobs"]["packages"]["steps"] if "NumPy floor" in s.get("name", "")]
+    assert "release.py floor rl-navigation numpy" in step["run"]
+    assert '"numpy==$numpy_floor.*"' in step["run"]

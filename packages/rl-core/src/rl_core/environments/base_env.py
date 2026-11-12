@@ -34,10 +34,12 @@ from .observation import (
 # box2d==2.3.10, which has no build for the Jetson's aarch64; box2d-py builds from source with swig
 # (docs/usage.md, LunarLander (Box2D)).
 BOX2D_INSTALL_HINT = (
-    "{env_name} needs Box2D: run ./setup.sh, or install it by hand into the virtual environment "
-    "with `pip install swig==4.5.1 'setuptools<85' 'wheel<0.49'` and then `PATH=<venv>/bin:$PATH "
-    "pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.8` "
-    "(docs/usage.md, LunarLander (Box2D))"
+    "{env_name} needs Box2D: run ./setup.sh in a checkout, which builds box2d-py (rl-challenges' box2d "
+    "extra) from source with swig, or by hand in the virtual environment, from the checkout's root: "
+    "`pip install swig setuptools wheel -c requirements-lock.txt`, then `PATH=<venv>/bin:$PATH pip install "
+    "--no-build-isolation --no-binary box2d-py box2d-py -c requirements-lock.txt` (pip's isolated build "
+    "cannot see swig; the versions are the lock's, https://github.com/andreijw/AI/blob/develop/"
+    "requirements-lock.txt; docs/usage.md, LunarLander (Box2D))"
 )
 
 # Checkpoint keys of an environment's generators: the wrapper's noise stream and Gymnasium's
