@@ -177,8 +177,9 @@ class ReinforceAgent(BaseAgent):
         Update policy parameters using the REINFORCE gradient estimate.
 
         The update applies a mean-return baseline (subtract the episode mean)
-        before scaling gradients, which reduces variance without introducing
-        bias.
+        before scaling gradients, a standard variance-reduction heuristic. The
+        episode's own mean (and standard deviation) depends on its actions, so
+        the estimate is slightly biased.
 
         Args:
             batch: Dictionary with keys:

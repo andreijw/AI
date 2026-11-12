@@ -209,7 +209,7 @@ flowchart TD
         
         subgraph Agents ["Agent Implementations"]
             BaseAgent["BaseAgent"]
-            DiscreteAgents["Discrete: Random, Reinforce, A2C, PPO, DQN"]
+            DiscreteAgents["Discrete: Random, Reinforce, Actor-Critic, PPO, DQN"]
             ContinuousAgents["Continuous: Random, A2C, PPO, DDPG"]
         end
 

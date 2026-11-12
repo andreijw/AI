@@ -14,7 +14,9 @@ agent:
   type: "reinforce"
   config:
     learning_rate: 0.001   # Adam step size
-    optimizer: "adam"      # "sgd" solved 0 of 5 seeds in 2000 episodes; Adam 5 of 5 (CHANGELOG.md, 2026-10-15)
+    # "sgd" solved 0 of 5 seeds in 2000 episodes, Adam 5 of 5 (CHANGELOG.md, 2026-10-15); in the benchmark
+    # Adam solves 4 of 5 and holds 3 (docs/benchmarks/cartpole_results.md).
+    optimizer: "adam"
     gamma: 0.99            # Discount factor
     hidden_dim: 128        # Hidden layer width
     seed: 42               # Weight initialisation seed

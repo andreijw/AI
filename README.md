@@ -13,20 +13,21 @@ and failed 2 of its 9 judged gates), and planning and the hardware are open.
 
 Eight Gymnasium environments and two navigation environments of this project's own, each with a committed config per
 agent. Every agent is written in NumPy; only DDPG, TD3 and SAC have an optional PyTorch backend. The table lists
-the agents that solve each challenge, measured on seeds 1 to 5 (MountainCar-v0 also on 11 to 15); the full table
-with every agent, how long each holds its score, and the caveats is in [docs/results.md](docs/results.md).
+the agents that solve each challenge, measured on seeds 1 to 5 (MountainCar-v0, LunarLander DQN and
+LunarLanderContinuous TD3 also on 11 to 15); the full table with every agent, how long each holds its score, and the
+caveats is in [docs/results.md](docs/results.md).
 
 | Challenge | Agents and seeds solved ("holds": still at the threshold at the end) | Report |
 | :--- | :--- | :--- |
 | CartPole-v1 | PPO, DQN and Actor-Critic 5 of 5 (Actor-Critic holds 4); REINFORCE 4 of 5 (holds 3) | [report](docs/benchmarks/cartpole_results.md) |
-| Pendulum-v1 | SAC, DDPG, TD3 and PPO 5 of 5 (PPO holds 4); continuous Actor-Critic 0 of 5 | [report](docs/benchmarks/pendulum_results.md) |
-| Acrobot-v1 | PPO and DQN 5 of 5 | [results](docs/results.md) |
+| Pendulum-v1 | SAC, DDPG, TD3 and PPO 5 of 5 (PPO holds 4); continuous Actor-Critic 0 of 5 | [report](docs/benchmarks/pendulum_results.md) (no TD3 or SAC row; see [results](docs/results.md)) |
+| Acrobot-v1 | PPO and DQN 5 of 5 (DQN's floor was tuned on seeds 1 to 5, no held-out run) | [results](docs/results.md) |
 | MountainCar-v0 | DQN reaches -110 on 10 of 10 seeds but holds it on 3 of 10 | [results](docs/results.md) |
 | MountainCarContinuous-v0 | DDPG and TD3 5 of 5 | [results](docs/results.md) |
 | LunarLander-v3 | DQN 5 of 5 | [results](docs/results.md) |
-| LunarLanderContinuous-v3 | SAC and TD3 5 of 5 | [report](docs/benchmarks/lunarlander_continuous_results.md) |
+| LunarLanderContinuous-v3 | SAC and TD3 5 of 5 | [report](docs/benchmarks/lunarlander_continuous_results.md) (TD3 only; SAC in [results](docs/results.md)) |
 | BipedalWalker-v3 | SAC 4 of 5 (holds 1); TD3 2 of 5 (holds 0) | [report](docs/benchmarks/bipedalwalker_results.md) |
-| Navigation-v0 | DQN 5 of 5; PPO reaches the threshold on 5 of 5 but holds it on 1 | [report](docs/benchmarks/navigation_results.md) |
+| Navigation-v0 | DQN 5 of 5 (threshold: a reward of 7, not a success rate); PPO reaches the threshold on 5 of 5 but holds it on 1 | [report](docs/benchmarks/navigation_results.md) |
 | NavigationContinuous-v0 | TD3 5 of 5; PPO reaches it on 5 of 5 but holds it on 0 | [report](docs/benchmarks/navigation_continuous_results.md) |
 
 A run is **solved** when its average training reward over 100 episodes reaches the challenge's threshold, and
@@ -35,10 +36,11 @@ A run is **solved** when its average training reward over 100 episodes reaches t
 
 ## Robot navigation
 
-`Navigation-v0` and `NavigationContinuous-v0` put a disc robot in a randomly laid-out room, seeing only its range
-sensors (five HC-SR04 sonars, or a 64-beam lidar). The simulator is NumPy only and `rl_navigation.gym_env` needs
-neither the training framework nor `rl_core`, so another project can import it. TD3 reaches the goal in 96% of 100
-held-out layouts after 100,000 steps; the random agent in 1%.
+`Navigation-v0` and `NavigationContinuous-v0` put a disc robot in a randomly laid-out room, seeing its range
+sensors (five HC-SR04 sonars, or a 64-beam lidar) and told the goal's distance and bearing. The simulator is NumPy
+only and `rl_navigation.gym_env` needs neither the training framework nor `rl_core`, so another
+project can import it. TD3 reaches the goal in 96% of 100 held-out layouts after 100,000 steps; the random agent in
+1%.
 
 `rl_navigation.estimation` finds the robot's pose on a known map from wheel encoders and range readings, with an
 extended Kalman filter (EKF) and Monte Carlo localization (MCL, which starts from anywhere and recovers from being

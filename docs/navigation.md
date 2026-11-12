@@ -8,8 +8,9 @@ open (SLAM, planning, the real robot). How to train and benchmark the navigation
 ## Range-Sensor Navigation
 
 `Navigation-v0` and `NavigationContinuous-v0` are this project's own Gymnasium environments (Phase 8 of
-[`docs/roadmap.md`](roadmap.md)): a disc robot drives to a goal through randomly placed obstacles, seeing only
-its range sensors. Each reset draws a new layout; `reset(options={"layout": layout})` plays a given
+[`docs/roadmap.md`](roadmap.md)): a disc robot drives to a goal through randomly placed obstacles, seeing its
+range sensors (see Observation) and told the goal's distance and bearing, as an oracle: a real robot would need
+localisation to supply them. Each reset draws a new layout; `reset(options={"layout": layout})` plays a given
 `rl_navigation.sim.Layout` instead.
 
 - **Actions**: `Navigation-v0` has five discrete actions (straight ahead, forward arcs left and right at half speed,

@@ -1,12 +1,13 @@
 # Pendulum Continuous Actor-Critic Training Configuration
 # rl-baselines3-zoo's A2C settings for Pendulum-v1 where they apply (8-step updates, GAE 0.9, gamma 0.9, lr 7e-4
-# annealed, value coefficient 0.4, log std -2), with a bounded policy mean, an entropy bonus and a fixed reward
-# scale. Measured 2026-10-18 (scratch harness, seeds 1-5, 1,000,000 steps): greedy evaluation -152 +/- 45 across
-# seed means, beating the random agent's -1224 on 5 of 5 seeds; the 100-episode training average stays at -286 to
-# -341 and does not reach -200 (CHANGELOG.md, 2026-10-18).
+# annealed, value coefficient 0.4 in rl-zoo's convention, log std -2), with a bounded policy mean, an entropy bonus
+# and a fixed reward scale. Measured 2026-10-18 (scratch harness, seeds 1-5, 1,000,000 steps): greedy evaluation
+# -152 +/- 45 across seed means, beating the random agent's -1224 on 5 of 5 seeds; the 100-episode training average
+# stayed at -286 to -341 and did not reach -200 (CHANGELOG.md, 2026-10-18; the benchmark run of 2026-10-19 gave
+# -286 to -307 and evaluation -172 +/- 27, CHANGELOG.md, 2026-10-19).
 # Observation normalisation since 2026-11-04: the final 100-episode training average was better on 5 of seeds 1-5
-# (mean -282.7 against -298.5) and 4 of held-out seeds 11-15 (-298.9 against -316.2), greedy evaluation unchanged;
-# still short of -200 (CHANGELOG.md, 2026-11-04).
+# (-268 to -298, mean -282.7 against -298.5) and 4 of held-out seeds 11-15 (-298.9 against -316.2), greedy
+# evaluation -170 +/- 26; still short of -200 (CHANGELOG.md, 2026-11-04; TESTING.md TR-5).
 
 environment:
   name: "Pendulum-v1"
@@ -24,7 +25,7 @@ agent:
     learning_rate: 0.0007       # Adam step size at the start (rl-zoo: RMSprop 7e-4)
     anneal_steps: 1000000       # Learning rate decays linearly to 0 over the whole training budget (rl-zoo lin_)
     normalize_advantages: false # rl-zoo normalize_advantage: False
-    value_coef: 0.4             # Critic loss weight (rl-zoo vf_coef)
+    value_coef: 0.4             # Critic loss weight; the loss carries a 1/2, so 0.4 = rl-zoo vf_coef 0.2
     entropy_coef: 0.01          # Entropy bonus: without it the log std collapses (0.003 and 0.001 measured worse)
     init_log_std: -2.0          # Initial log standard deviation (rl-zoo log_std_init)
     reward_scale: 0.05          # Rewards x 0.05; matched a running reward normaliser, 0.1 was worse

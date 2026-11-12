@@ -172,7 +172,7 @@ Always consult [CONTRIBUTING.md](CONTRIBUTING.md) when writing, refactoring, or 
   * Always ensure environments are correctly closed with `.close()` when done to prevent resource leaks.
 * **Vectorized Training**: Use `make_vec_env` for parallelized environment steps to speed up rollouts when
   configuration allows.
-* **Pure NumPy Framework**: The neural network architectures (A2C/PPO) are custom built on top of NumPy without
+* **Pure NumPy Framework**: The neural network architectures (Actor-Critic/PPO) are custom built on top of NumPy without
   external heavy DL dependencies. Maintain optimization cleanliness and verify numerical stability (e.g., stable
   softmax).
 * **Deterministic Runs**: Support reproducible seeds in random number generation. Always use the specified seed in

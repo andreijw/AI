@@ -73,6 +73,16 @@ Two things are generated, so run the generator and never edit by hand:
   with the default `--report`, never a smoke run; say in the hand-off how long it took, and ask first if it
   would take more than half an hour. If a smoke run rewrote a report, restore it.
 
+**Diagrams.** Update every diagram the change makes false (ARCHITECTURE.md's package flowchart, agent class
+diagram and training sequence, and any other Mermaid block: `Grep` for `` ```mermaid ``): a renamed or added
+class, a base-class method, a new package, a changed call order. Add a diagram where one would explain the
+change better than prose: a new module whose parts call each other (a pipeline, a filter's predict and update
+loop, a SLAM front end and back end), a new class hierarchy, a state machine, a data flow across packages. A
+one-function fix or a docs-only change needs none; say in the report which you added or why none was needed.
+Write diagrams as Mermaid in the Markdown (GitHub renders it; it diffs as text and cannot go stale silently),
+next to the prose they explain, not as images: a PNG is used only for a real output, such as a frame of a
+video. Keep each to what a reader needs (about a dozen nodes), with the same names the code uses.
+
 **Work items no longer needed** go in the same PR. A roadmap entry the change answers (a parked idea now
 measured, a follow-up now done, a note that a later item supersedes) is removed or rewritten, with what
 was learned condensed into `CHANGELOG.md`, so nothing in the roadmap still asks a settled question. Then

@@ -1,4 +1,4 @@
-"""Actor-Critic (A2C) agent for CartPole."""
+"""Actor-Critic agent for CartPole: REINFORCE with a learned baseline."""
 
 from typing import Any
 
@@ -10,7 +10,7 @@ from .returns import discounted_returns
 
 class ActorCriticAgent(ActorCriticBase):
     """
-    Actor-Critic agent (A2C style) for CartPole.
+    Actor-Critic agent for CartPole: REINFORCE with a learned state-value baseline.
 
     Uses a two-headed MLP with a shared trunk: the *actor* head outputs a
     softmax policy over discrete actions while the *critic* head estimates
@@ -30,9 +30,14 @@ class ActorCriticAgent(ActorCriticBase):
     * Trains a value function that can be reused for downstream extensions
       (e.g. GAE, PPO).
 
+    It uses Monte-Carlo returns with no n-step bootstrap, so it is not A2C
+    (the continuous Actor-Critic is, with GAE).
+
     References:
-        Mnih et al. (2016). Asynchronous Methods for Deep Reinforcement
-        Learning. ICML 2016.
+        Sutton & Barto (2018). Reinforcement Learning: An Introduction, 2nd
+        ed., section 13.4 (REINFORCE with baseline); the architecture follows
+        Mnih et al. (2016), Asynchronous Methods for Deep Reinforcement
+        Learning, ICML 2016, minus its n-step returns.
 
     Config keys (all optional):
         learning_rate (float): Step size for the configured optimizer. Default: 1e-3.

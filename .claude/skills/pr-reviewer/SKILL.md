@@ -109,6 +109,11 @@ The questions a training run, not an interpreter, would raise:
 - Seeds are pinned, files go under `tmp_path`, environments are closed, and nothing trains to convergence.
 - A new agent is in `ALL_AGENTS` in `tests/test_agent_harness.py`.
 - A changed or deleted existing test comes with a reason.
+- **The PyTorch tests ran where CI cannot run them.** CI installs no PyTorch, so `tests/test_torch_ddpg_agent.py`
+  is skipped there. When the diff touches `off_policy.py`, `ddpg_agent.py`, `td3_agent.py`, `sac_agent.py`,
+  `optim.py`, `base_agent.py`'s save or load, or any `torch_*.py`, the hand-off must report `TESTING.md` `TR-15`
+  run from `.venv-gpu`; if it did not run, that is a Warning, since the five `backend: torch` configs can break
+  with CI green.
 
 ## Pass 5: what gets committed
 
@@ -157,6 +162,14 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
   measured result is reflected in the agent's section there.
 - `docs/usage.md`, the README front page, ARCHITECTURE.md (the class diagram, the extension steps) and config
   comments still describe the code, and `python scripts/check_doc_links.py` reports no broken link.
+- **The documentation was updated in this PR, not left for later.** The `doc-sync` skill ran (its report is in
+  the hand-off), and every document it owns for the changed files says what the code now does. A change a reader
+  would look for, such as a new module, option, command or result, with no doc saying it, is a Warning.
+- **Diagrams match the code, and one was added where it helps.** Every Mermaid block (`` ```mermaid ``) that
+  names a changed class, method, package or call order is updated; a stale diagram is a Warning. A change that
+  adds a module whose parts call each other, a class hierarchy, a state machine or a cross-package data flow and
+  explains it only in prose gets a Suggestion to add a Mermaid diagram (doc-sync, "Diagrams"); a small fix needs
+  none.
 - The PR description follows `.github/pull_request_template.md` and every ticked box is true.
 
 ## Report
@@ -179,7 +192,8 @@ has no section of its own for it), updated for the fixes made after the review, 
 
 **Verdict** next: *Approve*, or *Changes needed* with the count of Critical and Warning findings.
 
-Then findings, most severe first. Each one: severity, `path:line`, then **Symptom** → **Source** →
+Then findings, most severe first: Critical (wrong results, data loss, a false published claim), Warning (fix
+before merge unless the PR description says why not), Suggestion (optional, never blocks). Each one: severity, `path:line`, then **Symptom** → **Source** →
 **Consequence** → **Remedy**. Make the consequence concrete: the input or sequence that goes wrong and what
 the person training the agent sees (a crash, a NaN, a curve that plateaus, a number that is quietly wrong).
 Keep style opinions out; Ruff owns style.

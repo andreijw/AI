@@ -145,6 +145,10 @@ hand-off says so and names the `TESTING.md` row for the maintainer to run. If it
 The review runs in a separate agent because a reviewer who did not write the code notices more. Give it a
 self-contained prompt: the branch, the base (`develop`), and the roadmap item. The reviewer only reports;
 you make the fixes, so each one goes back through the tests. Never use `brooks-sweep` for the same reason.
+When the change touches a file the `pr-reviewer` skill lists under "The PyTorch tests ran where CI cannot run
+them" (Pass 4), also run `TESTING.md` `TR-15` from `.venv-gpu`: CI has no PyTorch, so it cannot catch a broken
+`backend: torch` config.
+
 Run `/security-review` as well when the diff touches checkpoint loading, config parsing, the `subprocess`
 call in `rl_core/utils/video.py`, dependencies in `pyproject.toml`, or `.github/`.
 
@@ -158,7 +162,9 @@ this session and for the agents it spawns.
 
 ### 8. Doc sync
 
-Use the `doc-sync` skill. If `.github/workflows/` changed, it runs `python scripts/sync_workflow_docs.py`.
+Use the `doc-sync` skill on every PR, code or docs: it updates every document the change makes stale, and
+updates or adds the Mermaid diagrams the change calls for (its "Diagrams" step). If `.github/workflows/`
+changed, it runs `python scripts/sync_workflow_docs.py`. The `pr-reviewer` checks both.
 
 ### 9. Hand-off, then touchpoint 3
 
