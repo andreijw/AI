@@ -6,6 +6,12 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 
 ## [Unreleased]
 
+### Added
+
+- `FeatureSettings.max_bridged_angle` (default 3°): `segment_scan` joins usable beams across dropped ones, so circle
+  extraction keeps working under dropout. This changes `extract_circles` and `EkfSlam` results on the 360-beam lidar;
+  the 64-beam lidar is unchanged. `summarize_features` reports `reachable_rate`.
+
 ## [0.1.0] - 2026-11-11
 
 ### Added

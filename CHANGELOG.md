@@ -12,6 +12,25 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-12
+
+### Added
+
+- **Circle extraction bridges dropped beams** (`feature/segment-scan-bridging`; roadmap, Phase 8 SLAM follow-up).
+  `segment_scan` joins two usable beams across up to `FeatureSettings.max_bridged_angle` of unusable ones (default
+  3°: 3 beams of the robot's 1° lidar, none of the 5.6° 64-beam lidar), with the breakpoint scaled by the angle
+  spanned; a dropped beam never enters a fit. `feature_evaluation` reports `reachable_rate`, the share of visible
+  circles that keep 8 usable beams. Judged once on seeds 151 to 200 (TESTING.md `CIRC-2`) against gates registered
+  beforehand; the detection gate was lowered from 0.8 to 0.75 of `reachable_rate` after tuning on seeds 1 to 50 and
+  before 151 to 200 were read (the maintainer's decision; under 0.8 the row fails, 0.622 against 0.661). At 30 %
+  dropout on the 360-beam lidar: detection 0.622 against a bar of 0.620 (0.104 without bridging on seeds 1 to 50),
+  false fits 0.004 (0.285); without dropout every `CIRC-1` gate still passes (NEES 2.93, detection 0.773). SLAM-1 at
+  30 % dropout: 4 aligned failures against 5 without dropout, circles mapped 0.907 against 0.914 (17 failures without
+  bridging on seeds 1 to 50). It was judged as a count of 3 beams and capped by angle after the review, because on the
+  64-beam lidar a 3-beam bridge spans 22° and gave overconfident fits (NEES 24); the cap gives the judged segments
+  exactly on 360 beams (0 of 4,800 scans differ) and no bridging on 64. Not verified: SLAM-1 on the 64-beam lidar, and
+  the extraction timing alone on the machine (it was timed under shared load: 6.1 ms median, 10.8 ms p99).
+
 ## 2026-11-11
 
 ### Added

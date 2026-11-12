@@ -162,21 +162,185 @@ def test_a_fit_less_certain_than_max_fit_std_is_refused():
 # Segmentation ------------------------------------------------------------------------------------
 
 
-def test_segments_break_where_neighbouring_points_jump():
-    ranges = np.array([1.0, 1.0, 1.0, 2.5, 2.5, 2.5])
-    angles = np.radians(np.arange(6.0))
+def segments_of(ranges, usable, bridged, wrap=False, spacing=None, **settings):
+    """``segment_scan``'s segments as lists, for beams ``spacing`` apart from the origin (1 degree,
+    or a full turn when ``wrap``), beam 0 along +x, with ``bridged`` beams' angle bridged."""
+    if spacing is None:
+        spacing = 2 * math.pi / len(ranges) if wrap else math.radians(1.0)
+    if "max_bridged_angle" not in settings:
+        settings["max_bridged_angle"] = bridged * spacing
+    ranges = np.asarray(ranges, dtype=float)
+    angles = spacing * np.arange(len(ranges))
     points = ranges[:, None] * np.stack([np.cos(angles), np.sin(angles)], axis=1)
-    segments = segment_scan(points, ranges, np.ones(6, bool), math.radians(1.0), FeatureSettings())
-    assert [s.tolist() for s in segments] == [[0, 1, 2], [3, 4, 5]]
+    found = segment_scan(
+        points,
+        ranges,
+        np.asarray(usable, bool),
+        spacing,
+        FeatureSettings(**settings),
+        wrap,
+    )
+    return [s.tolist() for s in found]
+
+
+def test_segments_break_where_neighbouring_points_jump():
+    ranges = [1.0, 1.0, 1.0, 2.5, 2.5, 2.5]
+    assert segments_of(ranges, np.ones(6, bool), bridged=3) == [[0, 1, 2], [3, 4, 5]]
 
 
 def test_an_unusable_beam_splits_a_segment():
-    ranges = np.ones(6)
-    usable = np.array([True, True, False, True, True, True])
-    angles = np.radians(np.arange(6.0))
-    points = ranges[:, None] * np.stack([np.cos(angles), np.sin(angles)], axis=1)
-    segments = segment_scan(points, ranges, usable, math.radians(1.0), FeatureSettings())
-    assert [s.tolist() for s in segments] == [[0, 1], [3, 4, 5]]
+    usable = [True, True, False, True, True, True]
+    assert segments_of(np.ones(6), usable, bridged=0) == [[0, 1], [3, 4, 5]]
+
+
+def test_one_dropped_beam_inside_an_arc_is_bridged_and_left_out():
+    usable = np.ones(8, bool)
+    usable[3] = False
+    segments = segments_of(np.ones(8), usable, bridged=1)
+    assert segments == [[0, 1, 2, 4, 5, 6, 7]], "one segment, without the dropped beam 3"
+
+
+def test_two_dropped_beams_split_an_arc_when_one_may_be_bridged():
+    usable = np.ones(8, bool)
+    usable[3:5] = False
+    assert segments_of(np.ones(8), usable, bridged=1) == [[0, 1, 2], [5, 6, 7]]
+    assert segments_of(np.ones(8), usable, bridged=2) == [[0, 1, 2, 5, 6, 7]], "two may be"
+
+
+def test_a_dropped_beam_between_far_apart_surfaces_still_splits():
+    ranges = np.array([1.0, 1.0, 1.0, 1.7, 2.5, 2.5, 2.5])
+    usable = np.ones(7, bool)
+    usable[3] = False
+    assert segments_of(ranges, usable, bridged=3) == [[0, 1, 2], [4, 5, 6]]
+
+
+def test_bridging_joins_a_segment_across_the_scan_start():
+    count = 360
+    ranges = np.full(count, 3.0)
+    ranges[:10] = ranges[350:] = 1.0  # a near patch round beam 0, which dropped out
+    usable = np.ones(count, bool)
+    usable[0] = False
+    segments = segments_of(ranges, usable, bridged=1, wrap=True)
+    assert len(segments) == 2
+    assert [*range(350, 360), *range(1, 10)] in segments, "one patch across the start, in order"
+    assert segments_of(ranges, usable, bridged=0, wrap=True).count(list(range(1, 10))) == 1
+
+
+def test_a_closed_ring_with_dropped_beams_is_one_segment():
+    count = 360
+    usable = np.ones(count, bool)
+    usable[[0, 90, 91, 200]] = False
+    segments = segments_of(np.full(count, 1.5), usable, bridged=2, wrap=True)
+    assert segments == [np.flatnonzero(usable).tolist()], "the whole ring, every usable beam once"
+
+
+def test_without_wrap_the_last_beam_never_joins_the_first():
+    count = 360
+    usable = np.ones(count, bool)
+    usable[[0, 180]] = False
+    segments = segments_of(np.full(count, 1.5), usable, bridged=1, spacing=2 * math.pi / count)
+    assert segments == [np.flatnonzero(usable).tolist()], "beam 359 does not reach beam 1"
+    assert segments_of(np.ones(6), [False, True, True, True, True, False], bridged=3) == [
+        [1, 2, 3, 4]
+    ]
+
+
+def test_the_bridged_breakpoint_scales_with_the_angle_spanned():
+    """Unit ranges 1 degree apart; beam 2 dropped. Beams 1 and 3 are 2 sin(1 deg) = 0.0349 m
+    apart. With no fixed gap and a factor of 1.5 the limit across one dropped beam is
+    1.5 (2 pi/180) = 0.0524 m, so they join; at one beam's spacing it would be 0.0262 m, which
+    would split them. Neighbours 1 degree apart (0.0175 m) join either way."""
+    spacing = math.radians(1.0)
+    gap = 2 * math.sin(spacing)
+    assert 1.5 * spacing < gap <= 1.5 * 2 * spacing, "case moved"
+    usable = [True, True, False, True, True]
+    tight = {"breakpoint_gap": 0.0, "breakpoint_factor": 1.5}
+    assert segments_of(np.ones(5), usable, bridged=1, **tight) == [[0, 1, 3, 4]]
+
+
+def test_the_bridge_is_capped_by_angle_so_coarse_scans_bridge_nothing():
+    """3 degrees spans 3 beams of a 1 degree lidar but none of a 64-beam one (5.625 degrees): there
+    one dropped beam leaves 11.25 degrees between two points, too far apart to fit a circle to."""
+    three_degrees = {"max_bridged_angle": math.radians(3.0)}
+    usable = np.ones(10, bool)
+    usable[3:6] = False
+    assert segments_of(np.ones(10), usable, None, **three_degrees) == [[0, 1, 2, 6, 7, 8, 9]]
+    usable[6] = False
+    assert segments_of(np.ones(10), usable, None, **three_degrees) == [[0, 1, 2], [7, 8, 9]]
+    coarse = math.radians(5.625)
+    one_dropped = [True, True, False, True, True]
+    assert segments_of(np.ones(5), one_dropped, None, spacing=coarse, **three_degrees) == [
+        [0, 1],
+        [3, 4],
+    ]
+    assert segments_of(np.ones(5), one_dropped, 1, spacing=coarse) == [[0, 1, 3, 4]], "case moved"
+
+
+def test_a_scan_without_a_beam_spacing_bridges_nothing():
+    """A sensor whose beams do not span an angle (one beam) has spacing 0: no beam is bridged, and
+    the cap does not divide by zero."""
+    points = np.ones((3, 2))
+    usable = np.array([True, False, True])
+    segments = segment_scan(points, np.ones(3), usable, 0.0, FeatureSettings())
+    assert [s.tolist() for s in segments] == [[0], [2]]
+
+
+def reference_segments(points, ranges, usable, spacing, settings, wrap):
+    """segment_scan before bridging (PR 2a), kept to pin max_bridged_angle=0 to it."""
+    count = len(points)
+    following = np.roll(np.arange(count), -1)
+    gaps = np.hypot(*(points[following] - points).T)
+    limit = settings.breakpoint_gap + settings.breakpoint_factor * spacing * np.minimum(
+        ranges, ranges[following]
+    )
+    joined = usable & usable[following] & (gaps <= limit)
+    if not wrap:
+        joined[-1] = False
+    if not usable.any():
+        return []
+    if joined.all():
+        return [list(range(count))]
+    segments = []
+    for start in [i for i in range(count) if usable[i] and not joined[i - 1]]:
+        indices = [start]
+        while joined[indices[-1]]:
+            indices.append(int(following[indices[-1]]))
+        segments.append(indices)
+    return segments
+
+
+@pytest.mark.parametrize("wrap", [True, False])
+@pytest.mark.parametrize("seed", [3, 4])
+def test_no_bridging_reproduces_the_segments_before_bridging(seed, wrap):
+    """A seeded noisy scan of a layout at 30 % dropout, cut as segment_scan cut it before."""
+    layout = generate_layout(np.random.default_rng(seed))
+    sensor = lidar(num_beams=360)
+    rng = np.random.default_rng(seed + 10)
+    readings = sensor.read(layout.arena, layout.start, rng, dropout_prob=0.3)
+    points, usable, _ = scan_points(sensor, readings[0])
+    ranges = np.asarray(readings[0], dtype=float)
+    settings = FeatureSettings(max_bridged_angle=0.0)
+    spacing = 2 * math.pi / 360
+    expected = reference_segments(points, ranges, usable, spacing, settings, wrap)
+    found = segment_scan(points, ranges, usable, spacing, settings, wrap)
+    assert len(expected) > 20, "case moved: the scan should break into many segments"
+    assert [s.tolist() for s in found] == expected
+
+
+def test_bridging_finds_a_circle_with_every_third_beam_dropped():
+    """A 0.4 m circle 2 m ahead spans about 23 beams; with every third dropped no run of usable
+    beams reaches 8 points, so only bridged segments give the circle, fitted to usable beams."""
+    arena = Arena(6.0, 6.0, circle_centers=[[3.0, 3.0]], circle_radii=[0.4])
+    sensor = lidar(num_beams=360)
+    readings = scan_of(arena, sensor, [1.0, 3.0, 0.0], np.random.default_rng(5), SIGMA)
+    readings[::3] = sensor.max_range  # a dropout reads max_range
+    assert extract_circles(sensor, readings, FeatureSettings(max_bridged_angle=0.0)) == []
+    features = extract_circles(
+        sensor, readings, FeatureSettings(max_bridged_angle=math.radians(1.0))
+    )
+    assert len(features) == 1, "the circle, from the bridged segment"
+    assert not np.isin(features[0].beams, np.arange(0, 360, 3)).any(), "no dropped beam fitted"
+    np.testing.assert_allclose(features[0].z, [2.0, 0.0, 0.4], atol=0.03)
 
 
 def test_a_full_circle_scan_joins_its_last_segment_to_its_first():
@@ -336,6 +500,9 @@ def test_an_arc_with_two_outliers_fails_the_residual_test():
         {"corner_penalty": -1.0},
         {"max_iterations": 0},
         {"max_fit_std": 0.0},
+        {"max_bridged_angle": -0.01},
+        {"max_bridged_angle": math.nan},
+        {"max_bridged_angle": math.inf},
     ],
 )
 def test_feature_settings_refuse_values_out_of_range(kwargs):

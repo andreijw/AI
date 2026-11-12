@@ -1,7 +1,8 @@
 """Circle features from one range scan: the landmarks of the landmark SLAM.
 
 A scan's usable readings become points in the robot's frame. They are split into segments where
-neighbouring points jump apart (an adaptive breakpoint, Borges and Aldon 2004), and each segment
+neighbouring points jump apart (an adaptive breakpoint, Borges and Aldon 2004), bridging up to
+``max_bridged_angle`` of unusable beams (dropouts) between two usable ones, and each segment
 of at least ``min_points`` points is fitted with a circle:
 
 - an algebraic fit (Kasa 1976) starts a weighted geometric Gauss-Newton fit of
@@ -46,6 +47,10 @@ from rl_navigation.sim.sensors import RangeSensor, usable_readings
 # within this many radians.
 FULL_TURN_TOLERANCE = 1e-9
 
+# Beams that fit in max_bridged_angle are counted with this much slack, so a cap of exactly n
+# spacings bridges n beams despite rounding.
+BRIDGE_TOLERANCE = 1e-9
+
 # A fit whose radius exceeds this many times the largest radius allowed, at the algebraic start or
 # during the iterations, is a straight surface whose radius runs away: it is refused at once.
 DIVERGED_RADIUS_FACTOR = 3.0
@@ -76,6 +81,14 @@ class FeatureSettings:
         max_iterations: Gauss-Newton iterations at most (>= 1).
         max_fit_std: Largest standard deviation in metres of the centre's coordinates or the
             radius that a kept fit may have (> 0).
+        max_bridged_angle: Largest angle in radians of unusable beams (a dropout, no echo)
+            between two usable ones that a segment may span (finite, >= 0): ``floor(max_bridged_angle /
+            spacing)`` beams; 0 splits a segment at every unusable beam. 3 degrees bridges 3 beams
+            of the 1 degree lidar, which lifts detection at 30 % dropout from 10 % to 62 % of
+            visible circles while false fits fall from 28 % to 0.4 % (tuning seeds; 2 beams leave
+            2.3 % false fits). It bridges no beam of the 64-beam lidar (5.6 degrees), where one
+            bridged beam leaves 11 degrees between two points and the fits grow overconfident
+            (``TESTING.md`` ``CIRC-2``).
 
     Raises:
         ValueError: A value out of its range.
@@ -90,6 +103,7 @@ class FeatureSettings:
     corner_penalty: float = 3.0
     max_iterations: int = 10
     max_fit_std: float = 0.1
+    max_bridged_angle: float = math.radians(3.0)
 
     def __post_init__(self) -> None:
         low, high = self.radius_range
@@ -109,6 +123,10 @@ class FeatureSettings:
             (self.corner_penalty < 0.0, f"corner_penalty must be >= 0, got {self.corner_penalty}"),
             (self.max_iterations < 1, f"max_iterations must be >= 1, got {self.max_iterations}"),
             (self.max_fit_std <= 0.0, f"max_fit_std must be positive, got {self.max_fit_std}"),
+            (
+                not (math.isfinite(self.max_bridged_angle) and self.max_bridged_angle >= 0.0),
+                f"max_bridged_angle must be finite and >= 0, got {self.max_bridged_angle}",
+            ),
         ]
         wrong = [message for failed, message in problems if failed]
         if wrong:
@@ -170,44 +188,53 @@ def segment_scan(
 ) -> list[NDArray[np.intp]]:
     """Split a scan's usable points into runs of neighbours close enough to be one surface.
 
-    Neighbouring beams ``i`` and ``i + 1`` belong together when both are usable and their points
-    are at most ``breakpoint_gap + breakpoint_factor * spacing * min(range_i, range_i+1)`` apart.
+    The usable beams are taken in beam order. Consecutive usable beams ``i`` and ``j``, with
+    ``k = (j - i - 1) mod N`` unusable beams between them, belong together when
+    ``k <= floor(max_bridged_angle / spacing)`` and their points are at most ``breakpoint_gap + breakpoint_factor
+    * (k + 1) * spacing * min(range_i, range_j)`` apart: the breakpoint scaled by the angle the
+    two beams span. An unusable beam is never part of a segment.
 
     Args:
         points: ``(N, 2)`` points in beam order.
         ranges: ``(N,)`` readings, metres.
         usable: ``(N,)`` which readings carry a range.
         spacing: Angle between neighbouring beams, radians.
-        settings: The breakpoint settings.
+        settings: The breakpoint and bridging settings.
         wrap: The beams close a full turn, so the last beam neighbours the first.
 
     Returns:
-        Each segment's beam indices in beam order; a segment across the scan's start runs from
-        its first beam before the end to its last beam after the start.
+        Each segment's beam indices in beam order, segments ordered by their first beam; a
+        segment across the scan's start runs from its first beam before the end to its last beam
+        after the start.
     """
-    count = len(points)
-    if count == 0:
+    beams = np.flatnonzero(usable)
+    if len(beams) == 0:
         return []
-    following = np.roll(np.arange(count), -1)
-    gaps = np.hypot(*(points[following] - points).T)
-    limit = settings.breakpoint_gap + settings.breakpoint_factor * spacing * np.minimum(
-        ranges, ranges[following]
+    following = np.roll(beams, -1)
+    skipped = (following - beams - 1) % len(points)
+    gaps = np.hypot(*(points[following] - points[beams]).T)
+    spanned = (skipped + 1) * spacing  # the angle between the two beams
+    limit = settings.breakpoint_gap + settings.breakpoint_factor * spanned * np.minimum(
+        ranges[beams], ranges[following]
     )
-    joined = usable & usable[following] & (gaps <= limit)  # beam i joins beam i + 1
+    bridgeable = _bridgeable_beams(settings.max_bridged_angle, spacing)
+    joined = (skipped <= bridgeable) & (gaps <= limit)  # beams[k] joins k + 1
     if not wrap:
         joined[-1] = False
-    if not usable.any():
-        return []
     if joined.all():
-        return [np.arange(count)]
-    starts = [i for i in range(count) if usable[i] and not joined[i - 1]]
-    segments = []
-    for start in starts:
-        indices = [start]
-        while joined[indices[-1]]:
-            indices.append(int(following[indices[-1]]))
-        segments.append(np.array(indices, dtype=np.intp))
-    return segments
+        return [beams]
+    # Start the usable beams after a break, so no segment runs across the array's end.
+    shift = int(np.flatnonzero(~joined)[-1]) + 1
+    beams, joined = np.roll(beams, -shift), np.roll(joined, -shift)
+    segments = np.split(beams, np.flatnonzero(~joined[:-1]) + 1)
+    return sorted(segments, key=lambda segment: int(segment[0]))
+
+
+def _bridgeable_beams(max_angle: float, spacing: float) -> int:
+    """How many unusable beams ``spacing`` apart fit in ``max_angle`` (0 without a spacing)."""
+    if not spacing > 0.0:
+        return 0
+    return math.floor(max_angle / spacing + BRIDGE_TOLERANCE)
 
 
 def incidence_weights(

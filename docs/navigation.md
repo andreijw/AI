@@ -262,12 +262,16 @@ for feature in extract_circles(sensor, readings):  # one scan, metres
 ```
 
 A scan's usable readings are split where neighbouring points jump apart, and each segment of at least 8 points is
-fitted with a circle: an algebraic start, then a geometric Gauss-Newton fit in which each residual is weighted by
-the range noise projected on the surface (`σ·max(cos α, 0.3)`, α the beam's incidence), which keeps the fit's
-covariance honest (mean NEES 2.8 to 2.9 on tuning seeds and 3.22 on seeds 101 to 150, against 3). A fit is kept when
-its residuals pass a χ² test, its radius lies in 0.1 to 0.8 m, its centre lies beyond the points (a convex face),
-two straight lines do not explain the points better (a box corner), and its result is sound (finite, a
-positive-definite covariance, no σ above 0.1 m); nothing raises on a scan's content. The HC-SR04's five sonars, 30°
+fitted with a circle. A segment bridges up to 3° of unusable beams (`FeatureSettings.max_bridged_angle`; dropouts,
+or no echo) between two usable ones when their points pass the breakpoint scaled by the angle they span: 3 beams of
+the 1° lidar and none of the 64-beam one, whose fits grow overconfident across a bridge; before that one dropped beam
+split every arc. Each circle gets an algebraic start, then a geometric Gauss-Newton fit in which each residual is
+weighted by the range noise projected on the surface (`σ·max(cos α, 0.3)`, α the beam's incidence), which keeps the
+fit's covariance honest (mean NEES 2.8 to 2.9 on tuning seeds, 3.22 on seeds 101 to 150 and 2.93 with bridging on
+seeds 151 to 200, against 3). A fit is kept when its residuals pass a χ² test, its radius lies in 0.1 to 0.8 m, its
+centre lies beyond the points (a convex face), two straight lines do not explain the points better (a box corner),
+and its result is sound (finite, a positive-definite covariance, no σ above 0.1 m); nothing raises on a scan's
+content. The HC-SR04's five sonars, 30°
 apart, never give a feature: landmark SLAM needs the lidar.
 
 On fresh seeds 101 to 150 (`TESTING.md` `CIRC-1`, judged once on 2026-11-10) the 360-beam lidar finds 76 % of the
@@ -321,4 +325,7 @@ It fails two: its absolute error is 0.44 of dead reckoning's (gate 0.40), and 9 
 one Jetson core (`SLAM-2`). Known limits: FEJ stays linearized at a landmark's first
 estimate, so a landmark first seen while the heading was poorly known leaves the run wrong (the lost runs; OC-EKF is
 the follow-up); layouts with at most one circle barely beat dead reckoning (box corners are the follow-up); and with
-30 % of beams dropped the extraction splits each arc at every dropped beam, so few circles are found.
+30 % of beams dropped the extraction finds 62 % of visible circles, about 3 in 4 of those that keep 8 usable beams.
+Bridging up to 3° of dropped beams (`TESTING.md` `CIRC-2`, judged on seeds 151 to 200, 2026-11-12) lifted it from
+10 % with 28 % false fits (tuning seeds, before) and keeps false fits at 0.4 %, and the SLAM at 30 % dropout now
+fails 4 of 50 runs against 5 without dropout.

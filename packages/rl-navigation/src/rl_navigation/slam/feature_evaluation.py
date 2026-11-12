@@ -5,7 +5,9 @@ A desk tool: :mod:`rl_navigation.slam` does not import it. Each run is
 ``run_trial``, bit for bit). Every scan's features are placed with the *true* pose and matched to
 the true circle whose centre lies within :data:`MATCH_RADIUS`; a feature matching none is a false
 fit. A circle is *visible* in a scan when at least ``min_points`` noise-free beams end on it, and
-*detected* when a feature matched it. Matched features are scored by their centre and radius
+*detected* when a feature matched it. It is *reachable* when at least ``min_points`` of those
+beams also carry a usable reading in the scan: the most a detector could find under dropout.
+Matched features are scored by their centre and radius
 error and by their NEES against the fit's own covariance (3 degrees of freedom).
 """
 
@@ -37,7 +39,12 @@ def _rotation(theta: float) -> FloatArray:
 
 
 def visible_circles(
-    arena: Arena, sensor: RangeSensor, pose: ArrayLike, true_ranges: ArrayLike, min_points: int
+    arena: Arena,
+    sensor: RangeSensor,
+    pose: ArrayLike,
+    true_ranges: ArrayLike,
+    min_points: int,
+    readings: ArrayLike | None = None,
 ) -> NDArray[np.intp]:
     """Indices of the circles that at least ``min_points`` of the pose's noise-free beams end on,
     counting only beams whose noise-free range the sensor can report.
@@ -48,6 +55,8 @@ def visible_circles(
         pose: ``(3,)`` the true pose.
         true_ranges: ``(N,)`` the noise-free ranges at ``pose`` (``RangeSensor.true_ranges``).
         min_points: Beams a circle needs.
+        readings: ``(N,)`` the scan actually read; when given, a beam counts only if its reading
+            is also usable (the circle is *reachable*).
     """
     pose = np.asarray(pose, dtype=np.float64)
     if not len(arena.circle_radii):
@@ -60,6 +69,8 @@ def visible_circles(
     offsets = ends[:, None, :] - arena.circle_centers[None]  # (N, C, 2)
     on = np.abs(np.hypot(offsets[..., 0], offsets[..., 1]) - arena.circle_radii) < HIT_TOLERANCE
     on &= usable_readings(ranges, sensor)[:, None]  # past max_range a beam reads no echo
+    if readings is not None:
+        on &= usable_readings(readings, sensor)[:, None]  # a dropout carries no point
     return np.flatnonzero(on.sum(axis=0) >= min_points).astype(np.intp)
 
 
@@ -93,6 +104,7 @@ class FeatureRun:
         false_fits: Features matching no true circle.
         visible: Circle-scans with a visible circle (see the module docstring).
         detected: Visible circle-scans with a feature matching that circle.
+        reachable: Visible circle-scans whose circle keeps ``min_points`` usable readings.
         points: ``(M,)`` beams in each matched feature.
         centre_errors: ``(M,)`` distance from each matched feature's centre to the true one, m.
         radius_errors: ``(M,)`` fitted minus true radius, m.
@@ -108,6 +120,7 @@ class FeatureRun:
     false_fits: int
     visible: int
     detected: int
+    reachable: int
     points: NDArray[np.intp]
     centre_errors: FloatArray
     radius_errors: FloatArray
@@ -141,7 +154,7 @@ def feature_trial(
     run = record_run(seed, sensor, steps=steps, dropout_prob=dropout_prob)
     arena = run.arena
     true_ranges = sensor.true_ranges(arena, run.true_poses)
-    fits = false_fits = visible_count = detected = 0
+    fits = false_fits = visible_count = detected = reachable = 0
     points: list[int] = []
     centre_errors: list[float] = []
     radius_errors: list[float] = []
@@ -157,6 +170,7 @@ def feature_trial(
         fits += len(features)
         false_fits += int((matches < 0).sum())
         visible_count += len(visible)
+        reachable += len(visible_circles(arena, sensor, pose, true, settings.min_points, readings))
         detected += len(set(visible.tolist()) & set(matches.tolist()))
         to_body = _rotation(float(pose[2])).T
         for feature, circle in zip(features, matches, strict=True):
@@ -178,6 +192,7 @@ def feature_trial(
         false_fits=false_fits,
         visible=visible_count,
         detected=detected,
+        reachable=reachable,
         points=np.array(points, dtype=np.intp),
         centre_errors=np.array(centre_errors),
         radius_errors=np.array(radius_errors),
@@ -214,7 +229,9 @@ def summarize_features(runs: Sequence[FeatureRun]) -> dict[str, float]:
     """Pooled feature scores over runs.
 
     Returns:
-        ``detection_rate`` and ``false_fit_rate`` (shares), ``fits_per_scan``; over matched fits
+        ``detection_rate`` and ``false_fit_rate`` (shares), ``reachable_rate`` (visible
+        circle-scans that stay reachable, the detection rate's ceiling under dropout),
+        ``fits_per_scan``; over matched fits
         ``centre_error_median`` and ``_p95``, ``radius_error_median`` and ``_p95`` (absolute) and
         ``radius_error_mean`` (signed), ``fit_nees_mean`` overall and by beams per fit (``_8_to_11``,
         ``_12_to_19``, ``_20_up``); ``radius_bias_t2`` over every run's circles (each run's
@@ -242,6 +259,7 @@ def summarize_features(runs: Sequence[FeatureRun]) -> dict[str, float]:
 
     return {
         "detection_rate": sum(run.detected for run in runs) / visible if visible else float("nan"),
+        "reachable_rate": sum(run.reachable for run in runs) / visible if visible else float("nan"),
         "false_fit_rate": sum(run.false_fits for run in runs) / fits if fits else float("nan"),
         "fits_per_scan": fits / sum(run.scans for run in runs),
         "centre_error_median": quantile(centres, 0.5),
