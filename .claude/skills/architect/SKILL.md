@@ -35,15 +35,15 @@ common in plans written by an eager author.
 
 | Where | Holds | May import |
 | :--- | :--- | :--- |
-| `src/rl_core/agents/` | Algorithms: networks, update rules, `ReplayBuffer` | NumPy and the standard library. No Gymnasium, no challenge package |
-| `src/rl_core/environments/` | `BaseEnvWrapper`: seeding, observation noise, episode statistics and `wrap_env` shared by every challenge wrapper | Gymnasium as a library; it never names a challenge or a challenge's physics attributes, and `rl_core/agents/` never imports it |
-| `src/rl_core/training/` | `Trainer`: the episode loop, evaluation, checkpoint cadence | Gymnasium as an interface only; it never names an environment or an algorithm |
-| `src/rl_core/utils/` | Config, logging, video, plots | The I/O libraries (PyYAML, Matplotlib, moviepy) stay here; `__init__.py` never imports `visualization.py`, so training and the challenges load no Matplotlib (`tests/test_import_footprint.py`) |
-| `src/rl_core/challenges/` | `BenchmarkChallenge`, the challenge registry and `discover_challenges` | `rl_core`; it finds challenge packages by scanning, never by name |
-| `src/rl_<challenge>/` | One environment: wrapper, noise, domain randomization, `make_env` factories, the `BenchmarkChallenge` adapter in `benchmark.py` | `rl_core`; never another challenge, never `src/benchmark.py` |
-| `src/rl_navigation/sim/`, `src/rl_navigation/gym_env.py` | The navigation simulator, and the Gymnasium environment over it, both usable outside this framework (a robot's code, another project) | `sim/`: NumPy and the standard library only. `gym_env.py`: Gymnasium and `sim/` only. Neither imports `rl_core` (`tests/test_import_footprint.py`) |
-| `src/rl_navigation/estimation/` | Pose estimation for the robot's own program (`EkfLocalizer`, `MclLocalizer`), reading the map only through the `RangeMap` protocol (the EKF) or its extension `ParticleMap` (MCL) | NumPy, the standard library and `rl_navigation.sim` only; never `gym_env`, `environments`, Gymnasium or `rl_core`, and no environment or benchmark imports it (`tests/test_import_footprint.py`) |
-| `src/benchmark.py` | The benchmark runner and its command line | `rl_core`; challenges only through `discover_challenges` |
+| `packages/rl-core/src/rl_core/agents/` | Algorithms: networks, update rules, `ReplayBuffer` | NumPy and the standard library. No Gymnasium, no challenge package |
+| `packages/rl-core/src/rl_core/environments/` | `BaseEnvWrapper`: seeding, observation noise, episode statistics and `wrap_env` shared by every challenge wrapper | Gymnasium as a library; it never names a challenge or a challenge's physics attributes, and `rl_core/agents/` never imports it |
+| `packages/rl-core/src/rl_core/training/` | `Trainer`: the episode loop, evaluation, checkpoint cadence | Gymnasium as an interface only; it never names an environment or an algorithm |
+| `packages/rl-core/src/rl_core/utils/` | Config, logging, video, plots | The I/O libraries (PyYAML, Matplotlib, moviepy) stay here; `__init__.py` never imports `visualization.py`, so training and the challenges load no Matplotlib (`tests/test_import_footprint.py`) |
+| `packages/rl-core/src/rl_core/challenges/` | `BenchmarkChallenge`, the challenge registry and `discover_challenges` | `rl_core`; it finds challenge modules through the `rl_core.challenges` entry points, never by name, so a new challenge package declares one in its distribution's `pyproject.toml` |
+| `packages/rl-challenges/src/rl_<challenge>/` | One environment: wrapper, noise, domain randomization, `make_env` factories, the `BenchmarkChallenge` adapter in `benchmark.py` | `rl_core`; never another challenge, never `benchmark.py` |
+| `packages/rl-navigation/src/rl_navigation/sim/`, `packages/rl-navigation/src/rl_navigation/gym_env.py` | The navigation simulator, and the Gymnasium environment over it, both usable outside this framework (a robot's code, another project) | `sim/`: NumPy and the standard library only. `gym_env.py`: Gymnasium and `sim/` only. Neither imports `rl_core` (`tests/test_import_footprint.py`) |
+| `packages/rl-navigation/src/rl_navigation/estimation/` | Pose estimation for the robot's own program (`EkfLocalizer`, `MclLocalizer`), reading the map only through the `RangeMap` protocol (the EKF) or its extension `ParticleMap` (MCL) | NumPy, the standard library and `rl_navigation.sim` only; never `gym_env`, `environments`, Gymnasium or `rl_core`, and no environment or benchmark imports it (`tests/test_import_footprint.py`) |
+| `benchmark.py` | The benchmark runner and its command line | `rl_core`; challenges only through `discover_challenges` |
 | `train.py`, `record.py` | Command line: parse, build, call | Everything; they hold no algorithm logic |
 
 Dependencies point one way: scripts and challenges import `rl_core`, never the reverse. No file in

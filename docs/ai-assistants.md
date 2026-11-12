@@ -93,7 +93,7 @@ the project checks only.
 | `.claude/skills/test-crafter/scripts/mutation_check.py` | Applies small breaks from a JSON list, reports which tests notice, restores the files |
 | `.claude/skills/doc-sync/scripts/check_md_width.py` | Checks the Markdown line-length rule on machines without Node |
 | `.claude/skills/experiment-runner/scripts/run_queue.py` | Machine-wide job queue: `submit`, `run`, `status`, `wait`, `cancel`, `prune`; keeps at most 3 training runs going across all agents |
-| `src/benchmark.py --output-dir … --report …` | Seeded experiment sweeps that leave `docs/benchmarks/` and saved runs alone |
+| `benchmark.py --output-dir … --report …` | Seeded experiment sweeps that leave `docs/benchmarks/` and saved runs alone |
 
 ### Skill Setup
 
@@ -123,7 +123,7 @@ the project checks only.
 
 The same settings file pre-approves what the loop runs constantly, so it does not stop to ask each time: anything run
 with the project's own interpreter (`.venv/bin/python` or `.venv/Scripts/python`, which covers the quality gates,
-`train.py`, `src/benchmark.py` and the skill scripts), edits to the skill files, and `gh run`. That means the
+`train.py`, `benchmark.py` and the skill scripts), edits to the skill files, and `gh run`. That means the
 assistant can run any Python in this repository's environment without a prompt; narrow it in the file if you prefer
 to be asked. Rules are written as patterns, never with one-off file names; approve anything more specific into your
 git-ignored `.claude/settings.local.json`. To opt out of the plugin personally, add this to that file:

@@ -21,8 +21,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+# What its modules import directly, not only through rl-core.
 dependencies = [
     "rl-core~=0.1.0",
+    "gymnasium>=1.0.0",
+    "numpy>=1.21.0",
 ]
 
 [project.optional-dependencies]

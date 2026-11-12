@@ -122,8 +122,9 @@ The questions a training run, not an interpreter, would raise:
 - `docs/benchmarks/*.md` changed only by a full rerun of the report's own agents and seeds, never a smoke
   run (a smoke-run rewrite is Critical). A report the change makes stale (a listed agent's committed config or
   training changed) and did not rerun is a Warning: doc-sync regenerates it in the same PR.
-- No import of PyTorch, TensorFlow, JAX or another learning framework; no new dependency in
-  `pyproject.toml` that the plan did not announce.
+- No import of PyTorch, TensorFlow, JAX or another learning framework; no new dependency in a
+  `packages/*/pyproject.toml` or `requirements-dev.txt` that the plan did not announce (the root
+  `pyproject.toml` holds tool settings only).
 - A config key added or renamed is updated in every `configs/*.yaml` that uses the agent, and old
   checkpoints still load or the PR says they do not.
 - No absolute paths from someone's machine.
@@ -150,9 +151,11 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
   export'". The test used a checkpoint saved by a random agent and passed. With the checkpoint the row names,
   the command crashed with a `KeyError` before it got there. Only running the documented command found it.
 - The roadmap item matches what was built, including what was dropped.
-- **Every document the change makes stale is updated in this PR**, generated ones included: the README
-  challenge table and `docs/results.md`, `docs/benchmarks/*.md`, `TESTING.md` expected numbers and timings, config header comments.
-  A stale one is a Warning, not a follow-up.
+- **A change to a distribution's code adds a line to that distribution's `packages/<dist>/CHANGELOG.md`**
+  under `## [Unreleased]`: its release notes are that file. A missing line is a Warning.
+- **Every document the change makes stale is updated in this PR**, generated ones included: the README challenge table
+  and `docs/results.md`, `docs/benchmarks/*.md`, `TESTING.md` expected numbers and timings, config header comments. A
+  stale one is a Warning, not a follow-up.
 - **Work items no longer needed are gone.** No roadmap entry still asks a question the change answered or
   describes work it did. The hand-off lists the worktrees, branches and scratch folders the work made, and
   either removes them or names the command to remove them (`dev-loop` step 9). A leftover is a Warning.
@@ -192,11 +195,11 @@ has no section of its own for it), updated for the fixes made after the review, 
 
 **Verdict** next: *Approve*, or *Changes needed* with the count of Critical and Warning findings.
 
-Then findings, most severe first: Critical (wrong results, data loss, a false published claim), Warning (fix
-before merge unless the PR description says why not), Suggestion (optional, never blocks). Each one: severity, `path:line`, then **Symptom** → **Source** →
-**Consequence** → **Remedy**. Make the consequence concrete: the input or sequence that goes wrong and what
-the person training the agent sees (a crash, a NaN, a curve that plateaus, a number that is quietly wrong).
-Keep style opinions out; Ruff owns style.
+Then findings, most severe first: Critical (wrong results, data loss, a false published claim), Warning (fix before
+merge unless the PR description says why not), Suggestion (optional, never blocks). Each one: severity, `path:line`,
+then **Symptom** → **Source** → **Consequence** → **Remedy**. Make the consequence concrete: the input or sequence that
+goes wrong and what the person training the agent sees (a crash, a NaN, a curve that plateaus, a number that is quietly
+wrong). Keep style opinions out; Ruff owns style.
 
 Finish with **Not checked**: what you could not judge from the code, above all whether the agent still
 learns if you did not run it. Never report a pass you did not make.

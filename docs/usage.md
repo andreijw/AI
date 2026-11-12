@@ -31,16 +31,17 @@ From PowerShell in the repository root, run:
 ```
 
 The script installs Git and Python 3.12 via `winget` if they are missing, creates a `.venv` virtual environment,
-installs the package with `[dev,video,onnx]` extras, and runs the same checks as CI (Ruff, mypy, pytest). Flags:
-`-NonInteractive` (no prompts), `-SkipChecks`, `-Update` (upgrade tools and packages), and `-InstallHooks`
-(`pre-commit install`). Activate the environment afterwards with `.\.venv\Scripts\Activate.ps1`.
+installs `requirements-dev.txt` (the three distributions, editable, with the dev tools) and the video extras, and runs
+the same checks as CI (Ruff, mypy, pytest). Flags: `-NonInteractive` (no prompts), `-SkipChecks`, `-Update` (upgrade
+tools and packages), and `-InstallHooks` (`pre-commit install`). Activate the environment afterwards with
+`.\.venv\Scripts\Activate.ps1`.
 
 If script execution is disabled, run it once with `powershell -ExecutionPolicy Bypass -File .\setup.ps1`.
 
 ### Linux and macOS Setup
 
 ```bash
-./setup.sh                  # .venv, the CPU profile: .[dev,video,box2d,onnx], no PyTorch
+./setup.sh                  # .venv, the CPU profile: requirements-dev.txt, video and box2d extras, no PyTorch
 ./setup.sh --profile gpu    # .venv-gpu, adds PyTorch for the DDPG, TD3 and SAC backend (backend: torch); ~5 GiB
 ```
 
@@ -60,7 +61,7 @@ build-essential python3.12-dev`). `./setup.sh` does it; by hand, inside the virt
 ```bash
 pip install swig==4.5.1 "setuptools<85" "wheel<0.49"   # the versions it was verified with
 PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-py box2d-py==2.3.8
-pip install -e ".[dev,video,box2d,onnx]"
+pip install -r requirements-dev.txt -e "./packages/rl-core[video,onnx]" -e "./packages/rl-challenges[box2d]"
 ```
 
 `setup.ps1` does not install it on Windows. Without Box2D the LunarLander and BipedalWalker challenges are still
@@ -76,16 +77,11 @@ git clone https://github.com/andreijw/AI.git
 cd AI
 ```
 
-2. Install dependencies:
+2. Install the three distributions under `packages/` in development mode, with the dev tools, from the
+   repository root (pip reads the `./packages/...` paths relative to the current directory):
 
 ```bash
-pip install -r requirements.txt
-```
-
-Or install in development mode:
-
-```bash
-pip install -e .
+pip install -r requirements-dev.txt
 ```
 
 ## Training
@@ -317,7 +313,7 @@ save MP4 videos of training episodes to disk. No display or X server is required
 First, install the optional video dependencies:
 
 ```bash
-pip install -e ".[video]"
+pip install -e "./packages/rl-core[video]"
 # or: pip install moviepy "gymnasium[classic-control]"
 ```
 
@@ -404,7 +400,7 @@ only where NumPy's two best outputs are that close; these are reported as near-t
 ### Export a Trained Agent to ONNX
 
 For a device with an ONNX runtime (onnxruntime, TensorRT, OpenVINO and others), export the same policy as an ONNX
-model. It needs the `onnx` extra (`pip install -e ".[onnx]"`; the setup scripts install it):
+model. It needs the `onnx` extra (`pip install -e "./packages/rl-core[onnx]"`; the setup scripts install it):
 
 ```bash
 python export.py --format onnx --config configs/cartpole_ppo.yaml --checkpoint checkpoints/cartpole/ppo/agent_episode_600.pt --output policy.onnx
@@ -429,11 +425,11 @@ Run an automated comparative benchmark across all algorithms over reproducible s
 
 ```bash
 # Benchmark all agents on CartPole, each for its own config's budget, across seeds 42 and 123
-python src/benchmark.py --challenge cartpole \
+python benchmark.py --challenge cartpole \
     --agents random reinforce actor_critic ppo dqn --seeds 42 123
 
 # Quick comparison between PPO and DQN, both for 150 episodes
-python src/benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42
+python benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42
 ```
 
 Without `--episodes` or `--steps`, each agent trains for its own config's budget (`configs/<challenge>_<agent>.yaml`,
@@ -568,7 +564,7 @@ The 10-episode metrics records carry `curriculum_difficulty` (and `curriculum_st
 the log says when a stage advances, and a run that ends below difficulty 1 warns. The solve rule is unchanged, but
 its training average then mixes difficulties, so quote a curriculum run's greedy evaluation at the target as well.
 A run with a curriculum resumes only with the same one. `record.py`, `export.py` and the benchmark's evaluation
-build the target and ignore the curriculum; `src/benchmark.py` trains each run through its config's curriculum, and
+build the target and ignore the curriculum; `benchmark.py` trains each run through its config's curriculum, and
 its report names each agent that did.
 
 ### Robustness of a Trained Agent
@@ -679,7 +675,7 @@ ruff check --fix .
 Run type checking with mypy:
 
 ```bash
-mypy src/
+mypy
 ```
 
 ### Security Scanning
@@ -687,7 +683,7 @@ mypy src/
 Run security checks with Bandit:
 
 ```bash
-bandit -r src/ -ll
+bandit -r packages/ benchmark.py -ll
 ```
 
 ### Markdown Linting
@@ -707,7 +703,7 @@ Every pull request runs two jobs in `ci.yml`, which are the required status chec
 - **Unit Tests**: pytest with coverage (50% minimum) and the Codecov upload
 - **CodeQL**: security analysis, also on every push to `develop` and weekly
 
-A pull request that changes only `docs/**` or Markdown files (outside `src/` and `tests/`) skips the Python
+A pull request that changes only `docs/**` or Markdown files (outside `packages/` and `tests/`) skips the Python
 steps but still reports both checks; markdownlint, the link check and the workflow-list check always run. A new
 push to a pull request cancels its older run. Weekly Maintenance re-runs `ci.yml` on `develop` every Monday.
 
@@ -721,7 +717,7 @@ request per week for pip and one for GitHub Actions.
 Pre-commit hooks are available for local development. Install them with:
 
 ```bash
-pip install -e ".[dev]"
+pip install -r requirements-dev.txt
 pre-commit install
 ```
 

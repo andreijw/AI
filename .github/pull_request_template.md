@@ -25,8 +25,8 @@
 - [ ] All unit tests passed (`pytest`)
 - [ ] Code formatting verified (`ruff format --check .`)
 - [ ] Linter checks passed (`ruff check .`)
-- [ ] Type checking passed (`mypy src`)
-- [ ] Security audit passed (`bandit -r src/ -ll`)
+- [ ] Type checking passed (`mypy`)
+- [ ] Security audit passed (`bandit -r packages/ benchmark.py -ll`)
 
 ### Manual Verification
 <!-- Describe the manual testing steps performed and the results. Include terminal outputs or metrics if applicable. -->

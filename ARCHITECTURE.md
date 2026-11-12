@@ -7,13 +7,13 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           src/benchmark.py & CLI                            │
+│                     benchmark.py & CLI (repository root)                    │
 │                         (Multi-Agent Benchmarking)                          │
 └─────────────────────────────────────┬───────────────────────────────────────┘
                                       │
                                       ↓
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│   Challenge packages: src/rl_<name>/  (entry points, discover_challenges)   │
+│       Challenge packages (rl-challenges, rl-navigation): entry points       │
 │                                                                             │
 │  rl_cartpole     CartPoleEnv     CartPoleChallenge     discrete; noise, DR  │
 │  rl_pendulum     PendulumEnv     PendulumChallenge     continuous; noise, DR│
@@ -35,7 +35,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
                                       │
                                       ↓
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                                 src/rl_core/                                │
+│                    rl-core: packages/rl-core/src/rl_core/                   │
 │                     (Algorithm-Agnostic Core Framework)                     │
 │                                                                             │
 │  agents/               training/                 utils/                     │
@@ -54,6 +54,51 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │  - checked_randomization, ParameterBounds (randomization ranges)            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Distributions
+
+The code ships as three distributions under `packages/`, each with its own `pyproject.toml`, version and `CHANGELOG.md`;
+import names are the same as before the split (2026-11-11). Solid arrows are requirements, dotted ones the
+`rl_core.challenges` entry points that `discover_challenges()` loads (and one import within a distribution). The scripts
+at the repository root (`train.py`, `record.py`, `export.py`, `robustness.py`, `benchmark.py`) and `configs/` are in no
+distribution: training runs from a checkout.
+
+```mermaid
+flowchart LR
+    subgraph Core ["rl-core (packages/rl-core)"]
+        RlCore["rl_core: agents, training, challenges registry, export"]
+    end
+    subgraph Nav ["rl-navigation (packages/rl-navigation)"]
+        NavLib["rl_navigation.sim, estimation, mapping, slam (NumPy only)"]
+        NavGym["rl_navigation.gym_env (extra gym)"]
+        NavChallenge["rl_navigation.environments, benchmark (extra challenge)"]
+    end
+    subgraph Challenges ["rl-challenges (packages/rl-challenges)"]
+        Classic["rl_cartpole, rl_pendulum, rl_acrobot, rl_mountaincar, rl_lunarlander, rl_bipedalwalker"]
+    end
+    Game["another project (a game)"]
+    Scripts["train.py, record.py, export.py, robustness.py, benchmark.py"]
+
+    NavLib --> NumPy["numpy"]
+    NavGym --> NavLib
+    NavGym --> Gymnasium["gymnasium"]
+    NavChallenge -. imports .-> NavGym
+    NavChallenge --> RlCore
+    Classic --> RlCore
+    Game --> RlCore
+    RlCore --> Gymnasium
+    RlCore --> NumPy
+    RlCore --> Other["pyyaml, matplotlib"]
+    Scripts --> RlCore
+    RlCore -. entry points .-> Classic
+    RlCore -. entry points .-> NavChallenge
+    RlCore -. entry points .-> Game
+```
+
+A robot imports `rl-navigation` alone and gets NumPy only. A dependent pins `rl-core` with `~=0.x.0` (`~=0.1.0` stops
+before 0.2): in 0.x a minor version may break, and `~=0.1` would admit it.
 
 ---
 
@@ -178,15 +223,15 @@ visualized below:
 
 ```mermaid
 flowchart TD
-    subgraph CLI ["Entrypoints"]
+    subgraph CLI ["Entrypoints (repository root, in no distribution)"]
         Train["train.py"]
         Record["record.py"]
         Export["export.py"]
         Robust["robustness.py"]
-        Bench["src/benchmark.py"]
+        Bench["benchmark.py"]
     end
 
-    subgraph Challenges ["Challenge Layer"]
+    subgraph Challenges ["Challenge Layer (rl-challenges; rl_navigation in rl-navigation)"]
         CartPole["rl_cartpole: CartPoleEnv (Discrete)"]
         Pendulum["rl_pendulum: PendulumEnv (Continuous)"]
         Acrobot["rl_acrobot: AcrobotEnv (Discrete)"]
@@ -196,7 +241,7 @@ flowchart TD
         Navigation["rl_navigation: NavigationEnv (Discrete and Continuous)"]
     end
 
-    subgraph Libraries ["Libraries (no rl_core)"]
+    subgraph Libraries ["Libraries in rl-navigation (no rl_core)"]
         NavGym["rl_navigation.gym_env: Navigation-v0, NavigationContinuous-v0 (Gymnasium + sim only)"]
         NavSim["rl_navigation.sim: NumPy simulator (arena, ray casting, sensors, odometry, layouts, World, render)"]
         NavEst["rl_navigation.estimation: EkfLocalizer and MclLocalizer over a RangeMap (NumPy + sim only)"]
@@ -204,7 +249,7 @@ flowchart TD
         NavSlam["rl_navigation.slam: circle features and landmark EKF-SLAM (NumPy + sim + estimation core)"]
     end
 
-    subgraph Core ["rl_core Framework"]
+    subgraph Core ["rl_core Framework (rl-core)"]
         Trainer["Trainer (training loop & eval)"]
         
         subgraph Agents ["Agent Implementations"]
@@ -629,7 +674,7 @@ plots/
 
 ### Adding a New Challenge
 
-1. Create a new package under `src/rl_<challenge>/`:
+1. Create a new package under `packages/rl-challenges/src/rl_<challenge>/`:
    - `environments/<challenge>_env.py`: the challenge's wrapper, a subclass of
      `rl_core.environments.BaseEnvWrapper`. The base already handles seeding (the constructor seed on the first
      reset only), observation noise, the observation settings (`ObservationOptions`: `frame_stack`, `mask_velocity`,
@@ -664,23 +709,22 @@ plots/
      read that table and size each agent from the environment's spaces; a challenge overrides only
      `agent_config(agent_config, env)` when its environment adds to the agent's config: a continuous challenge returns
      `with_box_action_bounds(agent_config, env, self.name)` from `rl_core.challenges`, as Pendulum and
-     MountainCarContinuous do, to pass on its Box action bounds. The
-     base class builds benchmark runs from these. `train.py` and `record.py` pick the challenge whose `name` equals the
-     config's `environment.name` exactly (`select_challenge`), or the one `--challenge` names, and build through it, so
-     no script needs an edit. Two challenges may share an environment id; the config then needs `--challenge`.
-     One package may hold several challenges sharing a wrapper, each with its own `ENV_DEFAULTS`-style table and
-     factory (`rl_mountaincar`, `rl_lunarlander` and `rl_navigation`: `make_env_from_config` and
-     `make_continuous_env_from_config`).
-     Declare the module as an entry point, the package's one edit outside itself: `rl_<challenge> =
-     "rl_<challenge>.benchmark"` under `[project.entry-points."rl_core.challenges"]` in `pyproject.toml`
+     MountainCarContinuous do, to pass on its Box action bounds. The base class builds benchmark runs from these.
+     `train.py` and `record.py` pick the challenge whose `name` equals the config's `environment.name` exactly
+     (`select_challenge`), or the one `--challenge` names, and build through it, so no script needs an edit. Two
+     challenges may share an environment id; the config then needs `--challenge`. One package may hold several
+     challenges sharing a wrapper, each with its own `ENV_DEFAULTS`-style table and factory (`rl_mountaincar`,
+     `rl_lunarlander` and `rl_navigation`: `make_env_from_config` and `make_continuous_env_from_config`). Declare the
+     module as an entry point, the package's one edit outside itself: `rl_<challenge> = "rl_<challenge>.benchmark"`
+     under `[project.entry-points."rl_core.challenges"]` in `packages/rl-challenges/pyproject.toml`
      (`test_every_challenge_package_declares_an_entry_point` fails without it), then re-run the editable install, which
      is what writes entry points into the installed metadata. `discover_challenges()` imports every module in that
      group, so the runner needs no edit, and another project (a game) adds a challenge the same way from its own
      `pyproject.toml`. This repository's distributions load first and the rest by distribution and entry name, so a
      plugin cannot take an in-repo key: its clash is recorded as its own failure. A package that fails to import is
      reported with a warning, under its package name, in `run_benchmark`'s unknown-challenge error and at the end of
-     `src/benchmark.py --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the
-     base class provides one), and its `key` must not already be registered.
+     `benchmark.py --help`. A challenge's `__init__` must work with no arguments or with `config_dir` alone (the base
+     class provides one), and its `key` must not already be registered.
 2. Add reference YAML configurations under `configs/<challenge>_<agent>.yaml`.
 3. Add corresponding test suites in `tests/test_<challenge>.py`, and the challenge's rows to the per-challenge
    tables in `tests/test_challenge_selection.py` (`EXPECTED_AGENTS`, `ENV_CLASSES`, `CONFIGURED`) and
@@ -693,9 +737,9 @@ plots/
 
 ### Adding a New Continuous Algorithm
 
-1. Inherit from `ContinuousActorCriticBase` (or `BaseAgent`) in `src/rl_core/agents/`.
+1. Inherit from `ContinuousActorCriticBase` (or `BaseAgent`) in `packages/rl-core/src/rl_core/agents/`.
 2. Implement `update(trajectory: list[dict[str, Any]]) -> dict[str, float]` with closed-form or autodiff gradients.
-3. Expose the agent in `src/rl_core/agents/__init__.py`.
+3. Expose the agent in `packages/rl-core/src/rl_core/agents/__init__.py`.
 4. Register the agent in the challenge's `AGENT_CLASSES` map.
 5. To make it exportable (`export.py`, to C or ONNX), implement `_inference_network()`: its greedy policy as an
    `InferencePolicy` (`rl_core/agents/inference.py`) of dense layers, ReLU between them, and an `argmax`, `clip` or

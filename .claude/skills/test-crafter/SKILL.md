@@ -23,7 +23,7 @@ Windows, `.venv/bin/python` elsewhere.
 | | Unit tests | Integration tests | Learning runs |
 | :--- | :--- | :--- | :--- |
 | Where | `tests/test_<area>.py` | `tests/test_trainer.py`, `test_train_video.py`, `test_record.py`, `test_benchmark.py` | Not in pytest: `TESTING.md` rows `TR-*` and `BM-*` |
-| Drives | one class or function with a hand-built input | `Trainer`, or a script's `main()` through `tests/helpers.run_main` | `train.py` or `src/benchmark.py` with a committed config |
+| Drives | one class or function with a hand-built input | `Trainer`, or a script's `main()` through `tests/helpers.run_main` | `train.py` or `benchmark.py` with a committed config |
 | Costs | milliseconds | a few episodes, under a second each | minutes, and varies by seed |
 | Checks | the rule: a value, a gradient, a shape, a bound | that the pieces are wired together and files land where they should | that the agent actually learns |
 
@@ -193,7 +193,7 @@ your scratch directory and run it from the repository root:
 ```json
 [
   {
-    "file": "src/rl_core/agents/returns.py",
+    "file": "packages/rl-core/src/rl_core/agents/returns.py",
     "old": "gamma * cumulative",
     "new": "1.0 * cumulative",
     "tests": ["tests/test_returns.py"],

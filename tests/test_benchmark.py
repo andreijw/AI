@@ -1,4 +1,4 @@
-"""Unit and integration tests for general benchmark interface (src/benchmark.py) and CartPole challenge."""
+"""Unit and integration tests for general benchmark interface (benchmark.py) and CartPole challenge."""
 
 import json
 import os

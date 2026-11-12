@@ -24,6 +24,21 @@ Acrobot-v1) and
 
 ### Changed
 
+- **Docs, skills and review rules follow the `packages/` layout** (`feature/package-docs-sweep`). Every path to the
+  code (in the skills, CLAUDE.md, GEMINI.md, ARCHITECTURE.md, CONTRIBUTING.md, TESTING.md, `docs/` and
+  `.brooks-lint.yaml`) and every install and gate command now names `packages/<dist>/src/`,
+  `requirements-dev.txt`, `mypy` (its file list is in `pyproject.toml`) and `bandit -r packages/ benchmark.py`.
+  ARCHITECTURE.md gains a Distributions diagram (the three distributions, their requirements and the entry points)
+  and labels the component diagram's layers by distribution. `docs/navigation.md` says how a ROS 2 node installs
+  `rl-navigation`: a virtual environment made with `--system-site-packages` on Ubuntu 24.04. `tests/test_packages.py`
+  lists what a distribution must have (its folder's name, README, CHANGELOG section for its version, LICENSE, no
+  `[tool.ruff]`, a `requirements-dev.txt` line, installed metadata at its version, requirements on another
+  distribution that admit its version, no tracked file left in `src/`, a `py.typed` marker in every import package,
+  every third-party import declared as a requirement or in an extra, and NumPy only on rl-navigation's robot side), so
+  a new library starts as a copied folder. `rl-challenges` now declares Gymnasium and NumPy, which its modules import
+  directly. The doc-sync, dev-loop and pr-reviewer skills know the per-distribution CHANGELOGs and that dependencies
+  live in `packages/*/pyproject.toml`.
+
 - **Three distributions under `packages/`** (`feature/split-distributions`). The single `rl-cartpole` distribution is
   split, with unchanged import names, into `rl-core` (`packages/rl-core/src/rl_core`), `rl-navigation`
   (`rl_navigation`: NumPy only, extras `gym`, `challenge` and `video`) and `rl-challenges` (the six challenge
@@ -48,8 +63,8 @@ Acrobot-v1) and
   failures are keyed by the module's package, so the messages are unchanged. With no challenge registered the
   unknown-challenge error says how to install them. The tests see only this repository's entry points (they replace the
   public `registry.challenge_entry_points`), and the private-access scan now reads `tests/conftest.py` and
-  `tests/helpers.py` too. An existing environment must re-run `pip install -e ".[dev]"` once, since entry points are
-  installed metadata.
+  `tests/helpers.py` too. An existing environment must re-run its editable install once (`./setup.sh`), since entry
+  points are installed metadata.
 
 - **Docs and diagrams are a step of every PR** (`fix/review-doc-fixes`). The `doc-sync` skill gains a "Diagrams"
   step: update every Mermaid diagram a change makes false, and add one where it explains the change better than

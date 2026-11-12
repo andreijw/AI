@@ -1,7 +1,7 @@
 # Environment Setup Implementation Summary
 
 > **Historical.** This summary describes the environment setup as it was when the repository held only CartPole;
-> paths such as `src/rl_cartpole/...` and the files it lists may no longer match the layout. For the current one see
+> its paths are updated to the `packages/` layout, but the files it lists may no longer match. For the current one see
 > [GEMINI.md](../GEMINI.md#2-codebase-directory-layout) and
 > [ARCHITECTURE.md](../ARCHITECTURE.md).
 
@@ -14,7 +14,7 @@ project, including observation noise, action noise, domain randomization, and ve
 
 ### New Files
 
-1. **`src/rl_cartpole/environments/make_env.py`**
+1. **`packages/rl-challenges/src/rl_cartpole/environments/make_env.py`**
    - Factory functions for creating single and vectorized environments
    - Support for configuration-based environment creation
 
@@ -28,13 +28,13 @@ project, including observation noise, action noise, domain randomization, and ve
 
 ### Modified Files
 
-1. **`src/rl_cartpole/environments/cartpole_env.py`**
+1. **`packages/rl-challenges/src/rl_cartpole/environments/cartpole_env.py`**
    - Added observation noise injection
    - Added action noise with configurable probability
    - Implemented domain randomization
    - Enhanced compatibility with VectorEnv
 
-2. **`src/rl_cartpole/environments/__init__.py`**
+2. **`packages/rl-challenges/src/rl_cartpole/environments/__init__.py`**
    - Exported new factory functions
 
 3. **`tests/test_environment.py`**
