@@ -98,20 +98,23 @@ the gradient's variance far more than a single mean. Actor and critic share a hi
 **Update.** Once per episode, one optimizer step on the episode-averaged gradient:
 
 ```text
-G_t = Monte Carlo return (no bootstrap, no GAE);   A_t = G_t - V(s_t)   (held constant in the actor term)
+G_t = Monte Carlo return (no GAE);   A_t = G_t - V(s_t)   (held constant in the actor term)
 L   = (1/T) * sum_t [ -A_t * log pi(a_t|s_t) + c_v * 0.5 * (V(s_t) - G_t)^2 - c_e * H(pi(.|s_t)) ]
 ```
 
 `c_v` is `value_coef` (0.5) and `c_e` is `entropy_coef` (0.01); advantages are not normalised. The critic term
 carries a 1/2, as in every loss below, where SB3's `vf_coef` multiplies the plain mean squared error: `value_coef`
-0.5 here equals SB3 `vf_coef` 0.25. Like REINFORCE it does not bootstrap a time-limit cut, unlike the continuous
-Actor-Critic and PPO.
+0.5 here equals SB3 `vf_coef` 0.25. By default, like REINFORCE, it treats a time-limit cut as the end of the episode.
+With `bootstrap_truncation: true` (default false; on in `configs/cartpole_actor_critic.yaml`) a cut episode's
+returns become G_t + gamma^(T-t) * V(s_T), with V taken at the true next state `next_observations[-1]` and held
+constant, as PPO does; a termination is unchanged.
 
 **In this repo.** A shared `obs -> hidden_dim (ReLU)` trunk (`ActorCriticBase`) with a softmax policy head and a
 scalar value head; the hand-written backward pass meets in the shared layer. Only the policy is exported.
 
-**What was measured.** `configs/cartpole_actor_critic.yaml` (Adam, 500,000 steps): 5 of 5 seeds solve, at 209k to
-456k steps, and 4 hold; greedy evaluation 500 (`docs/benchmarks/cartpole_results.md`).
+**What was measured.** `configs/cartpole_actor_critic.yaml` (Adam, `bootstrap_truncation`, 500,000 steps): 5 of 5
+seeds solve, at 156k to 282k steps, and 5 hold; greedy evaluation 500 (`docs/benchmarks/cartpole_results.md`). Without
+the bootstrap, on the same seeds, they solved at 209k to 456k steps and 4 held (CHANGELOG.md, 2026-11-12).
 
 **Lessons.** Adam reached 475 at episodes 490 to 839 where SGD needed 906 to 1,269 (CHANGELOG.md, 2026-10-15). A
 "collapse" in a test was the test's fault: a fixed batch kept an action the policy had stopped choosing, so the
@@ -123,8 +126,9 @@ scalar value head; the hand-written backward pass meets in the shared layer. Onl
 network gives a state-dependent mean, and a separate learned log standard deviation sets the exploration noise.
 With `n_steps` it learns from short bootstrapped chunks, as A2C does.
 
-**Update.** With `n_steps: 0`, once per episode on Monte Carlo returns with normalised advantages. With `n_steps: N`
-the episode is replayed in chunks of N steps, one Adam step per chunk:
+**Update.** With `n_steps: 0`, once per episode on Monte Carlo returns with normalised advantages; a time-limit cut is
+then treated as an end unless `bootstrap_truncation: true` adds gamma^(T-t) * V(s_T) to the returns, after
+`reward_scale`. With `n_steps: N` the episode is replayed in chunks of N steps, one Adam step per chunk:
 
 ```text
 A = gae(reward_scale * r, V, gamma, lambda, V(next state)),   R = A + V    (A, R held constant)

@@ -139,10 +139,7 @@ class ContinuousPPOAgent(RolloutWindows, ContinuousActorCriticBase):
         else:
             return None
 
-        rewards = rewards * self.reward_scale
-        if bootstrap_obs is not None:
-            _, _, last_v, _ = self._forward(bootstrap_obs)
-            rewards[-1] += self.gamma * float(last_v)
+        rewards = self._add_bootstrap(rewards * self.reward_scale, bootstrap_obs)
         return RolloutColumns(states, actions, rewards, dones)
 
     def _rollout_targets(

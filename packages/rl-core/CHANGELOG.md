@@ -6,6 +6,12 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 
 ## [Unreleased]
 
+### Fixed
+
+- `ActorCriticAgent` and `ContinuousActorCritic` (with `n_steps: 0`) take `bootstrap_truncation` (default false):
+  a time-limit cut is bootstrapped from V(next state) instead of treated as an end. PPO and continuous PPO share
+  the same bootstrap; their behaviour is unchanged.
+
 ## [0.1.0] - 2026-11-11
 
 ### Added

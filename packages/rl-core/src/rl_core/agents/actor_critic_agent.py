@@ -4,6 +4,8 @@ from typing import Any
 
 import numpy as np
 
+from rl_core.utils.config_values import flag
+
 from .actor_critic_base import ActorCriticBase
 from .returns import discounted_returns
 
@@ -31,13 +33,14 @@ class ActorCriticAgent(ActorCriticBase):
       (e.g. GAE, PPO).
 
     It uses Monte-Carlo returns with no n-step bootstrap, so it is not A2C
-    (the continuous Actor-Critic is, with GAE).
+    (the continuous Actor-Critic is, with GAE). By default an episode cut by a
+    time limit is treated as ended; with ``bootstrap_truncation`` its returns
+    become G_t + γ^(T−t)·V(s_T), with V taken at the true next state
+    ``next_observations[-1]`` and held constant, as PPO does.
 
     References:
         Sutton & Barto (2018). Reinforcement Learning: An Introduction, 2nd
-        ed., section 13.4 (REINFORCE with baseline); the architecture follows
-        Mnih et al. (2016), Asynchronous Methods for Deep Reinforcement
-        Learning, ICML 2016, minus its n-step returns.
+        ed., section 13.4 (REINFORCE with baseline).
 
     Config keys (all optional):
         learning_rate (float): Step size for the configured optimizer. Default: 1e-3.
@@ -50,6 +53,8 @@ class ActorCriticAgent(ActorCriticBase):
         entropy_coef  (float): Entropy-bonus weight (encourages exploration).
                                Default: 0.01.
         seed          (int):   RNG seed for weight initialisation. Default: None.
+        bootstrap_truncation (bool): Add γ^(T−t)·V(s_T) to the returns of an episode
+                               that was cut rather than terminated. Default: False.
     """
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]):
@@ -64,6 +69,7 @@ class ActorCriticAgent(ActorCriticBase):
         super().__init__(observation_dim, action_dim, config)
 
         self.learning_rate: float = float(config.get("learning_rate", 1e-3))
+        self.bootstrap_truncation: bool = flag(config, "bootstrap_truncation", False)
 
         if self.learning_rate <= 0.0:
             raise ValueError(f"learning_rate must be positive, got {self.learning_rate!r}")
@@ -96,6 +102,8 @@ class ActorCriticAgent(ActorCriticBase):
                    - "observations": array of shape (T, observation_dim)
                    - "actions":      integer array of shape (T,)
                    - "rewards":      float array of shape (T,)
+                   and optionally "dones", "terminated" and "next_observations", read
+                   only with ``bootstrap_truncation`` (see :meth:`_bootstrap_cut`).
 
         Returns:
             Dictionary with keys ``"policy_loss"``, ``"value_loss"``, and
@@ -106,7 +114,9 @@ class ActorCriticAgent(ActorCriticBase):
             return {"policy_loss": 0.0, "value_loss": 0.0, "entropy_bonus": 0.0}
 
         # Monte-Carlo returns (same as REINFORCE, no normalisation here so the
-        # value function retains scale information)
+        # value function retains scale information), bootstrapped at a cut if asked
+        if self.bootstrap_truncation:
+            _, rewards = self._bootstrap_cut(batch, rewards)
         returns = discounted_returns(rewards, self.gamma)
 
         components, grads = self._loss_and_grads(observations, actions, returns)
