@@ -65,17 +65,17 @@ Explore before designing. Search for what already does part of the job: the base
 the `make_env` factories, `rl_core/utils/`, and the setup helpers in `train.py`. Reusing them is the default. Check
 Gymnasium and NumPy signatures in Context7, not from memory.
 
-For anything that changes a hyperparameter, a schedule or an update rule, **walk the numbers** before
-proposing them: play the real values through a typical run. Until 2026-10-16 `configs/cartpole_dqn.yaml`
-decayed epsilon by 0.995 "per update" from 1.0 to a floor of 0.02, and `DQNAgent` applied that once per
-`update()` call, which the trainer makes once per episode. Reaching the floor takes ln(0.02) / ln(0.995) ≈ 780
-episodes, but the config trained for 500, so epsilon ended near 0.08 and the floor was never reached (the
-config now decays it linearly per environment step with `exploration_steps`). Read as "per gradient
-step" the same line would end exploration within the first 40 episodes. Whether either is right is a
-judgement; not knowing which one the code does is a mistake, and the logged `epsilon` settles it. Do the
-same for learning
-rate against the number of updates, target-sync period against episode length, buffer warm-up against
-batch size, and a Polyak rate against how many updates the target lags by (ln 2 / τ).
+For anything that changes a hyperparameter, a schedule or an update rule, **walk the numbers** before proposing them:
+play the real values through a typical run. Until 2026-10-16 `configs/cartpole_dqn.yaml` decayed epsilon by 0.995 "per
+update" from 1.0 to a floor of 0.02, and `DQNAgent` applied that once per `update()` call, which the trainer makes once
+per episode. Reaching the floor takes ln(0.02) / ln(0.995) ≈ 780 episodes: the config's first budget, 500 episodes,
+ended epsilon near 0.08, and the 750 it had from 2026-10-14 ended it at about 0.023, practically the floor (the config
+now decays it linearly per environment step with `exploration_steps`). Read as "per gradient step" the same line would
+end exploration within the first 40 episodes. The lesson is the unit: "per update" did not say per call, per episode or
+per gradient step. Whether any of them is right is a judgement; not knowing which one the code does is a mistake, and
+the logged `epsilon` settles it. Do the same for learning rate against the number of updates, target-sync period against
+episode length, buffer warm-up against batch size, and a Polyak rate against how many updates the target lags by (ln 2 /
+τ).
 
 For a new algorithm, network piece or update rule, use the `algorithm-crafter` skill for this step: it
 pins down the variant, the array shapes and the hand-derived gradients before any code exists.

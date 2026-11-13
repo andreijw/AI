@@ -37,6 +37,15 @@ Acrobot-v1) and
   `PLAN-1` (tuning seeds 10000 to 10199, alone on the Jetson): A\* 1.1 ms median and 23 ms p99, the shortcut 7.6 ms
   at worst; the judged timing gate runs in PR 3. The flood fill of `path_exists` is now `sim.layouts.connected`.
 
+- **Teaching pages for the algorithms** (`docs/learn-algorithms`; docs PR 2). `docs/learn/algorithms/` explains
+  REINFORCE and the Actor-Critics, PPO, DQN, DDPG and TD3, and SAC as implemented here: the idea, each update written
+  from the code with a pointer to the function that computes it, the settings that matter (linked to `configs/`), the
+  pitfalls, and the fixes this repository needed, each cited to its CHANGELOG entry (from all 91 algorithm entries).
+  `docs/agents.md` keeps the reference (terms, classes, replay buffer, updates during an episode, the PyTorch backend
+  with its own fixes, export). A numbers check against the sources corrected the DQN epsilon story (the 500-episode
+  run ended near 0.08, the 750-episode budget from 2026-10-14 near the floor; the lesson was the unit) in the page
+  and the dev-loop skill.
+
 ### Changed
 
 - **rl-core 0.2.0, part 1: a declared public API and all versions at 0.2.0** (`feature/rl-core-public-api`; the
