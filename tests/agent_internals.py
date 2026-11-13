@@ -577,6 +577,66 @@ def device_arrays(agent: DDPGAgent) -> dict[str, np.ndarray]:
     return arrays
 
 
+# What a PyTorch backend still runs of its NumPy agent, each with why. Anything else a NumPy agent
+# class defines is training maths, which would train the NumPy mirror that the device then
+# overwrites. Adding an entry silences test_every_numpy_training_method_is_overridden_or_stubbed for
+# that member, so a pull request that adds one says why in its description.
+_SHARED_WITH_TORCH_BACKEND = frozenset(
+    {
+        "_validate",  # config checks run before any network exists
+        "_check_class_constants",  # class-level declarations, checked once per class
+        "_build_networks",  # NumPy weights are built first, then copied to the device
+        "_networks",  # names the NumPy mirror's parameter groups for checkpoints and the device copy
+        "_optimizers_by_net",  # the Adam state the checkpoint holds and the device copies
+        "_critic_names",  # which networks are critics: sizes the device's critic step
+        "_target_names",  # which target follows which network: the device's target update
+        "select_action",  # acting runs on the NumPy mirror of the actor
+        "update",  # stores transitions and calls _train_steps, which the backend overrides
+        "end_episode",  # resets exploration noise, a host-side generator
+        "_greedy_action",  # evaluation acts on the NumPy actor
+        "_training_action",  # exploration acts on the NumPy actor
+        "_actor_forward",  # the NumPy actor's forward pass, used only for acting
+        "_policy",  # SAC acts by sampling the NumPy actor
+        "_checkpoint_kind",  # the agent's name in checkpoint error messages
+        "_inference_network",  # the ONNX and C export read the NumPy mirror
+        "_tanh_scale_policy",  # builds that exported policy
+        "_draw_target_noise",  # TD3's target noise, drawn on the host as the device step's input
+        "_draw_policy_noise",  # SAC's policy noise, drawn on the host as the device step's input
+        "_is_actor_step",  # TD3's policy-delay schedule picks the device step's kind
+        "_step_means",  # TD3's metric averaging over critic and actor steps
+        "_critic_forward",  # called only by stubbed NumPy maths and by the maths tests
+        "_min_target_q",  # called only by stubbed NumPy target computations
+        "_bootstrapped",  # called only by stubbed NumPy target computations
+        "_target_pairs",  # called only by the stubbed NumPy _polyak
+    }
+)
+
+
+_DESCRIPTORS = (property, classmethod, staticmethod)
+
+
+def numpy_maths_left_to_torch_backend(torch_cls: type) -> list[str]:
+    """
+    ``"Class.member"`` for each member a NumPy agent class in ``torch_cls``'s MRO defines that the
+    backend neither shares (``_SHARED_WITH_TORCH_BACKEND``) nor overrides or stubs: NumPy training
+    maths that a call would run on the mirror. Empty for a backend that stubs it all. A name
+    added to ``_SHARED_WITH_TORCH_BACKEND`` is never reported, so a pull request adding one says
+    why.
+    """
+    left = []
+    for numpy_cls in torch_cls.__mro__:
+        if not (issubclass(numpy_cls, OffPolicyAgent) and numpy_cls.BACKEND == "numpy"):
+            continue
+        for name, member in vars(numpy_cls).items():
+            is_method = callable(member) or isinstance(member, _DESCRIPTORS)
+            if not is_method or name.startswith("__") or name in _SHARED_WITH_TORCH_BACKEND:
+                continue
+            owner = next(cls for cls in torch_cls.__mro__ if name in vars(cls))
+            if owner is numpy_cls:
+                left.append(f"{numpy_cls.__name__}.{name}")
+    return sorted(left)
+
+
 # ---------------------------------------------------------------------------
 # Checkpoint entries (tests/test_checkpoint_observation_settings.py)
 # ---------------------------------------------------------------------------

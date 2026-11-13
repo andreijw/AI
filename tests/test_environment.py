@@ -1,5 +1,6 @@
 """Tests for CartPole environment wrapper."""
 
+import gymnasium as gym
 import numpy as np
 import pytest
 
@@ -13,12 +14,18 @@ from rl_cartpole.environments import (
 
 
 def test_env_creation():
-    """Test environment creation."""
+    """The wrapper exposes CartPole-v1's own spaces: a 4-dimensional Box and Discrete(2)."""
+    reference = gym.make("CartPole-v1")
     env = CartPoleEnv(seed=42)
-    assert env is not None
-    assert env.observation_space is not None
-    assert env.action_space is not None
-    env.close()
+    try:
+        assert env.observation_space == reference.observation_space, (
+            "CartPoleEnv should expose CartPole-v1's observation space unchanged"
+        )
+        assert env.observation_space.shape == (4,)
+        assert env.action_space == gym.spaces.Discrete(2), "CartPole has two actions"
+    finally:
+        env.close()
+        reference.close()
 
 
 def test_env_reset():

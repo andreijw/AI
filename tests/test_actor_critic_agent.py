@@ -57,9 +57,10 @@ def test_actor_critic_agent_select_action_greedy():
 def test_actor_critic_agent_update_returns_metrics():
     """update() returns a dict with scalar 'policy_loss', 'value_loss', and 'entropy_bonus' keys."""
     agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CONFIG)
+    rng = np.random.default_rng(0)
     batch = {
-        "observations": np.random.randn(10, 4),
-        "actions": np.random.randint(0, 2, size=10),
+        "observations": rng.standard_normal((10, 4)),
+        "actions": rng.integers(0, 2, size=10),
         "rewards": np.ones(10),
     }
     metrics = agent.update(batch)

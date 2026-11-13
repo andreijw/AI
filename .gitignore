@@ -210,6 +210,8 @@ __marimo__/
 # RL CartPole specific
 logs/
 checkpoints/
+# Small reference checkpoints the tests load (scripts/write_reference_checkpoints.py)
+!tests/data/checkpoints/
 test_logs/
 test_checkpoints/
 plots/

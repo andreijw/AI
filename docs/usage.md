@@ -649,7 +649,7 @@ pytest -q
 Run tests with coverage (CI-aligned):
 
 ```bash
-pytest --cov-report=xml --cov-fail-under=50
+pytest --cov-report=xml --cov-branch --cov-fail-under=90
 ```
 
 ### Code Formatting
@@ -704,7 +704,7 @@ Every pull request runs two jobs in `ci.yml`, which are the required status chec
 
 - **Checks**: Ruff lint and format, MyPy, Bandit, the pylint duplicate-code audit, markdownlint, the Markdown link
   check (`scripts/check_doc_links.py`), and a check that the workflow list in the README is current
-- **Unit Tests**: pytest with coverage (50% minimum) and the Codecov upload
+- **Unit Tests**: pytest with branch coverage (90% minimum) and the Codecov upload
 - **Packages** (not required): builds the three distributions, installs each wheel in a fresh environment and
   imports it (`scripts/release.py smoke-all`; `rl-navigation` may load only NumPy), and runs the robot-side tests
   from the rl-navigation wheel alone on its NumPy floor (1.26)

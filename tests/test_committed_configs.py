@@ -83,6 +83,18 @@ def test_every_agent_trains_for_its_step_budget(challenge, agent_type):
     assert anneal is None or anneal == train_cfg["total_steps"], "Anneal over the whole budget."
 
 
+@pytest.mark.parametrize("challenge", sorted(discover_challenges()))
+def test_every_registered_agent_has_a_committed_config(challenge):
+    """An agent added to a challenge's AGENT_CLASSES without a config in CONFIG_MAP (or the other
+    way round) fails here, not when someone first asks the benchmark for it."""
+    challenge_cls = discover_challenges()[challenge]
+    assert set(challenge_cls.CONFIG_MAP) == set(challenge_cls.AGENT_CLASSES), (
+        f"{challenge}: CONFIG_MAP and AGENT_CLASSES should name the same agents"
+    )
+    for config_file in challenge_cls.CONFIG_MAP.values():
+        assert os.path.isfile(os.path.join(CONFIGS_DIR, config_file)), config_file
+
+
 @pytest.mark.parametrize("agent_type", ["reinforce", "actor_critic", "ppo"])
 def test_cartpole_policy_gradient_agents_use_adam(agent_type):
     env, agent, _ = CartPoleChallenge().setup_run(agent_type, seed=1, episodes=None)

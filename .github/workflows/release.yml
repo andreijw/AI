@@ -57,7 +57,7 @@ jobs:
         run: pip install -r requirements-dev.txt -c requirements-lock.txt
 
       - name: Run tests
-        run: pytest -q --cov-fail-under=50
+        run: pytest -q --cov-branch --cov-fail-under=90
 
       - name: Build the sdist and wheel
         env:

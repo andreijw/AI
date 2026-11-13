@@ -88,7 +88,7 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
 
     captured = {}
 
-    class _StubReinforce:
+    class StubReinforce:
         @classmethod
         def class_for_config(cls, config):
             return cls
@@ -101,7 +101,7 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
         def record_observation_settings(self, settings, defaults):
             captured["observation_settings"] = dict(settings)
 
-    class _StubTrainer:
+    class StubTrainer:
         def __init__(self, env, agent, config, logger=None, **_eval):
             captured["trainer_agent_type"] = type(agent).__name__
             captured["trainer_num_episodes"] = config.get("num_episodes")
@@ -112,13 +112,13 @@ def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
             return {"ok": True}
 
     monkeypatch.setitem(
-        rl_cartpole.benchmark.CartPoleChallenge.AGENT_CLASSES, "reinforce", _StubReinforce
+        rl_cartpole.benchmark.CartPoleChallenge.AGENT_CLASSES, "reinforce", StubReinforce
     )
-    monkeypatch.setattr(train, "Trainer", _StubTrainer)
+    monkeypatch.setattr(train, "Trainer", StubTrainer)
 
     train.main()
 
-    assert captured["trainer_agent_type"] == "_StubReinforce"
+    assert captured["trainer_agent_type"] == "StubReinforce"
     assert captured["trainer_num_episodes"] == 1
     assert captured["agent_observation_dim"] == 4
     assert captured["agent_action_dim"] == 2

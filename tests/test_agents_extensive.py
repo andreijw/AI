@@ -6,7 +6,15 @@ import numpy as np
 import pytest
 
 from rl_core.agents import ActorCriticAgent, BaseAgent, RandomAgent, ReinforceAgent
-from tests.agent_internals import hidden_activations, probabilities, state_value, weights
+from rl_core.seeding import AGENT_EXPLORATION_STREAM, derive_rng
+from tests.agent_internals import (
+    hidden_activations,
+    loss_and_grads,
+    probabilities,
+    set_weights,
+    state_value,
+    weights,
+)
 from tests.helpers import assert_same_checkpoint
 
 # ---------------------------------------------------------------------------
@@ -147,7 +155,7 @@ class TestRandomAgentExtended:
 
     def test_large_observation_dim(self):
         agent = RandomAgent(observation_dim=256, action_dim=2, config={})
-        obs = np.random.randn(256)
+        obs = np.random.default_rng(0).standard_normal(256)
         action = agent.select_action(obs)
         assert action in (0, 1)
 
@@ -171,10 +179,19 @@ class TestRandomAgentExtended:
         # Each frequency should be within 5 % of 0.25
         np.testing.assert_allclose(freqs, 0.25, atol=0.05)
 
-    def test_action_is_integer_type(self):
-        agent = RandomAgent(observation_dim=4, action_dim=2, config={})
-        action = agent.select_action(np.zeros(4))
-        assert isinstance(action, int)
+    def test_actions_are_python_ints_from_the_exploration_stream(self):
+        """Training actions are the seed's exploration stream, uniform over the actions, each
+        returned as a Python int (not a NumPy integer)."""
+        agent = RandomAgent(observation_dim=4, action_dim=3, config={"seed": 11})
+        stream = derive_rng(11, AGENT_EXPLORATION_STREAM)
+        actions = [agent.select_action(np.zeros(4)) for _ in range(20)]
+        assert actions == [int(stream.integers(0, 3)) for _ in range(20)]
+        assert all(type(action) is int for action in actions)
+
+    @pytest.mark.parametrize("dims,match", [((0, 2), "observation_dim"), ((4, 0), "action_dim")])
+    def test_invalid_dimension_raises(self, dims, match):
+        with pytest.raises(ValueError, match=match):
+            RandomAgent(observation_dim=dims[0], action_dim=dims[1], config={})
 
     def test_evaluation_draws_from_its_own_reproducible_generator(self):
         """Since 2026-10-18 evaluation actions come from a separate stream (CHANGELOG.md,
@@ -253,77 +270,212 @@ class TestRandomAgentExtended:
 
 
 # ===========================================================================
+# REINFORCE and Actor-Critic – what the two discrete policy-gradient agents share
+# ===========================================================================
+
+# (class, config, the name of the policy head's bias)
+_POLICY_GRADIENT_AGENTS = [
+    pytest.param(ReinforceAgent, _REINFORCE_CFG, "b2", id="reinforce"),
+    pytest.param(ActorCriticAgent, _AC_CFG, "b_pi", id="actor_critic"),
+]
+_INVALID_SETTINGS = [
+    ("hidden_dim", 0),
+    ("hidden_dim", -8),
+    ("learning_rate", 0.0),
+    ("learning_rate", -1e-4),
+    ("gamma", 0.0),
+    ("gamma", -0.1),
+    ("gamma", 1.01),
+]
+
+
+@pytest.mark.parametrize("agent_cls,cfg,head_bias", _POLICY_GRADIENT_AGENTS)
+class TestPolicyGradientAgentsShared:
+    """Validation, action selection, update edges and checkpoint files: the same for both."""
+
+    # --- Construction / validation ------------------------------------------
+
+    @pytest.mark.parametrize(
+        "dims,match",
+        [
+            ((0, 2), "observation_dim"),
+            ((-1, 2), "observation_dim"),
+            ((4, 0), "action_dim"),
+            ((4, -3), "action_dim"),
+        ],
+    )
+    def test_invalid_dimension_raises(self, agent_cls, cfg, head_bias, dims, match):
+        with pytest.raises(ValueError, match=match):
+            agent_cls(observation_dim=dims[0], action_dim=dims[1], config=cfg)
+
+    @pytest.mark.parametrize("key,value", _INVALID_SETTINGS)
+    def test_invalid_setting_raises(self, agent_cls, cfg, head_bias, key, value):
+        with pytest.raises(ValueError, match=key):
+            agent_cls(observation_dim=4, action_dim=2, config={**cfg, key: value})
+
+    def test_valid_gamma_exactly_one(self, agent_cls, cfg, head_bias):
+        """gamma=1.0 is a valid boundary value and should not raise."""
+        agent = agent_cls(observation_dim=4, action_dim=2, config={**cfg, "gamma": 1.0})
+        assert agent.gamma == 1.0
+
+    # --- Policy --------------------------------------------------------------
+
+    def test_policy_probabilities_are_a_distribution(self, agent_cls, cfg, head_bias):
+        agent = agent_cls(observation_dim=4, action_dim=5, config=cfg)
+        rng = np.random.default_rng(1)
+        for _ in range(10):
+            probs = probabilities(agent, rng.standard_normal(4))
+            assert np.all(probs >= 0)
+            np.testing.assert_allclose(probs.sum(), 1.0, atol=1e-6)
+
+    # --- Action selection ----------------------------------------------------
+
+    def test_select_action_samples_the_only_likely_action(self, agent_cls, cfg, head_bias):
+        """With a zero observation the hidden layer is zero and the logits are the head's bias;
+        a bias of (-50, 50, -50) leaves action 1 the only one with any probability, sampled or
+        greedy, and it comes back as a Python int."""
+        agent = agent_cls(observation_dim=4, action_dim=3, config=cfg)
+        set_weights(agent, **{head_bias: np.array([-50.0, 50.0, -50.0])})
+        for training in (True, False):
+            actions = [agent.select_action(np.zeros(4), training=training) for _ in range(50)]
+            assert actions == [1] * 50, f"Only action 1 is likely (training={training})"
+            assert all(type(action) is int for action in actions), "Actions are Python ints"
+
+    def test_select_action_in_valid_range(self, agent_cls, cfg, head_bias):
+        for action_dim in (2, 3, 5):
+            agent = agent_cls(observation_dim=4, action_dim=action_dim, config=cfg)
+            for _ in range(50):
+                assert 0 <= agent.select_action(np.zeros(4)) < action_dim
+
+    def test_select_action_greedy_is_deterministic(self, agent_cls, cfg, head_bias):
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        obs = np.array([1.0, -1.0, 0.5, -0.5])
+        greedy = [agent.select_action(obs, training=False) for _ in range(30)]
+        assert len(set(greedy)) == 1
+
+    def test_select_action_greedy_matches_argmax(self, agent_cls, cfg, head_bias):
+        """Greedy action should equal argmax of the policy probabilities."""
+        agent = agent_cls(observation_dim=4, action_dim=4, config=cfg)
+        obs = np.random.default_rng(2).standard_normal(4)
+        greedy = agent.select_action(obs, training=False)
+        assert greedy == int(np.argmax(probabilities(agent, obs)))
+
+    def test_seeded_agent_reproducible_sequence(self, agent_cls, cfg, head_bias):
+        obs = np.zeros(4)
+        a = agent_cls(observation_dim=4, action_dim=2, config={**cfg, "seed": 42})
+        b = agent_cls(observation_dim=4, action_dim=2, config={**cfg, "seed": 42})
+        assert [a.select_action(obs) for _ in range(30)] == [
+            b.select_action(obs) for _ in range(30)
+        ]
+
+    # --- Update --------------------------------------------------------------
+
+    def test_update_inconsistent_trajectory_lengths(self, agent_cls, cfg, head_bias):
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        batch = {
+            "observations": np.zeros((5, 4)),
+            "actions": np.array([0, 1, 0]),  # length mismatch
+            "rewards": np.ones(5),
+        }
+        with pytest.raises(ValueError, match="Inconsistent"):
+            agent.update(batch)
+
+    @pytest.mark.parametrize(
+        "batch",
+        [
+            pytest.param(
+                {"observations": np.zeros((1, 4)), "actions": np.array([0]), "rewards": [1.0]},
+                id="single-step",
+            ),
+            pytest.param({**_make_batch(10), "rewards": -np.ones(10)}, id="negative-rewards"),
+        ],
+    )
+    def test_update_edge_batches_give_finite_metrics(self, agent_cls, cfg, head_bias, batch):
+        metrics = agent_cls(observation_dim=4, action_dim=2, config=cfg).update(batch)
+        assert metrics and all(np.isfinite(v) for v in metrics.values()), metrics
+
+    def test_update_large_observation_and_action_dim(self, agent_cls, cfg, head_bias):
+        agent = agent_cls(observation_dim=64, action_dim=8, config={"seed": 0})
+        metrics = agent.update(_make_batch(n=20, obs_dim=64, action_dim=8))
+        assert metrics and all(np.isfinite(v) for v in metrics.values()), metrics
+
+    # --- Save / Load ---------------------------------------------------------
+
+    def _restored(self, agent_cls, cfg, path):
+        restored = agent_cls(observation_dim=4, action_dim=2, config={**cfg, "seed": 9})
+        restored.load(path)
+        return restored
+
+    def test_save_appends_npz_when_no_extension(self, agent_cls, cfg, head_bias, tmp_path):
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        p = str(tmp_path / "ckpt")
+        agent.save(p)
+        assert os.path.exists(p + ".npz")
+
+    def test_load_without_extension_falls_back_to_npz(self, agent_cls, cfg, head_bias, tmp_path):
+        """Loading a bare path appends .npz before looking up the file."""
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        p = str(tmp_path / "ckpt")
+        agent.save(p)
+        assert_same_checkpoint(agent, self._restored(agent_cls, cfg, p), tmp_path)
+
+    def test_save_load_preserves_inference_output(self, agent_cls, cfg, head_bias, tmp_path):
+        """After save/load the agent produces the same action probabilities."""
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        obs = np.array([0.1, -0.2, 0.3, -0.4])
+        p = str(tmp_path / "ckpt")
+        agent.save(p)
+        np.testing.assert_allclose(
+            probabilities(self._restored(agent_cls, cfg, p), obs),
+            probabilities(agent, obs),
+            atol=1e-10,
+        )
+
+    @pytest.mark.parametrize("extension", [".h5", ".pkl"])
+    def test_unsupported_extension_raises(self, agent_cls, cfg, head_bias, tmp_path, extension):
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        with pytest.raises(ValueError, match="Unsupported checkpoint extension"):
+            agent.save(str(tmp_path / f"model{extension}"))
+        with pytest.raises(ValueError, match="Unsupported checkpoint extension"):
+            agent.load(str(tmp_path / f"model{extension}"))
+
+    def test_load_nonexistent_file_raises(self, agent_cls, cfg, head_bias, tmp_path):
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        with pytest.raises(FileNotFoundError):
+            agent.load(str(tmp_path / "nonexistent.pt"))
+
+    def test_save_load_after_training(self, agent_cls, cfg, head_bias, tmp_path):
+        """Weights saved after training are restored with full precision."""
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        for _ in range(5):
+            agent.update(_make_batch(20))
+        p = str(tmp_path / "trained")
+        agent.save(p)
+        assert_same_checkpoint(agent, self._restored(agent_cls, cfg, p), tmp_path)
+
+    def test_load_pt_extension_exact_file(self, agent_cls, cfg, head_bias, tmp_path):
+        """Loading a .pt path that exists on disk should load that exact file."""
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        p = str(tmp_path / "model.pt")
+        agent.save(p)
+        assert os.path.exists(p)
+        assert_same_checkpoint(agent, self._restored(agent_cls, cfg, p), tmp_path)
+
+    def test_load_pt_legacy_npz_fallback(self, agent_cls, cfg, head_bias, tmp_path):
+        """Loading a .pt path falls back to '<name>.pt.npz' when the .pt file is absent."""
+        agent = agent_cls(observation_dim=4, action_dim=2, config=cfg)
+        agent.save(str(tmp_path / "legacy.pt.npz"))
+        restored = self._restored(agent_cls, cfg, str(tmp_path / "legacy.pt"))
+        assert_same_checkpoint(agent, restored, tmp_path)
+
+
+# ===========================================================================
 # ReinforceAgent – extended tests
 # ===========================================================================
 
 
 class TestReinforceAgentExtended:
-    """Comprehensive tests for ReinforceAgent validation, numerics, and I/O."""
-
-    # --- Construction / validation ------------------------------------------
-
-    def test_invalid_observation_dim_zero(self):
-        with pytest.raises(ValueError, match="observation_dim"):
-            ReinforceAgent(observation_dim=0, action_dim=2, config=_REINFORCE_CFG)
-
-    def test_invalid_observation_dim_negative(self):
-        with pytest.raises(ValueError, match="observation_dim"):
-            ReinforceAgent(observation_dim=-1, action_dim=2, config=_REINFORCE_CFG)
-
-    def test_invalid_action_dim_zero(self):
-        with pytest.raises(ValueError, match="action_dim"):
-            ReinforceAgent(observation_dim=4, action_dim=0, config=_REINFORCE_CFG)
-
-    def test_invalid_action_dim_negative(self):
-        with pytest.raises(ValueError, match="action_dim"):
-            ReinforceAgent(observation_dim=4, action_dim=-3, config=_REINFORCE_CFG)
-
-    def test_invalid_hidden_dim_zero(self):
-        with pytest.raises(ValueError, match="hidden_dim"):
-            ReinforceAgent(
-                observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "hidden_dim": 0}
-            )
-
-    def test_invalid_hidden_dim_negative(self):
-        with pytest.raises(ValueError, match="hidden_dim"):
-            ReinforceAgent(
-                observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "hidden_dim": -8}
-            )
-
-    def test_invalid_learning_rate_zero(self):
-        with pytest.raises(ValueError, match="learning_rate"):
-            ReinforceAgent(
-                observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "learning_rate": 0.0}
-            )
-
-    def test_invalid_learning_rate_negative(self):
-        with pytest.raises(ValueError, match="learning_rate"):
-            ReinforceAgent(
-                observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "learning_rate": -1e-4}
-            )
-
-    def test_invalid_gamma_zero(self):
-        with pytest.raises(ValueError, match="gamma"):
-            ReinforceAgent(observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "gamma": 0.0})
-
-    def test_invalid_gamma_negative(self):
-        with pytest.raises(ValueError, match="gamma"):
-            ReinforceAgent(
-                observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "gamma": -0.1}
-            )
-
-    def test_invalid_gamma_greater_than_one(self):
-        with pytest.raises(ValueError, match="gamma"):
-            ReinforceAgent(
-                observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "gamma": 1.01}
-            )
-
-    def test_valid_gamma_exactly_one(self):
-        """gamma=1.0 is a valid boundary value and should not raise."""
-        agent = ReinforceAgent(
-            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "gamma": 1.0}
-        )
-        assert agent.gamma == 1.0
+    """What only REINFORCE has: its defaults, network, single loss and reported value."""
 
     def test_defaults_without_config(self):
         """Agent created with empty config should use documented defaults."""
@@ -331,8 +483,6 @@ class TestReinforceAgentExtended:
         assert agent.learning_rate == 1e-3
         assert agent.gamma == 0.99
         assert agent.hidden_dim == 128
-
-    # --- Weight shapes -------------------------------------------------------
 
     def test_weight_shapes(self):
         agent = ReinforceAgent(
@@ -348,28 +498,11 @@ class TestReinforceAgentExtended:
         np.testing.assert_array_equal(weights(agent)["b1"], np.zeros_like(weights(agent)["b1"]))
         np.testing.assert_array_equal(weights(agent)["b2"], np.zeros_like(weights(agent)["b2"]))
 
-    # --- Policy forward pass -------------------------------------------------
-
     def test_policy_output_shape(self):
         for action_dim in (2, 3, 5):
             agent = ReinforceAgent(observation_dim=4, action_dim=action_dim, config=_REINFORCE_CFG)
-            probs = probabilities(agent, np.zeros(4))
-            h = hidden_activations(agent, np.zeros(4))
-            assert probs.shape == (action_dim,)
-            assert h.shape == (64,)
-
-    def test_policy_probabilities_sum_to_one(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        for _ in range(10):
-            obs = np.random.randn(4)
-            probs = probabilities(agent, obs)
-            np.testing.assert_allclose(probs.sum(), 1.0, atol=1e-6)
-
-    def test_policy_probabilities_non_negative(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=5, config=_REINFORCE_CFG)
-        for _ in range(10):
-            probs = probabilities(agent, np.random.randn(4))
-            assert np.all(probs >= 0)
+            assert probabilities(agent, np.zeros(4)).shape == (action_dim,)
+            assert hidden_activations(agent, np.zeros(4)).shape == (64,)
 
     def test_policy_probabilities_strictly_positive(self):
         """Softmax output should never collapse to zero for reasonable inputs."""
@@ -377,97 +510,41 @@ class TestReinforceAgentExtended:
         probs = probabilities(agent, np.array([100.0, -100.0, 0.0, 0.5]))
         assert np.all(probs > 0)
 
-    # --- Action selection ----------------------------------------------------
-
-    def test_select_action_returns_integer(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        action = agent.select_action(np.zeros(4))
-        assert isinstance(action, int)
-
-    def test_select_action_in_valid_range(self):
-        for action_dim in (2, 3, 5):
-            agent = ReinforceAgent(observation_dim=4, action_dim=action_dim, config=_REINFORCE_CFG)
-            for _ in range(50):
-                assert 0 <= agent.select_action(np.zeros(4)) < action_dim
-
-    def test_select_action_greedy_is_deterministic(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        obs = np.array([1.0, -1.0, 0.5, -0.5])
-        greedy = [agent.select_action(obs, training=False) for _ in range(30)]
-        assert len(set(greedy)) == 1
-
-    def test_select_action_greedy_matches_argmax(self):
-        """Greedy action should equal argmax of the policy probabilities."""
-        agent = ReinforceAgent(observation_dim=4, action_dim=4, config=_REINFORCE_CFG)
-        obs = np.random.randn(4)
-        probs = probabilities(agent, obs)
-        greedy = agent.select_action(obs, training=False)
-        assert greedy == int(np.argmax(probs))
-
     def test_select_action_stochastic_explores(self):
         """Over many draws both actions should appear during training."""
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
         actions = {agent.select_action(np.zeros(4), training=True) for _ in range(200)}
         assert len(actions) == 2
 
-    def test_seeded_agent_reproducible_sequence(self):
-        obs = np.zeros(4)
-        a = ReinforceAgent(observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 42})
-        b = ReinforceAgent(observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 42})
-        seq_a = [a.select_action(obs) for _ in range(30)]
-        seq_b = [b.select_action(obs) for _ in range(30)]
-        assert seq_a == seq_b
+    def test_update_reports_the_mean_loss_over_the_episode(self):
+        """The reported policy_loss is the summed loss over the episode's steps, weighted by
+        the normalised discounted returns, divided by its length.
 
-    # --- Update --------------------------------------------------------------
+        Rewards (1, 0, 2) with gamma 0.5 give returns G2 = 2, G1 = 0 + 0.5 * 2 = 1 and
+        G0 = 1 + 0.5 * 1 = 1.5; normalised, (G - 1.5) / std(G) with std(G) = sqrt(1/6)."""
+        agent = ReinforceAgent(
+            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "gamma": 0.5}
+        )
+        batch = _make_batch(n=3)
+        batch["rewards"] = np.array([1.0, 0.0, 2.0])
+        returns = np.array([1.5, 1.0, 2.0])
+        normalised = (returns - 1.5) / np.sqrt(1.0 / 6.0)
+        summed, _ = loss_and_grads(agent, batch["observations"], batch["actions"], normalised)
 
-    def test_update_returns_float_policy_loss(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        metrics = agent.update(_make_batch())
-        assert isinstance(metrics["policy_loss"], float)
+        metrics = agent.update(batch)
+
+        assert type(metrics["policy_loss"]) is float
+        np.testing.assert_allclose(metrics["policy_loss"], summed / 3, rtol=1e-12)
 
     def test_update_empty_batch_returns_zero_loss(self):
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
         batch = {"observations": np.empty((0, 4)), "actions": np.array([]), "rewards": np.array([])}
         assert agent.update(batch) == {"policy_loss": 0.0}
 
-    def test_update_single_step_trajectory(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        batch = {
-            "observations": np.zeros((1, 4)),
-            "actions": np.array([0]),
-            "rewards": np.array([1.0]),
-        }
-        metrics = agent.update(batch)
-        assert np.isfinite(metrics["policy_loss"])
-
     def test_update_loss_is_finite(self):
         agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
         for _ in range(5):
-            metrics = agent.update(_make_batch(20))
-            assert np.isfinite(metrics["policy_loss"])
-
-    def test_update_negative_rewards(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        batch = _make_batch(10)
-        batch["rewards"] = -np.ones(10)
-        metrics = agent.update(batch)
-        assert np.isfinite(metrics["policy_loss"])
-
-    def test_update_only_policy_loss_key(self):
-        """ReinforceAgent.update returns exactly one key."""
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        metrics = agent.update(_make_batch())
-        assert list(metrics.keys()) == ["policy_loss"]
-
-    def test_update_inconsistent_trajectory_lengths(self):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        batch = {
-            "observations": np.zeros((5, 4)),
-            "actions": np.array([0, 1, 0]),  # length mismatch
-            "rewards": np.ones(5),
-        }
-        with pytest.raises(ValueError, match="Inconsistent"):
-            agent.update(batch)
+            assert np.isfinite(agent.update(_make_batch(20))["policy_loss"])
 
     def test_update_repeated_lowers_the_policy_loss(self):
         """Repeated updates on a fixed batch descend the loss they report; a gradient with the
@@ -489,113 +566,6 @@ class TestReinforceAgentExtended:
             f"The reported policy loss must fall on a fixed batch: {losses[0]:.4f} -> {losses[-1]:.4f}"
         )
 
-    def test_update_large_observation_and_action_dim(self):
-        agent = ReinforceAgent(observation_dim=64, action_dim=8, config={"seed": 0})
-        batch = _make_batch(n=20, obs_dim=64, action_dim=8)
-        metrics = agent.update(batch)
-        assert np.isfinite(metrics["policy_loss"])
-
-    # --- Save / Load ---------------------------------------------------------
-
-    def test_save_appends_npz_when_no_extension(self, tmp_path):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        p = str(tmp_path / "ckpt")
-        agent.save(p)
-        assert os.path.exists(p + ".npz")
-
-    def test_save_load_roundtrip_no_extension(self, tmp_path):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        p = str(tmp_path / "ckpt")
-        agent.save(p)
-        agent2 = ReinforceAgent(
-            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
-        )
-        agent2.load(p)
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
-    def test_save_load_preserves_inference_output(self, tmp_path):
-        """After save/load the agent produces the same action probabilities."""
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        obs = np.array([0.1, -0.2, 0.3, -0.4])
-        probs_before = probabilities(agent, obs)
-
-        p = str(tmp_path / "ckpt")
-        agent.save(p)
-
-        agent2 = ReinforceAgent(
-            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
-        )
-        agent2.load(p)
-        probs_after = probabilities(agent2, obs)
-
-        np.testing.assert_allclose(probs_before, probs_after, atol=1e-10)
-
-    def test_save_unsupported_extension_raises(self, tmp_path):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        with pytest.raises(ValueError, match="Unsupported checkpoint extension"):
-            agent.save(str(tmp_path / "model.h5"))
-
-    def test_load_unsupported_extension_raises(self, tmp_path):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        with pytest.raises(ValueError, match="Unsupported checkpoint extension"):
-            agent.load(str(tmp_path / "model.h5"))
-
-    def test_load_nonexistent_file_raises(self, tmp_path):
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        with pytest.raises(FileNotFoundError):
-            agent.load(str(tmp_path / "nonexistent.pt"))
-
-    def test_load_nonexistent_no_extension_falls_back_to_npz(self, tmp_path):
-        """Loading a bare path appends .npz before looking up the file."""
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        p = str(tmp_path / "ckpt")
-        agent.save(p)
-        agent2 = ReinforceAgent(
-            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
-        )
-        agent2.load(p)  # Should resolve to p + ".npz"
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
-    def test_save_load_after_training(self, tmp_path):
-        """Weights saved after training are restored with full precision."""
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        for _ in range(5):
-            agent.update(_make_batch(20))
-
-        p = str(tmp_path / "trained")
-        agent.save(p)
-
-        agent2 = ReinforceAgent(
-            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
-        )
-        agent2.load(p)
-
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
-    def test_load_pt_extension_exact_file(self, tmp_path):
-        """Loading a .pt path that exists on disk should load that exact file."""
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        p = str(tmp_path / "model.pt")
-        agent.save(p)
-        assert os.path.exists(p)
-
-        agent2 = ReinforceAgent(
-            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
-        )
-        agent2.load(p)
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
-    def test_load_pt_legacy_npz_fallback(self, tmp_path):
-        """Loading a .pt path falls back to '<name>.pt.npz' when the .pt file is absent."""
-        agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CFG)
-        agent.save(str(tmp_path / "reinforce_legacy.pt.npz"))
-
-        agent2 = ReinforceAgent(
-            observation_dim=4, action_dim=2, config={**_REINFORCE_CFG, "seed": 9}
-        )
-        agent2.load(str(tmp_path / "reinforce_legacy.pt"))
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
 
 # ===========================================================================
 # ActorCriticAgent – extended tests
@@ -603,65 +573,12 @@ class TestReinforceAgentExtended:
 
 
 class TestActorCriticAgentExtended:
-    """Comprehensive tests for ActorCriticAgent validation, numerics, and I/O."""
+    """What only the Actor-Critic has: its coefficients, value head and three metrics."""
 
-    # --- Construction / validation ------------------------------------------
-
-    def test_invalid_observation_dim_zero(self):
-        with pytest.raises(ValueError, match="observation_dim"):
-            ActorCriticAgent(observation_dim=0, action_dim=2, config=_AC_CFG)
-
-    def test_invalid_observation_dim_negative(self):
-        with pytest.raises(ValueError, match="observation_dim"):
-            ActorCriticAgent(observation_dim=-2, action_dim=2, config=_AC_CFG)
-
-    def test_invalid_action_dim_zero(self):
-        with pytest.raises(ValueError, match="action_dim"):
-            ActorCriticAgent(observation_dim=4, action_dim=0, config=_AC_CFG)
-
-    def test_invalid_action_dim_negative(self):
-        with pytest.raises(ValueError, match="action_dim"):
-            ActorCriticAgent(observation_dim=4, action_dim=-1, config=_AC_CFG)
-
-    def test_invalid_hidden_dim_zero(self):
-        with pytest.raises(ValueError, match="hidden_dim"):
-            ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "hidden_dim": 0})
-
-    def test_invalid_hidden_dim_negative(self):
-        with pytest.raises(ValueError, match="hidden_dim"):
-            ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "hidden_dim": -16})
-
-    def test_invalid_learning_rate_zero(self):
-        with pytest.raises(ValueError, match="learning_rate"):
-            ActorCriticAgent(
-                observation_dim=4, action_dim=2, config={**_AC_CFG, "learning_rate": 0.0}
-            )
-
-    def test_invalid_learning_rate_negative(self):
-        with pytest.raises(ValueError, match="learning_rate"):
-            ActorCriticAgent(
-                observation_dim=4, action_dim=2, config={**_AC_CFG, "learning_rate": -1e-4}
-            )
-
-    def test_invalid_gamma_zero(self):
-        with pytest.raises(ValueError, match="gamma"):
-            ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "gamma": 0.0})
-
-    def test_invalid_gamma_greater_than_one(self):
-        with pytest.raises(ValueError, match="gamma"):
-            ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "gamma": 1.1})
-
-    def test_invalid_value_coef_negative(self):
-        with pytest.raises(ValueError, match="value_coef"):
-            ActorCriticAgent(
-                observation_dim=4, action_dim=2, config={**_AC_CFG, "value_coef": -0.5}
-            )
-
-    def test_invalid_entropy_coef_negative(self):
-        with pytest.raises(ValueError, match="entropy_coef"):
-            ActorCriticAgent(
-                observation_dim=4, action_dim=2, config={**_AC_CFG, "entropy_coef": -0.01}
-            )
+    @pytest.mark.parametrize("key", ["value_coef", "entropy_coef"])
+    def test_invalid_coefficient_negative(self, key):
+        with pytest.raises(ValueError, match=key):
+            ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, key: -0.5})
 
     def test_valid_zero_coefs(self):
         """value_coef=0 and entropy_coef=0 are valid boundary values."""
@@ -672,10 +589,6 @@ class TestActorCriticAgentExtended:
         )
         assert agent.value_coef == 0.0
         assert agent.entropy_coef == 0.0
-
-    def test_valid_gamma_exactly_one(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "gamma": 1.0})
-        assert agent.gamma == 1.0
 
     def test_defaults_without_config(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config={})
@@ -705,80 +618,34 @@ class TestActorCriticAgentExtended:
 
     # --- Forward pass --------------------------------------------------------
 
-    def test_forward_output_types_and_shapes(self):
+    def test_forward_value_is_the_value_head_of_the_hidden_layer(self):
+        """V(s) = h · W_v + b_v, a Python float; b_v is set away from its zero start so a value
+        that drops it, or reads the wrong head, fails."""
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        probs = probabilities(agent, np.zeros(4))
-        value = state_value(agent, np.zeros(4))
-        h = hidden_activations(agent, np.zeros(4))
-        assert probs.shape == (2,)
-        assert isinstance(value, float)
-        assert h.shape == (64,)
+        set_weights(agent, b_v=0.7)
+        obs = np.array([0.5, -1.0, 0.25, 2.0])
+        h = hidden_activations(agent, obs)
 
-    def test_forward_probs_sum_to_one(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        for _ in range(10):
-            probs = probabilities(agent, np.random.randn(4))
-            np.testing.assert_allclose(probs.sum(), 1.0, atol=1e-6)
+        value = state_value(agent, obs)
 
-    def test_forward_probs_non_negative(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=5, config=_AC_CFG)
-        for _ in range(10):
-            probs = probabilities(agent, np.random.randn(4))
-            assert np.all(probs >= 0)
+        assert type(value) is float
+        assert h.shape == (64,) and probabilities(agent, obs).shape == (2,)
+        np.testing.assert_allclose(value, h @ weights(agent)["W_v"] + 0.7, rtol=1e-12)
 
     def test_forward_value_is_finite(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
+        rng = np.random.default_rng(3)
         for _ in range(10):
-            value = state_value(agent, np.random.randn(4))
-            assert np.isfinite(value)
+            assert np.isfinite(state_value(agent, rng.standard_normal(4)))
 
     def test_forward_hidden_relu_non_negative(self):
         """Hidden activations after ReLU must be non-negative."""
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
+        rng = np.random.default_rng(4)
         for _ in range(10):
-            h = hidden_activations(agent, np.random.randn(4))
-            assert np.all(h >= 0)
-
-    # --- Action selection ----------------------------------------------------
-
-    def test_select_action_returns_integer(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        action = agent.select_action(np.zeros(4))
-        assert isinstance(action, int)
-
-    def test_select_action_in_valid_range(self):
-        for action_dim in (2, 4, 6):
-            agent = ActorCriticAgent(observation_dim=4, action_dim=action_dim, config=_AC_CFG)
-            for _ in range(50):
-                assert 0 <= agent.select_action(np.zeros(4)) < action_dim
-
-    def test_select_action_greedy_is_deterministic(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        obs = np.array([1.0, -1.0, 0.5, -0.5])
-        greedy = [agent.select_action(obs, training=False) for _ in range(30)]
-        assert len(set(greedy)) == 1
-
-    def test_select_action_greedy_matches_argmax(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=4, config=_AC_CFG)
-        obs = np.random.randn(4)
-        probs = probabilities(agent, obs)
-        greedy = agent.select_action(obs, training=False)
-        assert greedy == int(np.argmax(probs))
-
-    def test_seeded_agent_reproducible_sequence(self):
-        obs = np.zeros(4)
-        a = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 99})
-        b = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 99})
-        seq_a = [a.select_action(obs) for _ in range(30)]
-        seq_b = [b.select_action(obs) for _ in range(30)]
-        assert seq_a == seq_b
+            assert np.all(hidden_activations(agent, rng.standard_normal(4)) >= 0)
 
     # --- Update --------------------------------------------------------------
-
-    def test_update_returns_all_metric_keys(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        metrics = agent.update(_make_batch())
-        assert set(metrics.keys()) == {"policy_loss", "value_loss", "entropy_bonus"}
 
     def test_update_all_metrics_are_finite(self):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
@@ -803,42 +670,6 @@ class TestActorCriticAgentExtended:
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
         batch = {"observations": np.empty((0, 4)), "actions": np.array([]), "rewards": np.array([])}
         assert agent.update(batch) == {"policy_loss": 0.0, "value_loss": 0.0, "entropy_bonus": 0.0}
-
-    def test_update_single_step_trajectory(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        batch = {
-            "observations": np.zeros((1, 4)),
-            "actions": np.array([0]),
-            "rewards": np.array([1.0]),
-        }
-        metrics = agent.update(batch)
-        for val in metrics.values():
-            assert np.isfinite(val)
-
-    def test_update_inconsistent_trajectory_lengths(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        batch = {
-            "observations": np.zeros((5, 4)),
-            "actions": np.array([0, 1]),  # wrong length
-            "rewards": np.ones(5),
-        }
-        with pytest.raises(ValueError, match="Inconsistent"):
-            agent.update(batch)
-
-    def test_update_negative_rewards_are_handled(self):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        batch = _make_batch(10)
-        batch["rewards"] = -np.ones(10)
-        metrics = agent.update(batch)
-        for val in metrics.values():
-            assert np.isfinite(val)
-
-    def test_update_large_observation_and_action_dim(self):
-        agent = ActorCriticAgent(observation_dim=64, action_dim=8, config={"seed": 0})
-        batch = _make_batch(n=20, obs_dim=64, action_dim=8)
-        metrics = agent.update(batch)
-        for val in metrics.values():
-            assert np.isfinite(val)
 
     def test_zero_value_coef_does_not_change_critic_weights(self):
         """When value_coef=0 the critic output gradient is zero, so W_v should not change."""
@@ -885,93 +716,12 @@ class TestActorCriticAgentExtended:
             "Higher entropy_coef should produce larger policy-weight updates"
         )
 
-    # --- Save / Load ---------------------------------------------------------
-
-    def test_save_appends_npz_when_no_extension(self, tmp_path):
+    def test_save_load_preserves_state_value(self, tmp_path):
         agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        p = str(tmp_path / "ckpt")
-        agent.save(p)
-        assert os.path.exists(p + ".npz")
-
-    def test_save_load_roundtrip_no_extension(self, tmp_path):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        p = str(tmp_path / "ckpt")
-        agent.save(p)
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
-        agent2.load(p)
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
-    def test_save_load_preserves_inference_output(self, tmp_path):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
+        set_weights(agent, b_v=0.3)
         obs = np.array([0.1, -0.2, 0.3, -0.4])
-        probs_before, val_before = probabilities(agent, obs), state_value(agent, obs)
-
         p = str(tmp_path / "ckpt")
         agent.save(p)
-
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
-        agent2.load(p)
-        probs_after, val_after = probabilities(agent2, obs), state_value(agent2, obs)
-
-        np.testing.assert_allclose(probs_before, probs_after, atol=1e-10)
-        np.testing.assert_allclose(val_before, val_after, atol=1e-10)
-
-    def test_save_unsupported_extension_raises(self, tmp_path):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        with pytest.raises(ValueError, match="Unsupported checkpoint extension"):
-            agent.save(str(tmp_path / "model.pkl"))
-
-    def test_load_unsupported_extension_raises(self, tmp_path):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        with pytest.raises(ValueError, match="Unsupported checkpoint extension"):
-            agent.load(str(tmp_path / "model.pkl"))
-
-    def test_load_nonexistent_pt_file_raises(self, tmp_path):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        with pytest.raises(FileNotFoundError):
-            agent.load(str(tmp_path / "ghost.pt"))
-
-    def test_load_nonexistent_no_extension_falls_back_to_npz(self, tmp_path):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        p = str(tmp_path / "ckpt")
-        agent.save(p)
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
-        agent2.load(p)
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
-    def test_save_load_after_training(self, tmp_path):
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        for _ in range(5):
-            agent.update(_make_batch(20))
-        p = str(tmp_path / "trained")
-        agent.save(p)
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
-        agent2.load(p)
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
-    def test_load_pt_extension_exact_file(self, tmp_path):
-        """Loading a .pt path that exists on disk should load that exact file."""
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        p = str(tmp_path / "model.pt")
-        agent.save(p)
-        assert os.path.exists(p)
-
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
-        agent2.load(p)
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
-    def test_load_pt_legacy_npz_fallback(self, tmp_path):
-        """Loading a .pt path falls back to '<name>.pt.npz' when the .pt file is absent."""
-        agent = ActorCriticAgent(observation_dim=4, action_dim=2, config=_AC_CFG)
-        agent.save(str(tmp_path / "ac_legacy.pt.npz"))
-        agent2 = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
-        agent2.load(str(tmp_path / "ac_legacy.pt"))
-        assert_same_checkpoint(agent, agent2, tmp_path)
-
-    def test_invalid_observation_dim_raises(self):
-        with pytest.raises(ValueError, match="observation_dim"):
-            RandomAgent(observation_dim=0, action_dim=2, config={})
-
-    def test_invalid_action_dim_raises(self):
-        with pytest.raises(ValueError, match="action_dim"):
-            RandomAgent(observation_dim=4, action_dim=0, config={})
+        restored = ActorCriticAgent(observation_dim=4, action_dim=2, config={**_AC_CFG, "seed": 9})
+        restored.load(p)
+        np.testing.assert_allclose(state_value(restored, obs), state_value(agent, obs), atol=1e-10)

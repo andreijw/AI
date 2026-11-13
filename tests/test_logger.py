@@ -189,24 +189,37 @@ def test_logger_log_appends_multiple_entries(logger, log_dir):
 # ---------------------------------------------------------------------------
 
 
-def test_logger_info(logger):
-    """Logger.info should not raise."""
-    logger.info("This is an info message")
+def _log_file_text(log_dir: str) -> str:
+    """The text of the one .log file in ``log_dir``; FileHandler flushes every record."""
+    (log_file,) = [f for f in os.listdir(log_dir) if f.endswith(".log")]
+    with open(os.path.join(log_dir, log_file), encoding="utf-8") as f:
+        return f.read()
 
 
-def test_logger_warning(logger):
-    """Logger.warning should not raise."""
-    logger.warning("This is a warning")
+@pytest.mark.parametrize(
+    "method,level",
+    [
+        (Logger.debug, logging.DEBUG),
+        (Logger.info, logging.INFO),
+        (Logger.warning, logging.WARNING),
+        (Logger.error, logging.ERROR),
+    ],
+    ids=["debug", "info", "warning", "error"],
+)
+def test_logger_method_logs_the_message_at_its_level(logger, log_dir, caplog, method, level):
+    """Each convenience method sends its message, at its own level, to the log and the file."""
+    message = f"a {method.__name__} message"
+    with caplog.at_level(logging.DEBUG, logger=logger.name):
+        method(logger, message)
 
-
-def test_logger_error(logger):
-    """Logger.error should not raise."""
-    logger.error("This is an error")
-
-
-def test_logger_debug(logger):
-    """Logger.debug should not raise."""
-    logger.debug("This is a debug message")
+    records = [r for r in caplog.records if r.name == logger.name]
+    assert [(r.levelno, r.getMessage()) for r in records] == [(level, message)], (
+        f"Logger.{method.__name__} should log exactly its message at {logging.getLevelName(level)}"
+    )
+    (line,) = [line for line in _log_file_text(log_dir).splitlines() if message in line]
+    assert logging.getLevelName(level) in line, (
+        f"Logger.{method.__name__}'s line in the .log file should name its level"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -261,8 +274,15 @@ def test_logger_close_is_idempotent(log_dir, request):
     """Calling Logger.close() more than once should not raise."""
     safe_name = _safe_logger_name(request)
     lg = Logger(name=safe_name, log_dir=log_dir)
+    lg.info("before close")
     lg.close()
-    lg.close()  # should not raise
+    lg.close()  # a second close finds nothing left to close
+
+    assert lg.logger.handlers == [], "close() should leave the logger with no handlers"
+    lg.info("after close")
+    text = _log_file_text(log_dir)
+    assert "before close" in text, "What was logged before close() should be in the file"
+    assert "after close" not in text, "Nothing logged after close() should reach the file"
 
 
 def test_logger_close_preserves_external_handlers(log_dir, request):

@@ -60,6 +60,20 @@ Acrobot-v1) and
   `gh release edit <tag> --draft=false`; tags stay the maintainer's. rl-core and rl-navigation 0.1.0 were published
   this way on 2026-11-12.
 
+- **Tests that can fail, and CI on branch coverage** (`fix/tests-that-can-fail`; code-health passes of 2026-11-12,
+  the maintainer's approved cleanup plan, PR 1 of 4). Tests that held no assertion or checked only a type now pin
+  behaviour (logger levels and file output, the Random agent's exploration stream, hand-worked REINFORCE losses and
+  Actor-Critic values), each shown to fail under a mutation of the code it covers; the REINFORCE and Actor-Critic
+  copies in `test_agents_extensive.py` are one parametrized class; 34 unseeded `np.random` calls now use seeded
+  generators; the run-queue overlap test no longer depends on sleeps overlapping. New nets: every challenge's
+  `CONFIG_MAP` equals its `AGENT_CLASSES` (all 10 do), and every torch agent overrides or stubs the NumPy training
+  maths it inherits (runs only where PyTorch is installed, not in CI); `TorchTD3Agent` now stubs `_td3_targets` and
+  `_target_actions`. `scripts/write_reference_checkpoints.py` writes 15 reference checkpoints (380 KB in
+  `tests/data/checkpoints/`), pinned by keys, dtypes, shapes and value hashes, for the checkpoint refactor that
+  follows. CI and the Release workflow now require 90 % branch coverage (`--cov-branch --cov-fail-under=90`; the
+  maintainer's decision), against 50 % line coverage before; the suite measures 94.8 % in `.venv`. Not verified: the
+  branch coverage on CI's runner, which has no Box2D.
+
 ## 2026-11-11
 
 ### Added

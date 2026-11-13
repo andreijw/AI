@@ -147,7 +147,7 @@ The checks CI runs, from the virtual environment:
 ```bash
 ruff check . && ruff format --check .   # lint and format
 mypy                                    # types
-pytest -q                               # tests (CI enforces 50% line coverage)
+pytest -q                               # tests (CI enforces 90% branch coverage)
 python scripts/check_doc_links.py       # every Markdown link resolves
 ```
 

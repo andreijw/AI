@@ -87,11 +87,12 @@ def test_dqn_epsilon_decay():
         },
     )
 
+    rng = np.random.default_rng(0)
     batch = {
-        "observations": np.random.randn(5, 4),
+        "observations": rng.standard_normal((5, 4)),
         "actions": np.array([0, 1, 0, 1, 0]),
         "rewards": np.ones(5),
-        "next_observations": np.random.randn(5, 4),
+        "next_observations": rng.standard_normal((5, 4)),
         "dones": np.zeros(5, dtype=bool),
     }
 
@@ -112,11 +113,12 @@ def test_dqn_insufficient_buffer_no_update():
     )
 
     # Ingest only 5 samples (less than 32)
+    rng = np.random.default_rng(0)
     batch = {
-        "observations": np.random.randn(5, 4),
+        "observations": rng.standard_normal((5, 4)),
         "actions": np.array([0, 1, 0, 1, 0]),
         "rewards": np.ones(5),
-        "next_observations": np.random.randn(5, 4),
+        "next_observations": rng.standard_normal((5, 4)),
         "dones": np.zeros(5, dtype=bool),
     }
 
@@ -138,11 +140,12 @@ def test_dqn_target_network_hard_sync():
         },
     )
 
+    rng = np.random.default_rng(0)
     batch = {
-        "observations": np.random.randn(10, 4),
-        "actions": np.random.randint(0, 2, size=10),
+        "observations": rng.standard_normal((10, 4)),
+        "actions": rng.integers(0, 2, size=10),
         "rewards": np.ones(10),
-        "next_observations": np.random.randn(10, 4),
+        "next_observations": rng.standard_normal((10, 4)),
         "dones": np.zeros(10, dtype=bool),
     }
 
@@ -181,11 +184,12 @@ def test_dqn_target_network_soft_sync():
         },
     )
 
+    rng = np.random.default_rng(0)
     batch = {
-        "observations": np.random.randn(10, 4),
-        "actions": np.random.randint(0, 2, size=10),
+        "observations": rng.standard_normal((10, 4)),
+        "actions": rng.integers(0, 2, size=10),
         "rewards": np.ones(10),
-        "next_observations": np.random.randn(10, 4),
+        "next_observations": rng.standard_normal((10, 4)),
         "dones": np.zeros(10, dtype=bool),
     }
 
@@ -246,11 +250,12 @@ def test_dqn_updates_per_step_multiple_updates():
             "max_updates_per_call": 10,
         },
     )
+    rng = np.random.default_rng(0)
     batch = {
-        "observations": np.random.randn(8, 4),
-        "actions": np.random.randint(0, 2, size=8),
+        "observations": rng.standard_normal((8, 4)),
+        "actions": rng.integers(0, 2, size=8),
         "rewards": np.ones(8),
-        "next_observations": np.random.randn(8, 4),
+        "next_observations": rng.standard_normal((8, 4)),
         "dones": np.zeros(8, dtype=bool),
     }
     agent.update(batch)

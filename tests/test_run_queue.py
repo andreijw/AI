@@ -90,13 +90,28 @@ def _alive(pid: int) -> bool:
     return stat.rsplit(")", 1)[1].split()[0] != "Z"
 
 
-def test_slot_cap_is_never_exceeded(rq: ModuleType) -> None:
+def test_slot_cap_is_never_exceeded(rq: ModuleType, tmp_path: Path) -> None:
+    """At most the cap's 2 jobs run at once, counted from the start and end each job records
+    itself, not from the queue's own bookkeeping; and the queue does fill both slots."""
+    spans = tmp_path / "spans.txt"
+    job = (
+        "import time\n"
+        "start = time.monotonic(); time.sleep(0.25)\n"
+        f"with open({str(spans)!r}, 'a') as f:\n"
+        "    f.write(f'{start} {time.monotonic()}\\n')\n"
+    )
     for i in range(5):
-        _submit(rq, f"j{i}", "import time; time.sleep(0.25)")
+        _submit(rq, f"j{i}", job)
     assert rq.main(["run"]) == 0
     jobs = _jobs(rq)
     assert [j["state"] for j in jobs] == ["done"] * 5
-    assert _max_overlap(jobs) == 2
+    recorded = [
+        dict(zip(("start", "end"), map(float, line.split()), strict=True))
+        for line in spans.read_text().splitlines()
+    ]
+    assert len(recorded) == 5
+    assert _max_overlap(recorded) <= 2, "More jobs ran at once than the 2 slots"
+    assert _max_overlap(jobs) == 2, "The queue should start a job in each free slot"
 
 
 def test_a_second_worker_exits_at_once_while_one_holds_the_lock(rq: ModuleType) -> None:

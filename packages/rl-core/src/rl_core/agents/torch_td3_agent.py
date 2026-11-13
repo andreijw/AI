@@ -75,3 +75,12 @@ class TorchTD3Agent(TorchDDPGAgent, TD3Agent):
             self._move_targets()
         with torch.no_grad():
             self._metric_sums[: len(metrics)] += torch.stack(metrics).detach()
+
+    # TD3Agent's own NumPy training maths (DDPGAgent's is stubbed by TorchDDPGAgent). Its
+    # ``_draw_target_noise`` stays: ``_sample_inputs`` draws the device step's noise with it.
+
+    def _target_actions(self, *args: Any, **kwargs: Any) -> Any:
+        raise self._on_device()
+
+    def _td3_targets(self, *args: Any, **kwargs: Any) -> Any:
+        raise self._on_device()

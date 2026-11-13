@@ -168,8 +168,6 @@ eternal-descent repo). Setup and troubleshooting:
 
 Treat the repository as the source of truth when docs disagree:
 
-- CONTRIBUTING.md asks for ≥80% **branch** coverage; CI enforces 50% **line** coverage (`--cov-fail-under=50`, no
-  `--cov-branch`).
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
 - Older PR descriptions and commits say `configs/pendulum_ppo.yaml` solves Pendulum-v1. It did under the 10-episode
   rule, then solved 0 of 5 under the 100-episode rule (2026-10-16), and since 2026-10-18 solves 5 of 5 with
