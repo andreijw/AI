@@ -74,6 +74,18 @@ Acrobot-v1) and
   maintainer's decision), against 50 % line coverage before; the suite measures 94.8 % in `.venv`. Not verified: the
   branch coverage on CI's runner, which has no Box2D.
 
+- **Agent checkpoints in a mixin; one Trainer step** (`refactor/agent-checkpoint-mixin`; the code-health cleanup,
+  PR 2 of 4). `BaseAgent`'s save and load code (430 lines) moved unchanged to `CheckpointMixin`
+  (`rl_core/agents/checkpointing.py`), which only `BaseAgent` lists, so every agent's and PyTorch backend's overrides
+  still resolve first; `base_agent.py` falls from 702 to 272 lines and still exports the 0.1.0 names
+  (`GENERATOR_KEY_PREFIX`, `OBSERVATION_KEY_PREFIX`, `OBS_NORM_KEY_PREFIX`, `check_checkpoint_shapes`). The discrete
+  sampler moved to `DiscreteSampling` (REINFORCE, the discrete Actor-Critic and PPO). Both Trainer loops build each
+  transition through one pure `_record_step`. Pinned by the reference checkpoints of PR 1 (load and save back the
+  same keys, dtypes, shapes and values for 12 NumPy agents and 3 PyTorch backends), the bit-for-bit golden trainer
+  tests of both loops, and `TESTING.md` `TR-15` (488 passed); 22 mutations killed. The step costs about 1 µs more
+  per environment step with a random agent (1.5 to 4 % of the Trainer's own overhead). No learning run: the golden
+  tests pin the trajectories exactly.
+
 ## 2026-11-11
 
 ### Added

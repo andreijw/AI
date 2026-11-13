@@ -9,13 +9,14 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 from rl_core.utils.config_values import positive_int
 
 from .base_agent import BaseAgent
+from .discrete_sampling import DiscreteSampling
 from .inference import DenseLayer, InferencePolicy
 from .optim import Optimizer, optimizer_from_config
 from .returns import discounted_returns
 from .softmax import stable_softmax
 
 
-class ReinforceAgent(BaseAgent):
+class ReinforceAgent(DiscreteSampling, BaseAgent):
     """
     REINFORCE agent implementing the Monte Carlo Policy Gradient algorithm.
 

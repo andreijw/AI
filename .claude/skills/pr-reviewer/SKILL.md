@@ -111,9 +111,9 @@ The questions a training run, not an interpreter, would raise:
 - A changed or deleted existing test comes with a reason.
 - **The PyTorch tests ran where CI cannot run them.** CI installs no PyTorch, so `tests/test_torch_ddpg_agent.py`
   is skipped there. When the diff touches `off_policy.py`, `ddpg_agent.py`, `td3_agent.py`, `sac_agent.py`,
-  `optim.py`, `base_agent.py`'s save or load, or any `torch_*.py`, the hand-off must report `TESTING.md` `TR-15`
-  run from `.venv-gpu`; if it did not run, that is a Warning, since the five `backend: torch` configs can break
-  with CI green.
+  `optim.py`, `base_agent.py`, `checkpointing.py` (save and load), or any `torch_*.py`, the hand-off must report
+  `TESTING.md` `TR-15` run from `.venv-gpu`; if it did not run, that is a Warning, since the five `backend: torch`
+  configs can break with CI green.
 
 ## Pass 5: what gets committed
 

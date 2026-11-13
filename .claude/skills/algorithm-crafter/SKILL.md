@@ -62,9 +62,12 @@ State the reduction once: averaging over the batch divides every gradient by `B`
 
 - **Family.** A discrete actor-critic extends `ActorCriticBase`; a continuous one extends
   `ContinuousActorCriticBase`; anything else extends `BaseAgent`. Read the base class before writing: the
-  network, forward pass, optimizer step and checkpoint arrays may already exist. A checkpoint is
-  `BaseAgent.save`: the agent supplies `_checkpoint_arrays` and `_load_checkpoint_arrays` (`load` has already
-  checked every entry's shape against `_checkpoint_arrays`, so assign only), and every generator
+  network, forward pass, optimizer step and checkpoint arrays may already exist. A discrete agent outside
+  `ActorCriticBase` that samples from action probabilities lists `DiscreteSampling`
+  (`agents/discrete_sampling.py`) before `BaseAgent`. A checkpoint is `BaseAgent.save`, which `BaseAgent`
+  inherits from `CheckpointMixin` (`agents/checkpointing.py`; no agent lists the mixin): the agent
+  supplies `_checkpoint_arrays` and `_load_checkpoint_arrays` (`load` has already checked every entry's
+  shape against `_checkpoint_arrays`, so assign only), and every generator
   attribute is saved by name automatically (one inside another object, such as a buffer, is that object's to save).
 - **Contract.** `select_action(observation, training)` returns an `int` for a discrete space and a
   float array for a continuous one, and is greedy (or the clipped mean) when `training` is false. A

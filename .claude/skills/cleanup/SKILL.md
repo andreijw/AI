@@ -38,8 +38,8 @@ A duplicate rarely shares a name with the original. For each candidate, search f
 
 | The new code does this | Search for | Use instead |
 | :--- | :--- | :--- |
-| Picks a discrete action from probabilities | `rng.choice(`, `np.argmax(probs` | `BaseAgent._select_action_from_probs` |
-| Works out a checkpoint path or extension | `.npz`, `os.path.splitext` | `BaseAgent._resolve_save_path` / `_resolve_load_path` |
+| Picks a discrete action from probabilities | `rng.choice(`, `np.argmax(probs` | `DiscreteSampling._select_action_from_probs` (`agents/discrete_sampling.py`; list it before `BaseAgent`) |
+| Works out a checkpoint path or extension | `.npz`, `os.path.splitext` | `BaseAgent._resolve_save_path` / `_resolve_load_path` (from `CheckpointMixin`, `agents/checkpointing.py`) |
 | Rejects bad dimensions | `<= 0` near `raise ValueError` | `BaseAgent._validate_dims` |
 | Reads an integer or boolean setting from a config | `int(config.get(`, `bool(config.get(`, `isinstance(value, bool)` | `rl_core.utils.config_values` (`positive_int`, `optional_positive_int`, `non_negative_int`, `flag`; `check_positive_int` for list entries) |
 | Computes discounted returns | `gamma *` in a reversed loop | `rl_core.agents.returns.discounted_returns` |

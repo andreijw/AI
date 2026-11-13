@@ -490,6 +490,17 @@ classDiagram
     SACAgent <|-- TorchSACAgent
 ```
 
+`BaseAgent` (`rl_core/agents/base_agent.py`) is the acting and training interface. Its checkpoint half is
+`CheckpointMixin` (`rl_core/agents/checkpointing.py`): `save` and `load`, the hooks an agent overrides
+(`_checkpoint_arrays`, `_load_checkpoint_arrays`, `_check_checkpoint_arrays`, `_extra_checkpoint_state` and its check
+and load, `_checkpoint_kind`), the path rules, the generator and observation-setting entries, and the public
+`observation_settings` and `record_observation_settings`. Only `BaseAgent` lists the mixin, so it sits just after
+`BaseAgent` in every agent's MRO and every override, a PyTorch backend's included, resolves first; the three key
+prefixes (generator, observation, normalisation) and `check_checkpoint_shapes` are still importable from `base_agent`.
+REINFORCE and `ActorCriticBase` (the discrete Actor-Critic and PPO) list `DiscreteSampling`
+(`rl_core/agents/discrete_sampling.py`) before `BaseAgent` for `_select_action_from_probs`, which samples an action from
+the policy's probabilities with `_explore_rng`.
+
 Every agent is NumPy by default. `BaseAgent.class_for_config(config)` returns the class to build for the config's
 `backend` key (`numpy` when absent): the class itself, or the version its `BACKENDS` names, imported only then.
 `BenchmarkChallenge.make_agent` builds through it, so `backend: torch` in a DDPG, TD3 or SAC config builds

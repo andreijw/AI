@@ -14,6 +14,11 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 - `TorchTD3Agent` raises on the NumPy-only `_td3_targets` and `_target_actions` instead of silently running them,
   like the other NumPy training maths the torch backends replace.
 
+### Changed
+
+- Checkpoint save and load live in `rl_core.agents.checkpointing.CheckpointMixin`, which `BaseAgent` inherits; every
+  name `rl_core.agents.base_agent` exported in 0.1.0 still imports from there. The checkpoint format is unchanged.
+
 ## [0.1.0] - 2026-11-11
 
 ### Added

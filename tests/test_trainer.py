@@ -13,7 +13,7 @@ from rl_cartpole.environments import CartPoleEnv
 from rl_core.agents import BaseAgent, DQNAgent, RandomAgent
 from rl_core.training import Trainer
 from rl_core.utils.logger import Logger
-from tests.trainer_internals import log_metrics
+from tests.trainer_internals import log_metrics, record_step
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -821,3 +821,38 @@ def test_end_episode_follows_every_training_update_and_precedes_saves(env, tmp_p
         if event == "save":
             latest = [e for e in events[:i] if e in ("update", "end_episode")][-1]
             assert latest == "end_episode", "a checkpoint should be saved after the episode ended"
+
+
+# ---------------------------------------------------------------------------
+# One environment step as a transition (both training loops and evaluation)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("terminated", "truncated", "length", "done", "ends"),
+    [
+        (False, False, 3, False, False),
+        (True, False, 3, True, True),
+        (False, True, 3, True, True),
+        (np.True_, np.False_, 3, True, True),
+        # The step limit (max_steps_per_episode) ends the episode but is no done of the environment.
+        (False, False, 5, False, True),
+        (False, False, 6, False, True),
+    ],
+)
+def test_record_step_builds_the_transition_and_says_whether_the_episode_ends(
+    terminated, truncated, length, done, ends
+):
+    obs, next_obs, raw, raw_next = (np.full(2, float(i)) for i in range(4))
+    transition, ended = record_step(
+        obs, 1, 0.5, next_obs, terminated, truncated, raw, raw_next, length=length, max_steps=5
+    )
+    assert ended is ends
+    assert transition[4] == done
+    assert type(transition[4]) is type(terminated or truncated), "done keeps the environment's type"
+    assert transition[5] is bool(terminated), "terminated is stored as a Python bool"
+    # The arrays are the step's own, not copies, in the order the batch reads them.
+    for position, expected in ((0, obs), (3, next_obs), (6, raw), (7, raw_next)):
+        assert transition[position] is expected
+    assert transition[1:3] == (1, 0.5)
+    assert len(transition) == 8

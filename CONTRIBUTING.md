@@ -173,7 +173,8 @@ git checkout -b feature/<kebab-case-name>   # or fix/<kebab-case-name> for bugs
 
 - Identify every file, class, function, and configuration that needs to change.
 - **Check existing components first** — search `packages/rl-core/src/rl_core/` and the challenge packages for similar
-  logic before writing anything new (e.g. `rl_core/agents/base_agent.py` `BaseAgent`,
+  logic before writing anything new (e.g. `rl_core/agents/base_agent.py` `BaseAgent`, whose save, load and
+  checkpoint hooks are `CheckpointMixin`'s in `rl_core/agents/checkpointing.py`,
   `rl_core/agents/actor_critic_base.py` `ActorCriticBase`, the `environments/make_env.py` factories, `rl_core/utils/`).
   Plan to reuse or extend rather than duplicate.
 - Design clean abstractions; avoid one-off inline logic for anything with a natural architectural boundary.

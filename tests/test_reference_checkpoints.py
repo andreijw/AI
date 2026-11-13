@@ -10,6 +10,7 @@ The ``torch_*`` checkpoints need PyTorch and skip without it, as the other PyTor
 """
 
 import json
+import zipfile
 
 import numpy as np
 import pytest
@@ -79,3 +80,27 @@ def test_writer_still_writes_the_recorded_layout(tmp_path):
         layout = {key: (e["dtype"], e["shape"]) for key, e in written[name]["entries"].items()}
         recorded = MANIFEST[name]["entries"]
         assert layout == {key: (e["dtype"], e["shape"]) for key, e in recorded.items()}, name
+
+
+@pytest.mark.parametrize("name", ["reinforce", "dqn"])
+def test_a_saved_checkpoint_is_a_compressed_npz(name, tmp_path):
+    """``save`` writes ``np.savez_compressed``'s format, every member deflated (CONTRIBUTING.md §5):
+    the entries compared above would read the same from an uncompressed archive."""
+    agent = writer.build(name)
+    agent.load(str(writer.OUTPUT_DIR / f"{name}.npz"))
+    agent.save(str(tmp_path / "again.npz"))
+
+    with zipfile.ZipFile(tmp_path / "again.npz") as archive:
+        members = archive.infolist()
+    assert members, f"{name}: the checkpoint is empty"
+    assert {member.compress_type for member in members} == {zipfile.ZIP_DEFLATED}
+
+
+def test_the_released_checkpoint_names_still_import_from_base_agent():
+    """rl-core 0.1.0 defined these in ``rl_core.agents.base_agent``; the move to ``checkpointing`` keeps them there."""
+    from rl_core.agents import base_agent, checkpointing
+
+    assert base_agent.GENERATOR_KEY_PREFIX is checkpointing.GENERATOR_KEY_PREFIX
+    assert base_agent.OBSERVATION_KEY_PREFIX is checkpointing.OBSERVATION_KEY_PREFIX
+    assert base_agent.OBS_NORM_KEY_PREFIX is checkpointing.OBS_NORM_KEY_PREFIX
+    assert base_agent.check_checkpoint_shapes is checkpointing.check_checkpoint_shapes
