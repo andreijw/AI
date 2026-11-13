@@ -466,11 +466,18 @@ VEC_FACTORIES = {
 }
 
 
+def _vectorized(key: str, config: dict[str, Any]) -> Any:
+    """One environment from the challenge's vector factory, deprecated in rl-challenges 0.2.0: these
+    tests go with it in 0.3.0."""
+    with pytest.deprecated_call():
+        return VEC_FACTORIES[key][0](config, num_envs=1)
+
+
 @pytest.mark.parametrize("key", sorted(VEC_FACTORIES))
 def test_vectorized_factories_reject_a_setting_the_challenge_does_not_support(key):
-    factory, foreign = VEC_FACTORIES[key]
+    foreign = VEC_FACTORIES[key][1]
     with pytest.raises(ValueError, match=f"does not support .*{foreign}"):
-        factory({foreign: 0.1}, num_envs=1)
+        _vectorized(key, {foreign: 0.1})
 
 
 _ASYNC_ENVS_CASES = [
@@ -492,7 +499,7 @@ _ASYNC_ENVS_CASES = [
 )
 def test_vectorized_factories_choose_processes_by_async_envs(key, config, expected):
     """Unset or true runs each environment in its own process; null keeps meaning synchronous."""
-    vec_env = VEC_FACTORIES[key][0](config, num_envs=1)
+    vec_env = _vectorized(key, config)
     try:
         assert isinstance(vec_env, expected), f"{config} should build a {expected.__name__}"
     finally:
@@ -500,7 +507,7 @@ def test_vectorized_factories_choose_processes_by_async_envs(key, config, expect
 
 
 def build_vectorized(key: str) -> Any:
-    return lambda config: VEC_FACTORIES[key][0](config, num_envs=1)
+    return lambda config: _vectorized(key, config)
 
 
 def build_one(key: str) -> Any:

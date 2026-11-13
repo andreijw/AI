@@ -1,12 +1,9 @@
 """Example script demonstrating environment features."""
 
 import numpy as np
+from gymnasium.vector import AsyncVectorEnv
 
-from rl_cartpole.environments import (
-    make_env,
-    make_env_from_config,
-    make_vec_env,
-)
+from rl_cartpole.environments import CartPoleEnv, make_env_from_config
 
 
 def demo_basic_env():
@@ -15,7 +12,7 @@ def demo_basic_env():
     print("Demo 1: Basic Environment")
     print("=" * 60)
 
-    env = make_env(seed=42)
+    env = CartPoleEnv(seed=42)
     obs, info = env.reset()
 
     print(f"Observation space: {env.observation_space}")
@@ -41,8 +38,8 @@ def demo_observation_noise():
     print("Demo 2: Observation Noise")
     print("=" * 60)
 
-    env_clean = make_env(seed=42, obs_noise_std=0.0)
-    env_noisy = make_env(seed=42, obs_noise_std=0.1)
+    env_clean = CartPoleEnv(seed=42, obs_noise_std=0.0)
+    env_noisy = CartPoleEnv(seed=42, obs_noise_std=0.1)
 
     obs_clean, _ = env_clean.reset(seed=123)
     obs_noisy, _ = env_noisy.reset(seed=123)
@@ -63,7 +60,7 @@ def demo_action_noise():
     print("=" * 60)
 
     # With 50% action noise probability
-    env = make_env(seed=42, action_noise_prob=0.5)
+    env = CartPoleEnv(seed=42, action_noise_prob=0.5)
     obs, info = env.reset()
 
     print("Testing action noise (50% flip probability) using env.step:")
@@ -97,7 +94,7 @@ def demo_domain_randomization():
         "length": (0.45, 0.55),
     }
 
-    env = make_env(seed=None, domain_randomization=domain_rand)
+    env = CartPoleEnv(seed=None, domain_randomization=domain_rand)
 
     print("Running 3 episodes with domain randomization:")
     for episode in range(3):
@@ -120,8 +117,8 @@ def demo_vectorized_env():
     print("Demo 5: Vectorized Environments")
     print("=" * 60)
 
-    # Create 4 parallel environments
-    vec_env = make_vec_env(num_envs=4, seed=42)
+    # Create 4 parallel environments, each in its own process (training uses training.num_envs instead)
+    vec_env = AsyncVectorEnv([lambda i=i: CartPoleEnv(seed=42 + i) for i in range(4)])
 
     print(f"Number of parallel environments: {vec_env.num_envs}")
 
@@ -177,12 +174,10 @@ def demo_pendulum_features():
     print("Demo 7: Continuous Control (Pendulum-v1)")
     print("=" * 60)
 
-    from rl_pendulum.environments import make_env as make_pendulum_env
+    from rl_pendulum.environments import PendulumEnv
 
     dr = {"gravity": (8.0, 12.0), "mass": (0.8, 1.2), "length": (0.8, 1.2)}
-    env = make_pendulum_env(
-        seed=42, obs_noise_std=0.05, action_noise_std=0.1, domain_randomization=dr
-    )
+    env = PendulumEnv(seed=42, obs_noise_std=0.05, action_noise_std=0.1, domain_randomization=dr)
     obs, _ = env.reset()
 
     print(f"Observation space:   {env.observation_space}")
