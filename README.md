@@ -20,7 +20,7 @@ caveats is in [docs/results.md](docs/results.md).
 | Challenge | Agents and seeds solved ("holds": still at the threshold at the end) | Report |
 | :--- | :--- | :--- |
 | CartPole-v1 | PPO, DQN and Actor-Critic 5 of 5; REINFORCE 4 of 5 (holds 3) | [report](docs/benchmarks/cartpole_results.md) |
-| Pendulum-v1 | SAC, DDPG, TD3 and PPO 5 of 5 (PPO holds 4); continuous Actor-Critic 0 of 5 | [report](docs/benchmarks/pendulum_results.md) (no TD3 or SAC row; see [results](docs/results.md)) |
+| Pendulum-v1 | SAC, DDPG, TD3 and PPO 5 of 5 (PPO holds 4); continuous Actor-Critic reaches -200 on 2 of 5, holds it on none | [report](docs/benchmarks/pendulum_results.md) (no TD3 or SAC row; see [results](docs/results.md)) |
 | Acrobot-v1 | PPO and DQN 5 of 5 (DQN's floor was tuned on seeds 1 to 5, no held-out run) | [results](docs/results.md) |
 | MountainCar-v0 | DQN reaches -110 on 10 of 10 seeds but holds it on 3 of 10 | [results](docs/results.md) |
 | MountainCarContinuous-v0 | DDPG and TD3 5 of 5 | [results](docs/results.md) |

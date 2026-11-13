@@ -91,6 +91,15 @@ Acrobot-v1) and
   per environment step with a random agent (1.5 to 4 % of the Trainer's own overhead). No learning run: the golden
   tests pin the trajectories exactly.
 
+- **Pendulum Actor-Critic trains on 8 environments** (`chore/pendulum-ac-8-envs`; the maintainer's decision,
+  2026-11-12). `configs/pendulum_actor_critic.yaml` takes rl-zoo's layout (`num_envs: 8`, `update_every: 8`: one A2C
+  step over 64 transitions), as measured on 2026-11-10: seeds 1 to 5, 1,000,000 steps, final training averages -227.6
+  to -268.7 (mean -244.1, against -282.7 on one environment; better on all 5), 2 of 5 reach -200 (episodes 2613 and
+  3724) and none holds it; greedy evaluation is worse, -184.0 ± 42.7 against -170.0 ± 25.9; 249 s a seed against
+  329 s. `docs/benchmarks/pendulum_results.md` was rerun in full: the Actor-Critic row reproduces that run seed for
+  seed, and the DDPG, PPO and random rows are unchanged but for their times. The plot in `plots/` is not refreshed
+  (the maintainer's folder).
+
 ## 2026-11-11
 
 ### Added

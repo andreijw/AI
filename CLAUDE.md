@@ -172,9 +172,11 @@ Treat the repository as the source of truth when docs disagree:
 - Older PR descriptions and commits say `configs/pendulum_ppo.yaml` solves Pendulum-v1. It did under the 10-episode
   rule, then solved 0 of 5 under the 100-episode rule (2026-10-16), and since 2026-10-18 solves 5 of 5 with
   2048-step rollouts and 200,000 steps, holding on 4 of 5 (`docs/benchmarks/pendulum_results.md`; CHANGELOG.md,
-  2026-10-18). Continuous Actor-Critic beats the random agent in evaluation since 2026-10-18 but does not solve
-  under the 100-episode rule (CHANGELOG.md, 2026-10-18). CartPole PPO does solve CartPole-v1: 5 of 5 seeds within
-  200,000 steps, holding on all 5 (TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
+  2026-10-18). Continuous Actor-Critic beats the random agent in evaluation since 2026-10-18 but does not hold
+  -200 under the 100-episode rule; with 8 environments (since 2026-11-12) 2 of 5 seeds reach it and fall back
+  (`docs/benchmarks/pendulum_results.md`; CHANGELOG.md, 2026-10-18 and 2026-11-12). CartPole PPO does solve
+  CartPole-v1: 5 of 5 seeds within 200,000 steps, holding on all 5 (TESTING.md `TR-3` and
+  `docs/benchmarks/cartpole_results.md`).
 - The `box2d` extra names `box2d-py` (pinned in `requirements-lock.txt`), not the `box2d==2.3.10` Gymnasium 1.4's own
   `box2d` extra pins: that
   has no aarch64 build, and `box2d-py` builds on the Jetson with `swig` and `--no-build-isolation` (docs/usage.md,

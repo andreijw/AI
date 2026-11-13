@@ -399,9 +399,12 @@ def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
 
 
 def test_pendulum_actor_critic_uses_the_measured_settings():
-    """Bounded mean, 8-step chunked updates, entropy 0.01 and rewards x 0.05: evaluation -152 +/- 45 on
-    seeds 1-5, beating the random agent on 5 of 5 (CHANGELOG.md, 2026-10-18). Observation normalisation
-    raised the final training average on 5 of seeds 1-5 and 4 of 11-15 (CHANGELOG.md, 2026-11-04)."""
+    """Bounded mean, entropy 0.01 and rewards x 0.05: evaluation -152 +/- 45 on seeds 1-5, beating the
+    random agent on 5 of 5 (CHANGELOG.md, 2026-10-18). Observation normalisation raised the final training
+    average on 5 of seeds 1-5 and 4 of 11-15 (CHANGELOG.md, 2026-11-04). Since 2026-11-12 rl-zoo's A2C
+    layout, 8 environments x 8 steps (num_envs 8, update_every 8 = n_steps: one Adam step over 64
+    transitions): final training average -244.1 against -282.7 with one environment, better on all 5 of
+    seeds 1-5, none holding -200, greedy evaluation worse (CHANGELOG.md, 2026-11-10 and 2026-11-12)."""
     from rl_pendulum.benchmark import PendulumChallenge
 
     env, agent, _ = PendulumChallenge().setup_run("actor_critic", seed=1, episodes=None)
@@ -414,6 +417,10 @@ def test_pendulum_actor_critic_uses_the_measured_settings():
     )
     np.testing.assert_allclose(weights(agent)["log_std"], [-2.0])
     assert agent.observation_normalizer is not None, "the config must normalise observations"
+    training = load_config(os.path.join(CONFIGS_DIR, "pendulum_actor_critic.yaml"))["training"]
+    assert (training.get("num_envs"), training.get("update_every")) == (8, 8), (
+        "8 environments x 8 steps per update, as rl-zoo's A2C (CHANGELOG.md, 2026-11-12)"
+    )
 
 
 def test_acrobot_dqn_uses_rl_zoo_settings_with_a_lower_exploration_floor():

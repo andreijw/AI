@@ -8,6 +8,11 @@
 # Observation normalisation since 2026-11-04: the final 100-episode training average was better on 5 of seeds 1-5
 # (-268 to -298, mean -282.7 against -298.5) and 4 of held-out seeds 11-15 (-298.9 against -316.2), greedy
 # evaluation -170 +/- 26; still short of -200 (CHANGELOG.md, 2026-11-04; TESTING.md TR-5).
+# Eight environments since 2026-11-12 (training.num_envs: 8, update_every: 8: one A2C step over 64 transitions, as
+# rl-zoo does). Seeds 1-5 paired against the one-environment config, 1,000,000 steps: final 100-episode training
+# average -244.1 against -282.7, better on all 5 seeds; none holds -200; greedy evaluation is worse, -184.0 +/- 42.7
+# against -170.0 +/- 25.9; about 260 s a seed against 329 s (CHANGELOG.md, 2026-11-10 and 2026-11-12; TESTING.md
+# TR-38).
 
 environment:
   name: "Pendulum-v1"
@@ -19,7 +24,7 @@ agent:
   type: "actor_critic"
   config:
     bounded_mean: true          # Policy mean = bias + scale * tanh(z): stays inside the torque bounds
-    n_steps: 8                  # Steps per update: each episode is replayed in 25 chunks of 8 (rl-zoo n_steps)
+    n_steps: 8                  # Steps per update and environment (rl-zoo n_steps); equals training.update_every
     gae_lambda: 0.9             # GAE lambda within each chunk (rl-zoo)
     gamma: 0.9                  # Discount factor (rl-zoo)
     learning_rate: 0.0007       # Adam step size at the start (rl-zoo: RMSprop 7e-4)
@@ -42,6 +47,8 @@ training:
   save_frequency: 50
   checkpoint_dir: "./checkpoints"
   log_dir: "./logs"
+  num_envs: 8       # Environments stepped in lockstep (rl-zoo n_envs 8)
+  update_every: 8   # One A2C step every 8 vector steps: 8 x 8 = 64 transitions (true A2C needs n_steps)
 
 logging:
   level: "INFO"

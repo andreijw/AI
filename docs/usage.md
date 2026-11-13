@@ -535,7 +535,8 @@ holds it to a recording). With N above 1:
   - The continuous Actor-Critic (`n_steps` equal to `update_every`) makes one Adam step over the window's N × k
     transitions: every segment's GAE targets from the same weights, each bootstrapped by its own end, advantages
     normalised over the window when `normalize_advantages` is on, the loss averaged over all of them. That is
-    rl-zoo's A2C layout (8 environments × 8 steps on Pendulum).
+    rl-zoo's A2C layout (8 environments × 8 steps on Pendulum), which `configs/pendulum_actor_critic.yaml` uses
+    since 2026-11-12.
   - PPO (both kinds) needs `update_every` with several environments, and `rollout_steps` a multiple of
     `update_every × num_envs` (SB3's `n_steps × n_envs`; CartPole with 4 environments: `update_every: 64` for
     256). It buffers every segment of a window and trains only at the end of a call, so each rollout is data its

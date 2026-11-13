@@ -75,10 +75,10 @@ an item.
   50-step chunks (50 transitions per update from one environment, against rl-zoo's 64 from eight; CHANGELOG.md,
   2026-11-04). rl-zoo's 8 parallel environments, measured 2026-11-10 (`num_envs: 8`, `update_every: 8`, one A2C step
   over 64 transitions; seeds 1 to 5 paired): final training averages -244.1 against -282.7, better on all 5 seeds,
-  but none holds -200 (CHANGELOG.md, 2026-11-10); adopting it in `configs/pendulum_actor_critic.yaml` is the
-  maintainer's decision. Untried: gSDE exploration (its PPO version is in `~/rl-experiments/item5/` on the
-  development machine). Asynchronous training environments (deferred from the parallel-environments item until a
-  measured speedup on navigation or BipedalWalker) also remain open.
+  but none holds -200 (CHANGELOG.md, 2026-11-10); adopted in `configs/pendulum_actor_critic.yaml`
+  (2 of 5 reach -200, none holds it; CHANGELOG.md, 2026-11-12). Untried: gSDE exploration (its PPO version is in
+  `~/rl-experiments/item5/` on the development machine). Asynchronous training environments (deferred from the
+  parallel-environments item until a measured speedup on navigation or BipedalWalker) also remain open.
 - [ ] **SAC's BipedalWalker training average does not hold**: `configs/bipedalwalker_sac.yaml` solved 300 on 4
   of seeds 1 to 5 within 500,000 steps but held on 1 (final 100-episode averages 251 to 307), while every seed's
   greedy evaluation was 321 to 327 (CHANGELOG.md, 2026-11-05). The training average includes exploration noise.
