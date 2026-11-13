@@ -62,6 +62,22 @@ ALL_AGENTS: list[tuple[type[BaseAgent], dict[str, object]]] = [
     ),
 ]
 
+# What each agent's update reports: the names the trainer logs.
+UPDATE_METRICS: dict[type[BaseAgent], set[str]] = {
+    RandomAgent: set(),
+    ReinforceAgent: {"policy_loss"},
+    ActorCriticAgent: {"policy_loss", "value_loss", "entropy_bonus"},
+    PPOAgent: {
+        "policy_loss",
+        "value_loss",
+        "entropy_bonus",
+        "clip_fraction",
+        "rollout_steps",
+        "anneal_fraction",
+    },
+    DQNAgent: {"loss", "epsilon", "mean_q"},
+}
+
 _FLAGS = ("dueling", "double_q")
 # Settings that shape the network, so a checkpoint loads only into an agent built with them.
 ARCHITECTURE_KEYS = ("dueling",)
@@ -92,21 +108,24 @@ def test_agent_select_action_contract(
 @pytest.mark.parametrize("agent_cls,config", ALL_AGENTS, ids=ALL_AGENT_IDS)
 def test_agent_update_batch_contract(agent_cls: type[BaseAgent], config: dict[str, object]) -> None:
     """Verify update accepts the unified batch with next_observations and dones."""
-    agent = agent_cls(observation_dim=4, action_dim=2, config=config)
+    rng = np.random.default_rng(0)
     n = 5
     batch = {
-        "observations": np.random.randn(n, 4),
-        "actions": np.random.randint(0, 2, size=n),
+        "observations": rng.standard_normal((n, 4)),
+        "actions": rng.integers(0, 2, size=n),
         "rewards": np.ones(n, dtype=np.float64),
-        "next_observations": np.random.randn(n, 4),
+        "next_observations": rng.standard_normal((n, 4)),
         "dones": np.array([False, False, False, False, True]),
     }
 
-    metrics = agent.update(batch)
-    assert isinstance(metrics, dict)
-    for k, v in metrics.items():
-        assert isinstance(k, str)
-        assert isinstance(v, (float, int, np.floating, np.integer))
+    metrics = agent_cls(observation_dim=4, action_dim=2, config=config).update(batch)
+    assert set(metrics) == UPDATE_METRICS[agent_cls], (
+        f"{agent_cls.__name__}.update should report {sorted(UPDATE_METRICS[agent_cls])}"
+    )
+    for name, value in metrics.items():
+        assert isinstance(value, float) and np.isfinite(value), f"{name} should be a finite float"
+    twin = agent_cls(observation_dim=4, action_dim=2, config=config).update(batch)
+    assert twin == metrics, "The same seed and batch should report the same metrics"
 
 
 @pytest.mark.parametrize("agent_cls,config", ALL_AGENTS, ids=ALL_AGENT_IDS)

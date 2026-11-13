@@ -59,9 +59,10 @@ def test_ppo_agent_select_action_greedy():
 def test_ppo_agent_update_returns_metrics():
     """update() returns policy/value/entropy/clip metrics."""
     agent = PPOAgent(observation_dim=4, action_dim=2, config=_PPO_CONFIG)
+    rng = np.random.default_rng(0)
     batch = {
-        "observations": np.random.randn(20, 4),
-        "actions": np.random.randint(0, 2, size=20),
+        "observations": rng.standard_normal((20, 4)),
+        "actions": rng.integers(0, 2, size=20),
         "rewards": np.ones(20),
     }
     metrics = agent.update(batch)

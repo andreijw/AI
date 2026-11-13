@@ -2,9 +2,9 @@
 name: release
 description: >
   Takes a distribution of the RL framework (rl-core, rl-navigation, rl-challenges) from "ready to release" to a
-  draft GitHub Release the maintainer publishes: the version bump and CHANGELOG section in a pull request, the
+  published GitHub Release: the version bump and CHANGELOG section in a pull request, the
   local `scripts/release.py check`, the maintainer's signed tag commands in dependency order, watching the Release
-  workflow, checking the draft, and the next distribution's tag once a dependency is published. Use this whenever
+  workflow, checking the draft, publishing it once the maintainer says yes, and the next distribution's tag once a dependency is published. Use this whenever
   the user asks to release, tag, publish or cut a version of a distribution, asks what the next release step is,
   or a Release workflow run has finished or failed.
 ---
@@ -19,8 +19,9 @@ PyPI.
 
 - **The tag.** It is signed with their key (`git tag -s`), SSH is refused from this machine's shell, and the
   `Release tags` ruleset lets only admins create, move or delete a `*-v*` tag. You print the commands; they run them.
-- **Publishing the draft.** Immutable releases are on: a published release's tag and files can never be changed.
-  You say the draft is ready and why; they publish it (Releases → the draft → Edit → Publish release).
+- **The yes to publish.** Immutable releases are on: a published release's tag and files can never be changed.
+  You say the draft is ready and why, and ask for each tag by name; you publish only the tags they say yes to
+  (the maintainer's decision, 2026-11-12). Without a yes, nothing is published.
 - **Deleting or re-pushing a tag** after a failed run, and the version number itself (SemVer 0.x: in 0.x a minor
   version may break the API; a breaking `rl-core` change bumps the dependents too, `docs/releasing.md`).
 
@@ -89,15 +90,24 @@ d=$(mktemp -d <scratch>/release.XXXX) && gh release download <tag> -D "$d" && (c
 
 It is ready when: it is a draft; the prerelease flag matches the version (`rc`, `.dev` are prereleases); the assets
 are the wheel, the sdist and `SHA256SUMS`, and every sum is OK; the notes equal the CHANGELOG section of that
-version. Say so to the maintainer with what you checked, and that publishing cannot be undone.
+version. Say so to the maintainer with what you checked, and that publishing cannot be undone, and ask whether to
+publish it (AskUserQuestion, naming the tag). On a yes:
+
+```bash
+gh release edit <tag> --draft=false
+gh release view <tag> --json isDraft,publishedAt
+```
+
+The rule `Bash(gh release edit * --draft=false)` in `.claude/settings.local.json` allows that one command.
 
 ### 7. Next
 
-Once they say it is published, confirm it (`gh release view <tag> --json isDraft`) and go back to step 4 for the
+Once it is published, confirm it (`gh release view <tag> --json isDraft`) and go back to step 4 for the
 distributions it unblocked. Update `~/rl-experiments/STATUS.md` at each hand-over.
 
 ## Never
 
-- `git tag`, `git push` of a tag, `gh release create`, `gh release edit --draft=false` or `gh release delete`.
+- `git tag`, `git push` of a tag, `gh release create` or `gh release delete`.
+- `gh release edit --draft=false` without the maintainer's yes for that tag, or any other `gh release edit`.
 - Editing `.github/workflows/release.yml` without the maintainer's go (anything under `.github/` is theirs).
 - `pip install -U` of an `rl-*` name: these names are not on PyPI, so it asks an index anyone could publish to.

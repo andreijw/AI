@@ -107,7 +107,7 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 - Linux and macOS: `./setup.sh --profile cpu|gpu`. **`cpu`** (the default) builds `.venv` with `requirements-dev.txt`
   plus the `video` and `box2d` extras: no PyTorch, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with
   the same and `rl-core[torch]` from PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests
-  (`tests/test_torch_ddpg_agent.py`, skipped elsewhere) and for `train.py` runs with `backend: torch`. Both build Box2D
+  (`tests/test_torch_backends.py`, skipped elsewhere) and for `train.py` runs with `backend: torch`. Both build Box2D
   (`box2d-py` from source with `swig`) before the extras. CI installs neither PyTorch nor Box2D, and their tests skip
   there (`needs_torch`, `needs_box2d`/`env_marks` in `tests/helpers.py`; maintainer's decisions, 2026-10-25 and
   2026-10-27). The C export tests (`needs_cc`) skip on Windows and where no `CC`, `cc`, `gcc` or `clang` is found; CI's
@@ -168,15 +168,15 @@ eternal-descent repo). Setup and troubleshooting:
 
 Treat the repository as the source of truth when docs disagree:
 
-- CONTRIBUTING.md asks for ≥80% **branch** coverage; CI enforces 50% **line** coverage (`--cov-fail-under=50`, no
-  `--cov-branch`).
 - GEMINI.md §1 names Gemini models; use the Model Selection table above instead.
 - Older PR descriptions and commits say `configs/pendulum_ppo.yaml` solves Pendulum-v1. It did under the 10-episode
   rule, then solved 0 of 5 under the 100-episode rule (2026-10-16), and since 2026-10-18 solves 5 of 5 with
   2048-step rollouts and 200,000 steps, holding on 4 of 5 (`docs/benchmarks/pendulum_results.md`; CHANGELOG.md,
-  2026-10-18). Continuous Actor-Critic beats the random agent in evaluation since 2026-10-18 but does not solve
-  under the 100-episode rule (CHANGELOG.md, 2026-10-18). CartPole PPO does solve CartPole-v1: 5 of 5 seeds within
-  200,000 steps, holding on all 5 (TESTING.md `TR-3` and `docs/benchmarks/cartpole_results.md`).
+  2026-10-18). Continuous Actor-Critic beats the random agent in evaluation since 2026-10-18 but does not hold
+  -200 under the 100-episode rule; with 8 environments (since 2026-11-12) 2 of 5 seeds reach it and fall back
+  (`docs/benchmarks/pendulum_results.md`; CHANGELOG.md, 2026-10-18 and 2026-11-12). CartPole PPO does solve
+  CartPole-v1: 5 of 5 seeds within 200,000 steps, holding on all 5 (TESTING.md `TR-3` and
+  `docs/benchmarks/cartpole_results.md`).
 - The `box2d` extra names `box2d-py` (pinned in `requirements-lock.txt`), not the `box2d==2.3.10` Gymnasium 1.4's own
   `box2d` extra pins: that
   has no aarch64 build, and `box2d-py` builds on the Jetson with `swig` and `--no-build-isolation` (docs/usage.md,

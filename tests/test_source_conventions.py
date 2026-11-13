@@ -287,11 +287,9 @@ def test_the_seeded_default_rng_scan_flags_what_it_claims():
 # Every test file is held to the agents' public interface (CHANGELOG.md,
 # 2026-10-20), except these, which test something other than an agent and reach into it on purpose.
 PRIVATE_ACCESS_EXEMPT = {
-    "test_train_video.py": "script tests (out of scope of the public-interface work)",
     "test_environment.py": "environment wrapper internals (action noise, domain randomization)",
     "test_pendulum.py": "environment wrapper internals (action noise)",
     "test_replay_buffer.py": "the buffer's write index",
-    "test_visualization.py": "a private plotting helper",
 }
 # The shared fixtures and helpers too: what they reach into, every test reaches into.
 AGENT_TEST_FILES = sorted(
@@ -383,6 +381,17 @@ def test_private_access_exemptions_name_existing_files():
     existing = {path.name for path in (REPO_ROOT / "tests").glob("test_*.py")}
     assert set(PRIVATE_ACCESS_EXEMPT) <= existing
     assert {"test_agents_extensive.py", "test_ddpg_agent.py"} <= {p.name for p in AGENT_TEST_FILES}
+
+
+def test_private_access_exemptions_are_still_needed():
+    """An exempt file that no longer reaches into anything private leaves the list, so the
+    public-interface check covers it again."""
+    stale = [
+        name
+        for name in PRIVATE_ACCESS_EXEMPT
+        if not private_accesses((REPO_ROOT / "tests" / name).read_text(encoding="utf-8"))
+    ]
+    assert not stale, f"Remove from PRIVATE_ACCESS_EXEMPT, nothing private is reached: {stale}"
 
 
 def test_private_access_scan_flags_each_spelling():
@@ -570,3 +579,87 @@ def test_importing_the_framework_does_not_load_torch():
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "False", "importing the framework should not load torch"
+
+
+# A package's __main__.py runs its entry point only under the guard: the release smoke test
+# (scripts/release.py smoke-all) imports every module of each wheel, and an unguarded call would
+# start the command line there.
+MAIN_MODULE_GLOB = "**/__main__.py"
+
+
+def _is_main_guard(node: ast.stmt) -> bool:
+    """``if __name__ == "__main__":``, either way round."""
+    if not isinstance(node, ast.If) or not isinstance(node.test, ast.Compare):
+        return False
+    test = node.test
+    if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
+        return False
+    sides = [test.left, test.comparators[0]]
+    names = [s.id for s in sides if isinstance(s, ast.Name)]
+    constants = [s.value for s in sides if isinstance(s, ast.Constant)]
+    return names == ["__name__"] and constants == ["__main__"]
+
+
+def _run_at_import(statement: ast.stmt) -> list[ast.AST]:
+    """The parts of a module-level statement that run when the module is imported: all of it,
+    but a function's body, a class's methods' bodies and the ``__main__`` guard's own body."""
+    if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        arguments = statement.args
+        return [
+            *statement.decorator_list,
+            *arguments.defaults,
+            *(default for default in arguments.kw_defaults if default is not None),
+        ]
+    if isinstance(statement, ast.ClassDef):
+        parts: list[ast.AST] = [*statement.decorator_list, *statement.bases, *statement.keywords]
+        for child in statement.body:
+            parts.extend(_run_at_import(child))
+        return parts
+    if _is_main_guard(statement):
+        assert isinstance(statement, ast.If)
+        return [part for child in statement.orelse for part in _run_at_import(child)]
+    return [statement]
+
+
+def unguarded_calls(source: str) -> list[int]:
+    """Lines of the calls a module makes at import, outside the ``__main__`` guard's body."""
+    return sorted(
+        node.lineno
+        for statement in ast.parse(source).body
+        for part in _run_at_import(statement)
+        for node in ast.walk(part)
+        if isinstance(node, ast.Call)
+    )
+
+
+def test_every_main_module_calls_its_entry_point_only_under_the_guard():
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}:{line}"
+        for path in _glob_src(MAIN_MODULE_GLOB)
+        for line in unguarded_calls(path.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, (
+        'Call the entry point inside `if __name__ == "__main__":` (importing the module must not '
+        "run it):\n" + "\n".join(offenders)
+    )
+
+
+def test_the_main_guard_scan_sees_an_unguarded_call():
+    source = (
+        '"""Doc."""\n'
+        "from x import main\n"
+        "main()\n"
+        "result = main()\n"
+        'if "__main__" == __name__:\n    main()\n'
+        'if __name__ == "__main__":\n    main()\n'
+        'if __name__ != "__main__":\n    main()\n'
+        "def f():\n    main()\n"
+        'if __name__ == "__main__":\n    pass\nelse:\n    main()\n'
+        "class C:\n    x = main()\n    def m(self):\n        main()\n"
+        "@main()\ndef g(a=main()):\n    pass\n"
+    )
+    assert unguarded_calls(source) == [3, 4, 10, 16, 18, 21, 22]
+
+
+def test_the_main_guard_scan_covers_a_main_module():
+    assert _glob_src(MAIN_MODULE_GLOB), "the scan should see the package __main__ modules"

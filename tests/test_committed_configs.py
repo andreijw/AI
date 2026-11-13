@@ -83,6 +83,18 @@ def test_every_agent_trains_for_its_step_budget(challenge, agent_type):
     assert anneal is None or anneal == train_cfg["total_steps"], "Anneal over the whole budget."
 
 
+@pytest.mark.parametrize("challenge", sorted(discover_challenges()))
+def test_every_registered_agent_has_a_committed_config(challenge):
+    """An agent added to a challenge's AGENT_CLASSES without a config in CONFIG_MAP (or the other
+    way round) fails here, not when someone first asks the benchmark for it."""
+    challenge_cls = discover_challenges()[challenge]
+    assert set(challenge_cls.CONFIG_MAP) == set(challenge_cls.AGENT_CLASSES), (
+        f"{challenge}: CONFIG_MAP and AGENT_CLASSES should name the same agents"
+    )
+    for config_file in challenge_cls.CONFIG_MAP.values():
+        assert os.path.isfile(os.path.join(CONFIGS_DIR, config_file)), config_file
+
+
 @pytest.mark.parametrize("agent_type", ["reinforce", "actor_critic", "ppo"])
 def test_cartpole_policy_gradient_agents_use_adam(agent_type):
     env, agent, _ = CartPoleChallenge().setup_run(agent_type, seed=1, episodes=None)
@@ -387,9 +399,12 @@ def test_pendulum_ddpg_uses_rl_zoo_settings_with_a_smaller_network():
 
 
 def test_pendulum_actor_critic_uses_the_measured_settings():
-    """Bounded mean, 8-step chunked updates, entropy 0.01 and rewards x 0.05: evaluation -152 +/- 45 on
-    seeds 1-5, beating the random agent on 5 of 5 (CHANGELOG.md, 2026-10-18). Observation normalisation
-    raised the final training average on 5 of seeds 1-5 and 4 of 11-15 (CHANGELOG.md, 2026-11-04)."""
+    """Bounded mean, entropy 0.01 and rewards x 0.05: evaluation -152 +/- 45 on seeds 1-5, beating the
+    random agent on 5 of 5 (CHANGELOG.md, 2026-10-18). Observation normalisation raised the final training
+    average on 5 of seeds 1-5 and 4 of 11-15 (CHANGELOG.md, 2026-11-04). Since 2026-11-12 rl-zoo's A2C
+    layout, 8 environments x 8 steps (num_envs 8, update_every 8 = n_steps: one Adam step over 64
+    transitions): final training average -244.1 against -282.7 with one environment, better on all 5 of
+    seeds 1-5, none holding -200, greedy evaluation worse (CHANGELOG.md, 2026-11-10 and 2026-11-12)."""
     from rl_pendulum.benchmark import PendulumChallenge
 
     env, agent, _ = PendulumChallenge().setup_run("actor_critic", seed=1, episodes=None)
@@ -402,6 +417,10 @@ def test_pendulum_actor_critic_uses_the_measured_settings():
     )
     np.testing.assert_allclose(weights(agent)["log_std"], [-2.0])
     assert agent.observation_normalizer is not None, "the config must normalise observations"
+    training = load_config(os.path.join(CONFIGS_DIR, "pendulum_actor_critic.yaml"))["training"]
+    assert (training.get("num_envs"), training.get("update_every")) == (8, 8), (
+        "8 environments x 8 steps per update, as rl-zoo's A2C (CHANGELOG.md, 2026-11-12)"
+    )
 
 
 def test_acrobot_dqn_uses_rl_zoo_settings_with_a_lower_exploration_floor():

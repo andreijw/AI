@@ -56,10 +56,11 @@ anyone could publish one. Upgrade by installing the new release's URL instead.
    wheels of what it requires, in a fresh environment and imports every module a plain install can
    (`scripts/release.py smoke`; rl-navigation may load only NumPy); writes `SHA256SUMS`; and opens a **draft**
    GitHub Release with the files and the CHANGELOG section as notes.
-4. **The maintainer** reads the draft and publishes it. A failed run leaves nothing public; fix the cause in a pull
-   request, then delete and push the tag again (both theirs). A run on a tag whose draft exists brings the draft in
-   line with it (notes, title, prerelease flag, files; files it did not build are removed); a published release is
-   never changed. The workflow does not verify the tag's signature: the tag ruleset below limits who can push one.
+4. **The maintainer** reads the draft and publishes it, or says yes when the assistant's `release` skill asks to.
+   A failed run leaves nothing public; fix the cause in a pull request, then delete and push the tag again (both
+   theirs). A run on a tag whose draft exists brings the draft in line with it (notes, title, prerelease flag, files;
+   files it did not build are removed); a published release is never changed. The workflow does not verify the
+   tag's signature: the tag ruleset below limits who can push one.
 
 **Order.** The first releases: tag `rl-core-v0.1.0` and publish its draft, then tag `rl-navigation-v0.1.0` and
 `rl-challenges-v0.1.0`. `check` refuses a distribution while anything it requires, its extras included, "has no tag"

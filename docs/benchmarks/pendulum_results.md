@@ -21,15 +21,17 @@ averaged over the solved runs. **Held** is the share of runs with at least
 Evaluation runs on a separate environment and plays the same start states
 every time for a seed, so it does not change the training episodes.
 A step budget finishes the episode that crosses it, so a run can overshoot its budget by up to one episode.
+Runs that trained from N environments (`training.num_envs`, actor_critic: 8) also finish the
+episodes in flight in the other environments, so they can overshoot by up to N - 1 more episodes.
 
 ## Performance Summary
 
 | Algorithm | Budget | Episodes | Mean Eval Reward | Reward Std | Solve Rate | Avg Solve Episode | Avg Steps to Solve | Held | Eval ≥ Threshold | Mean Time (s) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **actor_critic** | 1000000 steps | 5000 | -170.0 | ±25.9 | 0% | N/A | N/A | 0% | 80% | 305.37s |
-| **ddpg** | 40000 steps | 200 | -158.3 | ±24.8 | 100% | 156.0 | 31,200 | 100% | 100% | 198.37s |
-| **ppo** | 200000 steps | 1000 | -188.3 | ±34.9 | 100% | 555.8 | 111,160 | 80% | 60% | 57.18s |
-| **random** | 40000 steps | 200 | -1292.7 | ±81.2 | 0% | N/A | N/A | 0% | 0% | 5.91s |
+| **actor_critic** | 1000000 steps | 5000 | -184.0 | ±42.7 | 40% | 3168.5 | 633,700 | 0% | 60% | 248.90s |
+| **ddpg** | 40000 steps | 200 | -158.3 | ±24.8 | 100% | 156.0 | 31,200 | 100% | 100% | 203.21s |
+| **ppo** | 200000 steps | 1000 | -188.3 | ±34.9 | 100% | 555.8 | 111,160 | 80% | 60% | 57.40s |
+| **random** | 40000 steps | 200 | -1292.7 | ±81.2 | 0% | N/A | N/A | 0% | 0% | 5.96s |
 
 ## Learning Trajectories
 

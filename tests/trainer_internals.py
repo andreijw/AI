@@ -7,6 +7,7 @@ Everything else goes through ``train()``, ``evaluate()`` and the files and log l
 from collections.abc import Mapping
 from typing import Any
 
+from rl_core.training import trainer as trainer_module
 from rl_core.training.trainer import Trainer
 
 
@@ -21,3 +22,9 @@ def force_lockstep(trainer: Trainer) -> None:
     plays through the single-environment loop; tests/test_trainer_golden.py holds the two to the
     same recording."""
     trainer._lockstep = True
+
+
+def record_step(*args: Any, **kwargs: Any) -> tuple[tuple[Any, ...], bool]:
+    """The trainer's ``_record_step``: one environment step as the transition both training loops
+    store, and whether it ends the episode."""
+    return trainer_module._record_step(*args, **kwargs)

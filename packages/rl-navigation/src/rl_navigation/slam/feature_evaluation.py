@@ -18,6 +18,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from rl_navigation.estimation.averages import mean_or_nan
 from rl_navigation.mapping.evaluation import record_run
 from rl_navigation.sim.geometry import Arena, FloatArray
 from rl_navigation.sim.sensors import RangeSensor, usable_readings
@@ -218,11 +219,7 @@ def radius_bias_t2(
             continue
         standard_error = values.std(ddof=1) / np.sqrt(len(values))
         squares.append((values.mean() / standard_error) ** 2)
-    return float(np.mean(squares)) if squares else float("nan")
-
-
-def _mean_or_nan(values: FloatArray) -> float:
-    return float(values.mean()) if len(values) else float("nan")
+    return mean_or_nan(squares)
 
 
 def summarize_features(runs: Sequence[FeatureRun]) -> dict[str, float]:
@@ -266,11 +263,11 @@ def summarize_features(runs: Sequence[FeatureRun]) -> dict[str, float]:
         "centre_error_p95": quantile(centres, 0.95),
         "radius_error_median": quantile(np.abs(radii), 0.5),
         "radius_error_p95": quantile(np.abs(radii), 0.95),
-        "radius_error_mean": _mean_or_nan(radii),
-        "fit_nees_mean": _mean_or_nan(nees),
-        "fit_nees_mean_8_to_11": _mean_or_nan(nees[points < 12]),
-        "fit_nees_mean_12_to_19": _mean_or_nan(nees[(points >= 12) & (points < 20)]),
-        "fit_nees_mean_20_up": _mean_or_nan(nees[points >= 20]),
+        "radius_error_mean": mean_or_nan(radii),
+        "fit_nees_mean": mean_or_nan(nees),
+        "fit_nees_mean_8_to_11": mean_or_nan(nees[points < 12]),
+        "fit_nees_mean_12_to_19": mean_or_nan(nees[(points >= 12) & (points < 20)]),
+        "fit_nees_mean_20_up": mean_or_nan(nees[points >= 20]),
         "radius_bias_t2": radius_bias_t2(keys, radii),
         "extract_ms_median": quantile(milliseconds, 0.5),
         "extract_ms_p99": quantile(milliseconds, 0.99),

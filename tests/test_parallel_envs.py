@@ -590,6 +590,16 @@ def test_the_benchmark_report_states_the_overshoot_of_several_environments(tmp_p
     assert "(`training.num_envs`, reinforce: 3)" in three and "up to N - 1 more episodes" in three
 
 
+def test_the_benchmark_report_with_several_environments_keeps_markdownlint_line_length(tmp_path):
+    """The reports under docs/benchmarks/ pass markdownlint, whose MD013 allows 120 characters
+    outside tables (.markdownlint.json): the several-environment note is wrapped like the rest."""
+    report = _benchmark_report(tmp_path, 3)
+    long_lines = [
+        line for line in report.splitlines() if not line.startswith("|") and len(line) > 120
+    ]
+    assert long_lines == []
+
+
 def test_setup_extra_envs_builds_a_benchmark_runs_other_environments(tmp_path):
     from rl_cartpole.benchmark import CartPoleChallenge
     from rl_core.seeding import env_seed

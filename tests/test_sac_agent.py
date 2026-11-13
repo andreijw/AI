@@ -30,6 +30,7 @@ from tests.helpers import (
     ReferenceAdam,
     assert_gradients_match,
     assert_same_checkpoint,
+    continuous_batch,
 )
 
 OBS_DIM, ACT_DIM = 3, 2
@@ -51,15 +52,16 @@ def _agent(**config) -> SACAgent:
 
 
 def _batch(n: int = 6, seed: int = 2) -> dict[str, np.ndarray]:
-    rng = np.random.default_rng(seed)
-    return {
-        "observations": rng.standard_normal((n, OBS_DIM)),
-        "actions": rng.uniform(LOW, HIGH, size=(n, ACT_DIM)).astype(np.float32),
-        "rewards": -rng.uniform(0.0, 5.0, size=n),
-        "next_observations": rng.standard_normal((n, OBS_DIM)),
-        "dones": np.array([False] * (n - 1) + [True]),
-        "terminated": np.array([False] * (n - 2) + [True, False]),  # one true end mid-batch
-    }
+    return continuous_batch(
+        n,
+        OBS_DIM,
+        ACT_DIM,
+        seed=seed,
+        low=LOW,
+        high=HIGH,
+        reward_range=(-5.0, 0.0),
+        terminated=np.array([False] * (n - 2) + [True, False]),  # one true end mid-batch
+    )
 
 
 def _naive_log_prob(eps, log_std, pre_tanh) -> np.ndarray:

@@ -29,7 +29,7 @@ class TorchTD3Agent(TorchDDPGAgent, TD3Agent):
     ``critic`` step trains both critics; a ``full`` step also trains the actor and moves the three
     target networks. On CUDA each kind is captured as its own graph. The target-policy noise is
     drawn on the host from TD3Agent's own generator, with the batch, so float64 matches TD3Agent
-    to rounding (tests/test_torch_ddpg_agent.py).
+    to rounding (tests/test_torch_backends.py).
     """
 
     def __init__(self, observation_dim: int, action_dim: int, config: dict[str, Any]) -> None:
@@ -75,3 +75,12 @@ class TorchTD3Agent(TorchDDPGAgent, TD3Agent):
             self._move_targets()
         with torch.no_grad():
             self._metric_sums[: len(metrics)] += torch.stack(metrics).detach()
+
+    # TD3Agent's own NumPy training maths (DDPGAgent's is stubbed by TorchDDPGAgent). Its
+    # ``_draw_target_noise`` stays: ``_sample_inputs`` draws the device step's noise with it.
+
+    def _target_actions(self, *args: Any, **kwargs: Any) -> Any:
+        raise self._on_device()
+
+    def _td3_targets(self, *args: Any, **kwargs: Any) -> Any:
+        raise self._on_device()

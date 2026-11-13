@@ -30,7 +30,7 @@ from rl_core.agents import (
     TD3Agent,
 )
 from rl_core.seeding import WRAPPER_STREAM, derive_rng, env_seed
-from tests.helpers import torch_backend_cases
+from tests.helpers import continuous_batch, discrete_batch, torch_backend_cases
 
 SEED = 7
 DISCRETE = [
@@ -53,17 +53,10 @@ CONTINUOUS += torch_backend_cases({"batch_size": 2, "learning_starts": 0, "hidde
 
 
 def _batch(continuous: bool) -> dict[str, np.ndarray]:
-    rng = np.random.default_rng(100)  # test data, not compared
-    n = 5
-    actions = rng.uniform(-1, 1, (n, 1)) if continuous else rng.integers(0, 2, n)
-    return {
-        "observations": rng.standard_normal((n, 3 if continuous else 4)),
-        "actions": actions,
-        "rewards": -np.ones(n),
-        "next_observations": rng.standard_normal((n, 3 if continuous else 4)),
-        "dones": np.array([False] * (n - 1) + [True]),
-        "terminated": np.zeros(n, dtype=bool),
-    }
+    # Test data, not compared.
+    if continuous:
+        return continuous_batch(5, 3, 1, seed=100, rewards=-np.ones(5), terminated=False)
+    return discrete_batch(5, 4, 2, seed=100, rewards=-np.ones(5), terminated=False)
 
 
 def _generators_used(monkeypatch, agent_cls, config, continuous: bool) -> list[np.random.Generator]:

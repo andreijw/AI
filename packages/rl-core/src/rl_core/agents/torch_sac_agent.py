@@ -29,7 +29,7 @@ class TorchSACAgent(TorchOffPolicyAgent, SACAgent):
     targets, both critics, the actor against the critics just updated, then Polyak on the target
     critics. Both noises, ``eps`` for the batch and ``eps'`` for the next states, are drawn on the
     host from SACAgent's own stream, with the batch, so float64 matches SACAgent to rounding
-    (tests/test_torch_ddpg_agent.py). ``log_ent_coef`` is a one-value parameter group on the
+    (tests/test_torch_backends.py). ``log_ent_coef`` is a one-value parameter group on the
     device with its own Adam, never clipped, as SACAgent's; with a fixed ``ent_coef`` it is never
     stepped. :attr:`ent_coef` reads it from the device, so it is current between updates.
     """

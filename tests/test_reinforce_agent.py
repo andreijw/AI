@@ -48,9 +48,10 @@ def test_reinforce_agent_select_action_greedy():
 def test_reinforce_agent_update_returns_loss():
     """update() returns a dict with a scalar 'policy_loss' key."""
     agent = ReinforceAgent(observation_dim=4, action_dim=2, config=_REINFORCE_CONFIG)
+    rng = np.random.default_rng(0)
     batch = {
-        "observations": np.random.randn(10, 4),
-        "actions": np.random.randint(0, 2, size=10),
+        "observations": rng.standard_normal((10, 4)),
+        "actions": rng.integers(0, 2, size=10),
         "rewards": np.ones(10),
     }
     metrics = agent.update(batch)

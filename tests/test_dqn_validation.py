@@ -12,6 +12,7 @@ from tests.agent_internals import (
     live_weights,
     weights,
 )
+from tests.helpers import discrete_batch
 
 
 def _agent(**config) -> DQNAgent:
@@ -89,14 +90,7 @@ def test_the_committed_config_is_valid():
 
 
 def _batch(n: int = 6) -> dict[str, np.ndarray]:
-    rng = np.random.default_rng(0)
-    return {
-        "observations": rng.standard_normal((n, 4)),
-        "actions": rng.integers(0, 2, n),
-        "rewards": np.ones(n),
-        "next_observations": rng.standard_normal((n, 4)),
-        "dones": np.array([False] * (n - 1) + [True]),
-    }
+    return discrete_batch(n, 4, 2, rewards=np.ones(n))
 
 
 @pytest.mark.parametrize("dueling", [False, True])

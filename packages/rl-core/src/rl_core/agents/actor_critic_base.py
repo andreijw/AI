@@ -10,13 +10,14 @@ from rl_core.seeding import AGENT_EXPLORATION_STREAM, AGENT_WEIGHTS_STREAM, deri
 from rl_core.utils.config_values import positive_int
 
 from .base_agent import BaseAgent
+from .discrete_sampling import DiscreteSampling
 from .inference import DenseLayer, InferencePolicy
 from .optim import Optimizer, optimizer_from_config
 from .returns import episode_end
 from .softmax import stable_softmax
 
 
-class ActorCriticBase(BaseAgent):
+class ActorCriticBase(DiscreteSampling, BaseAgent):
     """
     Shared base for actor-critic style agents (A2C / PPO) with a two-headed MLP.
 

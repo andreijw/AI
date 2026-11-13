@@ -35,7 +35,7 @@ contributing, writing code, refactoring components, or submitting pull requests.
     gradient steps; nothing imports those modules except `BaseAgent.class_for_config`, through the agent's `BACKENDS`
     (`tests/test_source_conventions.py` enforces both).
   - It must train as the NumPy agent does: in float64 on the CPU it matches it to rounding
-    (`tests/test_torch_ddpg_agent.py`), and its checkpoints are the NumPy agent's format.
+    (`tests/test_torch_backends.py`), and its checkpoints are the NumPy agent's format.
   - PyTorch is never a required dependency: it is the `[torch]` extra, and CI does not install it.
   - TensorFlow, JAX and other frameworks remain out.
   - Exporting is not training: the ONNX export's `onnx` and `onnxruntime` (the `[onnx]` extra) are imported only inside
@@ -109,7 +109,8 @@ pytest
 pytest -q
 ```
 
-- **Coverage Goal**: New features must include tests achieving >=80% branch coverage.
+- **Coverage Floor**: CI fails below 90% branch coverage of the packages and `benchmark.py`
+  (`pytest --cov-report=xml --cov-branch --cov-fail-under=90`); new code comes with the tests that cover it.
 - All tests must pass cleanly (`0 failed`) before submitting a pull request.
 - An exception raised in a `__del__` during the tests fails the test that triggered it: `pyproject.toml` turns
   pytest's `PytestUnraisableExceptionWarning` into an error, so such a failure means an object is torn down
@@ -172,7 +173,8 @@ git checkout -b feature/<kebab-case-name>   # or fix/<kebab-case-name> for bugs
 
 - Identify every file, class, function, and configuration that needs to change.
 - **Check existing components first** — search `packages/rl-core/src/rl_core/` and the challenge packages for similar
-  logic before writing anything new (e.g. `rl_core/agents/base_agent.py` `BaseAgent`,
+  logic before writing anything new (e.g. `rl_core/agents/base_agent.py` `BaseAgent`, whose save, load and
+  checkpoint hooks are `CheckpointMixin`'s in `rl_core/agents/checkpointing.py`,
   `rl_core/agents/actor_critic_base.py` `ActorCriticBase`, the `environments/make_env.py` factories, `rl_core/utils/`).
   Plan to reuse or extend rather than duplicate.
 - Design clean abstractions; avoid one-off inline logic for anything with a natural architectural boundary.
@@ -284,6 +286,10 @@ Training runs and the test suite write bulky outputs that must never be committe
   - `logs/` (TensorBoard and raw metrics logs)
   - `checkpoints/` (serialized NumPy agent weights)
   - `test_logs/` and `test_checkpoints/` (temporary test-suite outputs)
+
+  The one exception is `tests/data/checkpoints/`: one small reference checkpoint per agent, which
+  `scripts/write_reference_checkpoints.py` writes and `tests/test_reference_checkpoints.py` pins (keys, dtypes, shapes
+  and values; loading and saving back). Rewrite them only when the checkpoint format changes on purpose.
 - **Checkpoint format** — persist model weights as NumPy `.npz` files (or plain state dicts). Keep checkpoint frequency
   (`save_frequency`) balanced to avoid excessive disk writes; `train.py` also saves once after its last episode
   (`Trainer(save_final=True)`, unless that episode was just saved), so the newest checkpoint holds the final weights.

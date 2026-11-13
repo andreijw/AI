@@ -535,7 +535,8 @@ holds it to a recording). With N above 1:
   - The continuous Actor-Critic (`n_steps` equal to `update_every`) makes one Adam step over the window's N × k
     transitions: every segment's GAE targets from the same weights, each bootstrapped by its own end, advantages
     normalised over the window when `normalize_advantages` is on, the loss averaged over all of them. That is
-    rl-zoo's A2C layout (8 environments × 8 steps on Pendulum).
+    rl-zoo's A2C layout (8 environments × 8 steps on Pendulum), which `configs/pendulum_actor_critic.yaml` uses
+    since 2026-11-12.
   - PPO (both kinds) needs `update_every` with several environments, and `rollout_steps` a multiple of
     `update_every × num_envs` (SB3's `n_steps × n_envs`; CartPole with 4 environments: `update_every: 64` for
     256). It buffers every segment of a window and trains only at the end of a call, so each rollout is data its
@@ -649,7 +650,7 @@ pytest -q
 Run tests with coverage (CI-aligned):
 
 ```bash
-pytest --cov-report=xml --cov-fail-under=50
+pytest --cov-report=xml --cov-branch --cov-fail-under=90
 ```
 
 ### Code Formatting
@@ -704,7 +705,7 @@ Every pull request runs two jobs in `ci.yml`, which are the required status chec
 
 - **Checks**: Ruff lint and format, MyPy, Bandit, the pylint duplicate-code audit, markdownlint, the Markdown link
   check (`scripts/check_doc_links.py`), and a check that the workflow list in the README is current
-- **Unit Tests**: pytest with coverage (50% minimum) and the Codecov upload
+- **Unit Tests**: pytest with branch coverage (90% minimum) and the Codecov upload
 - **Packages** (not required): builds the three distributions, installs each wheel in a fresh environment and
   imports it (`scripts/release.py smoke-all`; `rl-navigation` may load only NumPy), and runs the robot-side tests
   from the rl-navigation wheel alone on its NumPy floor (1.26)

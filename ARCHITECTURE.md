@@ -123,8 +123,10 @@ tags are in [docs/releasing.md](docs/releasing.md).
    - `rl_navigation.estimation` is the robot's own code beside the Gymnasium layer, not under it: pose estimation on a
      known map (`ekf`: `EkfLocalizer`; `kalman`: `kalman_update` in Joseph form; `mcl`: `MclLocalizer`, augmented Monte
      Carlo localization with its pure resampling and likelihood functions; `evaluation`: seeded trials with either
-     filter, optionally with a kidnapping, against the simulator's true pose; `comparison`: the EKF and MCL on the same
-     seeds as a Markdown report and a command line, a desk tool that the package's `__init__` does not import;
+     filter, optionally with a kidnapping, against the simulator's true pose; `averages`: the NaN-on-empty mean and
+     median of the evaluation tools; `comparison`: the EKF and MCL on the same seeds as a Markdown report
+     and a command line, a desk-tool package (`instrumentation`, `records`, `metrics`, `runner`, `report`, `cli`,
+     re-exported by its `__init__`) that the package's `__init__` does not import;
      `recording`: snapshots of both filters on one seeded trial and the frames painted from them, another desk tool the
      package does not import; the `rl_navigation.localization_video` command, outside the package, writes them to an
      MP4). It imports NumPy and `rl_navigation.sim` only, never `gym_env`, the framework's layer, Gymnasium or
@@ -149,19 +151,20 @@ tags are in [docs/releasing.md](docs/releasing.md).
      lidar scan into segments (bridging up to 3° of dropped beams) and fits circles to them (an algebraic start, a
      geometric Gauss-Newton fit weighted by each beam's incidence, a residual test, a two-line test against box
      corners and checks that a result is sound);
-     `ekf_slam` (`EkfSlam`) estimates the pose and a map of those circles in one Gaussian: Thrun's EKF-SLAM (Tables
-     10.1 and 10.2, with the provisional list) with first-estimate Jacobians (FEJ, Huang et al. 2008), one batch
-     Joseph update per scan, a 15 mm model-error floor per feature, and guards so that it never raises on a scan's
-     content. `EkfSlam` keeps the `Localizer` protocol, so `run_trial` drives it like the localizers. Its core imports
-     NumPy, `rl_navigation.sim` and the `estimation` core (`kalman_update`, `symmetrized`, `motion_jacobians`,
-     `chi2_quantile`, the pose checks), never `mapping` or `estimation`'s desk tools. `feature_evaluation` and
-     `evaluation` (`slam_trial`, `SlamFactory`, the oracle, the aligned scoring) are desk tools the package's
-     `__init__` does not import; `evaluation` also imports `mapping.evaluation.record_run` for the oracle's true poses.
-     Nothing below it (`estimation`, `mapping`, the Gymnasium layer, the challenge) imports it. **Move triggers:**
-     when a third package needs `motion_jacobians`, `kalman_update` and `chi2_quantile`, they move to a shared module
-     (`sim` for the motion model); if a further desk tool uses `record_run`, it moves from `mapping.evaluation` to a
-     neutral desk-tool module; `SlamFactory` is the fourth implementation of the six-keyword `LocalizerFactory` seam,
-     and a fifth, or any change to the keywords, refactors the seam to one builder.
+     `ekf_slam` (`EkfSlam`) estimates the pose and a map of those circles in one Gaussian: Thrun's EKF-SLAM (Tables 10.1
+     and 10.2, with the provisional list) with first-estimate Jacobians (FEJ, Huang et al. 2008), one batch Joseph
+     update per scan, a 15 mm model-error floor per feature, EKF2's second-order term with the unobservable frame taken
+     out (`second_order_covariance`, so that one update after a long unseen stretch does not collapse the heading), and
+     guards so that it never raises on a scan's content. `EkfSlam` keeps the `Localizer` protocol, so `run_trial` drives
+     it like the localizers. Its core imports NumPy, `rl_navigation.sim` and the `estimation` core (`kalman_update`,
+     `symmetrized`, `motion_jacobians`, `chi2_quantile`, the pose checks), never `mapping` or `estimation`'s desk tools.
+     `feature_evaluation` and `evaluation` (`slam_trial`, `SlamFactory`, the oracle, the aligned scoring) are desk tools
+     the package's `__init__` does not import; `evaluation` also imports `mapping.evaluation.record_run` for the
+     oracle's true poses. Nothing below it (`estimation`, `mapping`, the Gymnasium layer, the challenge) imports it.
+     **Move triggers:** when a third package needs `motion_jacobians`, `kalman_update` and `chi2_quantile`, they move to
+     a shared module (`sim` for the motion model); if a further desk tool uses `record_run`, it moves from
+     `mapping.evaluation` to a neutral desk-tool module; `SlamFactory` is the fourth implementation of the six-keyword
+     `LocalizerFactory` seam, and a fifth, or any change to the keywords, refactors the seam to one builder.
    - `rl_navigation.gym_env` (`NavigationGymEnv`) is the Gymnasium environment over the simulator, and importing it
      registers `Navigation-v0` and `NavigationContinuous-v0`. It imports Gymnasium and `rl_navigation.sim` only, so
      `import rl_navigation.gym_env; gym.make("NavigationContinuous-v0")` works without the training framework.
@@ -225,7 +228,10 @@ tags are in [docs/releasing.md](docs/releasing.md).
 ## Component Architecture
 
 The high-level interaction between the training orchestration, environment wrappers, and agent policies is
-visualized below:
+visualized below. Arrows are imports; a dotted one is a desk tool's (`evaluation`) import that the package's core does
+not make. `trainer.py` imports no challenge; `training/robustness.py` does (the one package cycle, an open API
+decision): the challenges registry imports the training package (budgets and the curriculum), and the export's rollout
+imports its `ChallengeEnv`.
 
 ```mermaid
 flowchart TD
@@ -251,8 +257,10 @@ flowchart TD
         NavGym["rl_navigation.gym_env: Navigation-v0, NavigationContinuous-v0 (Gymnasium + sim only)"]
         NavSim["rl_navigation.sim: NumPy simulator (arena, ray casting, sensors, odometry, layouts, World, render)"]
         NavEst["rl_navigation.estimation: EkfLocalizer and MclLocalizer over a RangeMap (NumPy + sim only)"]
-        NavMap["rl_navigation.mapping: log-odds OccupancyGrid from scans at known poses (NumPy + sim only)"]
-        NavSlam["rl_navigation.slam: circle features and landmark EKF-SLAM (NumPy + sim + estimation core)"]
+        NavAvg["rl_navigation.estimation.averages: NaN-on-empty mean and median (NumPy only)"]
+        NavCmp["rl_navigation.estimation.comparison: EKF against MCL, report and CLI (desk tool)"]
+        NavMap["rl_navigation.mapping: log-odds OccupancyGrid from scans at known poses (core: NumPy + sim)"]
+        NavSlam["rl_navigation.slam: circle features and landmark EKF-SLAM (core: NumPy + sim + estimation core)"]
     end
 
     subgraph Core ["rl_core Framework (rl-core)"]
@@ -261,10 +269,11 @@ flowchart TD
         subgraph Agents ["Agent Implementations"]
             BaseAgent["BaseAgent"]
             DiscreteAgents["Discrete: Random, Reinforce, Actor-Critic, PPO, DQN"]
-            ContinuousAgents["Continuous: Random, A2C, PPO, DDPG"]
+            ContinuousAgents["Continuous: Random, A2C, PPO, DDPG, TD3, SAC"]
         end
 
         EnvBase["environments: BaseEnvWrapper"]
+        Registry["challenges: BenchmarkChallenge, ChallengeEnv, discover_challenges registry"]
 
         subgraph Utils ["Utility Infrastructure"]
             Config["config.py"]
@@ -287,8 +296,11 @@ flowchart TD
     Robust --> Challenges
     Export --> ExportPkg
     ExportPkg --> Agents
+    ExportPkg --> Registry
     Bench --> Challenges
-    Trainer --> Challenges
+    Registry --> Trainer
+    Trainer -. robustness .-> Registry
+    Registry --> Agents
     Trainer --> Agents
     Trainer --> Utils
     CartPole --> EnvBase
@@ -299,11 +311,17 @@ flowchart TD
     BipedalWalker --> EnvBase
     Navigation --> EnvBase
     Navigation --> NavGym
+    Challenges --> Registry
     NavGym --> NavSim
     NavEst --> NavSim
+    NavEst --> NavAvg
+    NavCmp --> NavEst
+    NavCmp --> NavSim
     NavMap --> NavSim
+    NavMap -. evaluation .-> NavEst
     NavSlam --> NavEst
     NavSlam --> NavSim
+    NavSlam -. evaluation .-> NavMap
 ```
 
 ---
@@ -314,6 +332,19 @@ The agent hierarchy provides clean inheritance across discrete and continuous co
 
 ```mermaid
 classDiagram
+    class CheckpointMixin {
+        <<abstract>>
+        +save(path)
+        +load(path)
+        +observation_settings
+        +record_observation_settings(settings, defaults)
+        #_checkpoint_arrays()* dict
+        #_load_checkpoint_arrays(data)*
+        #_check_checkpoint_arrays(data, path)
+        #_extra_checkpoint_state() dict
+        #_checkpoint_kind() str
+    }
+
     class BaseAgent {
         <<abstract>>
         +int observation_dim
@@ -321,14 +352,12 @@ classDiagram
         +dict config
         +select_action(obs, training)
         +update(batch)* dict
-        +save(path)
-        +load(path)
-        +record_observation_settings(settings, defaults)
         +inference_policy() InferencePolicy
         #_inference_network() InferencePolicy
-        #_checkpoint_arrays()* dict
-        #_check_checkpoint_arrays(data, path)
-        #_load_checkpoint_arrays(data)*
+    }
+
+    class DiscreteSampling {
+        #_select_action_from_probs(probs, training) int
     }
 
     class RandomAgent {
@@ -467,10 +496,13 @@ classDiagram
         #_train_steps(num_updates) dict
     }
 
+    CheckpointMixin <|-- BaseAgent
     BaseAgent <|-- RandomAgent
     BaseAgent <|-- ContinuousRandomAgent
     BaseAgent <|-- ReinforceAgent
     BaseAgent <|-- ActorCriticBase
+    DiscreteSampling <|-- ReinforceAgent
+    DiscreteSampling <|-- ActorCriticBase
     ActorCriticBase <|-- ActorCriticAgent
     ActorCriticBase <|-- PPOAgent
     BaseAgent <|-- DQNAgent
@@ -489,6 +521,17 @@ classDiagram
     TorchOffPolicyAgent <|-- TorchSACAgent
     SACAgent <|-- TorchSACAgent
 ```
+
+`BaseAgent` (`rl_core/agents/base_agent.py`) is the acting and training interface. Its checkpoint half is
+`CheckpointMixin` (`rl_core/agents/checkpointing.py`): `save` and `load`, the hooks an agent overrides
+(`_checkpoint_arrays`, `_load_checkpoint_arrays`, `_check_checkpoint_arrays`, `_extra_checkpoint_state` and its check
+and load, `_checkpoint_kind`), the path rules, the generator and observation-setting entries, and the public
+`observation_settings` and `record_observation_settings`. Only `BaseAgent` lists the mixin, so it sits just after
+`BaseAgent` in every agent's MRO and every override, a PyTorch backend's included, resolves first; the three key
+prefixes (generator, observation, normalisation) and `check_checkpoint_shapes` are still importable from `base_agent`.
+REINFORCE and `ActorCriticBase` (the discrete Actor-Critic and PPO) list `DiscreteSampling`
+(`rl_core/agents/discrete_sampling.py`) before `BaseAgent` for `_select_action_from_probs`, which samples an action from
+the policy's probabilities with `_explore_rng`.
 
 Every agent is NumPy by default. `BaseAgent.class_for_config(config)` returns the class to build for the config's
 `backend` key (`numpy` when absent): the class itself, or the version its `BACKENDS` names, imported only then.

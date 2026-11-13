@@ -53,6 +53,94 @@ Acrobot-v1) and
   100% held, and the other agents' learning figures are unchanged. Not verified: Pendulum with `n_steps: 0` (the
   committed Pendulum config uses `n_steps: 8`, which already bootstrapped), and seeds other than 1 to 5.
 
+- **Benchmark reports wrap their multi-environment note** (`fix/benchmark-report-wrap`). A report with an agent
+  trained on several environments (`training.num_envs`) wrote its overshoot note as one 190-character line, which
+  fails CI's markdownlint (MD013, 120); `benchmark.py` now wraps it at 100. A test builds such a report and checks
+  every line outside a table.
+
+- **SLAM re-acquisition after heading collapse** (`fix/slam-association-drift`; roadmap, Phase 8 SLAM follow-up,
+  renamed from "Association drift" by the maintainer). The diagnosis on seeds 1 to 100 found association was not the
+  cause (3 wrong pairings in 83,505; the oracle fails as often): after a long stretch without circles, one update
+  linearised far from the true heading collapsed it. `EkfSlam` now adds EKF2's second-order heading term to every
+  feature–landmark noise, computed with the unobservable frame (translation and rotation) removed and stacked over a
+  scan's rows; FEJ's Jacobians are unchanged. `SlamSettings.second_order` defaults to on, a behaviour change for every
+  `EkfSlam` user: `second_order=False` restores the previous filter. Judged once on seeds 201 to 250 against gates
+  registered beforehand (`TESTING.md` `SLAM-3`): every gate passes, including the two SLAM-1 gates that failed on
+  2026-11-10: ratio to dead reckoning 0.296 (≤ 0.40), 6 aligned failures (≤ 8; 3 in layouts with at most one
+  circle; the gate passes with about 0.86 probability by chance), 1 collapse (≤ 2), median run NEES 3.04, no run
+  below 0.5, and the 30 % dropout row still passes `CIRC-2`. `SLAM-2`: update median 9.77 ms with 30 landmarks
+  against 10 ms, near the edge (the term costs 1.3 ms; accepted by the maintainer). Known limit: past about 0.5 rad
+  of heading error the term bounds the damage but the pose does not stay consistent.
+
+### Changed
+
+- **The `release` skill publishes a draft once the maintainer says yes** (`docs/release-skill-publish`; the
+  maintainer's request, 2026-11-12). After its draft check it asks for each tag by name and, on a yes, runs
+  `gh release edit <tag> --draft=false`; tags stay the maintainer's. rl-core and rl-navigation 0.1.0 were published
+  this way on 2026-11-12.
+
+- **Tests that can fail, and CI on branch coverage** (`fix/tests-that-can-fail`; code-health passes of 2026-11-12,
+  the maintainer's approved cleanup plan, PR 1 of 4). Tests that held no assertion or checked only a type now pin
+  behaviour (logger levels and file output, the Random agent's exploration stream, hand-worked REINFORCE losses and
+  Actor-Critic values), each shown to fail under a mutation of the code it covers; the REINFORCE and Actor-Critic
+  copies in `test_agents_extensive.py` are one parametrized class; 34 unseeded `np.random` calls now use seeded
+  generators; the run-queue overlap test no longer depends on sleeps overlapping. New nets: every challenge's
+  `CONFIG_MAP` equals its `AGENT_CLASSES` (all 10 do), and every torch agent overrides or stubs the NumPy training
+  maths it inherits (runs only where PyTorch is installed, not in CI); `TorchTD3Agent` now stubs `_td3_targets` and
+  `_target_actions`. `scripts/write_reference_checkpoints.py` writes 15 reference checkpoints (380 KB in
+  `tests/data/checkpoints/`), pinned by keys, dtypes, shapes and value hashes, for the checkpoint refactor that
+  follows. CI and the Release workflow now require 90 % branch coverage (`--cov-branch --cov-fail-under=90`; the
+  maintainer's decision), against 50 % line coverage before; the suite measures 94.8 % in `.venv`. Not verified: the
+  branch coverage on CI's runner, which has no Box2D.
+
+- **Agent checkpoints in a mixin; one Trainer step** (`refactor/agent-checkpoint-mixin`; the code-health cleanup,
+  PR 2 of 4). `BaseAgent`'s save and load code (430 lines) moved unchanged to `CheckpointMixin`
+  (`rl_core/agents/checkpointing.py`), which only `BaseAgent` lists, so every agent's and PyTorch backend's overrides
+  still resolve first; `base_agent.py` falls from 702 to 272 lines and still exports the 0.1.0 names
+  (`GENERATOR_KEY_PREFIX`, `OBSERVATION_KEY_PREFIX`, `OBS_NORM_KEY_PREFIX`, `check_checkpoint_shapes`). The discrete
+  sampler moved to `DiscreteSampling` (REINFORCE, the discrete Actor-Critic and PPO). Both Trainer loops build each
+  transition through one pure `_record_step`. Pinned by the reference checkpoints of PR 1 (load and save back the
+  same keys, dtypes, shapes and values for 12 NumPy agents and 3 PyTorch backends), the bit-for-bit golden trainer
+  tests of both loops, and `TESTING.md` `TR-15` (488 passed); 22 mutations killed. The step costs about 1 µs more
+  per environment step with a random agent (1.5 to 4 % of the Trainer's own overhead). No learning run: the golden
+  tests pin the trajectories exactly.
+
+- **Pendulum Actor-Critic trains on 8 environments** (`chore/pendulum-ac-8-envs`; the maintainer's decision,
+  2026-11-12). `configs/pendulum_actor_critic.yaml` takes rl-zoo's layout (`num_envs: 8`, `update_every: 8`: one A2C
+  step over 64 transitions), as measured on 2026-11-10: seeds 1 to 5, 1,000,000 steps, final training averages -227.6
+  to -268.7 (mean -244.1, against -282.7 on one environment; better on all 5), 2 of 5 reach -200 (episodes 2613 and
+  3724) and none holds it; greedy evaluation is worse, -184.0 ± 42.7 against -170.0 ± 25.9; 249 s a seed against
+  329 s. `docs/benchmarks/pendulum_results.md` was rerun in full: the Actor-Critic row reproduces that run seed for
+  seed, and the DDPG, PPO and random rows are unchanged but for their times. The plot in `plots/` is not refreshed
+  (the maintainer's folder).
+
+- **The localization comparison is a package; one NaN-on-empty average** (`refactor/split-localization-comparison`;
+  the code-health cleanup, PR 3 of 4). `rl_navigation/estimation/comparison.py` (1,063 lines) is now the
+  `comparison/` package (instrumentation, records, metrics, runner, report, cli), moved unchanged; it re-exports its
+  28 public names and `python -m rl_navigation.estimation.comparison` still runs. A report merged from saved records is
+  byte-identical to the old code's. The mean and median that return NaN when empty, repeated in the SLAM, feature and
+  mapping evaluations and in `_median_steps`, are now `rl_navigation.estimation.averages`.
+
+- **Shared test batches, the docs caught up** (`refactor/test-helpers-and-docs`; the code-health cleanup, PR 4 of 4).
+  `tests/helpers.py` gains `continuous_batch` and `discrete_batch`, used by 10 test files instead of their own
+  builders (the hand-worked ones keep theirs); the CLI-override tests move from `test_train_video.py` to
+  `test_train_main.py` and run a real agent instead of stubs; `test_torch_ddpg_agent.py` is `test_torch_backends.py`.
+  A convention test requires every `__main__.py` under `packages/` to call its entry point only under
+  `if __name__ == "__main__":` (the release smoke imports every module; `comparison/__main__.py` did not, and the
+  Packages job failed on it). `ARCHITECTURE.md`'s diagrams show TD3 and SAC, the challenge registry, the one
+  `training` ↔ `challenges` cycle (through `training/robustness.py`), the checkpoint mixin and the comparison
+  package. `TESTING.md` records the published releases (`CI-10`) and the 2026-11-12 CartPole rerun dates; the
+  roadmap drops a met gate and gains the follow-ups left only in CHANGELOG. Test and assertion counts are unchanged
+  in every migrated file.
+
+- **MountainCar-v0's -110 hold closed as a documented limit** (the maintainer's decision, 2026-11-12). With the
+  committed DQN config (observations normalised when sampled), all of seeds 1 to 5 and 11 to 15 reach -110 but 3 of
+  10 hold it (final averages -106 to -119; CHANGELOG.md, 2026-11-04). Tried without closing it: Polyak `tau`, a higher
+  learning rate, `batch_size` 256 (2026-10-27), prioritised replay (2026-10-27), Double DQN and Dueling DQN
+  (2026-10-29); none held more seeds. The -110 rule judges the training average with exploration included; rl-zoo's
+  -100.8 is a greedy evaluation, the measure the agent already reaches (greedy -100 to -107 on seed 4 mid-run). The
+  SAC BipedalWalker hold is parked on the same grounds (greedy 321 to 327 on every seed), to revisit with gSDE.
+
 ## 2026-11-11
 
 ### Added

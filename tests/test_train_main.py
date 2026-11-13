@@ -1,13 +1,17 @@
-"""train.py's main: how a run ends (finished, interrupted, failed) and how the CLI is read."""
+"""train.py's main: how a run ends (finished, interrupted, failed), how the CLI is read and
+overrides the config, and what it forwards to the environment."""
 
 import argparse
 import os
 import sys
 
+import numpy as np
 import pytest
 
 import rl_core.training
 from rl_cartpole.environments import CartPoleEnv
+from rl_core.agents.base_agent import OBSERVATION_KEY_PREFIX
+from rl_core.environments import OBSERVATION_DEFAULTS
 from tests.helpers import minimal_config, run_main
 
 
@@ -165,3 +169,123 @@ def test_train_py_saves_a_final_checkpoint_at_the_last_episode(tmp_path, monkeyp
         "agent_episode_4.pt",
         "trainer_episode_4.npz",
     ]
+
+
+# ---------------------------------------------------------------------------
+# CLI overrides and the environment config train.py forwards
+# ---------------------------------------------------------------------------
+
+
+def test_num_episodes_override_requires_positive_int(tmp_path, monkeypatch):
+    """--num-episodes must be a positive integer."""
+    config_path = minimal_config(tmp_path)
+    with pytest.raises(SystemExit):
+        run_main(["--num-episodes", "0", "--config", config_path], monkeypatch)
+
+
+def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
+    """--agent-type and --num-episodes replace the config's: a real random agent trains for one
+    episode, is saved under its own name, and records the run's observation settings."""
+    config_path = minimal_config(tmp_path, agent={"type": "reinforce"})
+    run_main(
+        ["--config", config_path, "--agent-type", "random", "--num-episodes", "1"], monkeypatch
+    )
+    (folder,) = (tmp_path / "checkpoints").glob("*/*")
+    assert folder.relative_to(tmp_path / "checkpoints").parts == ("cartpole", "random")
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "agent_episode_1.pt",
+        "trainer_episode_1.npz",
+    ]
+    with np.load(folder / "agent_episode_1.pt") as saved:
+        dims = (int(saved["observation_dim"]), int(saved["action_dim"]))
+        recorded = {
+            key.removeprefix(OBSERVATION_KEY_PREFIX): saved[key].item()
+            for key in saved.files
+            if key.startswith(OBSERVATION_KEY_PREFIX)
+        }
+    assert dims == (4, 2), "built for CartPole's 4 observations and 2 actions"
+    assert recorded == OBSERVATION_DEFAULTS
+
+
+def _cartpole_env_kwargs(args, monkeypatch) -> dict:
+    """The keyword arguments train.py builds its first CartPoleEnv with; it stops there."""
+    captured = {}
+
+    class _StopAfterCaptureError(Exception):
+        pass
+
+    def patched_init(self, *args, **kwargs):
+        captured.update(kwargs)
+        raise _StopAfterCaptureError()
+
+    monkeypatch.setattr(CartPoleEnv, "__init__", patched_init)
+    with pytest.raises(_StopAfterCaptureError):
+        run_main(args, monkeypatch)
+    return captured
+
+
+def test_environment_config_is_forwarded_to_cartpole_env(tmp_path, monkeypatch):
+    """train.py should forward environment config fields into CartPoleEnv."""
+    config_path = minimal_config(
+        tmp_path,
+        environment={
+            "seed": 123,
+            "obs_noise_std": 0.05,
+            "action_noise_prob": 0.1,
+            "domain_randomization": {"gravity": [8.0, 12.0]},
+        },
+    )
+
+    captured = _cartpole_env_kwargs(["--config", config_path], monkeypatch)
+
+    assert captured["env_name"] == "CartPole-v1"
+    assert captured["max_episode_steps"] == 20
+    assert captured["seed"] == 123
+    assert captured["obs_noise_std"] == pytest.approx(0.05)
+    assert captured["action_noise_prob"] == pytest.approx(0.1)
+    assert captured["domain_randomization"] == {"gravity": (8.0, 12.0)}
+
+
+def test_environment_null_values_fall_back_to_defaults(tmp_path, monkeypatch):
+    """Explicit YAML nulls for environment fields use defaults; --challenge supplies the name."""
+    config_path = minimal_config(
+        tmp_path,
+        environment={"name": None, "seed": 123, "obs_noise_std": None, "action_noise_prob": None},
+    )
+
+    captured = _cartpole_env_kwargs(
+        ["--config", config_path, "--challenge", "cartpole"], monkeypatch
+    )
+
+    assert captured["env_name"] == "CartPole-v1"
+    assert captured["obs_noise_std"] == pytest.approx(0.0)
+    assert captured["action_noise_prob"] == pytest.approx(0.0)
+
+
+def test_total_steps_override_sets_a_step_budget(tmp_path):
+    from train import load_run_config
+
+    config, _ = load_run_config(minimal_config(tmp_path), total_steps=300)
+    assert config["training"]["total_steps"] == 300
+
+
+def test_num_episodes_override_clears_a_step_budget(tmp_path):
+    from train import load_run_config
+
+    path = minimal_config(tmp_path, training={"total_steps": 900})
+    config, _ = load_run_config(path, num_episodes=2)
+    assert config["training"]["num_episodes"] == 2 and "total_steps" not in config["training"]
+
+
+def test_num_episodes_and_total_steps_together_are_rejected(tmp_path, monkeypatch):
+    config_path = minimal_config(tmp_path)
+    with pytest.raises(SystemExit):
+        run_main(
+            ["--num-episodes", "2", "--total-steps", "50", "--config", config_path], monkeypatch
+        )
+
+
+def test_total_steps_override_requires_positive_int(tmp_path, monkeypatch):
+    config_path = minimal_config(tmp_path)
+    with pytest.raises(SystemExit):
+        run_main(["--total-steps", "0", "--config", config_path], monkeypatch)

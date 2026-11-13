@@ -149,7 +149,7 @@ jobs:
       - name: Run tests with coverage
         id: pytest
         if: ${{ steps.docs.outputs.docs_only != 'true' }}
-        run: pytest --cov-report=xml --cov-fail-under=50
+        run: pytest --cov-report=xml --cov-branch --cov-fail-under=90
 
       # Pull requests only: called and scheduled runs receive no secrets. Fork and Dependabot PRs get no
       # token either, which fail_ci_if_error: false tolerates.

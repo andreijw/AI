@@ -16,6 +16,7 @@ from rl_navigation.slam.evaluation import (
     SlamRun,
     align_se2,
     aligned_trajectory_error,
+    collapsed,
     loop_closures,
     oracle_labels,
     score_landmarks,
@@ -316,3 +317,71 @@ def test_circles_mapped_pools_mapped_over_seen_circles_across_runs():
 def test_summarize_slam_refuses_no_runs():
     with pytest.raises(ValueError, match="needs runs"):
         summarize_slam([])
+
+
+# Consistency over runs: collapses and the per-run NEES bounds -----------------------------------
+
+
+@pytest.mark.parametrize(
+    "series, expected",
+    [
+        ([1.0] * 10 + [30.0] * 25, True),  # rises through 20 and stays there
+        ([1.0] * 10 + [30.0] + [1.0] * 30, False),  # one spike: the next 20 scans' median is low
+        ([30.0] * 40, False),  # above 20 from the start: no rise
+        ([1.0] * 10 + [19.9] * 30, False),  # never reaches 20
+        ([5.0, 25.0] + [21.0] * 19, True),  # held for exactly the 20 scans from the rise
+    ],
+)
+def test_a_collapse_is_a_rise_through_nees_20_that_holds_for_20_scans(series, expected):
+    assert slam_evaluation.COLLAPSE_NEES == 20.0 and slam_evaluation.COLLAPSE_HOLD == 20
+    assert collapsed(np.array(series)) is expected
+
+
+def nees_run(nees):
+    """A run whose pose NEES at each step is ``nees`` (an x error against a 0.01 I covariance),
+    with no landmark."""
+    nees = np.asarray(nees, dtype=float)
+    steps = len(nees)
+    truth = np.column_stack([np.linspace(0.5, 4.5, steps), np.full(steps, 1.5), np.zeros(steps)])
+    estimates = truth.copy()
+    estimates[:, 0] += np.sqrt(0.01 * nees)
+    trial = Trial(
+        true_poses=truth,
+        estimates=estimates,
+        covariances=np.tile(0.01 * np.eye(3), (steps, 1, 1)),
+        dead_reckoning=truth.copy(),
+        beams_used=np.zeros(steps, dtype=np.int_),
+        collided=False,
+    )
+    return SlamRun(
+        seed=0,
+        trial=trial,
+        arena=TWO_CIRCLES,
+        sensor=SENSOR,
+        landmarks=np.zeros((0, 3)),
+        labels=np.zeros(0, dtype=np.intp),
+        state_covariance=0.01 * np.eye(3),
+        first_estimates=np.zeros((0, 3)),
+        updates=[SlamUpdate(used=np.zeros(360, dtype=bool)) for _ in range(steps)],
+        update_seconds=np.zeros(steps),
+        seen=np.zeros(2, dtype=bool),
+        min_points=8,
+    )
+
+
+def test_summarize_slam_counts_collapses_and_bounds_the_per_run_nees():
+    """Four runs of 40 steps with mean NEES 0.25, 1.0, 3.0 and 15.625 (the last collapses at step
+    10 from 1 to 20.5): one collapse; the median of the per-run means is (1 + 3) / 2 = 2; one of
+    four runs below 0.5 (low_nees_runs 0.25) and one above 6 (high_nees_runs 0.25)."""
+    runs = [
+        nees_run([0.25] * 40),
+        nees_run([1.0] * 40),
+        nees_run([3.0] * 40),
+        nees_run([1.0] * 10 + [20.5] * 30),
+    ]
+    summary = summarize_slam(runs)
+    assert summary["collapses"] == 1.0
+    assert summary["run_nees_mean_median"] == pytest.approx(2.0, rel=1e-9)
+    assert summary["low_nees_runs"] == pytest.approx(0.25, abs=1e-12)
+    assert summary["high_nees_runs"] == pytest.approx(0.25, abs=1e-12)
+    assert slam_evaluation.LOW_MEAN_NEES == 0.5

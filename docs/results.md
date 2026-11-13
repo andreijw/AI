@@ -13,8 +13,9 @@ NavigationContinuous-v0. It **holds** when the average over its last
 100 episodes is still at or above the threshold. Each agent trains for a budget of environment steps set against its
 rl-baselines3-zoo reference (see the config comments). Measured with the committed configs on seeds 1 to 5
 (MountainCar-v0 DQN also on seeds 11 to 15) on 2026-10-18
-(CartPole PPO on 2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment and named
-random streams ([`docs/benchmarks/cartpole_results.md`](benchmarks/cartpole_results.md),
+(CartPole on 2026-11-12, after time-limit cuts were bootstrapped in PPO and Actor-Critic; the Pendulum report on
+2026-11-12, with the Actor-Critic on 8 environments), with evaluation on its own environment and named random streams
+([`docs/benchmarks/cartpole_results.md`](benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](benchmarks/pendulum_results.md); LunarLanderContinuous TD3 on 2026-11-01 in
 [`docs/benchmarks/lunarlander_continuous_results.md`](benchmarks/lunarlander_continuous_results.md); BipedalWalker
 SAC and TD3 on 2026-11-05 in [`docs/benchmarks/bipedalwalker_results.md`](benchmarks/bipedalwalker_results.md);
@@ -34,7 +35,7 @@ land on the unlucky side of these numbers:
 | Pendulum-v1 | TD3 | `pendulum_td3.yaml` (rl-zoo settings, 64×64 networks); CHANGELOG.md, 2026-10-25 | 40,000 | 5 of 5 | 32.6k to 33.4k | 5 of 5 |
 | Pendulum-v1 | SAC | `pendulum_sac.yaml` (rl-zoo settings, 64×64 networks); no published report, CHANGELOG.md, 2026-11-04 | 40,000 | 5 of 5 | 21.8k to 23.2k | 5 of 5 |
 | Pendulum-v1 | PPO | `pendulum_ppo.yaml` (2048-step rollouts, annealed) | 200,000 | 5 of 5 | 72k to 157k | 4 of 5 |
-| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8-step updates, observation normalisation); CHANGELOG.md, 2026-11-04 | 1,000,000 | 0 of 5 | — | 0 of 5 |
+| Pendulum-v1 | Actor-Critic | `pendulum_actor_critic.yaml` (bounded mean, 8 environments x 8 steps per update, observation normalisation); CHANGELOG.md, 2026-11-12 | 1,000,000 | 2 of 5 | 523k to 745k | 0 of 5 |
 | Acrobot-v1 | PPO | `acrobot_ppo.yaml` (rl-zoo settings, no normalisation) | 500,000 | 5 of 5 | 72k to 278k | 5 of 5 |
 | Acrobot-v1 | DQN | `acrobot_dqn.yaml` (rl-zoo settings, one 256 layer, epsilon floor 0.02) | 100,000 | 5 of 5 | 25k to 32k | 5 of 5 |
 | MountainCar-v0 | DQN | `mountaincar_dqn.yaml` (rl-zoo settings, target sync translated, epsilon floor 0.02, decaying rate, 100k buffer, observations normalised when sampled); seeds 1 to 5 and 11 to 15, 2026-11-04 | 200,000 | 10 of 10 | 141k to 197k | 3 of 10 |
@@ -56,9 +57,11 @@ Pendulum DDPG uses rl-zoo's settings with 64×64 networks instead of 400×300, w
 NumPy; its greedy evaluation averages -158 (± 25 across the 5 seeds' means) against rl-zoo's -152 (± 94 across
 episodes of one run) (CHANGELOG.md, 2026-10-19). Pendulum PPO trains on rollouts of whole episodes for 200,000
 steps, twice rl-zoo's 100,000; updating on one episode at a time it solved no seed (CHANGELOG.md, 2026-10-18).
-Continuous Actor-Critic does not solve: with observation normalisation (since 2026-11-04) its training average ends
-at -268 to -298, though its greedy evaluation of -170 ± 26 beats the random agent on every seed (CHANGELOG.md,
-2026-11-04; `TESTING.md` `TR-5`; before it, -286 to -307 and -172 ± 27, CHANGELOG.md, 2026-10-19).
+Continuous Actor-Critic does not hold -200: with 8 environments (since 2026-11-12) two seeds reach it in a
+100-episode window and fall back, and the training average ends at -227.6 to -268.7 (mean -244.1 against -282.7
+with one environment, better on every seed); its greedy evaluation of -184.0 ± 42.7 is worse than with one
+(-170.0 ± 25.9) but beats the random agent on every seed (CHANGELOG.md, 2026-11-10 and 2026-11-12; `TESTING.md`
+`TR-5`; with one environment before 2026-11-12, no seed reached -200: -268 to -298, CHANGELOG.md, 2026-11-04).
 Acrobot was measured on 2026-10-22 (CHANGELOG.md, 2026-10-22); it has no published report under `docs/benchmarks/`
 yet. Acrobot DQN keeps exploring with 2% random actions rather than rl-zoo's 10%: with 10% its training average ended
 at -95 to -103 and held on 1 of 5 seeds; with 2% it ends at -90 to -96, and its greedy evaluation is -85 ± 6.

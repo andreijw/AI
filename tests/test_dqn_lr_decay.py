@@ -7,6 +7,7 @@ import pytest
 
 from rl_core.agents import DQNAgent
 from tests.agent_internals import assert_same_weights, counters, optimizer, weights
+from tests.helpers import discrete_batch
 
 OBS_DIM, ACTION_DIM = 4, 2
 ANNEAL = {"anneal_steps": 100, "min_buffer_size": 8, "batch_size": 8}
@@ -17,15 +18,7 @@ def _agent(**config) -> DQNAgent:
 
 
 def _batch(n: int, seed: int = 0) -> dict[str, np.ndarray]:
-    rng = np.random.default_rng(seed)
-    return {
-        "observations": rng.standard_normal((n, OBS_DIM)),
-        "actions": rng.integers(0, ACTION_DIM, size=n),
-        "rewards": rng.standard_normal(n),
-        "next_observations": rng.standard_normal((n, OBS_DIM)),
-        "dones": np.array([False] * (n - 1) + [True]),
-        "terminated": np.array([False] * (n - 1) + [True]),
-    }
+    return discrete_batch(n, OBS_DIM, ACTION_DIM, seed=seed, terminated=True)
 
 
 def _step(agent: DQNAgent, batch: dict[str, np.ndarray]) -> dict[str, np.ndarray]:

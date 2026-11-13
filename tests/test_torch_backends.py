@@ -4,7 +4,7 @@ checkpoints.
 Skipped unless PyTorch is installed (it is not in .venv or CI); the CUDA tests also need a GPU.
 Run them from the gpu profile's environment (./setup.sh --profile gpu):
 
-    .venv-gpu/bin/python -m pytest tests/test_torch_ddpg_agent.py --no-cov
+    .venv-gpu/bin/python -m pytest tests/test_torch_backends.py --no-cov
 """
 
 import numpy as np
@@ -19,9 +19,24 @@ from rl_core.agents.torch_sac_agent import TorchSACAgent  # noqa: E402
 from rl_core.agents.torch_td3_agent import TorchTD3Agent  # noqa: E402
 from rl_core.challenges import discover_challenges  # noqa: E402
 from tests import test_ddpg_td3_golden as golden  # noqa: E402
-from tests.agent_internals import device_arrays, set_weights, weights  # noqa: E402
+from tests.agent_internals import (  # noqa: E402
+    device_arrays,
+    numpy_maths_left_to_torch_backend,
+    set_weights,
+    weights,
+)
 
 needs_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA GPU")
+
+
+@pytest.mark.parametrize("torch_cls", [TorchDDPGAgent, TorchTD3Agent, TorchSACAgent])
+def test_every_numpy_training_method_is_overridden_or_stubbed(torch_cls):
+    """A NumPy training method the backend inherits unstubbed would train the NumPy mirror, which
+    the device then overwrites: a silent no-op. Runs only where PyTorch is installed, not in CI."""
+    assert numpy_maths_left_to_torch_backend(torch_cls) == [], (
+        f"{torch_cls.__name__} should override or stub these (raise self._on_device()), or list "
+        "them in tests/agent_internals.py _SHARED_WITH_TORCH_BACKEND if the device step uses them"
+    )
 
 
 OBS, ACT, EPISODE = 3, 2, 20

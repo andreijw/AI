@@ -13,6 +13,7 @@ from typing import Protocol
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from rl_navigation.estimation.averages import median_or_nan
 from rl_navigation.estimation.ekf import EkfLocalizer
 from rl_navigation.estimation.maps import SensorMap
 from rl_navigation.estimation.mcl import MclLocalizer, MclSettings, sample_free_poses
@@ -470,7 +471,7 @@ def localization_success(
 def _median_steps(steps: Sequence[int | None]) -> float:
     """Median of the steps that are not None; NaN when none is."""
     found = [step for step in steps if step is not None]
-    return float(np.median(found)) if found else float("nan")
+    return median_or_nan(found)
 
 
 def summarize_localization(

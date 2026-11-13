@@ -52,6 +52,45 @@ class EpisodeResult:
 _Transition = tuple[Any, Any, Any, Any, bool, bool, Any, Any]
 
 
+def _record_step(
+    observation: Any,
+    action: Any,
+    reward: Any,
+    next_observation: Any,
+    terminated: Any,
+    truncated: Any,
+    raw_observation: Any,
+    raw_next_observation: Any,
+    *,
+    length: int,
+    max_steps: int,
+) -> tuple[_Transition, bool]:
+    """
+    One environment step as the transition the trainer keeps, and whether it ends the episode.
+
+    Args:
+        length: The episode's steps including this one.
+        max_steps: ``max_steps_per_episode``.
+
+    Returns:
+        ``(transition, done_or_cut)``: the transition's ``done`` is ``terminated or truncated``,
+        and its ``terminated`` a bool; ``done_or_cut`` is also true when ``length`` reached
+        ``max_steps``, which cuts the episode without a ``done``.
+    """
+    done = terminated or truncated
+    transition = (
+        observation,
+        action,
+        reward,
+        next_observation,
+        done,
+        bool(terminated),
+        raw_observation,
+        raw_next_observation,
+    )
+    return transition, bool(done or length >= max_steps)
+
+
 @dataclass
 class _Playing:
     """An episode in progress in one of several training environments."""
@@ -569,24 +608,24 @@ class Trainer:
             for index, raw_next, reward, terminated, truncated, info in pool.step(actions):
                 episode = playing[index]
                 next_obs = self.agent.normalize_observation(raw_next, training=True)
-                done = terminated or truncated
-                episode.transitions.append(
-                    (
-                        episode.observation,
-                        actions[index],
-                        reward,
-                        next_obs,
-                        done,
-                        bool(terminated),
-                        episode.raw_observation,
-                        raw_next,
-                    )
-                )
-                episode.reward += float(reward)
                 episode.length += 1
+                transition, ends = _record_step(
+                    episode.observation,
+                    actions[index],
+                    reward,
+                    next_obs,
+                    terminated,
+                    truncated,
+                    episode.raw_observation,
+                    raw_next,
+                    length=episode.length,
+                    max_steps=self.max_steps_per_episode,
+                )
+                episode.transitions.append(transition)
+                episode.reward += float(reward)
                 episode.success = bool(info["is_success"]) if "is_success" in info else None
                 episode.observation, episode.raw_observation = next_obs, raw_next
-                if done or episode.length >= self.max_steps_per_episode:
+                if ends:
                     ended.append(index)
 
             before = len(self.episode_rewards)
@@ -702,22 +741,31 @@ class Trainer:
         transitions: list[_Transition] = []
         update_every = self.update_every if training else None
 
-        done = False
-        while not done and episode_length < self.max_steps_per_episode:
+        # max_steps_per_episode is at least 1, so every episode plays a step.
+        last = False
+        while not last:
             action = self.agent.select_action(obs, training=training)
             raw_next, reward, terminated, truncated, info = env.step(action)
             next_obs = self.agent.normalize_observation(raw_next, training=training)
-            done = terminated or truncated
-            transitions.append(
-                (obs, action, reward, next_obs, done, bool(terminated), raw_obs, raw_next)
+            episode_length += 1
+            transition, last = _record_step(
+                obs,
+                action,
+                reward,
+                next_obs,
+                terminated,
+                truncated,
+                raw_obs,
+                raw_next,
+                length=episode_length,
+                max_steps=self.max_steps_per_episode,
             )
+            transitions.append(transition)
 
             episode_reward += float(reward)
-            episode_length += 1
             success = bool(info["is_success"]) if "is_success" in info else None
             obs, raw_obs = next_obs, raw_next
             # The step that ends the episode goes with the final update below.
-            last = done or episode_length >= self.max_steps_per_episode
             if update_every is not None and episode_length % update_every == 0 and not last:
                 self._update_agent(transitions)
                 transitions = []

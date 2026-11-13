@@ -300,6 +300,18 @@ def test_localization_summary_by_hand():
     }
 
 
+def test_the_median_steps_skip_the_runs_that_never_localized():
+    """Localized in 4 and 2 steps, recovered in 4 and 2, and one run never: the medians are over
+    the two that did, 3.0 each, as Python floats."""
+    first = _localization_trial([1.0] * 4 + [0.0] * 3 + [2.0] * 4 + [0.0] * 3, kidnap_at=7)
+    never = _localization_trial([1.0] * 14, kidnap_at=7)
+    early = _localization_trial([1.0] * 2 + [0.0] * 5 + [2.0] * 2 + [0.0] * 5, kidnap_at=7)
+    summary = summarize_localization([first, never, early], deadline=4, hold=3)
+    for key in ("median_steps_to_localize", "median_steps_to_recover"):
+        assert summary[key] == 3.0, key
+        assert type(summary[key]) is float, key
+
+
 def test_steps_to_localize_count_from_the_last_step_out_of_tolerance():
     """Off at rows 0 and 2, within from row 3 to the window's end at row 6: 3 steps. A slip after
     the window does not count; one inside it means not localized."""

@@ -146,12 +146,16 @@ log-probability matches what was sampled; evaluation plays the mean. Always Adam
 
 **What was measured.** `configs/pendulum_actor_critic.yaml` follows rl-zoo's A2C (`n_steps` 8, `gae_lambda` 0.9,
 `gamma` 0.9, lr 7e-4 annealed over 1,000,000 steps, `init_log_std` -2, `reward_scale` 0.05) with observation
-normalisation since 2026-11-04. It beats the random agent (greedy evaluation -170 ± 26 against -1,293) but does not
-solve: the training average ends near -283 (CHANGELOG.md, 2026-11-04).
+normalisation since 2026-11-04 and, since 2026-11-12, rl-zoo's 8 environments (`training.num_envs: 8`,
+`update_every: 8`: one Adam step over 64 transitions). Paired against one environment on seeds 1 to 5, the final
+training average is -244.1 against -282.7, better on all 5 seeds; two seeds reach -200 in a 100-episode window but
+none holds it, and the greedy evaluation is worse (-184.0 ± 42.7 against -170.0 ± 25.9); it still beats the random
+agent's -1,293 (CHANGELOG.md, 2026-11-10 and 2026-11-12; `docs/benchmarks/pendulum_results.md`).
 
 **Lessons.** A bounded mean and 8-step chunks made it beat random (CHANGELOG.md, 2026-10-18). Without the entropy
 bonus the log std collapses. True A2C (`update_every: 8`) and 50-step chunks did not close the gap to -200; rl-zoo's
-8 parallel environments are untried (CHANGELOG.md, 2026-10-30 and 2026-11-04; roadmap, "Parallel environments").
+8 parallel environments narrowed it but did not close it either (CHANGELOG.md, 2026-10-30, 2026-11-04 and
+2026-11-10).
 
 ## PPO, discrete and continuous (`PPOAgent`, `ppo_agent.py`; `ContinuousPPOAgent`, `continuous_ppo.py`)
 

@@ -39,6 +39,7 @@ from typing import NamedTuple
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from rl_navigation.estimation.averages import mean_or_nan, median_or_nan
 from rl_navigation.estimation.evaluation import Localizer, Trial, run_trial, summarize
 from rl_navigation.estimation.maps import SensorMap
 from rl_navigation.estimation.poses import pose_difference
@@ -63,6 +64,14 @@ LOOP_GAP = 150
 # A run whose aligned trajectory error exceeds this many metres has failed (aligned_failures): unlike
 # lost, it does not count a right map in a shifted frame.
 ALIGNED_FAILURE_ATE = 0.10
+
+# A run collapses when its pose NEES rises through COLLAPSE_NEES and the median of the
+# COLLAPSE_HOLD scans from the rise stays above it: one update made the pose overconfident.
+COLLAPSE_NEES = 20.0
+COLLAPSE_HOLD = 20
+
+# A run whose mean pose NEES is below this is in the underconfident tail (3 is consistent).
+LOW_MEAN_NEES = 0.5
 
 # A run whose mean pose NEES exceeds this is in the overconfident tail (3 is consistent).
 HIGH_MEAN_NEES = 6.0
@@ -254,6 +263,15 @@ def slam_trial(
     )
 
 
+def collapsed(nees: ArrayLike, threshold: float = COLLAPSE_NEES, hold: int = COLLAPSE_HOLD) -> bool:
+    """Whether a run's pose NEES ``(T,)`` rises from below ``threshold`` to at least it at some
+    step and the median of the ``hold`` steps from that step exceeds ``threshold``: the mark of
+    one update that left the pose overconfident, as a re-acquisition far off in heading does."""
+    values = np.asarray(nees, dtype=np.float64)
+    rises = np.flatnonzero((values[:-1] < threshold) & (values[1:] >= threshold)) + 1
+    return any(float(np.median(values[k : k + hold])) > threshold for k in rises)
+
+
 def align_se2(estimated: ArrayLike, truth: ArrayLike) -> tuple[FloatArray, FloatArray]:
     """The rotation ``R`` and translation ``t`` minimizing ``sum |R e_i + t - g_i|^2`` (Umeyama
     1991 without scale; never a reflection).
@@ -389,6 +407,7 @@ class RunScore:
     radius_errors: FloatArray
     first_estimate_drift: float
     loops: FloatArray
+    collapsed: bool
 
 
 def score_run(run: SlamRun) -> RunScore:
@@ -447,15 +466,12 @@ def score_run(run: SlamRun) -> RunScore:
         radius_errors=np.array(radius_errors),
         first_estimate_drift=float(drift.max(initial=0.0)),
         loops=loop_closures(events, position_errors, stds),
+        collapsed=collapsed(
+            np.einsum(
+                "ti,ti->t", error, np.linalg.solve(trial.covariances, error[..., None])[..., 0]
+            )
+        ),
     )
-
-
-def _mean(values: Sequence[float] | FloatArray) -> float:
-    return float(np.mean(values)) if len(values) else float("nan")
-
-
-def _median(values: Sequence[float] | FloatArray) -> float:
-    return float(np.median(values)) if len(values) else float("nan")
 
 
 def summarize_slam(
@@ -471,8 +487,11 @@ def summarize_slam(
         ``ate_mean_two_or_more_circles`` and ``ate_mean_at_most_one_circle`` (with their
         ``runs_``); ``run_nees_median_q25``, ``_q50`` and ``_q75`` (quantiles of the per-run
         median NEES) and ``high_nees_runs`` (the share of runs whose mean NEES exceeds
-        :data:`HIGH_MEAN_NEES`); per run ``landmarks_per_run``, ``spurious_per_run`` and
-        ``duplicates_per_run``; ``circles_mapped`` (mapped over seen circles); over assigned
+        :data:`HIGH_MEAN_NEES`), ``low_nees_runs`` (below :data:`LOW_MEAN_NEES`),
+        ``run_nees_mean_median`` (the median over runs of each run's mean NEES) and
+        ``collapses`` (runs that :func:`collapsed`); per run ``landmarks_per_run``,
+        ``spurious_per_run`` and ``duplicates_per_run``;
+        ``circles_mapped`` (mapped over seen circles); over assigned
         landmarks ``radius_nees_mean`` and ``_median``, ``pair_nees_mean`` and ``_median``,
         ``absolute_nees_mean`` (2 degrees of freedom, gauge included) and ``radius_error_mean``;
         ``drift_median`` and ``drift_max`` (per run, the largest distance of a landmark from its
@@ -504,33 +523,36 @@ def summarize_slam(
         "ate_median": float(np.median(ates)),
         "ate_max": float(ates.max()),
         "aligned_failures": float((ates > failure_ate).sum()),
-        "ate_mean_two_or_more_circles": _mean(ates[many]),
-        "ate_mean_at_most_one_circle": _mean(ates[~many]),
+        "ate_mean_two_or_more_circles": mean_or_nan(ates[many]),
+        "ate_mean_at_most_one_circle": mean_or_nan(ates[~many]),
         "runs_two_or_more_circles": float(many.sum()),
         "runs_at_most_one_circle": float((~many).sum()),
         "run_nees_median_q25": float(np.quantile(run_medians, 0.25)),
         "run_nees_median_q50": float(np.quantile(run_medians, 0.5)),
         "run_nees_median_q75": float(np.quantile(run_medians, 0.75)),
         "high_nees_runs": float(np.mean([score.mean_nees > HIGH_MEAN_NEES for score in scores])),
+        "low_nees_runs": float(np.mean([score.mean_nees < LOW_MEAN_NEES for score in scores])),
+        "run_nees_mean_median": float(np.median([score.mean_nees for score in scores])),
+        "collapses": float(sum(score.collapsed for score in scores)),
         "landmarks_per_run": float(np.mean([len(run.landmarks) for run in runs])),
         "spurious_per_run": float(np.mean([score.landmarks.spurious for score in scores])),
         "duplicates_per_run": float(np.mean([score.landmarks.duplicates for score in scores])),
         "circles_mapped": (
             sum(score.landmarks.mapped for score in scores) / seen if seen else float("nan")
         ),
-        "radius_nees_mean": _mean(pooled("radius_nees")),
-        "radius_nees_median": _median(pooled("radius_nees")),
-        "pair_nees_mean": _mean(pooled("pair_nees")),
-        "pair_nees_median": _median(pooled("pair_nees")),
-        "absolute_nees_mean": _mean(pooled("absolute_nees")),
-        "radius_error_mean": _mean(pooled("radius_errors")),
-        "drift_median": _median([score.first_estimate_drift for score in scores]),
+        "radius_nees_mean": mean_or_nan(pooled("radius_nees")),
+        "radius_nees_median": median_or_nan(pooled("radius_nees")),
+        "pair_nees_mean": mean_or_nan(pooled("pair_nees")),
+        "pair_nees_median": median_or_nan(pooled("pair_nees")),
+        "absolute_nees_mean": mean_or_nan(pooled("absolute_nees")),
+        "radius_error_mean": mean_or_nan(pooled("radius_errors")),
+        "drift_median": median_or_nan([score.first_estimate_drift for score in scores]),
         "drift_max": float(max(score.first_estimate_drift for score in scores)),
         "loop_closures": float(len(loops)),
-        "loop_error_before": _median(loops[:, 0]),
-        "loop_error_after": _median(loops[:, 1]),
-        "loop_std_before": _median(loops[:, 2]),
-        "loop_std_after": _median(loops[:, 3]),
+        "loop_error_before": median_or_nan(loops[:, 0]),
+        "loop_error_after": median_or_nan(loops[:, 1]),
+        "loop_std_before": median_or_nan(loops[:, 2]),
+        "loop_std_after": median_or_nan(loops[:, 3]),
         "update_ms_median": float(np.median(seconds) * 1e3),
         "update_ms_p99": float(np.quantile(seconds, 0.99) * 1e3),
         "rejected": float(sum(update.rejected for update in updates)),

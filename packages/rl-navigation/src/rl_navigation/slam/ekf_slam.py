@@ -15,7 +15,20 @@ et al. (IROS 2006) describe. Differences from the tables:
 4. FEJ Jacobians (below); ``jacobians="standard"`` is kept as a reference.
 5. One batch Joseph update per scan (:func:`~rl_navigation.estimation.kalman.kalman_update`).
 6. No iteration: relinearizing at the current estimate would bring back the spurious information
-   FEJ removes. No hold: keeping ``P`` while moving the state can break FEJ's consistency.
+   FEJ removes. No hold: keeping ``P`` while moving the state can break FEJ's consistency. (A
+   5-iteration IEKF, tried on tuning seeds 1 to 100 on 2026-11-12: 19 aligned failures against
+   14 and a mean pose NEES of about 50.)
+7. EKF2's second-order term (:func:`second_order_covariance`) is added to each pair's noise, in
+   association and in the update (stacked over a scan's rows, cross terms included). It is
+   computed with the unobservable frame taken out of ``P``, so it grows only with the heading's
+   uncertainty relative to the map. It is what keeps one update after a long unseen stretch
+   (sigma_theta about 0.3) from collapsing sigma_theta while the pose is still far off. The frame
+   is removed over a different block in each use: in association over each pose-and-landmark
+   block on its own, in the update over the pose and every centre the scan corrects (removing
+   more there, so association's term is at least as large: on random covariances the trace ratio
+   has a median of 1.06 and reaches 35). The per-feature fallback reuses the stacked term computed
+   at the prior. Projecting once over the pose and all centres and slicing for both uses is the
+   follow-up.
 
 **State.** ``x = (x, y, theta, m_1x, m_1y, rho_1, ...)`` of shape ``(3 + 3L,)``, ``P`` of shape
 ``(3 + 3L, 3 + 3L)``, each landmark's first estimate ``first`` ``(L, 3)``, and the pose after the
@@ -52,9 +65,10 @@ positive definite is skipped, and one whose NIS exceeds ``oracle_quantile`` is r
 ``S`` that is not positive definite falls back to one feature at a time; an update leaving ``x``
 or ``P`` non-finite, ``P`` indefinite or the pose outside ``bounds`` is undone.
 
-Known limit: FEJ linearizes at each landmark's first estimate, so a landmark first seen while the
+Known limits: FEJ linearizes at each landmark's first estimate, so a landmark first seen while the
 heading was poorly known stays linearized there. The gates keep such a filter from diverging, not
-from being wrong (OC-EKF is the follow-up).
+from being wrong (OC-EKF is the follow-up). The second-order term is a Taylor term: past about
+0.5 rad of heading error it limits an update's damage but no longer makes it consistent.
 
 Shares ``kalman_update``, ``motion_jacobians`` and ``chi2_quantile`` with ``estimation``. When a
 third package needs them, they move to a shared module (``sim`` for the motion model).
@@ -161,6 +175,76 @@ def initialize_landmark(pose: ArrayLike, z: ArrayLike) -> tuple[FloatArray, Floa
     return m, G_pose, G_z
 
 
+def second_order_covariance(
+    pose: ArrayLike, centres: ArrayLike, covariance: ArrayLike
+) -> FloatArray:
+    """EKF2's second-order term of the predicted circles, gauge-free: an extra measurement noise.
+
+    For the stacked centres ``h_a`` (``a`` over each landmark's two body-frame coordinates) the
+    term is ``C_ab = 1/2 tr(M_a P_c M_b P_c)``, ``M_a`` the Hessian of ``h_a`` in ``(x, y, theta,
+    m_1x, m_1y, ...)``: ``d2/dtheta2 = -u`` (``u = R^T (m - p)``), ``d2/dtheta dp = -R'^T`` and
+    ``d2/dtheta dm = R'^T``, every other entry 0. The radius is linear, so its rows are 0.
+
+    ``P_c = P - N (N^T P^-1 N)^-1 N^T`` removes the largest part of ``P`` along the unobservable
+    translation and rotation ``N`` (the gauge), along which ``h`` does not change at all; so
+    ``C(P + N S N^T) = C(P)``. Without it the term would grow with the frame's uncertainty, which
+    no measurement reduces. A ``P`` that cannot be factored is used as it is (a larger term).
+
+    ``u`` and ``N`` are at the current estimate, the point the error is centred on; the filter's
+    ``H`` stays the first-estimates one, and the term only adds to ``R``, so it adds no
+    information along ``N``.
+
+    Args:
+        pose: ``(3,)`` the robot's pose.
+        centres: ``(..., K, 2)`` the landmarks' centres.
+        covariance: ``(..., 3 + 2K, 3 + 2K)`` the covariance of the pose and the centres, in that
+            order; leading axes are batch axes.
+
+    Returns:
+        ``(..., 3K, 3K)`` symmetric positive semidefinite, in the order of the stacked
+        ``(c_x, c_y, rho)`` measurements.
+    """
+    pose = np.asarray(pose, dtype=np.float64)
+    centres = np.asarray(centres, dtype=np.float64)
+    P = np.asarray(covariance, dtype=np.float64)
+    count = centres.shape[-2]
+    size = 3 + 2 * count
+    batch = centres.shape[:-2]
+    R = _rotation(float(pose[2]))
+    R_prime = R @ _QUARTER_TURN
+    # The gauge: translation along x and y, and rotation about the origin, over the block.
+    N = np.zeros(batch + (size, 3))
+    N[..., 0, 0] = N[..., 1, 1] = N[..., 2, 2] = 1.0
+    N[..., :2, 2] = _QUARTER_TURN @ pose[:2]
+    for k in range(count):
+        centre_rows = slice(3 + 2 * k, 5 + 2 * k)
+        N[..., centre_rows, :2] = np.eye(2)
+        N[..., centre_rows, 2] = centres[..., k, :] @ _QUARTER_TURN.T
+    factorable = positive_definite(P)
+    safe = np.where(factorable[..., None, None], P, np.eye(size))
+    gauge = np.swapaxes(N, -1, -2) @ np.linalg.solve(safe, N)
+    sound = factorable & positive_definite(gauge)
+    inverse = np.linalg.inv(np.where(sound[..., None, None], gauge, np.eye(3)))
+    removed = N @ inverse @ np.swapaxes(N, -1, -2)
+    P_c = symmetrized(P - np.where(sound[..., None, None], removed, 0.0))
+    # Hessians: the theta row and column only.
+    body = (centres - pose[:2]) @ R  # (..., K, 2), R^T (m - p) row-wise
+    M = np.zeros(batch + (2 * count, size, size))
+    for k in range(count):
+        for i in range(2):
+            a = 2 * k + i
+            M[..., a, 2, 2] = -body[..., k, i]
+            M[..., a, 2, :2] = M[..., a, :2, 2] = -R_prime[:, i]
+            M[..., a, 2, 3 + 2 * k : 5 + 2 * k] = R_prime[:, i]
+            M[..., a, 3 + 2 * k : 5 + 2 * k, 2] = R_prime[:, i]
+    A = M @ P_c[..., None, :, :]
+    pairs = 0.5 * np.einsum("...aij,...bji->...ab", A, A)
+    out = np.zeros(batch + (3 * count, 3 * count))
+    rows = np.array([3 * k + i for k in range(count) for i in range(2)])
+    out[..., rows[:, None], rows[None, :]] = symmetrized(pairs)
+    return out
+
+
 def associate_ml(nis: ArrayLike, gate: float, new_landmark_nis: float) -> NDArray[np.intp]:
     """Maximum-likelihood data association (Thrun's Table 10.2), one to one within a scan.
 
@@ -216,6 +300,9 @@ class SlamSettings:
         oracle_quantile: Chi-square quantile of the labelled path's gate, in (0, 1).
         jacobians: ``"fej"`` (first estimates) or ``"standard"`` (a reference that is
             overconfident in the heading).
+        second_order: Add EKF2's gauge-free second-order term
+            (:func:`second_order_covariance`) to every feature-landmark pair's noise, in
+            association and in the update (stacked over a scan's rows).
 
     Raises:
         ValueError: A value out of its range.
@@ -230,6 +317,7 @@ class SlamSettings:
     candidate_timeout: int = 50
     oracle_quantile: float = 0.999
     jacobians: Literal["fej", "standard"] = "fej"
+    second_order: bool = True
 
     def __post_init__(self) -> None:
         problems = [
@@ -257,6 +345,10 @@ class SlamSettings:
             (
                 self.jacobians not in ("fej", "standard"),
                 f"jacobians must be 'fej' or 'standard', got {self.jacobians!r}",
+            ),
+            (
+                not isinstance(self.second_order, bool),
+                f"second_order must be a bool, got {self.second_order!r}",
             ),
         ]
         if 0.0 < self.gate_quantile < 1.0:
@@ -627,6 +719,24 @@ class EkfSlam:
         )
         return h, H_pose, H_landmark, base
 
+    def _second_order(self, landmarks: list[int], stacked: bool) -> FloatArray:
+        """The EKF2 term (:func:`second_order_covariance`) at the current state: ``(3R, 3R)``
+        over ``landmarks`` stacked, cross terms included, or ``(R, 3, 3)`` each on its own. The
+        frame is removed over the block each call passes, so the two forms differ (module
+        docstring, difference 7)."""
+        index = np.array([[3 + 3 * j, 4 + 3 * j] for j in landmarks], dtype=np.intp).reshape(-1, 2)
+        centres = self._x[3:].reshape(-1, 3)[landmarks, :2]
+        pose_rows = np.arange(3)
+        if stacked:
+            block = np.concatenate([pose_rows, index.ravel()])
+            return second_order_covariance(
+                self._x[:3], centres, self._P[block[:, None], block[None, :]]
+            )
+        blocks = np.concatenate([np.tile(pose_rows, (len(landmarks), 1)), index], axis=1)
+        return second_order_covariance(
+            self._x[:3], centres[:, None, :], self._P[blocks[:, :, None], blocks[:, None, :]]
+        )
+
     def _associate(
         self,
         features: Sequence[CircleFeature],
@@ -642,6 +752,8 @@ class EkfSlam:
             return rows, new
         count = self.num_landmarks
         h, _, _, base = self._predicted()
+        if self.settings.second_order and count:
+            base = base + self._second_order(list(range(count)), stacked=False)
         if labels is None:
             if count:
                 z = np.array([features[i].z for i in kept])
@@ -708,6 +820,8 @@ class EkfSlam:
             H[block, 3 + 3 * j : 6 + 3 * j] = H_landmark[j]
             innovation[block] = features[f].z - h[j]
             R[block, block] = noises[f]
+        if self.settings.second_order:
+            R = R + self._second_order([j for _, j in rows], stacked=True)
         S = H @ P0 @ H.T + R
         applied = list(rows)
         if positive_definite(S[None])[0]:
