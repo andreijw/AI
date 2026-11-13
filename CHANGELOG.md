@@ -66,6 +66,14 @@ Acrobot-v1) and
   as at the new path, a star import still gives all nine, and mypy still types them; patching a name at the old path
   no longer changes behaviour. Every caller in the repository uses the new path.
 
+- **rl-core 0.2.0, part 3: the legacy environment factories are deprecated** (`feature/rl-core-deprecate-factories`;
+  PR 3 of 4). `make_env`, `make_vec_env` and `make_vec_env_from_config` of `rl_cartpole` and `rl_pendulum` warn once
+  per call that they are removed in rl-challenges 0.3.0 and name the replacement (`CartPoleEnv(...)`,
+  `make_env_from_config`, `training.num_envs` or a Gymnasium vector environment over the wrapper); a vector factory
+  warns once in all, async included. Every challenge, `train.py` and the benchmark stay silent: all ten challenges
+  build with warnings as errors. The repository's own uses moved to the replacements or assert the warning; the
+  example script and `docs/environment_setup_summary.md` use the wrapper classes.
+
 ## 2026-11-12
 
 ### Added

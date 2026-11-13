@@ -1,4 +1,8 @@
-"""Unit tests for the Pendulum-v1 environment wrapper, vectorization, and challenge."""
+"""Unit tests for the Pendulum-v1 environment wrapper, vectorization, and challenge.
+
+The tests that call make_env, make_vec_env or make_vec_env_from_config assert their deprecation
+warning; delete them with the factories in rl-challenges 0.3.0.
+"""
 
 from __future__ import annotations
 
@@ -147,7 +151,8 @@ def test_pendulum_factory_make_env_and_configs():
     assert env.domain_randomization == {"g": (9.0, 11.0)}
     env.close()
 
-    env_direct = make_env(env_name="Pendulum-v1", seed=123)
+    with pytest.deprecated_call():
+        env_direct = make_env(env_name="Pendulum-v1", seed=123)
     assert env_direct.seed == 123
     env_direct.close()
 
@@ -155,7 +160,8 @@ def test_pendulum_factory_make_env_and_configs():
 def test_pendulum_vectorized_environments():
     """Verify make_vec_env and make_vec_env_from_config create functional sync/async vector envs."""
     # Sync Vector Env
-    vec_sync = make_vec_env(num_envs=2, seed=42, async_envs=False)
+    with pytest.deprecated_call():
+        vec_sync = make_vec_env(num_envs=2, seed=42, async_envs=False)
     obs_sync, _ = vec_sync.reset()
     assert obs_sync.shape == (2, 3)
 
@@ -167,7 +173,8 @@ def test_pendulum_vectorized_environments():
 
     # Async Vector Env via config
     cfg = {"name": "Pendulum-v1", "seed": 100, "async_envs": False}
-    vec_cfg = make_vec_env_from_config(cfg, num_envs=2)
+    with pytest.deprecated_call():
+        vec_cfg = make_vec_env_from_config(cfg, num_envs=2)
     obs_cfg, _ = vec_cfg.reset()
     assert obs_cfg.shape == (2, 3)
     vec_cfg.close()

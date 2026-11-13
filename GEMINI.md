@@ -182,8 +182,8 @@ Always consult [CONTRIBUTING.md](CONTRIBUTING.md) when writing, refactoring, or 
   * Adhere to Gymnasium v1.0+ signatures. Always expect `terminated` and `truncated` as separate boolean outputs from
     environment step calls.
   * Always ensure environments are correctly closed with `.close()` when done to prevent resource leaks.
-* **Vectorized Training**: Use `make_vec_env` for parallelized environment steps to speed up rollouts when
-  configuration allows.
+* **Vectorized Training**: Use `training.num_envs` for several training environments stepped together (CartPole's
+  and Pendulum's `make_vec_env` is deprecated since rl-challenges 0.2.0 and removed in 0.3.0).
 * **Pure NumPy Framework**: The neural network architectures (Actor-Critic/PPO) are custom built on top of NumPy without
   external heavy DL dependencies. Maintain optimization cleanliness and verify numerical stability (e.g., stable
   softmax).
