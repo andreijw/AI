@@ -49,7 +49,8 @@ Training and Code Health items are picked as they become useful.
   deprecation shim; declare `__all__` throughout rl-core; deprecate the legacy `make_env`, `make_vec_env` and
   `make_vec_env_from_config` of rl_cartpole and rl_pendulum (removed in 0.3.0); make matplotlib an optional
   `rl-core[plot]` extra. The two per-challenge agent maps stay. Then release all three distributions as 0.2.0.
-  - **Progress (PR 1, 2026-11-13)**: the public API and every version bump (CHANGELOG.md, 2026-11-13).
+  - **Progress (PRs 1 and 2, 2026-11-13)**: the public API and every version bump; the robustness benchmark moved
+    out of `training`, ending the cycle (CHANGELOG.md, 2026-11-13).
 
 - [ ] **Library follow-ups** (deferred from the importable-libraries item, 2026-11-11; not picked). Each waits for a
   consumer that needs it:

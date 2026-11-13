@@ -12,6 +12,22 @@ from tests.helpers import FIRST_PARTY_DISCOVERY, minimal_config
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def test_the_training_package_loads_no_challenge():
+    """The challenges import the training package, so training importing them back would be a cycle; the
+    deprecated rl_core.training.robustness path loads rl_core.robustness only when a name is used. A fresh
+    process."""
+    code = (
+        "import sys; import rl_core.training, rl_core.training.robustness; "
+        "print(sorted(m for m in sys.modules "
+        "if m.startswith(('rl_core.challenges', 'rl_core.robustness'))))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", f"rl_core.training loaded {result.stdout.strip()}"
+
+
 def test_trainer_and_challenges_do_not_import_matplotlib():
     """Training and benchmarking without plots need no matplotlib; a fresh process shows it.
 

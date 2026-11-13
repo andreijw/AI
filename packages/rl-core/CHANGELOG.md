@@ -18,16 +18,23 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 
 - **Breaking:** the public API is the `__all__` of `rl_core.agents`, `rl_core.challenges`, `rl_core.environments`,
   `rl_core.export` (its modules `c_header`, `onnx_model`, `rollout` and `verify`, each with its own `__all__`),
-  `rl_core.seeding`, `rl_core.training` and `rl_core.utils`; `rl_core.__all__` is `["__version__"]`. Every other
-  module path (`rl_core.utils.config_values`, `rl_core.agents.base_agent`, ...) is private and may change in any
-  release. No name the 0.1.0 packages exported has left. `read_env_settings`, `check_positive_int` and
-  `non_negative_int` now import from `rl_core.utils`. `rl_core.seeding` and the four export modules now have an
-  `__all__`, so a star import gives only those names, and the rest at those public paths (`WRAPPER_STREAM`, `ATOL`,
-  ...) are private. `import rl_core.export` now loads its four modules, and through `rollout` also
-  `rl_core.challenges` and Gymnasium (never onnx or onnxruntime).
+  `rl_core.robustness`, `rl_core.seeding`, `rl_core.training` and `rl_core.utils`; `rl_core.__all__` is
+  `["__version__"]`. Every other module path (`rl_core.utils.config_values`, `rl_core.agents.base_agent`, ...) is
+  private and may change in any release. No name the 0.1.0 packages exported has left. `read_env_settings`,
+  `check_positive_int` and `non_negative_int` now import from `rl_core.utils`. `rl_core.seeding` and the four export
+  modules now have an `__all__`, so a star import gives only those names, and the rest at those public paths
+  (`WRAPPER_STREAM`, `ATOL`, ...) are private. `import rl_core.export` now loads its four modules, and through `rollout`
+  also `rl_core.challenges` and Gymnasium (never onnx or onnxruntime).
 - Checkpoint save and load live in `rl_core.agents.checkpointing.CheckpointMixin`, which `BaseAgent` inherits; every
   name it defined in 0.1.0 still imports from `rl_core.agents.base_agent` (a private path from 0.2.0: import
   from `rl_core.agents`). The checkpoint format is unchanged.
+
+### Deprecated
+
+- `rl_core.training.robustness` moved to `rl_core.robustness`, so the training package imports no challenge (the
+  challenges import it: the one package cycle is gone). The old path still gives the same nine names, with a
+  `DeprecationWarning` on each use, and is removed in 0.3.0. Patching a name at the old path no longer changes
+  behaviour: patch `rl_core.robustness`.
 
 ## [0.1.0] - 2026-11-11
 

@@ -175,6 +175,25 @@ def test_rl_core_does_not_import_a_challenge_package():
     assert offenders == [], f"rl_core must not depend on a challenge: {offenders}"
 
 
+# The 0.1.0 path of the robustness benchmark: its TYPE_CHECKING block and lazy re-export name
+# rl_core.robustness. It goes in 0.3.0.
+ROBUSTNESS_SHIM = CORE_SRC / "rl_core" / "training" / "robustness.py"
+
+
+def test_the_training_package_imports_no_challenge_and_not_the_robustness_benchmark():
+    """The challenges import the training package (budgets, curriculum); training importing them back was
+    the one package cycle, broken in 0.2.0 by moving the robustness benchmark to rl_core.robustness."""
+    files = [path for path in _source_files_under("rl_core/training") if path != ROBUSTNESS_SHIM]
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}:{line} imports {module}"
+        for path in files
+        for line, module in resolved_imports(path.read_text(encoding="utf-8"), package_of(path))
+        if module.split(".")[:2] in (["rl_core", "challenges"], ["rl_core", "robustness"])
+    ]
+    assert files, "The scan found no training modules to check."
+    assert offenders == [], f"rl_core.training must not import a challenge: {offenders}"
+
+
 def test_environment_packages_do_not_import_the_agents_package():
     # An environment wrapper is built before any agent and must not depend on one; the config
     # readers both use live in rl_core.utils.config_values.
@@ -267,6 +286,7 @@ PRIVATE_ACCESS_EXEMPT = {
     "test_environment.py": "environment wrapper internals (action noise, domain randomization)",
     "test_pendulum.py": "environment wrapper internals (action noise)",
     "test_replay_buffer.py": "the buffer's write index",
+    "test_robustness_old_path.py": "the deprecated path's __getattr__ and __dir__ (computed getattr, dir)",
 }
 # The shared fixtures and helpers too: what they reach into, every test reaches into.
 AGENT_TEST_FILES = sorted(

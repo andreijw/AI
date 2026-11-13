@@ -1,5 +1,5 @@
 """Tests for the robustness benchmark: a checkpoint played greedily over perturbed environments
-(``rl_core.training.robustness``, ``Trainer.evaluate_episodes`` and robustness.py)."""
+(``rl_core.robustness``, ``Trainer.evaluate_episodes`` and robustness.py)."""
 
 import hashlib
 import importlib
@@ -13,9 +13,7 @@ import yaml
 from rl_cartpole.benchmark import CartPoleChallenge
 from rl_cartpole.environments import CartPoleEnv
 from rl_core.agents import DDPGAgent, ReinforceAgent
-from rl_core.training import Trainer
-from rl_core.training.curriculum import curriculum_from_config
-from rl_core.training.robustness import (
+from rl_core.robustness import (
     Perturbation,
     RobustnessRow,
     difficulty_reached,
@@ -25,6 +23,8 @@ from rl_core.training.robustness import (
     robustness_rows,
     training_range,
 )
+from rl_core.training import Trainer
+from rl_core.training.curriculum import curriculum_from_config
 from rl_pendulum.benchmark import PendulumChallenge
 from rl_pendulum.environments import PendulumEnv
 from tests.helpers import minimal_config, run_main

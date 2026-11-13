@@ -1,6 +1,6 @@
 """Navigation through the framework's training tools: the curriculum over its domain
 randomization and the robustness sweep over sensor noise (``rl_core.training.curriculum``,
-``rl_core.training.robustness``, ``rl_navigation.environments``).
+``rl_core.robustness``, ``rl_navigation.environments``).
 
 Characterization tests: they pin behaviour that already worked before navigation PR 5, so the
 TESTING rows ``TR-36`` and ``ROB-2`` rest on it."""
@@ -9,8 +9,8 @@ import contextlib
 
 import pytest
 
+from rl_core.robustness import physics_defaults, training_range
 from rl_core.training.curriculum import curriculum_from_config
-from rl_core.training.robustness import physics_defaults, training_range
 from rl_navigation.benchmark import NavigationChallenge
 from rl_navigation.environments import make_env_from_config
 

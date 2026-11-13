@@ -52,7 +52,9 @@ To optimize token usage and context window limits:
   * `rl_core/training/`: Training pipeline orchestration (`trainer.py`), the checkpoint's trainer file
     (`checkpoints.py`), curriculum scheduling of the training environment's noise and randomization
     (`curriculum.py`), the pool of training environments `training.num_envs` steps in lockstep
-    (`parallel.py`) and the robustness benchmark's perturbations and greedy rows (`robustness.py`).
+    (`parallel.py`). `training/robustness.py` is the robustness benchmark's 0.1.0 path, which warns until 0.3.0.
+  * `rl_core/robustness.py`: The robustness benchmark's perturbations and greedy rows, beside `rl_core/seeding.py`:
+    it imports both the training package and the challenges, which import training.
   * `rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
     settings that agents, trainer and environments share (`config_values.py`), structured logging (`logger.py`),
     video recording (`video.py`), visualization helpers (`visualization.py`, imported directly: the package does
@@ -152,7 +154,7 @@ To optimize token usage and context window limits:
   ONNX model with `--format onnx`, and checks it by compiling it or running it in onnxruntime
   (`packages/rl-core/src/rl_core/export/`; the same config loading and challenge selection).
 * **`robustness.py`**: Plays a checkpoint greedily on environments perturbed one setting at a time and reports
-  each row inside or beyond its training range (`packages/rl-core/src/rl_core/training/robustness.py`).
+  each row inside or beyond its training range (`packages/rl-core/src/rl_core/robustness.py`).
 * **`example.py`**: Minimal standalone usage example of the framework.
 * **`ARCHITECTURE.md`** / **`TESTING.md`**: Component architecture reference and manual test procedures.
 * **`setup.ps1`**: Windows developer setup (installs Python 3.12, creates `.venv`, runs CI checks).

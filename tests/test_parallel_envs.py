@@ -621,7 +621,7 @@ def test_setup_extra_envs_builds_a_benchmark_runs_other_environments(tmp_path):
 
 def test_the_robustness_rows_evaluate_a_config_that_trains_several_environments():
     from rl_cartpole.benchmark import CartPoleChallenge
-    from rl_core.training.robustness import robustness_rows
+    from rl_core.robustness import robustness_rows
 
     challenge = CartPoleChallenge()
     config = {

@@ -50,6 +50,13 @@ Acrobot-v1) and
   only this repository's deprecation messages into errors come ready for parts 2 and 3. The three 0.2.0 wheels pass
   `release.py smoke-all` (57, 30 and 36 modules imported).
 
+- **rl-core 0.2.0, part 2: the robustness benchmark leaves `training`** (`feature/rl-core-robustness-move`; PR 2 of
+  4). `rl_core/training/robustness.py` is now `rl_core/robustness.py`, so the training package imports no challenge and
+  the one package cycle (`training` ↔ `challenges`) is gone; a fresh-process test and a source rule keep it gone. The
+  old path is a shim for one release: each of its nine names warns once at the caller's line and is the same object
+  as at the new path, a star import still gives all nine, and mypy still types them; patching a name at the old path
+  no longer changes behaviour. Every caller in the repository uses the new path.
+
 ## 2026-11-12
 
 ### Added

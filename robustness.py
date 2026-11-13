@@ -4,10 +4,7 @@ beyond the range it trained on, and report how it holds up."""
 import argparse
 import os
 
-from rl_core.seeding import eval_seed_for
-from rl_core.training.checkpoints import file_sha256
-from rl_core.training.curriculum import curriculum_from_config
-from rl_core.training.robustness import (
+from rl_core.robustness import (
     Perturbation,
     RobustnessRow,
     difficulty_reached,
@@ -15,6 +12,9 @@ from rl_core.training.robustness import (
     perturbed_section,
     robustness_rows,
 )
+from rl_core.seeding import eval_seed_for
+from rl_core.training.checkpoints import file_sha256
+from rl_core.training.curriculum import curriculum_from_config
 from train import (
     add_challenge_arguments,
     add_checkpoint_arguments,
