@@ -17,6 +17,8 @@ import numpy as np
 from rl_core.agents.inference import InferencePolicy
 from rl_core.agents.observation_normalizer import CLIP
 
+__all__ = ["render_c_header"]
+
 GUARD = "POLICY_WEIGHTS_H"
 _PER_LINE = 4
 

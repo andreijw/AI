@@ -27,7 +27,7 @@ build-backend = "setuptools.build_meta"
 name = "my-game"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["rl-core~=0.1.0", "gymnasium>=1.0.0", "numpy>=1.26"]
+dependencies = ["rl-core~=0.2.0", "gymnasium>=1.0.0", "numpy>=1.26"]
 
 # The one line that makes the challenge visible to rl-core: the entry's name is the import package,
 # its value the module that registers the challenge.
@@ -38,7 +38,7 @@ my_game = "my_game.benchmark"
 where = ["src"]
 ```
 
-`rl-core~=0.1.0` accepts 0.1.x and stops before 0.2, which may change the API ([releasing.md](releasing.md)).
+`rl-core~=0.2.0` accepts 0.2.x and stops before 0.3, which may change the API ([releasing.md](releasing.md)).
 
 ## 2. The game as a Gymnasium environment
 
@@ -232,7 +232,7 @@ environment's interpreter:
 cd my-game
 python3.12 -m venv .venv
 .venv/bin/pip install -e /path/to/AI/packages/rl-core -e .
-# or, from a release: .venv/bin/pip install \
+# or, from a release (0.2.0 once tagged; the 0.1.0 wheel needs ~=0.1.0): .venv/bin/pip install \
 #   https://github.com/andreijw/AI/releases/download/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl -e .
 
 .venv/bin/python /path/to/AI/train.py --config configs/corridor_ppo.yaml --num-episodes 20

@@ -149,6 +149,7 @@ ruff check . && ruff format --check .   # lint and format
 mypy                                    # types
 pytest -q                               # tests (CI enforces 90% branch coverage)
 python scripts/check_doc_links.py       # every Markdown link resolves
+python scripts/check_doc_sources.py     # teaching pages cite their numbers; docs images are listed
 ```
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) first: it holds the coding standards and the branch-first, test-driven

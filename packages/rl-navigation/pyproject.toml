@@ -33,7 +33,7 @@ gym = [
 ]
 # rl_navigation.environments and rl_navigation.benchmark: the navigation challenge on the framework.
 challenge = [
-    "rl-core~=0.1.0",
+    "rl-core~=0.2.0",
     "gymnasium>=1.0.0",
 ]
 # rl_navigation.localization_video: an MP4 of a localization trial, and its stills.

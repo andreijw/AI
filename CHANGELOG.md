@@ -12,6 +12,60 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-13
+
+### Added
+
+- **Teaching docs groundwork: a media rule and a source checker** (`docs/media-policy-and-checker`; the maintainer's
+  request for a deep teaching update before 0.2.0, PR 0 of the docs plan). Images and clips live only in
+  `docs/images/` (a PNG up to 60 KiB, a GIF up to 600 KiB, 6 MiB a regeneration), each listed in
+  `scripts/doc_media.json` with the command that made it (CONTRIBUTING.md §5). `scripts/check_doc_sources.py`, stdlib
+  only and run in CI's Checks job on every pull request, docs-only ones included, requires on the new `docs/learn/`
+  pages that every dotted code pointer resolve in the source (parsed, never imported), that every number sit beside a
+  benchmark-report link or a dated CHANGELOG citation whose heading exists, and that every image be listed, linked and
+  within budget; it also refuses media outside `docs/images/`. Fourteen skeleton pages fix the names and headings of
+  the learning path, challenge and algorithm pages so the next PRs can link to each other. The checker was written
+  before its tests; a mutation check caught all 38 deliberate breaks across two rounds.
+
+- **Planning on an occupancy grid: A\* and path smoothing** (`feature/planning-grid-astar`; roadmap, Phase 8
+  "Planning and control", PR 1 of 3). `rl_navigation.planning` (NumPy, `sim` and `mapping.beams` only, so the robot
+  imports it) builds a `PlanningGrid` from the true arena (exactly `occupancy_grid(inflate=)`) or from an occupied
+  mask, inflating by the true distance to each occupied cell's square, and plans with 8-connected A\* (octile
+  heuristic, no corner cutting, deterministic ties), a cheap `reachable` check that answers "no path" in about 8 ms
+  instead of a 70 ms failed search, and farthest-visible shortcutting batched one ray cast per kept point. Optimality
+  is checked against exhaustive search and an independent Bellman-Ford on 200 random grids; 19 mutations killed.
+  `PLAN-1` (tuning seeds 10000 to 10199, alone on the Jetson): A\* 1.1 ms median and 23 ms p99, the shortcut 7.6 ms
+  at worst; the judged timing gate runs in PR 3. The flood fill of `path_exists` is now `sim.layouts.connected`.
+
+- **Teaching pages for the algorithms** (`docs/learn-algorithms`; docs PR 2). `docs/learn/algorithms/` explains
+  REINFORCE and the Actor-Critics, PPO, DQN, DDPG and TD3, and SAC as implemented here: the idea, each update written
+  from the code with a pointer to the function that computes it, the settings that matter (linked to `configs/`), the
+  pitfalls, and the fixes this repository needed, each cited to its CHANGELOG entry (from all 91 algorithm entries).
+  `docs/agents.md` keeps the reference (terms, classes, replay buffer, updates during an episode, the PyTorch backend
+  with its own fixes, export). A numbers check against the sources corrected the DQN epsilon story (the 500-episode
+  run ended near 0.08, the 750-episode budget from 2026-10-14 near the floor; the lesson was the unit) in the page
+  and the dev-loop skill.
+
+### Changed
+
+- **rl-core 0.2.0, part 1: a declared public API and all versions at 0.2.0** (`feature/rl-core-public-api`; the
+  maintainer's decision D, 2026-11-13; PR 1 of 4). Every rl-core package now lists its public names in `__all__`;
+  everything else is private. `tests/test_public_api.py` keeps every name 0.1.0 published (`RELEASED_0_1_0`, read
+  from the tag) and fails if rl-challenges, rl-navigation, the examples or `docs/external-challenges.md` import a
+  private name; the root scripts' deep imports are an explicit allowlist. `rl_core.utils` re-exports the four helpers
+  the dependents used from deep paths. All three distributions are 0.2.0 with undated `## [0.2.0]` sections, the
+  dependents require `rl-core~=0.2.0`, and `scripts/release.py check` refuses an undated or impossible release date,
+  so nothing can be tagged before the release PR dates them. A shared deprecation helper and a test filter that turns
+  only this repository's deprecation messages into errors come ready for parts 2 and 3. The three 0.2.0 wheels pass
+  `release.py smoke-all` (57, 30 and 36 modules imported).
+
+- **rl-core 0.2.0, part 2: the robustness benchmark leaves `training`** (`feature/rl-core-robustness-move`; PR 2 of
+  4). `rl_core/training/robustness.py` is now `rl_core/robustness.py`, so the training package imports no challenge and
+  the one package cycle (`training` ↔ `challenges`) is gone; a fresh-process test and a source rule keep it gone. The
+  old path is a shim for one release: each of its nine names warns once at the caller's line and is the same object
+  as at the new path, a star import still gives all nine, and mypy still types them; patching a name at the old path
+  no longer changes behaviour. Every caller in the repository uses the new path.
+
 ## 2026-11-12
 
 ### Added

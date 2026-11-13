@@ -1,0 +1,14 @@
+{
+  "budget": {
+    "png_kib": 60,
+    "gif_kib": 600,
+    "total_kib": 6144
+  },
+  "media": [
+    {
+      "path": "docs/images/localization_seed101_step381.png",
+      "made_by": "python -m rl_navigation.localization_video --seed 101 --sensor lidar --steps 600 --kidnap-at 300 --mcl-scale 0.130 0.124 0.308 --output <scratch>/seed101.mp4 --stills 381 --stills-dir <scratch> (TESTING.md EST-4), the still copied here",
+      "added_in": "eb716e9"
+    }
+  ]
+}

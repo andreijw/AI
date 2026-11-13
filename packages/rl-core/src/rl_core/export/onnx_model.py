@@ -26,6 +26,8 @@ from rl_core.agents.inference import InferencePolicy
 from rl_core.agents.observation_normalizer import CLIP
 from rl_core.export.verify import VerificationReport, compare_with_policy
 
+__all__ = ["EXTRA", "missing_packages", "render_onnx_model", "verify_onnx_model"]
+
 # Pinned rather than onnx's newest, so a model built with a recent onnx still loads in an older
 # onnxruntime (IR 8 is opset 17's, onnx 1.12; onnxruntime has loaded both since 1.14).
 OPSET = 17

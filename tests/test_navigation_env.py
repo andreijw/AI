@@ -14,13 +14,13 @@ import numpy as np
 import pytest
 from gymnasium.utils.env_checker import check_env
 
-from rl_core.training.curriculum import curriculum_from_config
-from rl_core.training.robustness import (
+from rl_core.robustness import (
     Perturbation,
     canonical_setting,
     perturbed_section,
     physics_defaults,
 )
+from rl_core.training.curriculum import curriculum_from_config
 from rl_navigation.benchmark import NavigationChallenge, NavigationContinuousChallenge
 from rl_navigation.environments import (
     NavigationEnv,

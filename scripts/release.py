@@ -37,6 +37,7 @@ import tempfile
 import tomllib
 import venv
 from collections.abc import Iterable
+from datetime import date
 from pathlib import Path
 
 from packaging.requirements import Requirement
@@ -47,6 +48,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = REPO_ROOT / "packages"
 LOCK = REPO_ROOT / "requirements-lock.txt"
 LINK_REFERENCE = re.compile(r"^\[[^\]]+\]:\s")
+DATED_HEADING = re.compile(r"## \[[^\]]+\] - (?P<date>\d{4}-\d{2}-\d{2})", re.ASCII)
 TAG = re.compile(r"^(?P<dist>[a-z0-9][a-z0-9-]*)-v(?P<version>[0-9][0-9a-z.]*)$")
 
 #: Modules that need one of the distribution's extras, by name prefix: ``smoke`` does not import them
@@ -173,6 +175,31 @@ def check_dependencies(dist: str, tags: Iterable[str], packages: Path = PACKAGES
             )
 
 
+def _is_dated(heading: str) -> bool:
+    """``## [<version>] - YYYY-MM-DD`` with ASCII digits and a real calendar date."""
+    match = DATED_HEADING.fullmatch(heading)
+    if match is None:
+        return False
+    try:
+        date.fromisoformat(match["date"])
+    except ValueError:  # 2026-13-45
+        return False
+    return True
+
+
+def check_release_date(text: str, version: Version) -> None:
+    """Refuse a ``## [<version>]`` heading without its release date (``## [0.2.0] - 2026-11-20``): a
+    version is bumped before its release PR dates the section, and no tag passes until then."""
+    heading = f"## [{version}]"
+    # The first heading only: it is the section changelog_section takes the notes from.
+    first = next((line.rstrip() for line in text.splitlines() if line.startswith(heading)), "")
+    if not _is_dated(first):
+        raise ReleaseError(
+            f"CHANGELOG.md's '{heading}' has no release date: the release PR writes "
+            f"'{heading} - YYYY-MM-DD'"
+        )
+
+
 def check(tag: str, tags: Iterable[str], packages: Path = PACKAGES) -> tuple[str, Version, str]:
     """``(dist, version, notes)`` for a releasable tag; raises :class:`ReleaseError` otherwise."""
     dist, version = parse_tag(tag)
@@ -183,8 +210,11 @@ def check(tag: str, tags: Iterable[str], packages: Path = PACKAGES) -> tuple[str
     changelog = packages / dist / "CHANGELOG.md"
     if not changelog.is_file():
         raise ReleaseError(f"{dist} has no CHANGELOG.md: its release notes come from it")
-    notes = changelog_section(changelog.read_text(encoding="utf-8"), version)
+    text = changelog.read_text(encoding="utf-8")
+    notes = changelog_section(text, version)
     check_dependencies(dist, tags, packages)
+    # Last, so a bumped but undated version still has every other check run (tests/test_release.py).
+    check_release_date(text, version)
     return dist, version, notes
 
 

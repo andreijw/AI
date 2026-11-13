@@ -9,8 +9,8 @@ import gymnasium as gym
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 
 from rl_core.environments import OBSERVATION_DEFAULTS, ObservationOptions
-from rl_core.utils.config import read_env_settings
-from rl_core.utils.config_values import async_envs_setting
+from rl_core.utils import read_env_settings
+from rl_core.utils.config_values import async_envs_setting  # private: test_public_api allowlist
 
 from .pendulum_env import PendulumEnv
 

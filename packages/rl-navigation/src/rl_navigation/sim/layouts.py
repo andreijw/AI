@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import NamedTuple
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
 from rl_navigation.sim.geometry import Arena, FloatArray, clearance, occupancy_grid
 
@@ -125,6 +125,37 @@ def _draw_obstacles(rng: np.random.Generator, params: LayoutParams) -> Arena:
     )
 
 
+def connected(free: NDArray[np.bool_], start: tuple[int, int], goal: tuple[int, int]) -> bool:
+    """Whether ``goal``'s cell is reachable from ``start``'s through free cells, 4-connected.
+
+    A flood fill from the start grown by array shifts, one ring of cells per iteration, so it costs
+    about as many whole-grid operations as the shortest route has cells.
+
+    Args:
+        free: ``(rows, cols)`` booleans, True where a cell may be entered.
+        start: ``(row, col)`` of the start cell.
+        goal: ``(row, col)`` of the goal cell.
+
+    Returns:
+        True if both cells are free and joined by free cells; False otherwise.
+    """
+    if not (free[start] and free[goal]):
+        return False
+    reached = np.zeros_like(free)
+    reached[start] = True
+    while not reached[goal]:
+        grown = reached.copy()
+        grown[1:] |= reached[:-1]
+        grown[:-1] |= reached[1:]
+        grown[:, 1:] |= reached[:, :-1]
+        grown[:, :-1] |= reached[:, 1:]
+        grown &= free
+        if np.array_equal(grown, reached):
+            return False
+        reached = grown
+    return True
+
+
 def path_exists(
     arena: Arena, start: ArrayLike, goal: ArrayLike, robot_radius: float, resolution: float = 0.05
 ) -> bool:
@@ -132,8 +163,8 @@ def path_exists(
 
     Searches the occupancy grid inflated by ``robot_radius`` plus half a cell (the robot's
     configuration space, made conservative: a cell centre is free only if the disc fits anywhere
-    within half a cell of it) with a 4-connected flood fill from the start's cell, grown by array
-    shifts. A gap with less than half a cell to spare can be refused.
+    within half a cell of it) with :func:`connected`'s 4-connected flood fill from the start's
+    cell. A gap with less than half a cell to spare can be refused.
 
     Args:
         arena: The arena.
@@ -152,22 +183,7 @@ def path_exists(
         x, y = np.asarray(point, dtype=np.float64)[:2]
         return min(int(y / resolution), rows - 1), min(int(x / resolution), cols - 1)
 
-    (si, sj), (gi, gj) = cell(start), cell(goal)
-    if not (free[si, sj] and free[gi, gj]):
-        return False
-    reached = np.zeros_like(free)
-    reached[si, sj] = True
-    while not reached[gi, gj]:
-        grown = reached.copy()
-        grown[1:] |= reached[:-1]
-        grown[:-1] |= reached[1:]
-        grown[:, 1:] |= reached[:, :-1]
-        grown[:, :-1] |= reached[:, 1:]
-        grown &= free
-        if np.array_equal(grown, reached):
-            return False
-        reached = grown
-    return True
+    return connected(free, cell(start), cell(goal))
 
 
 def generate_layout(rng: np.random.Generator, params: LayoutParams | None = None) -> Layout:

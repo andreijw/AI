@@ -229,9 +229,9 @@ tags are in [docs/releasing.md](docs/releasing.md).
 
 The high-level interaction between the training orchestration, environment wrappers, and agent policies is
 visualized below. Arrows are imports; a dotted one is a desk tool's (`evaluation`) import that the package's core does
-not make. `trainer.py` imports no challenge; `training/robustness.py` does (the one package cycle, an open API
-decision): the challenges registry imports the training package (budgets and the curriculum), and the export's rollout
-imports its `ChallengeEnv`.
+not make. The training package imports no challenge: the challenges registry imports it (budgets and the curriculum),
+and the robustness benchmark, which needs both, is the top-level `rl_core.robustness` (in `training/` in 0.1.0,
+where the old path now warns). The export's rollout imports the registry's `ChallengeEnv`.
 
 ```mermaid
 flowchart TD
@@ -284,6 +284,7 @@ flowchart TD
         end
 
         ExportPkg["export: c_header, onnx_model, verify, rollout"]
+        RobustMod["robustness: perturbed greedy rows"]
     end
 
     Train --> Core
@@ -292,14 +293,15 @@ flowchart TD
     Train --> Challenges
     Record --> Challenges
     Export --> Challenges
-    Robust --> Core
+    Robust --> RobustMod
     Robust --> Challenges
+    RobustMod --> Registry
+    RobustMod --> Trainer
     Export --> ExportPkg
     ExportPkg --> Agents
     ExportPkg --> Registry
     Bench --> Challenges
     Registry --> Trainer
-    Trainer -. robustness .-> Registry
     Registry --> Agents
     Trainer --> Agents
     Trainer --> Utils
@@ -752,7 +754,7 @@ plots/
      still has its own validator.
    - `environments/make_env.py`: `make_env`, an `ENV_DEFAULTS` dict naming each environment setting the challenge
      supports with its default (spreading `rl_core.environments.OBSERVATION_DEFAULTS` into it), and
-     `make_env_from_config`, which reads them with `rl_core.utils.config.read_env_settings`: null takes the
+     `make_env_from_config`, which reads them with `rl_core.utils.read_env_settings`: null takes the
      default, and any other setting given a value is rejected rather than ignored. A wrapper with observation
      settings only builds through `rl_core.environments.env_from_config(wrapper, config, ENV_DEFAULTS)` (Acrobot,
      MountainCar, LunarLander, BipedalWalker). A vectorized factory only if something uses it (`rl_acrobot` has none).

@@ -120,7 +120,9 @@ The questions a training run, not an interpreter, would raise:
 ## Pass 5: what gets committed
 
 - No training output: nothing from `logs/`, `checkpoints/`, `videos/`, `plots/`, `test_logs/` or
-  `test_checkpoints/`, and no stray `.npz`, `.pt`, `.mp4` or `.png` elsewhere.
+  `test_checkpoints/`, and no stray `.npz`, `.pt`, `.mp4` or `.png` elsewhere. The exception is documentation
+  media in `docs/images/` (CONTRIBUTING.md §5): a `.png` or `.gif` within its budget, listed in
+  `scripts/doc_media.json` and linked from a page, which `python scripts/check_doc_sources.py` checks.
 - `docs/benchmarks/*.md` changed only by a full rerun of the report's own agents and seeds, never a smoke
   run (a smoke-run rewrite is Critical). A report the change makes stale (a listed agent's committed config or
   training changed) and did not rerun is a Warning: doc-sync regenerates it in the same PR.
@@ -155,7 +157,8 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
   the command crashed with a `KeyError` before it got there. Only running the documented command found it.
 - The roadmap item matches what was built, including what was dropped.
 - **A change to a distribution's code adds a line to that distribution's `packages/<dist>/CHANGELOG.md`**
-  under `## [Unreleased]`: its release notes are that file. A missing line is a Warning.
+  under the open section: `## [Unreleased]`, or the undated `## [<version>]` of a bumped but unreleased version. Its
+  release notes are that file. A missing line is a Warning.
 - **Every document the change makes stale is updated in this PR**, generated ones included: the README challenge table
   and `docs/results.md`, `docs/benchmarks/*.md`, `TESTING.md` expected numbers and timings, config header comments. A
   stale one is a Warning, not a follow-up.
@@ -167,7 +170,8 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
 - A new agent has its section in `docs/agents.md`, and a changed update rule, option, committed config or
   measured result is reflected in the agent's section there.
 - `docs/usage.md`, the README front page, ARCHITECTURE.md (the class diagram, the extension steps) and config
-  comments still describe the code, and `python scripts/check_doc_links.py` reports no broken link.
+  comments still describe the code, `python scripts/check_doc_links.py` reports no broken link, and
+  `python scripts/check_doc_sources.py` reports no problem.
 - **The documentation was updated in this PR, not left for later.** The `doc-sync` skill ran (its report is in
   the hand-off), and every document it owns for the changed files says what the code now does. A change a reader
   would look for, such as a new module, option, command or result, with no doc saying it, is a Warning.

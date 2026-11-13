@@ -36,6 +36,23 @@ Training and Code Health items are picked as they become useful.
 
 ### Workflow Tooling
 
+- [~] **Teaching docs for 0.2.0** (the maintainer's request, 2026-11-13; plan in seven PRs): a `docs/learn/` tree
+  with a learning path, a foundations page, seven challenge pages, the algorithm families (with the fixes this
+  repository needed, from CHANGELOG.md), a navigation track ending with the ONNX and C export, frames of every
+  challenge and GIF clips of trained and random agents (seed 1, retrained after the 0.2.0 API lands, checkpoints
+  attached to the release), and committed benchmark curves. The navigation track waits for planning and control.
+  - **Progress (PRs 0 and 2, 2026-11-13)**: the media rule, the source checker in CI and the page skeletons; the
+    algorithm pages
+    (CHANGELOG.md, 2026-11-13).
+
+- [~] **rl-core 0.2.0 API** (the maintainer's decision D, 2026-11-13; plan in four PRs plus the release PR):
+  break the `challenges` ↔ `training` cycle by moving `training/robustness.py` to `rl_core/robustness.py` behind a
+  deprecation shim; declare `__all__` throughout rl-core; deprecate the legacy `make_env`, `make_vec_env` and
+  `make_vec_env_from_config` of rl_cartpole and rl_pendulum (removed in 0.3.0); make matplotlib an optional
+  `rl-core[plot]` extra. The two per-challenge agent maps stay. Then release all three distributions as 0.2.0.
+  - **Progress (PRs 1 and 2, 2026-11-13)**: the public API and every version bump; the robustness benchmark moved
+    out of `training`, ending the cycle (CHANGELOG.md, 2026-11-13).
+
 - [ ] **Library follow-ups** (deferred from the importable-libraries item, 2026-11-11; not picked). Each waits for a
   consumer that needs it:
   - **The CLIs as `rl-core` console scripts** (`rl-train`, `rl-record`, `rl-benchmark`, ...): a game project then
@@ -189,7 +206,10 @@ steps 3 to 5 are sketches to turn into full items when picked.
     (FastSLAM-style) with scan matching for the lidar preset. Judged by map and pose error against ground truth,
     and loop closure on layouts that revisit a place.
 
-- [ ] **Planning and control**
+- [~] **Planning and control** (picked 2026-11-13; PR 1 grid, A\* and smoothing; PR 2 the pure-pursuit follower
+  and the navigator; PR 3 the comparison with the RL policies, judged once on seeds 30000 to 30499)
+  - **Progress (PR 1, 2026-11-13)**: `rl_navigation.planning` with A\* and smoothing (CHANGELOG.md,
+    2026-11-13).
   - **Description**: A* on the occupancy grid (from step 3 or the true map), path smoothing, and a pure-pursuit or
     PID follower that outputs the same velocity commands the RL agents do, as a classical baseline. Compared with
     the RL policy on the same seeded layouts: success rate, path length, time to goal and collisions, and how each

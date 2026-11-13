@@ -1,6 +1,7 @@
 """Shared helpers for tests: running the train.py / record.py scripts, gradient checks, and a
 reference Adam optimiser."""
 
+import ast
 import importlib
 import importlib.util
 import math
@@ -458,3 +459,28 @@ def torch_backend_cases(ddpg_config: Mapping[str, object]) -> list[tuple[type, d
 
     config = {**ddpg_config, "backend": "torch", "device": "cpu", "dtype": "float64"}
     return [(TorchDDPGAgent, config), (TorchTD3Agent, dict(config)), (TorchSACAgent, dict(config))]
+
+
+def package_of(path: Path) -> list[str]:
+    """The dotted parts of the package a file under a ``src/`` root belongs to (``rl_core/utils/x.py`` gives
+    ``["rl_core", "utils"]``); none for a file outside one, such as a root script."""
+    src = next((parent for parent in path.parents if parent.name == "src"), None)
+    return list(path.relative_to(src).parent.parts) if src else []
+
+
+def resolved_imports(source: str, package: list[str]) -> list[tuple[int, str]]:
+    """(line, module) for every static import in ``source``, a module of ``package`` (its dotted
+    parts). Relative imports are resolved, and ``from x import y`` gives ``x.y`` as well as ``x``, so
+    ``from rl_core import agents`` is seen as importing ``rl_core.agents``."""
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            found.extend((node.lineno, alias.name) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            base = package[: len(package) - node.level + 1] if node.level else []
+            module = ".".join([*base, *([node.module] if node.module else [])])
+            found.append((node.lineno, module))
+            found.extend(
+                (node.lineno, f"{module}.{alias.name}") for alias in node.names if alias.name != "*"
+            )
+    return found

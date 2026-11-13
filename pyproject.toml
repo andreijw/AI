@@ -28,6 +28,9 @@ filterwarnings = [
     "error::pytest.PytestUnraisableExceptionWarning",
     # RecordVideo warns, in colour, when its folder already exists: a test or train.py made it.
     "error:.*Overwriting existing videos:UserWarning",
+    # Our deprecations (rl_core.utils.deprecation's wording): a test that uses one says so with
+    # pytest.deprecated_call, so nothing in the repository keeps calling a deprecated name.
+    "error:.* is deprecated since rl-(core|challenges|navigation) [0-9.]+ and is removed in :DeprecationWarning",
 ]
 
 [tool.ruff]

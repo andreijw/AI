@@ -12,6 +12,22 @@ from tests.helpers import FIRST_PARTY_DISCOVERY, minimal_config
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def test_the_training_package_loads_no_challenge():
+    """The challenges import the training package, so training importing them back would be a cycle; the
+    deprecated rl_core.training.robustness path loads rl_core.robustness only when a name is used. A fresh
+    process."""
+    code = (
+        "import sys; import rl_core.training, rl_core.training.robustness; "
+        "print(sorted(m for m in sys.modules "
+        "if m.startswith(('rl_core.challenges', 'rl_core.robustness'))))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", f"rl_core.training loaded {result.stdout.strip()}"
+
+
 def test_trainer_and_challenges_do_not_import_matplotlib():
     """Training and benchmarking without plots need no matplotlib; a fresh process shows it.
 
@@ -84,7 +100,7 @@ def test_discovering_the_challenges_does_not_import_box2d():
 ONNX_PACKAGES = ("onnx", "onnxruntime")
 
 
-@pytest.mark.parametrize("module", ["train", "record", "export", "benchmark"])
+@pytest.mark.parametrize("module", ["train", "record", "export", "benchmark", "rl_core.export"])
 def test_entry_points_do_not_import_onnx(module):
     """onnx and onnxruntime are an optional extra, loaded only when an ONNX export asks for them."""
     code = (
@@ -159,6 +175,10 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.slam.feature_evaluation",
         "rl_navigation.slam.ekf_slam",
         "rl_navigation.slam.evaluation",
+        "rl_navigation.planning",
+        "rl_navigation.planning.grid",
+        "rl_navigation.planning.astar",
+        "rl_navigation.planning.smoothing",
     ],
 )
 def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
@@ -404,3 +424,24 @@ def test_the_localization_recording_loads_no_plotting_or_video_stack(module):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "[]", f"Importing {module} loaded {result.stdout.strip()}."
+
+
+def test_the_planning_core_imports_only_the_simulator_and_the_mapping_core():
+    """The planner runs on the robot: a layer above the mapper (its exact cell traversal), with
+    neither the estimators, SLAM, the Gymnasium layer nor the mapping desk tool. A fresh process."""
+    loaded = _loaded_navigation_packages(
+        "rl_navigation.planning, rl_navigation.planning.grid, rl_navigation.planning.astar, "
+        "rl_navigation.planning.smoothing"
+    )
+    assert loaded == ["mapping", "planning", "sim"], (
+        f"the planning core loaded rl_navigation.{loaded}"
+    )
+    code = (
+        "import sys; import rl_navigation.planning; "
+        "print('rl_navigation.mapping.evaluation' in sys.modules)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False", "the planning core imported the mapping desk tool"

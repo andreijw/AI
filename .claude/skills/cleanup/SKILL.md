@@ -116,7 +116,9 @@ at the config or is checked by the `doc-sync` skill.
   finding instead of fixing it
 - Training outputs outside the ignored folders: a stray `.npz`, `.pt`, `.mp4`, `.png` or `.jsonl` in the
   repository root or under `packages/`; and an unintended change to `docs/benchmarks/*.md`, which the benchmark
-  rewrites by default
+  rewrites by default. A `.png` or `.gif` in `docs/images/` listed in `scripts/doc_media.json` is documentation
+  media, not a leftover (CONTRIBUTING.md §5); `scripts/check_doc_sources.py` flags one that is not listed or not
+  linked
 - Throwaway scripts and scratch configs in the working tree
 - `TODO` notes with no roadmap item behind them: either do it, or add the item
 - Docstrings whose `Args`, `Returns` or `Raises` describe the previous behaviour

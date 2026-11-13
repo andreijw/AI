@@ -45,7 +45,7 @@ CONTRIBUTING.md, GEMINI.md and ARCHITECTURE.md.
 | :--- | :--- | :--- |
 | `docs/roadmap.md` | Open and in-progress items: description, acceptance criteria, status, follow-ups | Always. Record what was built and what was dropped while the item is open |
 | `CHANGELOG.md` | One condensed entry per completed item, newest first, under the date it was handed off | When an item completes, in its hand-off commit; the item leaves the roadmap at the same time |
-| `packages/<dist>/CHANGELOG.md` | The distribution's release notes: `## [Unreleased]`, then one `## [<version>] - <date>` section per version (`scripts/release.py check` and `tests/test_packages.py` need the current version's) | The distribution's code, requirements or behaviour changed (a line under `[Unreleased]`), or its version was bumped (the section) |
+| `packages/<dist>/CHANGELOG.md` | The distribution's release notes: the open section (`## [Unreleased]`, or the undated `## [<version>]` of a bumped but unreleased version), then one `## [<version>] - <date>` section per version (`scripts/release.py check` and `tests/test_packages.py` need the current version's) | The distribution's code, requirements or behaviour changed (a line under the open section: `## [Unreleased]`, or the undated `## [<version>]` of a bumped but unreleased version), or its version was bumped (the section) |
 | `packages/<dist>/README.md` | What the distribution is, how to install it, its extras (the wheel's long description) | An extra, a requirement, an install command or what the distribution holds changed |
 | `TESTING.md` | Manual checks a person runs, as rows with an ID (`ENV-`, `TR-`, `VID-`, `OUT-`, `BM-`, `CKPT-`, `LOG-`, `CI-`), a command and an expected result | A command, flag, output path or expected behaviour was added or changed |
 | `README.md` | The front page: what the repo is, what works and what does not, the challenge table (one row per registered challenge, named by its environment id, with its report), the robotics ladder, the quick start, the documentation map | A challenge was added, its result changed, a headline feature or the quick-start command changed, or the ladder moved |
@@ -56,6 +56,12 @@ CONTRIBUTING.md, GEMINI.md and ARCHITECTURE.md.
 | `docs/results.md` | The full table of which agent solves which challenge, with the caveats behind each number | A committed config, a measured result or a threshold changed |
 | `docs/navigation.md` | The navigation environments, the simulator and the state-estimation library with its measurements | `rl_navigation` changed, or its numbers did |
 | `docs/ai-assistants.md` | MCP server setup, skill setup and skill tooling | A skill, a skill tool, `.mcp.json` or `.claude/settings.json` changed |
+| `docs/learn/README.md` | The learning path through the teaching pages, and the one glossary (solved, held, terminated, truncated, greedy evaluation) | A teaching page was added or renamed, or a term's meaning changed |
+| `docs/learn/foundations.md` | What every agent shares, prerequisites first (the episode loop, terminated and truncated, returns and bootstrapping, solved and held), then the fixes that apply to every agent | The trainer, the solve rule, seeding, evaluation or checkpoints changed |
+| `docs/learn/challenges/<challenge>.md` (`cartpole`, `acrobot`, `mountaincar`, `pendulum`, `lunarlander`, `bipedalwalker`, `navigation`) | One challenge for a learner: the task, its observation, action and reward, how an episode ends and the threshold, who solves it (a link to its `docs/results.md` row, not restated), what was hard, its frame and clips, one train and one record command | The environment, threshold, committed configs, results or media of that challenge changed |
+| `docs/learn/algorithms/<family>.md` (`policy-gradient`, `ppo`, `dqn`, `ddpg-td3`, `sac`) | One algorithm family for a learner: the idea, the update as implemented (each step beside its code as a dotted name), the settings that matter (linked to `configs/`, current values never copied), pitfalls, and the dated fixes this repo needed | The family's update rule or options changed, or a fix to it was made |
+| `docs/learn/navigation/<step>.md` (`sim-and-sensors`, `estimation`, `mapping`, `slam`, `planning`, `export-to-robot`; written once planning and control is built) | The navigation track for a learner, one robotics step a page | `rl_navigation` or the export changed |
+| `docs/images/` and `scripts/doc_media.json` | The frames and clips the docs show, and for each the command that made it (CONTRIBUTING.md §5) | An image was added, regenerated or dropped; one is listed for each file |
 | `docs/agents.md` | How each agent works: its idea, its update as the code computes it, this repo's options, what was measured, lessons | An agent was added, or its update rule, options, committed config or measured result changed |
 | `ARCHITECTURE.md` | Package boundaries, the agent class diagram, the training sequence, the artifact tree, extension steps | A class, a base-class method in the diagram, a boundary or an output path changed |
 | `CONTRIBUTING.md` | Standards (§1 to §3), the workflow (§4), the artifact policy (§5) | A rule or a step changed |
@@ -127,7 +133,15 @@ python .claude/skills/doc-sync/scripts/check_md_width.py          # the virtual 
 
 Also run `python scripts/check_doc_links.py`: it fails on any relative link, cross-file anchor or file path in the
 Markdown that no longer resolves (a renamed heading, a moved file). CI runs it on every pull request, and
-`tests/test_doc_links.py` runs it too.
+`tests/test_doc_links.py` runs it too. Then run `python scripts/check_doc_sources.py`: in `docs/learn/` every dotted
+code name (`rl_core.agents.returns.discounted_returns`) must exist in `packages/*/src` (a name starting `rl_` that is
+no package is a typo), and every paragraph, list item or table row with a number must cite
+`(CHANGELOG.md, <date>)`, or the clickable form (a link to the CHANGELOG's `#<date>` heading whose text is
+`CHANGELOG.md, <date>`), with a real `## <date>` section, or link a `docs/benchmarks/` report. Every file in `docs/images/` must be listed in
+`scripts/doc_media.json`, linked from a page and within the budget of CONTRIBUTING.md §5, and no `.png` or `.gif`
+may sit elsewhere under `docs/` or `packages/`. CI runs it on every pull request; `tests/test_doc_sources.py` tests
+it. Numbers inside code spans are not checked, so a current config value written as code (`gamma: 0.9`) is the
+numbers-check agent's to match against `configs/`.
 
 ## 5. Report
 
