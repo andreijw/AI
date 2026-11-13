@@ -11,6 +11,8 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 - `FeatureSettings.max_bridged_angle` (default 3°): `segment_scan` joins usable beams across dropped ones, so circle
   extraction keeps working under dropout. This changes `extract_circles` and `EkfSlam` results on the 360-beam lidar;
   the 64-beam lidar is unchanged. `summarize_features` reports `reachable_rate`.
+- `rl_navigation.planning`: `PlanningGrid` (`from_arena`, `from_occupied`), `astar`, `reachable`, `segments_free` and
+  `shortcut`. `rl_navigation.sim.layouts.connected` is the flood fill `path_exists` uses.
 
 ### Changed
 

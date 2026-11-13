@@ -27,6 +27,16 @@ Acrobot-v1) and
   the learning path, challenge and algorithm pages so the next PRs can link to each other. The checker was written
   before its tests; a mutation check caught all 38 deliberate breaks across two rounds.
 
+- **Planning on an occupancy grid: A\* and path smoothing** (`feature/planning-grid-astar`; roadmap, Phase 8
+  "Planning and control", PR 1 of 3). `rl_navigation.planning` (NumPy, `sim` and `mapping.beams` only, so the robot
+  imports it) builds a `PlanningGrid` from the true arena (exactly `occupancy_grid(inflate=)`) or from an occupied
+  mask, inflating by the true distance to each occupied cell's square, and plans with 8-connected A\* (octile
+  heuristic, no corner cutting, deterministic ties), a cheap `reachable` check that answers "no path" in about 8 ms
+  instead of a 70 ms failed search, and farthest-visible shortcutting batched one ray cast per kept point. Optimality
+  is checked against exhaustive search and an independent Bellman-Ford on 200 random grids; 19 mutations killed.
+  `PLAN-1` (tuning seeds 10000 to 10199, alone on the Jetson): A\* 1.1 ms median and 23 ms p99, the shortcut 7.6 ms
+  at worst; the judged timing gate runs in PR 3. The flood fill of `path_exists` is now `sim.layouts.connected`.
+
 ### Changed
 
 - **rl-core 0.2.0, part 1: a declared public API and all versions at 0.2.0** (`feature/rl-core-public-api`; the

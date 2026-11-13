@@ -204,7 +204,10 @@ steps 3 to 5 are sketches to turn into full items when picked.
     (FastSLAM-style) with scan matching for the lidar preset. Judged by map and pose error against ground truth,
     and loop closure on layouts that revisit a place.
 
-- [ ] **Planning and control**
+- [~] **Planning and control** (picked 2026-11-13; PR 1 grid, A\* and smoothing; PR 2 the pure-pursuit follower
+  and the navigator; PR 3 the comparison with the RL policies, judged once on seeds 30000 to 30499)
+  - **Progress (PR 1, 2026-11-13)**: `rl_navigation.planning` with A\* and smoothing (CHANGELOG.md,
+    2026-11-13).
   - **Description**: A* on the occupancy grid (from step 3 or the true map), path smoothing, and a pure-pursuit or
     PID follower that outputs the same velocity commands the RL agents do, as a classical baseline. Compared with
     the RL policy on the same seeded layouts: success rate, path length, time to goal and collisions, and how each

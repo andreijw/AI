@@ -159,6 +159,10 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.slam.feature_evaluation",
         "rl_navigation.slam.ekf_slam",
         "rl_navigation.slam.evaluation",
+        "rl_navigation.planning",
+        "rl_navigation.planning.grid",
+        "rl_navigation.planning.astar",
+        "rl_navigation.planning.smoothing",
     ],
 )
 def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
@@ -404,3 +408,24 @@ def test_the_localization_recording_loads_no_plotting_or_video_stack(module):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "[]", f"Importing {module} loaded {result.stdout.strip()}."
+
+
+def test_the_planning_core_imports_only_the_simulator_and_the_mapping_core():
+    """The planner runs on the robot: a layer above the mapper (its exact cell traversal), with
+    neither the estimators, SLAM, the Gymnasium layer nor the mapping desk tool. A fresh process."""
+    loaded = _loaded_navigation_packages(
+        "rl_navigation.planning, rl_navigation.planning.grid, rl_navigation.planning.astar, "
+        "rl_navigation.planning.smoothing"
+    )
+    assert loaded == ["mapping", "planning", "sim"], (
+        f"the planning core loaded rl_navigation.{loaded}"
+    )
+    code = (
+        "import sys; import rl_navigation.planning; "
+        "print('rl_navigation.mapping.evaluation' in sys.modules)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False", "the planning core imported the mapping desk tool"
