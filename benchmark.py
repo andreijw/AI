@@ -11,6 +11,7 @@ import argparse
 import json
 import logging
 import os
+import textwrap
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -630,10 +631,17 @@ class BenchmarkRunner:
             )
             if parallel:
                 trained = ", ".join(f"{agent}: {n}" for agent, n in sorted(parallel.items()))
-                lines.append(
-                    f"Runs that trained from N environments (`training.num_envs`, {trained}) also "
-                    "finish the episodes in flight in the other environments, so they can "
-                    "overshoot by up to N - 1 more episodes."
+                # One sentence whose agent list varies, wrapped to stay inside markdownlint's
+                # 120-character MD013 limit (.markdownlint.json) like the fixed lines above.
+                lines.extend(
+                    textwrap.wrap(
+                        f"Runs that trained from N environments (`training.num_envs`, {trained}) "
+                        "also finish the episodes in flight in the other environments, so they "
+                        "can overshoot by up to N - 1 more episodes.",
+                        width=100,
+                        break_long_words=False,
+                        break_on_hyphens=False,
+                    )
                 )
         return lines
 

@@ -53,6 +53,11 @@ Acrobot-v1) and
   100% held, and the other agents' learning figures are unchanged. Not verified: Pendulum with `n_steps: 0` (the
   committed Pendulum config uses `n_steps: 8`, which already bootstrapped), and seeds other than 1 to 5.
 
+- **Benchmark reports wrap their multi-environment note** (`fix/benchmark-report-wrap`). A report with an agent
+  trained on several environments (`training.num_envs`) wrote its overshoot note as one 190-character line, which
+  fails CI's markdownlint (MD013, 120); `benchmark.py` now wraps it at 100. A test builds such a report and checks
+  every line outside a table.
+
 ### Changed
 
 - **The `release` skill publishes a draft once the maintainer says yes** (`docs/release-skill-publish`; the
