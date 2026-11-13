@@ -53,6 +53,13 @@ Acrobot-v1) and
   100% held, and the other agents' learning figures are unchanged. Not verified: Pendulum with `n_steps: 0` (the
   committed Pendulum config uses `n_steps: 8`, which already bootstrapped), and seeds other than 1 to 5.
 
+### Changed
+
+- **The `release` skill publishes a draft once the maintainer says yes** (`docs/release-skill-publish`; the
+  maintainer's request, 2026-11-12). After its draft check it asks for each tag by name and, on a yes, runs
+  `gh release edit <tag> --draft=false`; tags stay the maintainer's. rl-core and rl-navigation 0.1.0 were published
+  this way on 2026-11-12.
+
 ## 2026-11-11
 
 ### Added
