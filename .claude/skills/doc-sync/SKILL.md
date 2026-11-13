@@ -137,7 +137,9 @@ Markdown that no longer resolves (a renamed heading, a moved file). CI runs it o
 code name (`rl_core.agents.returns.discounted_returns`) must exist in `packages/*/src` (a name starting `rl_` that is
 no package is a typo), and every paragraph, list item or table row with a number must cite
 `(CHANGELOG.md, <date>)`, or the clickable form (a link to the CHANGELOG's `#<date>` heading whose text is
-`CHANGELOG.md, <date>`), with a real `## <date>` section, or link a `docs/benchmarks/` report. Every file in `docs/images/` must be listed in
+`CHANGELOG.md, <date>`), with a real `## <date>` section; or cite a manual-test row as ``(TESTING.md `TR-31`)``
+(several: ``(TESTING.md `TR-28`, `TR-31`)``), each ID a real `| ID |` row of `TESTING.md`; or link a
+`docs/benchmarks/` report. Every file in `docs/images/` must be listed in
 `scripts/doc_media.json`, linked from a page and within the budget of CONTRIBUTING.md §5, and no `.png` or `.gif`
 may sit elsewhere under `docs/` or `packages/`. CI runs it on every pull request; `tests/test_doc_sources.py` tests
 it. Numbers inside code spans are not checked, so a current config value written as code (`gamma: 0.9`) is the

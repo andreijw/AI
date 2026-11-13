@@ -249,6 +249,33 @@ def test_shown_numbers_keep_their_sign_and_lose_trailing_punctuation(tmp_path):
     assert len(problems) == 1 and "(-200, 5, 0.5)" in problems[0], problems
 
 
+TESTING_ROWS = "| ID | Name | Command | Expected |\n| :--- | :--- | :--- | :--- |\n| TR-31 | A | `x` | y |\n| TR-28 | B | `x` | y |\n"
+
+
+def test_a_testing_row_citation_is_a_source(tmp_path):
+    _write(tmp_path, "TESTING.md", TESTING_ROWS)
+    text = "# P\n\nSeed 42 ended at 302.4 after 636 episodes (TESTING.md `TR-31`).\n"
+    assert _page_problems(tmp_path, text) == []
+
+
+def test_every_row_of_a_testing_citation_must_exist(tmp_path):
+    _write(tmp_path, "TESTING.md", TESTING_ROWS)
+    text = "# P\n\nAbout 11 ms a step (TESTING.md `TR-28`, `TR-99`).\n"
+    assert _page_problems(tmp_path, text) == ["docs/learn/page.md:3: TESTING.md has no row TR-99"]
+
+
+def test_a_testing_citation_of_a_missing_row_is_reported_even_without_numbers(tmp_path):
+    _write(tmp_path, "TESTING.md", TESTING_ROWS)
+    problems = _page_problems(tmp_path, "# P\n\nAs measured (TESTING.md `CI-7`).\n")
+    assert problems == ["docs/learn/page.md:3: TESTING.md has no row CI-7"]
+
+
+def test_a_testing_row_named_in_prose_only_is_not_a_source(tmp_path):
+    _write(tmp_path, "TESTING.md", TESTING_ROWS)
+    problems = _page_problems(tmp_path, "# P\n\nRow `TR-31` says 636 episodes.\n")
+    assert len(problems) == 1 and "numbers without a source" in problems[0], problems
+
+
 def test_a_link_to_a_benchmark_report_is_a_source(tmp_path):
     _write(tmp_path, "docs/benchmarks/cartpole_results.md", "# R\n")
     text = "# P\n\nSolved 5 of 5 ([report](../benchmarks/cartpole_results.md#x)).\n"

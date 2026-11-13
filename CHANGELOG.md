@@ -46,6 +46,14 @@ Acrobot-v1) and
   run ended near 0.08, the 750-episode budget from 2026-10-14 near the floor; the lesson was the unit) in the page
   and the dev-loop skill.
 
+- **Teaching pages for the challenges** (`docs/learn-challenges`; docs PR 3). `docs/learn/challenges/` explains
+  CartPole, Acrobot, MountainCar (both), Pendulum, LunarLander (both) and BipedalWalker: the task, the observation,
+  action and reward (checked against Gymnasium 1.4.0), how an episode ends and why the solve threshold is what it is,
+  who solves it (linked to `docs/results.md` and the reports), what was hard, with every caveat that left
+  `results.md`, and the commands to try it. Challenges without a benchmark report quote their CHANGELOG entry
+  verbatim. `scripts/check_doc_sources.py` also accepts a `TESTING.md` row as a source (`(TESTING.md \`TR-31\`)`).
+  A numbers check of about 130 figures corrected three citation dates and one overclaim before the merge.
+
 ### Changed
 
 - **rl-core 0.2.0, part 1: a declared public API and all versions at 0.2.0** (`feature/rl-core-public-api`; the
