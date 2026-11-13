@@ -704,7 +704,8 @@ npx --yes markdownlint-cli@0.39.0 '**/*.md' --ignore node_modules   # the versio
 Every pull request runs two jobs in `ci.yml`, which are the required status checks, plus CodeQL:
 
 - **Checks**: Ruff lint and format, MyPy, Bandit, the pylint duplicate-code audit, markdownlint, the Markdown link
-  check (`scripts/check_doc_links.py`), and a check that the workflow list in the README is current
+  check (`scripts/check_doc_links.py`), the teaching-page source and docs-media check
+  (`scripts/check_doc_sources.py`), and a check that the workflow list in the README is current
 - **Unit Tests**: pytest with branch coverage (90% minimum) and the Codecov upload
 - **Packages** (not required): builds the three distributions, installs each wheel in a fresh environment and
   imports it (`scripts/release.py smoke-all`; `rl-navigation` may load only NumPy), and runs the robot-side tests

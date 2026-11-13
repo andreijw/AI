@@ -36,6 +36,14 @@ Training and Code Health items are picked as they become useful.
 
 ### Workflow Tooling
 
+- [~] **Teaching docs for 0.2.0** (the maintainer's request, 2026-11-13; plan in seven PRs): a `docs/learn/` tree
+  with a learning path, a foundations page, seven challenge pages, the algorithm families (with the fixes this
+  repository needed, from CHANGELOG.md), a navigation track ending with the ONNX and C export, frames of every
+  challenge and GIF clips of trained and random agents (seed 1, retrained after the 0.2.0 API lands, checkpoints
+  attached to the release), and committed benchmark curves. The navigation track waits for planning and control.
+  - **Progress (PR 0, 2026-11-13)**: the media rule, the source checker in CI and the page skeletons
+    (CHANGELOG.md, 2026-11-13).
+
 - [~] **rl-core 0.2.0 API** (the maintainer's decision D, 2026-11-13; plan in four PRs plus the release PR):
   break the `challenges` ↔ `training` cycle by moving `training/robustness.py` to `rl_core/robustness.py` behind a
   deprecation shim; declare `__all__` throughout rl-core; deprecate the legacy `make_env`, `make_vec_env` and

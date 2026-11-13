@@ -14,6 +14,19 @@ Acrobot-v1) and
 
 ## 2026-11-13
 
+### Added
+
+- **Teaching docs groundwork: a media rule and a source checker** (`docs/media-policy-and-checker`; the maintainer's
+  request for a deep teaching update before 0.2.0, PR 0 of the docs plan). Images and clips live only in
+  `docs/images/` (a PNG up to 60 KiB, a GIF up to 600 KiB, 6 MiB a regeneration), each listed in
+  `scripts/doc_media.json` with the command that made it (CONTRIBUTING.md §5). `scripts/check_doc_sources.py`, stdlib
+  only and run in CI's Checks job on every pull request, docs-only ones included, requires on the new `docs/learn/`
+  pages that every dotted code pointer resolve in the source (parsed, never imported), that every number sit beside a
+  benchmark-report link or a dated CHANGELOG citation whose heading exists, and that every image be listed, linked and
+  within budget; it also refuses media outside `docs/images/`. Fourteen skeleton pages fix the names and headings of
+  the learning path, challenge and algorithm pages so the next PRs can link to each other. The checker was written
+  before its tests; a mutation check caught all 38 deliberate breaks across two rounds.
+
 ### Changed
 
 - **rl-core 0.2.0, part 1: a declared public API and all versions at 0.2.0** (`feature/rl-core-public-api`; the
