@@ -98,9 +98,12 @@ To optimize token usage and context window limits:
     protocols and `SensorMap`), `kalman.py` (the Kalman update in Joseph form), `ekf.py` (`EkfLocalizer`, iterated
     EKF localization), `mcl.py` (`MclLocalizer`, augmented Monte Carlo localization), `evaluation.py`
     (`run_trial`, `summarize` and `summarize_localization`: seeded trials of either filter against the true pose,
-    with an optional kidnapping) and `comparison.py` (the EKF against MCL on the same seeds: a Markdown report and the
-    `python -m rl_navigation.estimation.comparison` command; not imported by the package) and `recording.py` (snapshots
-    of the EKF and MCL on one seeded trial and the frames painted from them; not imported by the package). No
+    with an optional kidnapping), `averages.py` (`mean_or_nan` and `median_or_nan`, the NaN-on-empty mean and median
+    of the evaluation tools), the `comparison/` package (the EKF against MCL on the same seeds:
+    `instrumentation.py`, `records.py`, `metrics.py`, `runner.py`, `report.py` and `cli.py`, all re-exported by its
+    `__init__.py`; a Markdown report and the `python -m rl_navigation.estimation.comparison` command; not imported by
+    the package) and `recording.py` (snapshots of the EKF and MCL on one seeded trial and the frames painted from them;
+    not imported by the package). No
     environment or benchmark challenge uses it.
   * `rl_navigation/mapping/`: occupancy-grid mapping with known poses, a peer of `estimation`: `beams.py`
     (`traverse_cells`, the exact vectorised cell traversal, `endpoint_visits`, the inverse sensor model's free and

@@ -100,6 +100,13 @@ Acrobot-v1) and
   seed, and the DDPG, PPO and random rows are unchanged but for their times. The plot in `plots/` is not refreshed
   (the maintainer's folder).
 
+- **The localization comparison is a package; one NaN-on-empty average** (`refactor/split-localization-comparison`;
+  the code-health cleanup, PR 3 of 4). `rl_navigation/estimation/comparison.py` (1,063 lines) is now the
+  `comparison/` package (instrumentation, records, metrics, runner, report, cli), moved unchanged; it re-exports its
+  28 public names and `python -m rl_navigation.estimation.comparison` still runs. A report merged from saved records is
+  byte-identical to the old code's. The mean and median that return NaN when empty, repeated in the SLAM, feature and
+  mapping evaluations and in `_median_steps`, are now `rl_navigation.estimation.averages`.
+
 ## 2026-11-11
 
 ### Added

@@ -123,8 +123,10 @@ tags are in [docs/releasing.md](docs/releasing.md).
    - `rl_navigation.estimation` is the robot's own code beside the Gymnasium layer, not under it: pose estimation on a
      known map (`ekf`: `EkfLocalizer`; `kalman`: `kalman_update` in Joseph form; `mcl`: `MclLocalizer`, augmented Monte
      Carlo localization with its pure resampling and likelihood functions; `evaluation`: seeded trials with either
-     filter, optionally with a kidnapping, against the simulator's true pose; `comparison`: the EKF and MCL on the same
-     seeds as a Markdown report and a command line, a desk tool that the package's `__init__` does not import;
+     filter, optionally with a kidnapping, against the simulator's true pose; `averages`: the NaN-on-empty mean and
+     median of the evaluation tools; `comparison`: the EKF and MCL on the same seeds as a Markdown report
+     and a command line, a desk-tool package (`instrumentation`, `records`, `metrics`, `runner`, `report`, `cli`,
+     re-exported by its `__init__`) that the package's `__init__` does not import;
      `recording`: snapshots of both filters on one seeded trial and the frames painted from them, another desk tool the
      package does not import; the `rl_navigation.localization_video` command, outside the package, writes them to an
      MP4). It imports NumPy and `rl_navigation.sim` only, never `gym_env`, the framework's layer, Gymnasium or

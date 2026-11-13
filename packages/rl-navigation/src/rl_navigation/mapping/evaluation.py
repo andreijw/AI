@@ -20,6 +20,7 @@ from typing import Literal, NamedTuple
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from rl_navigation.estimation.averages import mean_or_nan
 from rl_navigation.estimation.evaluation import Localizer, run_trial
 from rl_navigation.estimation.maps import SensorMap
 from rl_navigation.mapping.beams import sensor_rays
@@ -270,11 +271,6 @@ def visible_cells(
     return visible
 
 
-def _share(values: BoolGrid) -> float:
-    """The mean of a boolean array, NaN when it is empty."""
-    return float(values.mean()) if values.size else float("nan")
-
-
 def score_map(grid: OccupancyGrid, arena: Arena, poses: ArrayLike) -> dict[str, float]:
     """A map against the arena's true maps (:func:`true_maps`).
 
@@ -309,11 +305,11 @@ def score_map(grid: OccupancyGrid, arena: Arena, poses: ArrayLike) -> dict[str, 
     near_occupied = _dilate(occupied)
     judged = observed & ~truth.band
     return {
-        "observed_free_share": _share(observed[~truth.touching]),
-        "cell_accuracy": _share((occupied == truth.touching)[judged]),
-        "occupied_precision": _share(_dilate(truth.touching)[occupied]),
-        "visible_surface_recall": _share(near_occupied[seen_surface]),
-        "surface_recall": _share(near_occupied[truth.surface]),
+        "observed_free_share": mean_or_nan(observed[~truth.touching]),
+        "cell_accuracy": mean_or_nan((occupied == truth.touching)[judged]),
+        "occupied_precision": mean_or_nan(_dilate(truth.touching)[occupied]),
+        "visible_surface_recall": mean_or_nan(near_occupied[seen_surface]),
+        "surface_recall": mean_or_nan(near_occupied[truth.surface]),
         "false_free_cells": float((grid.free() & truth.deep).sum()),
     }
 
@@ -362,6 +358,7 @@ def summarize_maps(scores: Sequence[dict[str, float]]) -> dict[str, float]:
             continue
         values = np.array([run[name] for run in scores], dtype=np.float64)
         values = values[~np.isnan(values)]
+        # Not mean_or_nan: the three lines keep one guard, parallel with _min and _sd.
         summary[f"{name}_mean"] = float(values.mean()) if len(values) else float("nan")
         summary[f"{name}_min"] = float(values.min()) if len(values) else float("nan")
         summary[f"{name}_sd"] = float(values.std(ddof=1)) if len(values) > 1 else float("nan")

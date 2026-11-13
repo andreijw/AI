@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 
 from rl_navigation.estimation import EkfLocalizer, MclSettings
-from rl_navigation.estimation import comparison as comparison_module
 from rl_navigation.estimation.comparison import (
     COLLAPSED_POSITION_STD,
     ComparisonRow,
@@ -25,6 +24,7 @@ from rl_navigation.estimation.comparison import (
     nees_per_step,
     run_records,
 )
+from rl_navigation.estimation.comparison import runner as comparison_runner
 from rl_navigation.estimation.evaluation import LOST_ERROR, Trial, average_nees
 from rl_navigation.sim import lidar
 
@@ -627,7 +627,7 @@ def test_cli_reuses_the_records_already_written(cli_records, monkeypatch, capsys
     def no_trial(*args, **kwargs):
         raise AssertionError("a trial ran though its record was there")
 
-    monkeypatch.setattr(comparison_module, "run_trial", no_trial)
+    monkeypatch.setattr(comparison_runner, "run_trial", no_trial)
     main(["--seeds", "1", "--records", str(cli_records[0]), *CLI_RUN])
     assert capsys.readouterr().out.startswith("# Localization comparison")
     assert sorted((p.name, p.stat().st_mtime_ns) for p in cli_records[0].glob("*")) == times
@@ -677,7 +677,7 @@ def test_run_records_saves_each_trial_as_it_ends(tmp_path):
     ],
 )
 def test_cli_refuses_bad_arguments_before_running(argv, message, monkeypatch, capsys):
-    monkeypatch.setattr(comparison_module, "run_trial", None)  # nothing may run
+    monkeypatch.setattr(comparison_runner, "run_trial", None)  # nothing may run
     with pytest.raises(SystemExit):
         main(argv)
     assert message in capsys.readouterr().err
@@ -783,6 +783,80 @@ def test_merge_records_computes_each_sets_figures_by_hand():
     )
 
 
+# --from-records of the hand-worked records (_known_record), seeds 1 and 2 saved apart: the whole
+# report, pinned byte for byte. The path runs no trial, so nothing in it depends on the clock.
+KNOWN_REPORT = """\
+# Localization comparison: EKF and MCL
+
+Seeds 1, 2; 10 steps a run; the kidnap sets carry the robot off at step 4.
+Localized: within 0.2 m and 0.2 rad at each of the 2 steps that begin 2 steps after the start or \
+the kidnapping; a step
+is 0.1 s.
+
+MCL: 150 particles, 16 beams, model_std 0.15; covariance scale lidar (1, 1, 1).
+EKF reset: after 3 counting scans of at least 2 candidates, variance floor (0.2, 0.2, 0.1) \
+squared, window 2 scans.
+EKF hold: an update that does not converge or has an NIS over the chi-square 0.999 quantile keeps \
+P.
+EKF off-map count: a scan with no candidate beam while the estimate is not in free space counts \
+toward the reset.
+
+## Tracking from the noisy start
+
+| Sensor | Dropout | Filter | Position RMSE (m) | Heading RMSE (rad) | Mean NEES | Mean \
+e_i^2/P_ii (x, y, theta) | NEES <= 9.35 | Lost | Max recent resets | ms/step |
+| :--- | :--- | :--- | ---: | ---: | ---: | :--- | ---: | ---: | ---: | ---: |
+| lidar | own | EKF | 0.2236 | 0.3000 | 14.00 | 1.00, 4.00, 9.00 | 0.000 | 0/2 | 5 | 4.00 |
+| lidar | own | MCL | 0.2236 | 0.3000 | 14.00 | 1.00, 4.00, 9.00 | 0.000 | 0/2 | - | 4.00 |
+| lidar | own | Dead reckoning | 0.0000 | 0.0000 | - | - | - | 0/2 | - | - |
+
+## Global start and kidnapping
+
+Confidently wrong: the share of steps after the kidnapping, over all kidnapped runs, with \
+position error over 0.5 m,
+NEES over 9.35 and, for the EKF, no reset in the last 2 scans.
+Localized runs: the same share over only the runs that had localized before the kidnapping (n/a \
+when none had).
+Wrong with σ < 5 cm: the confidently wrong steps whose position standard deviation (larger axis) \
+is under 0.05 m.
+
+| Sensor | Dropout | Filter | Start | Localized | Median to localize | Recovered | Median to \
+recover | Confidently wrong (all runs) | Confidently wrong (localized runs) | Wrong with σ < 5 cm \
+(all runs) | Max recent resets | ms/step |
+| :--- | :--- | :--- | :--- | ---: | :--- | ---: | :--- | ---: | ---: | ---: | ---: | ---: |
+| lidar | own | MCL | anywhere | 0.50 | 0 steps (0.0 s) | 0.50 | 2 steps (0.2 s) | 0.500 | 0.333 \
+| 0.500 | - | 4.00 |
+| lidar | own | EKF | noisy start | 0.50 | 0 steps (0.0 s) | 0.50 | 2 steps (0.2 s) | 0.167 | \
+0.000 | 0.167 | 5 | 4.00 |
+
+Timings: m; b; concurrent jobs: n. ms/step: the filter's predict, update, pose and covariance per \
+step.
+"""
+
+
+def test_cli_from_records_reports_the_hand_worked_records(tmp_path, capsys):
+    directories = []
+    for seed in (1, 2):
+        directory = tmp_path / f"seed{seed}"
+        directory.mkdir()
+        for mode in KNOWN_MODES:
+            record = _known_record(seed, mode)
+            mcl_settings = record.meta["settings"]["mcl_settings"]
+            record.meta["settings"]["mcl_settings"] = {
+                **mcl_settings,
+                "max_beams": 16,
+                "model_std": 0.15,
+            }
+            record.save(directory / record.file_name)
+        directories.append(str(directory))
+    report = tmp_path / "report.md"
+    main(
+        ["--from-records", *directories, "--deadline", "2", "--hold", "2", "--report", str(report)]
+    )
+    assert capsys.readouterr().out == KNOWN_REPORT
+    assert report.read_bytes() == KNOWN_REPORT.encode("utf-8")
+
+
 def test_wrong_with_small_sigma_leaves_out_a_filter_at_the_reset_floor():
     """The hand-built records again with every kidnap covariance at the EKF's reset floor
     (sigma 0.2 m): the 1 m errors stay uncovered (NEES 25), so confidently wrong is unchanged,
@@ -852,6 +926,6 @@ def test_load_records_refuses_an_empty_directory(tmp_path):
 
 
 def test_compare_localizers_refuses_a_window_past_the_kidnapping_before_running(monkeypatch):
-    monkeypatch.setattr(comparison_module, "run_trial", None)  # nothing may run
+    monkeypatch.setattr(comparison_runner, "run_trial", None)  # nothing may run
     with pytest.raises(ValueError, match="deadline"):
         compare_localizers(SEEDS, {"lidar": lidar}, (None,), kidnap_at=60, deadline=50, hold=20)

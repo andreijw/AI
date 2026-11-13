@@ -12,6 +12,11 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
   extraction keeps working under dropout. This changes `extract_circles` and `EkfSlam` results on the 360-beam lidar;
   the 64-beam lidar is unchanged. `summarize_features` reports `reachable_rate`.
 
+### Changed
+
+- `rl_navigation.estimation.comparison` is a package of six modules with the same public names and the same `python -m`
+  entry point. New `rl_navigation.estimation.averages` (`mean_or_nan`, `median_or_nan`).
+
 ## [0.1.0] - 2026-11-11
 
 ### Added

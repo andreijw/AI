@@ -39,6 +39,7 @@ from typing import NamedTuple
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from rl_navigation.estimation.averages import mean_or_nan, median_or_nan
 from rl_navigation.estimation.evaluation import Localizer, Trial, run_trial, summarize
 from rl_navigation.estimation.maps import SensorMap
 from rl_navigation.estimation.poses import pose_difference
@@ -450,14 +451,6 @@ def score_run(run: SlamRun) -> RunScore:
     )
 
 
-def _mean(values: Sequence[float] | FloatArray) -> float:
-    return float(np.mean(values)) if len(values) else float("nan")
-
-
-def _median(values: Sequence[float] | FloatArray) -> float:
-    return float(np.median(values)) if len(values) else float("nan")
-
-
 def summarize_slam(
     runs: Sequence[SlamRun], failure_ate: float = ALIGNED_FAILURE_ATE
 ) -> dict[str, float]:
@@ -504,8 +497,8 @@ def summarize_slam(
         "ate_median": float(np.median(ates)),
         "ate_max": float(ates.max()),
         "aligned_failures": float((ates > failure_ate).sum()),
-        "ate_mean_two_or_more_circles": _mean(ates[many]),
-        "ate_mean_at_most_one_circle": _mean(ates[~many]),
+        "ate_mean_two_or_more_circles": mean_or_nan(ates[many]),
+        "ate_mean_at_most_one_circle": mean_or_nan(ates[~many]),
         "runs_two_or_more_circles": float(many.sum()),
         "runs_at_most_one_circle": float((~many).sum()),
         "run_nees_median_q25": float(np.quantile(run_medians, 0.25)),
@@ -518,19 +511,19 @@ def summarize_slam(
         "circles_mapped": (
             sum(score.landmarks.mapped for score in scores) / seen if seen else float("nan")
         ),
-        "radius_nees_mean": _mean(pooled("radius_nees")),
-        "radius_nees_median": _median(pooled("radius_nees")),
-        "pair_nees_mean": _mean(pooled("pair_nees")),
-        "pair_nees_median": _median(pooled("pair_nees")),
-        "absolute_nees_mean": _mean(pooled("absolute_nees")),
-        "radius_error_mean": _mean(pooled("radius_errors")),
-        "drift_median": _median([score.first_estimate_drift for score in scores]),
+        "radius_nees_mean": mean_or_nan(pooled("radius_nees")),
+        "radius_nees_median": median_or_nan(pooled("radius_nees")),
+        "pair_nees_mean": mean_or_nan(pooled("pair_nees")),
+        "pair_nees_median": median_or_nan(pooled("pair_nees")),
+        "absolute_nees_mean": mean_or_nan(pooled("absolute_nees")),
+        "radius_error_mean": mean_or_nan(pooled("radius_errors")),
+        "drift_median": median_or_nan([score.first_estimate_drift for score in scores]),
         "drift_max": float(max(score.first_estimate_drift for score in scores)),
         "loop_closures": float(len(loops)),
-        "loop_error_before": _median(loops[:, 0]),
-        "loop_error_after": _median(loops[:, 1]),
-        "loop_std_before": _median(loops[:, 2]),
-        "loop_std_after": _median(loops[:, 3]),
+        "loop_error_before": median_or_nan(loops[:, 0]),
+        "loop_error_after": median_or_nan(loops[:, 1]),
+        "loop_std_before": median_or_nan(loops[:, 2]),
+        "loop_std_after": median_or_nan(loops[:, 3]),
         "update_ms_median": float(np.median(seconds) * 1e3),
         "update_ms_p99": float(np.quantile(seconds, 0.99) * 1e3),
         "rejected": float(sum(update.rejected for update in updates)),
