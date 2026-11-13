@@ -58,6 +58,20 @@ Acrobot-v1) and
   fails CI's markdownlint (MD013, 120); `benchmark.py` now wraps it at 100. A test builds such a report and checks
   every line outside a table.
 
+- **SLAM re-acquisition after heading collapse** (`fix/slam-association-drift`; roadmap, Phase 8 SLAM follow-up,
+  renamed from "Association drift" by the maintainer). The diagnosis on seeds 1 to 100 found association was not the
+  cause (3 wrong pairings in 83,505; the oracle fails as often): after a long stretch without circles, one update
+  linearised far from the true heading collapsed it. `EkfSlam` now adds EKF2's second-order heading term to every
+  feature–landmark noise, computed with the unobservable frame (translation and rotation) removed and stacked over a
+  scan's rows; FEJ's Jacobians are unchanged. `SlamSettings.second_order` defaults to on, a behaviour change for every
+  `EkfSlam` user: `second_order=False` restores the previous filter. Judged once on seeds 201 to 250 against gates
+  registered beforehand (`TESTING.md` `SLAM-3`): every gate passes, including the two SLAM-1 gates that failed on
+  2026-11-10: ratio to dead reckoning 0.296 (≤ 0.40), 6 aligned failures (≤ 8; 3 in layouts with at most one
+  circle; the gate passes with about 0.86 probability by chance), 1 collapse (≤ 2), median run NEES 3.04, no run
+  below 0.5, and the 30 % dropout row still passes `CIRC-2`. `SLAM-2`: update median 9.77 ms with 30 landmarks
+  against 10 ms, near the edge (the term costs 1.3 ms; accepted by the maintainer). Known limit: past about 0.5 rad
+  of heading error the term bounds the damage but the pose does not stay consistent.
+
 ### Changed
 
 - **The `release` skill publishes a draft once the maintainer says yes** (`docs/release-skill-publish`; the

@@ -19,6 +19,7 @@ from rl_navigation.slam.ekf_slam import (
     fej_motion_jacobian,
     initialize_landmark,
     landmark_measurement,
+    second_order_covariance,
 )
 from rl_navigation.slam.features import CircleFeature
 from tests.navigation_cases import (
@@ -396,7 +397,7 @@ def test_the_floor_scales_with_the_sensors_range_noise():
 # Heading observability -------------------------------------------------------------------------
 
 
-def heading_std_after_30_scans(jacobians):
+def heading_std_after_30_scans(jacobians, second_order=True):
     """sigma_theta of a robot that starts with sigma_theta = 0.3 rad and sees two circles for
     30 scans (seeded features with 1 cm noise), started 0.1 rad off."""
     rng = np.random.default_rng(1)
@@ -408,7 +409,7 @@ def heading_std_after_30_scans(jacobians):
         ODOMETRY,
         start,
         np.diag([0.05, 0.05, 0.3]) ** 2,
-        SlamSettings(floor_factor=0.0, jacobians=jacobians),
+        SlamSettings(floor_factor=0.0, jacobians=jacobians, second_order=second_order),
     )
     travel = ODOMETRY.wheel_travel(0.3, 0.5, 0.1)
     for _ in range(30):
@@ -422,11 +423,13 @@ def heading_std_after_30_scans(jacobians):
     return math.sqrt(slam.covariance[2, 2])
 
 
-def test_fej_gains_no_information_about_the_absolute_heading():
+@pytest.mark.parametrize("second_order", [True, False])
+def test_fej_gains_no_information_about_the_absolute_heading(second_order):
     """Nothing observes the global heading. FEJ keeps sigma_theta at its prior; the standard
-    Jacobians invent heading information. This fails if FEJ is silently disabled."""
-    assert heading_std_after_30_scans("fej") >= 0.29
-    assert heading_std_after_30_scans("standard") < 0.15
+    Jacobians invent heading information. This fails if FEJ is silently disabled, and the
+    second-order term (it only adds noise) must not change it."""
+    assert heading_std_after_30_scans("fej", second_order) >= 0.29
+    assert heading_std_after_30_scans("standard", second_order) < 0.15
 
 
 # Association -----------------------------------------------------------------------------------
@@ -824,6 +827,7 @@ def test_wrong_inputs_are_refused():
         {"candidate_radius": 0.0},
         {"candidate_timeout": 0},
         {"jacobians": "iterated"},
+        {"second_order": 1},
     ],
 )
 def test_slam_settings_refuse_values_out_of_range(kwargs):
@@ -859,3 +863,234 @@ def test_three_scans_of_two_circles_map_both():
     order = np.argsort(slam.landmarks[:, 0])[::-1]
     np.testing.assert_allclose(slam.landmarks[order, :2], arena.circle_centers, atol=0.03)
     np.testing.assert_allclose(slam.landmarks[order, 2], arena.circle_radii, atol=0.03)
+
+
+# The second-order (EKF2) term -------------------------------------------------------------------
+
+
+def block_index(landmarks):
+    """The state indices of the pose and the given landmarks' centres, in that order."""
+    return [0, 1, 2] + [i for j in landmarks for i in (3 + 3 * j, 4 + 3 * j)]
+
+
+def random_state(rng, count):
+    """A pose, ``count`` landmarks and a random symmetric positive-definite covariance."""
+    state = np.concatenate(
+        [
+            random_pose(rng),
+            np.column_stack(
+                [rng.uniform(0.0, 5.0, (count, 2)), rng.uniform(0.2, 0.5, count)]
+            ).ravel(),
+        ]
+    )
+    A = rng.standard_normal((3 + 3 * count, 3 + 3 * count))
+    return state, 1e-2 * (A @ A.T) / (3 + 3 * count) + 1e-4 * np.eye(3 + 3 * count)
+
+
+def term(state, covariance, landmarks):
+    """``second_order_covariance`` for the given landmarks of a full state."""
+    index = block_index(landmarks)
+    centres = np.asarray(state[3:]).reshape(-1, 3)[landmarks, :2]
+    return second_order_covariance(state[:3], centres, covariance[np.ix_(index, index)])
+
+
+def definition(state, covariance, landmarks):
+    """The EKF2 term by its definition: the Hessians of each landmark's predicted centre from
+    central differences of ``landmark_measurement``, the gauge (translation and rotation) taken
+    out of the covariance as its largest part along the null space, then 1/2 tr(M_a P M_b P)."""
+    index = block_index(landmarks)
+    P = covariance[np.ix_(index, index)]
+    N = slam_null_space(state[:3], np.asarray(state[3:]).reshape(-1, 3)[:, :2])[index]
+    P = P - N @ np.linalg.inv(N.T @ np.linalg.solve(P, N)) @ N.T
+    hessians = []
+    for k, j in enumerate(landmarks):
+
+        def centre(v, k=k, j=j):
+            pose = v[:3]
+            m = np.array([v[3 + 2 * k], v[4 + 2 * k], state[5 + 3 * j]])
+            return landmark_measurement(pose, m)[0][:2]
+
+        def jacobian_row(v, i):
+            return fd_jacobian(lambda w: centre(w)[i : i + 1], v, eps=1e-4, angle_index=None)[0]
+
+        point = state[index]
+        for i in range(2):
+            hessians.append(
+                fd_jacobian(lambda v, i=i: jacobian_row(v, i), point, eps=1e-4, angle_index=None)
+            )
+    count = len(hessians)
+    C2 = np.array(
+        [
+            [0.5 * np.trace(hessians[a] @ P @ hessians[b] @ P) for b in range(count)]
+            for a in range(count)
+        ]
+    )
+    full = np.zeros((3 * len(landmarks), 3 * len(landmarks)))
+    rows = [3 * r + i for r in range(len(landmarks)) for i in range(2)]
+    full[np.ix_(rows, rows)] = C2
+    return full
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_the_second_order_term_matches_its_definition_with_cross_terms(seed):
+    """Two landmarks stacked: the (6, 6) term, cross blocks included, against the Hessians from
+    central differences; the radius rows and columns are zero (h_rho is linear)."""
+    rng = np.random.default_rng(seed)
+    state, covariance = random_state(rng, 3)
+    expected = definition(state, covariance, [2, 0])
+    got = term(state, covariance, [2, 0])
+    assert got.shape == (6, 6)
+    np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-10)
+    assert np.abs(got[:3, 3:]).max() > 1e-6, "the cross block between the two features is missing"
+    assert not got[[2, 5]].any() and not got[:, [2, 5]].any()
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_the_second_order_term_ignores_the_unobservable_directions(seed):
+    """Adding any covariance along the global translation and rotation (the gauge) leaves the
+    term unchanged, and a covariance made only of gauge gives none: h is constant along it."""
+    rng = np.random.default_rng(seed)
+    state, covariance = random_state(rng, 2)
+    N = slam_null_space(state[:3], state[3:].reshape(-1, 3)[:, :2])
+    S = rng.standard_normal((3, 3))
+    S = 0.3 * S @ S.T
+    np.testing.assert_allclose(
+        term(state, covariance + N @ S @ N.T, [0, 1]),
+        term(state, covariance, [0, 1]),
+        rtol=1e-7,
+        atol=1e-12,
+    )
+    gauge_only = N @ S @ N.T + 1e-12 * np.eye(len(state))
+    assert np.abs(term(state, gauge_only, [0, 1])).max() < 1e-9
+
+
+def test_the_second_order_term_is_radial_by_hand():
+    """Heading variance s^2 alone (pose and landmark known): the term is 1/2 s^4 u u^T, u the
+    body-frame centre, so its standard deviation is |u| s^2 / sqrt(2) along the line of sight:
+    at 3 m and s = 0.3, 3 * 0.09 / sqrt(2) = 0.191 m."""
+    state = np.array([1.0, 2.0, 0.3, 1.0 + 3.0 * math.cos(0.3), 2.0 + 3.0 * math.sin(0.3), 0.3])
+    covariance = np.diag([1e-12, 1e-12, 0.09, 1e-12, 1e-12, 1e-12])
+    got = term(state, covariance, [0])
+    np.testing.assert_allclose(
+        got[:2, :2], 0.5 * 0.09**2 * np.outer([3.0, 0.0], [3.0, 0.0]), atol=1e-9
+    )
+    assert math.sqrt(got[0, 0]) == pytest.approx(3.0 * 0.09 / math.sqrt(2.0), rel=1e-6)
+
+
+def test_the_second_order_term_is_symmetric_positive_semidefinite_and_zero_without_heading():
+    rng = np.random.default_rng(3)
+    state, covariance = random_state(rng, 3)
+    got = term(state, covariance, [0, 1, 2])
+    np.testing.assert_allclose(got, got.T, atol=1e-15)
+    assert np.linalg.eigvalsh(got).min() > -1e-12
+    covariance[2, :] = covariance[:, 2] = 0.0
+    np.testing.assert_array_equal(term(state, covariance, [0, 1, 2]), np.zeros((9, 9)))
+
+
+def test_the_second_order_term_is_batched_over_landmarks():
+    """Leading axes are batch axes: each landmark's own (3, 3) term, as association uses it."""
+    rng = np.random.default_rng(4)
+    state, covariance = random_state(rng, 3)
+    blocks = np.array([covariance[np.ix_(block_index([j]), block_index([j]))] for j in range(3)])
+    centres = state[3:].reshape(-1, 3)[:, None, :2]
+    batched = second_order_covariance(state[:3], centres, blocks)
+    assert batched.shape == (3, 3, 3)
+    for j in range(3):
+        np.testing.assert_allclose(batched[j], term(state, covariance, [j]), rtol=1e-12, atol=1e-15)
+
+
+def test_a_singular_covariance_skips_the_gauge_projection_without_raising():
+    """Pose and landmark exactly known except the heading: P is singular, nothing is projected
+    out, and the term is the hand-worked radial one."""
+    state = np.array([0.0, 0.0, 0.0, 2.0, 0.0, 0.3])
+    covariance = np.diag([0.0, 0.0, 0.04, 0.0, 0.0, 0.0])
+    got = term(state, covariance, [0])
+    np.testing.assert_allclose(got[:2, :2], 0.5 * 0.04**2 * np.diag([4.0, 0.0]), atol=1e-15)
+
+
+def test_a_two_feature_update_uses_the_stacked_term_with_its_cross_blocks():
+    """The batch update equals kalman_update with R = feature noise + the stacked second-order
+    term at the prior: dropping its cross blocks (or the term) changes the posterior."""
+    rng = np.random.default_rng(5)
+    state, covariance = random_state(rng, 2)
+    covariance[2, 2] += 0.05
+    first = state[3:].reshape(-1, 3).copy()
+    slam = filter_from(state, covariance, labels=[0, 1], first=first)
+    zs = [body_frame(state[:3], state[3 + 3 * j : 6 + 3 * j]) + [0.02, -0.01, 0.0] for j in (0, 1)]
+    h, H_pose, H_landmark = landmark_measurement(state[:3], first, first[:, :2])
+    H = np.zeros((6, len(state)))
+    for j in range(2):
+        H[3 * j : 3 * j + 3, :3] = H_pose[j]
+        H[3 * j : 3 * j + 3, 3 + 3 * j : 6 + 3 * j] = H_landmark[j]
+    R = np.kron(np.eye(2), FEATURE_Q) + term(state, covariance, [0, 1])
+    innovation = np.concatenate([z - hj for z, hj in zip(zs, h, strict=True)])
+    expected, _ = kalman_update(state, covariance, innovation, H, R)
+    result = slam.update_features([feature(zs[0]), feature(zs[1], first_beam=100)], oracle([0, 1]))
+    assert result.associated == 2
+    np.testing.assert_allclose(slam.state, expected, rtol=1e-10, atol=1e-12)
+    diagonal = R.copy()
+    diagonal[:3, 3:] = diagonal[3:, :3] = 0.0
+    without_cross, _ = kalman_update(state, covariance, innovation, H, diagonal)
+    assert np.abs(without_cross - expected).max() > 1e-6, (
+        "the case cannot tell the cross blocks apart"
+    )
+
+
+def reacquire(heading_error, second_order, scans=10):
+    """One landmark at 3 m known to 1 cm, a pose known to 0.3 m and 0.3 rad that is
+    ``heading_error`` off, and the landmark's true feature for ``scans`` scans (labelled):
+    the pose NEES after the first scan and after the last, and how many scans were used."""
+    truth = np.array([1.0, 1.0, 0.0])
+    landmark = np.array([4.0, 1.0, 0.3])
+    state = np.concatenate([truth + [0.0, 0.0, heading_error], landmark])
+    covariance = np.diag([0.09, 0.09, 0.09, 1e-4, 1e-4, 1e-4])
+    slam = filter_from(
+        state, covariance, SlamSettings(floor_factor=0.0, second_order=second_order), labels=[0]
+    )
+    seen = feature(body_frame(truth, landmark))
+    nees, used = [], 0
+    for _ in range(scans):
+        used += slam.update_features([seen], oracle([0])).associated
+        error = slam.pose - truth
+        error[2] = wrap_angle(error[2])
+        nees.append(float(error @ np.linalg.solve(slam.covariance, error)))
+    return nees[0], nees[-1], used
+
+
+def test_a_re_acquisition_far_off_in_heading_does_not_collapse_with_the_second_order_term():
+    """0.4 rad off at sigma_theta 0.3: the plain EKF update, linearised 0.4 rad from the truth,
+    leaves the pose with NEES above 100 and then rejects the landmark; with the term the pose
+    stays consistent (NEES below chi2_3 0.95 = 7.81) and every scan is used."""
+    plain_first, _, plain_used = reacquire(0.4, second_order=False)
+    first, last, used = reacquire(0.4, second_order=True)
+    assert plain_first > 100.0 and plain_used < 10, "the case no longer shows the collapse"
+    assert first < 7.81 and last < 7.81
+    assert used == 10
+
+
+def test_past_the_linear_domain_the_term_limits_the_damage_but_does_not_cure_it():
+    """The seed-57 case in miniature, 0.6 rad off: the plain filter's first update leaves NEES
+    above 1000. With the term every scan is used and NEES stays below the collapse threshold of
+    20 for 30 scans. Past about 0.5 rad the term no longer keeps the pose consistent (the known
+    limit in the module docstring), so only these bounds are asserted."""
+    plain_first, _, _ = reacquire(0.6, second_order=False)
+    first, last, used = reacquire(0.6, second_order=True, scans=30)
+    assert plain_first > 1000.0
+    assert used == 30
+    assert first < 20.0 and last < 20.0
+
+
+@pytest.mark.parametrize("second_order, associated", [(False, 0), (True, 1)])
+def test_the_ml_gate_allows_for_the_radial_miss_a_heading_error_causes(second_order, associated):
+    """Heading 0.3 rad off at sigma_theta 0.3, landmark at 3 m: the true feature lies 3 (1 -
+    cos 0.3) = 0.134 m short of the prediction along the line of sight, a second-order miss the
+    plain gate reads as NIS about 90 (a new candidate). With the term (radial sd 0.19 m) it is
+    associated."""
+    truth = np.array([1.0, 1.0, 0.0])
+    landmark = np.array([4.0, 1.0, 0.3])
+    state = np.concatenate([truth + [0.0, 0.0, 0.3], landmark])
+    covariance = np.diag([1e-4, 1e-4, 0.09, 1e-4, 1e-4, 1e-4])
+    slam = filter_from(state, covariance, SlamSettings(floor_factor=0.0, second_order=second_order))
+    result = slam.update_features([feature(body_frame(truth, landmark))])
+    assert result.associated == associated
+    assert slam.num_candidates == 1 - associated

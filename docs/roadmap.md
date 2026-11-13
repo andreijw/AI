@@ -206,9 +206,13 @@ steps 3 to 5 are sketches to turn into full items when picked.
     after alignment (9 against ≤ 8). Shipped with the failure recorded (the maintainer's decision; CHANGELOG.md,
     2026-11-10).
   - **Follow-ups**:
-    - **Association drift**: 4 of the 9 aligned failures are association errors (the oracle row has 5), with first
-      estimates drifting 0.05 to 0.60 m; a fix is judged on new seeds 201 to 250, as 101 to 200 are spent
-      (151 to 200 by the dropout bridging, CHANGELOG.md, 2026-11-12).
+    - **One gauge projection for the second-order term**: project the frame out once over the pose and all landmark
+      centres per scan and slice that covariance for both association and the update, so the two gate on the same
+      term (today association projects per pose-and-landmark block and the update over the scan's block: trace ratio
+      median 1.06, max 35 on random covariances; the per-feature fallback reuses the stacked term from the prior). It
+      would also cut the 1.3 ms the term costs against `SLAM-2`'s 0.23 ms margin (CHANGELOG.md, 2026-11-12).
+    - **`pose_nees` shared**: make `estimation.evaluation._nees` public and use it in `slam.evaluation.score_run`
+      instead of its 3-line copy.
     - Left for later PRs: lidar scan matching and the grid as a `RangeMap` (PR 3), grid FastSLAM (PR 4).
   - **Description**: Occupancy-grid mapping from range readings with known poses (log-odds, an inverse sensor
     model for both presets), then SLAM without them: landmark EKF-SLAM, then a particle-filter grid SLAM

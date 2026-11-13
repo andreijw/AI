@@ -7,8 +7,9 @@ from rl_navigation.sim.geometry import FloatArray
 
 
 def symmetrized(matrix: FloatArray) -> FloatArray:
-    """``(M + M^T) / 2``: a covariance with the rounding asymmetry of its products removed."""
-    return (matrix + matrix.T) / 2.0
+    """``(M + M^T) / 2`` over the last two axes: a covariance (or a stack of them) with the
+    rounding asymmetry of its products removed."""
+    return (matrix + np.swapaxes(matrix, -1, -2)) / 2.0
 
 
 def kalman_update(

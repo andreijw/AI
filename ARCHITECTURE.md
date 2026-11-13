@@ -151,19 +151,20 @@ tags are in [docs/releasing.md](docs/releasing.md).
      lidar scan into segments (bridging up to 3° of dropped beams) and fits circles to them (an algebraic start, a
      geometric Gauss-Newton fit weighted by each beam's incidence, a residual test, a two-line test against box
      corners and checks that a result is sound);
-     `ekf_slam` (`EkfSlam`) estimates the pose and a map of those circles in one Gaussian: Thrun's EKF-SLAM (Tables
-     10.1 and 10.2, with the provisional list) with first-estimate Jacobians (FEJ, Huang et al. 2008), one batch
-     Joseph update per scan, a 15 mm model-error floor per feature, and guards so that it never raises on a scan's
-     content. `EkfSlam` keeps the `Localizer` protocol, so `run_trial` drives it like the localizers. Its core imports
-     NumPy, `rl_navigation.sim` and the `estimation` core (`kalman_update`, `symmetrized`, `motion_jacobians`,
-     `chi2_quantile`, the pose checks), never `mapping` or `estimation`'s desk tools. `feature_evaluation` and
-     `evaluation` (`slam_trial`, `SlamFactory`, the oracle, the aligned scoring) are desk tools the package's
-     `__init__` does not import; `evaluation` also imports `mapping.evaluation.record_run` for the oracle's true poses.
-     Nothing below it (`estimation`, `mapping`, the Gymnasium layer, the challenge) imports it. **Move triggers:**
-     when a third package needs `motion_jacobians`, `kalman_update` and `chi2_quantile`, they move to a shared module
-     (`sim` for the motion model); if a further desk tool uses `record_run`, it moves from `mapping.evaluation` to a
-     neutral desk-tool module; `SlamFactory` is the fourth implementation of the six-keyword `LocalizerFactory` seam,
-     and a fifth, or any change to the keywords, refactors the seam to one builder.
+     `ekf_slam` (`EkfSlam`) estimates the pose and a map of those circles in one Gaussian: Thrun's EKF-SLAM (Tables 10.1
+     and 10.2, with the provisional list) with first-estimate Jacobians (FEJ, Huang et al. 2008), one batch Joseph
+     update per scan, a 15 mm model-error floor per feature, EKF2's second-order term with the unobservable frame taken
+     out (`second_order_covariance`, so that one update after a long unseen stretch does not collapse the heading), and
+     guards so that it never raises on a scan's content. `EkfSlam` keeps the `Localizer` protocol, so `run_trial` drives
+     it like the localizers. Its core imports NumPy, `rl_navigation.sim` and the `estimation` core (`kalman_update`,
+     `symmetrized`, `motion_jacobians`, `chi2_quantile`, the pose checks), never `mapping` or `estimation`'s desk tools.
+     `feature_evaluation` and `evaluation` (`slam_trial`, `SlamFactory`, the oracle, the aligned scoring) are desk tools
+     the package's `__init__` does not import; `evaluation` also imports `mapping.evaluation.record_run` for the
+     oracle's true poses. Nothing below it (`estimation`, `mapping`, the Gymnasium layer, the challenge) imports it.
+     **Move triggers:** when a third package needs `motion_jacobians`, `kalman_update` and `chi2_quantile`, they move to
+     a shared module (`sim` for the motion model); if a further desk tool uses `record_run`, it moves from
+     `mapping.evaluation` to a neutral desk-tool module; `SlamFactory` is the fourth implementation of the six-keyword
+     `LocalizerFactory` seam, and a fifth, or any change to the keywords, refactors the seam to one builder.
    - `rl_navigation.gym_env` (`NavigationGymEnv`) is the Gymnasium environment over the simulator, and importing it
      registers `Navigation-v0` and `NavigationContinuous-v0`. It imports Gymnasium and `rl_navigation.sim` only, so
      `import rl_navigation.gym_env; gym.make("NavigationContinuous-v0")` works without the training framework.

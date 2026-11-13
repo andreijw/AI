@@ -115,11 +115,12 @@ To optimize token usage and context window limits:
   * `rl_navigation/slam/`: simultaneous localization and mapping, a layer above `estimation`: `features.py`
     (`FeatureSettings`, `CircleFeature`, `scan_points`, `segment_scan`, `fit_circle`, `extract_circles`: circles fitted
     to the segments of a lidar scan, the landmarks) and `ekf_slam.py` (`SlamSettings`, `SlamUpdate`, `EkfSlam`, and the
-    Jacobians `fej_motion_jacobian`, `landmark_measurement`, `initialize_landmark` and the association `associate_ml`:
-    landmark EKF-SLAM with first-estimate Jacobians) import NumPy, `rl_navigation.sim` and the `estimation` core;
+    Jacobians `fej_motion_jacobian`, `landmark_measurement`, `initialize_landmark`, the association `associate_ml` and
+    EKF2's gauge-free `second_order_covariance`: landmark EKF-SLAM with first-estimate Jacobians) import NumPy,
+    `rl_navigation.sim` and the `estimation` core;
     `feature_evaluation.py` (`feature_trial`, `summarize_features`: `TESTING.md` `CIRC-1` and `CIRC-2`) and
-    `evaluation.py` (`slam_trial`, `SlamFactory`, `align_se2`, `score_landmarks`, `loop_closures`, `summarize_slam`:
-    `TESTING.md` `SLAM-1`) are desk tools the package does not import.
+    `evaluation.py` (`slam_trial`, `SlamFactory`, `align_se2`, `score_landmarks`, `loop_closures`, `summarize_slam`,
+    `collapsed`: `TESTING.md` `SLAM-1` and `SLAM-3`) are desk tools the package does not import.
   * `rl_navigation/localization_video.py`: `python -m rl_navigation.localization_video`, which writes a
     `recording` to an MP4 (imageio-ffmpeg, the `video` extra) and PNG stills (matplotlib); never overwrites a file.
   * `rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.

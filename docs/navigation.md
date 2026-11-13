@@ -309,23 +309,32 @@ list); one in between is discarded. Its Jacobians are **first-estimate Jacobians
 2008): a plain EKF-SLAM linearizes at estimates that move between steps and so learns about the absolute heading, which
 nothing measures (in a test, a robot starting at σθ = 0.3 rad and seeing two circles for 30 scans: standard Jacobians
 shrink σθ to 0.02 rad, FEJ keeps 0.30); FEJ keeps the system's unobservable directions (global translation and rotation)
-unobservable, which the tests check to 1e-12. There is no iteration and no hold, both of which would break that. The
-filter never raises on a scan's content: unsound features are skipped, labelled ones gated, and an update that leaves
-the state non-finite, its covariance indefinite or the pose outside its bounds is undone (`SlamUpdate` counts each).
+unobservable, which the tests check to 1e-12. There is no iteration and no hold, both of which would break that. Every
+feature-landmark pair's noise also gets EKF2's **second-order term** (`second_order_covariance`, on by default),
+computed with the unobservable frame taken out of the covariance: after a long stretch without a circle in view σθ
+reaches about 0.3 rad, and one plain update linearised 0.4 to 0.5 rad from the truth then collapsed σθ while leaving the
+pose far off (`TESTING.md` `SLAM-3`); while tracking the term is under 1.5 mm. Past about 0.5 rad of heading error it
+limits the damage but no longer keeps the pose consistent. The filter never raises on a scan's content: unsound features
+are skipped, labelled ones gated, and an update that leaves the state non-finite, its covariance indefinite or the pose
+outside its bounds is undone (`SlamUpdate` counts each).
 
-`rl_navigation.slam.evaluation` drives `run_trial`'s wanderer with the filter (`slam_trial`), optionally with an
-oracle that labels each feature from the true pose (known correspondence), and scores it after aligning the
-estimated trajectory to the true one (`TESTING.md` `SLAM-1`): SLAM cannot recover the start's error or the heading
-drift before its first sighting, so its **aligned trajectory error** and the map's figures are the SLAM figures, and
-the absolute error against dead reckoning is a low bar. Judged once on fresh seeds 101 to 150 (`SLAM-1`, 2026-11-10),
-the 360-beam row passes 7 of its 9 gates: aligned error 6.4 cm mean and 1.1 cm median, 80 % of seen circles mapped, 0.24
-spurious and 0.06 duplicate landmarks a run, 96 % of steps under the NEES bound, 13 of 50 runs lost in absolute terms.
-It fails two: its absolute error is 0.44 of dead reckoning's (gate 0.40), and 9 runs have an aligned error above 10 cm
-(gate 8), 4 of them association failures that the oracle avoids. An update takes 7.5 ms (8.4 ms with 30 landmarks) on
-one Jetson core (`SLAM-2`). Known limits: FEJ stays linearized at a landmark's first
-estimate, so a landmark first seen while the heading was poorly known leaves the run wrong (the lost runs; OC-EKF is
-the follow-up); layouts with at most one circle barely beat dead reckoning (box corners are the follow-up); and with
-30 % of beams dropped the extraction finds 62 % of visible circles, about 3 in 4 of those that keep 8 usable beams.
-Bridging up to 3° of dropped beams (`TESTING.md` `CIRC-2`, judged on seeds 151 to 200, 2026-11-12) lifted it from
-10 % with 28 % false fits (tuning seeds, before) and keeps false fits at 0.4 %, and the SLAM at 30 % dropout now
-fails 4 of 50 runs against 5 without dropout.
+`rl_navigation.slam.evaluation` drives `run_trial`'s wanderer with the filter (`slam_trial`), optionally with an oracle
+that labels each feature from the true pose (known correspondence), and scores it after aligning the estimated
+trajectory to the true one (`TESTING.md` `SLAM-1`): SLAM cannot recover the start's error or the heading drift before
+its first sighting, so its **aligned trajectory error** and the map's figures are the SLAM figures, and the absolute
+error against dead reckoning is a low bar. Judged once on fresh seeds 101 to 150 (`SLAM-1`, 2026-11-10), the 360-beam
+row passed 7 of its 9 gates: aligned error 6.4 cm mean and 1.1 cm median, 80 % of seen circles mapped, 0.24 spurious and
+0.06 duplicate landmarks a run, 96 % of steps under the NEES bound, 13 of 50 runs lost in absolute terms. It failed two:
+its absolute error was 0.44 of dead reckoning's (gate 0.40), and 9 runs had an aligned error above 10 cm (gate 8). On
+tuning seeds 1 to 100 that association gap did not reproduce (the oracle failed as often as maximum likelihood, 14 in
+100 each) and the heading collapse above was the main mechanism there; seeds 101 to 150 were not rerun. With the
+second-order term, judged once on fresh seeds 201 to 250 (`SLAM-3`, 2026-11-12), every gate passes: 0.30 of dead
+reckoning's error, 6 runs above 10 cm (3 of them in layouts with at most one circle), one collapse, 3.9 cm mean aligned
+error and 89 % of seen circles mapped. An update takes 8.6 ms (9.8 ms with 30 landmarks, 1.3 ms of it the second-order
+term) on one Jetson core (`SLAM-2`). Known limits: FEJ stays linearized at a landmark's first estimate, so a landmark
+first seen while the heading was poorly known leaves the run wrong (the lost runs; OC-EKF is the follow-up); layouts
+with at most one circle barely beat dead reckoning (box corners are the follow-up); and with 30 % of beams dropped the
+extraction finds 62 % of visible circles, about 3 in 4 of those that keep 8 usable beams. Bridging up to 3° of dropped
+beams (`TESTING.md` `CIRC-2`, judged on seeds 151 to 200, 2026-11-12) lifted it from 10 % with 28 % false fits (tuning
+seeds, before) and keeps false fits at 0.4 %, and the SLAM at 30 % dropout now fails 4 of 50 runs against 5 without
+dropout.
