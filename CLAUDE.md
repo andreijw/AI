@@ -107,7 +107,7 @@ changes under `.github/`, and anything destructive, which includes the git-ignor
 - Linux and macOS: `./setup.sh --profile cpu|gpu`. **`cpu`** (the default) builds `.venv` with `requirements-dev.txt`
   plus the `video` and `box2d` extras: no PyTorch, and the interpreter for every tool. **`gpu`** builds `.venv-gpu` with
   the same and `rl-core[torch]` from PyTorch's CUDA index: use `.venv-gpu/bin/python` for the PyTorch backend's tests
-  (`tests/test_torch_ddpg_agent.py`, skipped elsewhere) and for `train.py` runs with `backend: torch`. Both build Box2D
+  (`tests/test_torch_backends.py`, skipped elsewhere) and for `train.py` runs with `backend: torch`. Both build Box2D
   (`box2d-py` from source with `swig`) before the extras. CI installs neither PyTorch nor Box2D, and their tests skip
   there (`needs_torch`, `needs_box2d`/`env_marks` in `tests/helpers.py`; maintainer's decisions, 2026-10-25 and
   2026-10-27). The C export tests (`needs_cc`) skip on Windows and where no `CC`, `cc`, `gcc` or `clang` is found; CI's

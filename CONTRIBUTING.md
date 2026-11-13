@@ -35,7 +35,7 @@ contributing, writing code, refactoring components, or submitting pull requests.
     gradient steps; nothing imports those modules except `BaseAgent.class_for_config`, through the agent's `BACKENDS`
     (`tests/test_source_conventions.py` enforces both).
   - It must train as the NumPy agent does: in float64 on the CPU it matches it to rounding
-    (`tests/test_torch_ddpg_agent.py`), and its checkpoints are the NumPy agent's format.
+    (`tests/test_torch_backends.py`), and its checkpoints are the NumPy agent's format.
   - PyTorch is never a required dependency: it is the `[torch]` extra, and CI does not install it.
   - TensorFlow, JAX and other frameworks remain out.
   - Exporting is not training: the ONNX export's `onnx` and `onnxruntime` (the `[onnx]` extra) are imported only inside

@@ -1,7 +1,7 @@
 """Choosing an agent's backend with the ``backend`` config key (BaseAgent.class_for_config).
 
 These run with or without PyTorch: the torch backend's own tests are in
-tests/test_torch_ddpg_agent.py.
+tests/test_torch_backends.py.
 """
 
 import sys

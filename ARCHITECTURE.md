@@ -228,7 +228,10 @@ tags are in [docs/releasing.md](docs/releasing.md).
 ## Component Architecture
 
 The high-level interaction between the training orchestration, environment wrappers, and agent policies is
-visualized below:
+visualized below. Arrows are imports; a dotted one is a desk tool's (`evaluation`) import that the package's core does
+not make. `trainer.py` imports no challenge; `training/robustness.py` does (the one package cycle, an open API
+decision): the challenges registry imports the training package (budgets and the curriculum), and the export's rollout
+imports its `ChallengeEnv`.
 
 ```mermaid
 flowchart TD
@@ -254,8 +257,10 @@ flowchart TD
         NavGym["rl_navigation.gym_env: Navigation-v0, NavigationContinuous-v0 (Gymnasium + sim only)"]
         NavSim["rl_navigation.sim: NumPy simulator (arena, ray casting, sensors, odometry, layouts, World, render)"]
         NavEst["rl_navigation.estimation: EkfLocalizer and MclLocalizer over a RangeMap (NumPy + sim only)"]
-        NavMap["rl_navigation.mapping: log-odds OccupancyGrid from scans at known poses (NumPy + sim only)"]
-        NavSlam["rl_navigation.slam: circle features and landmark EKF-SLAM (NumPy + sim + estimation core)"]
+        NavAvg["rl_navigation.estimation.averages: NaN-on-empty mean and median (NumPy only)"]
+        NavCmp["rl_navigation.estimation.comparison: EKF against MCL, report and CLI (desk tool)"]
+        NavMap["rl_navigation.mapping: log-odds OccupancyGrid from scans at known poses (core: NumPy + sim)"]
+        NavSlam["rl_navigation.slam: circle features and landmark EKF-SLAM (core: NumPy + sim + estimation core)"]
     end
 
     subgraph Core ["rl_core Framework (rl-core)"]
@@ -264,10 +269,11 @@ flowchart TD
         subgraph Agents ["Agent Implementations"]
             BaseAgent["BaseAgent"]
             DiscreteAgents["Discrete: Random, Reinforce, Actor-Critic, PPO, DQN"]
-            ContinuousAgents["Continuous: Random, A2C, PPO, DDPG"]
+            ContinuousAgents["Continuous: Random, A2C, PPO, DDPG, TD3, SAC"]
         end
 
         EnvBase["environments: BaseEnvWrapper"]
+        Registry["challenges: BenchmarkChallenge, ChallengeEnv, discover_challenges registry"]
 
         subgraph Utils ["Utility Infrastructure"]
             Config["config.py"]
@@ -290,8 +296,11 @@ flowchart TD
     Robust --> Challenges
     Export --> ExportPkg
     ExportPkg --> Agents
+    ExportPkg --> Registry
     Bench --> Challenges
-    Trainer --> Challenges
+    Registry --> Trainer
+    Trainer -. robustness .-> Registry
+    Registry --> Agents
     Trainer --> Agents
     Trainer --> Utils
     CartPole --> EnvBase
@@ -302,11 +311,17 @@ flowchart TD
     BipedalWalker --> EnvBase
     Navigation --> EnvBase
     Navigation --> NavGym
+    Challenges --> Registry
     NavGym --> NavSim
     NavEst --> NavSim
+    NavEst --> NavAvg
+    NavCmp --> NavEst
+    NavCmp --> NavSim
     NavMap --> NavSim
+    NavMap -. evaluation .-> NavEst
     NavSlam --> NavEst
     NavSlam --> NavSim
+    NavSlam -. evaluation .-> NavMap
 ```
 
 ---
@@ -317,6 +332,19 @@ The agent hierarchy provides clean inheritance across discrete and continuous co
 
 ```mermaid
 classDiagram
+    class CheckpointMixin {
+        <<abstract>>
+        +save(path)
+        +load(path)
+        +observation_settings
+        +record_observation_settings(settings, defaults)
+        #_checkpoint_arrays()* dict
+        #_load_checkpoint_arrays(data)*
+        #_check_checkpoint_arrays(data, path)
+        #_extra_checkpoint_state() dict
+        #_checkpoint_kind() str
+    }
+
     class BaseAgent {
         <<abstract>>
         +int observation_dim
@@ -324,14 +352,12 @@ classDiagram
         +dict config
         +select_action(obs, training)
         +update(batch)* dict
-        +save(path)
-        +load(path)
-        +record_observation_settings(settings, defaults)
         +inference_policy() InferencePolicy
         #_inference_network() InferencePolicy
-        #_checkpoint_arrays()* dict
-        #_check_checkpoint_arrays(data, path)
-        #_load_checkpoint_arrays(data)*
+    }
+
+    class DiscreteSampling {
+        #_select_action_from_probs(probs, training) int
     }
 
     class RandomAgent {
@@ -470,10 +496,13 @@ classDiagram
         #_train_steps(num_updates) dict
     }
 
+    CheckpointMixin <|-- BaseAgent
     BaseAgent <|-- RandomAgent
     BaseAgent <|-- ContinuousRandomAgent
     BaseAgent <|-- ReinforceAgent
     BaseAgent <|-- ActorCriticBase
+    DiscreteSampling <|-- ReinforceAgent
+    DiscreteSampling <|-- ActorCriticBase
     ActorCriticBase <|-- ActorCriticAgent
     ActorCriticBase <|-- PPOAgent
     BaseAgent <|-- DQNAgent

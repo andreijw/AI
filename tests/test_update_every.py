@@ -28,6 +28,7 @@ from rl_core.agents import (
 from rl_core.agents.base_agent import BaseAgent
 from rl_core.training import Trainer
 from tests.agent_internals import counters, spy_on_chunk_targets
+from tests.helpers import continuous_batch
 
 OBS_DIM, ACT_DIM = 3, 1
 BOUNDS = {"action_low": [-2.0], "action_high": [2.0]}
@@ -210,15 +211,16 @@ def test_a_real_agent_trains_once_per_transition_through_the_trainer(tmp_path):
 
 
 def _transitions(n, seed=0):
-    rng = np.random.default_rng(seed)
-    return {
-        "observations": rng.standard_normal((n, OBS_DIM)),
-        "actions": rng.uniform(-2.0, 2.0, (n, ACT_DIM)),
-        "rewards": rng.standard_normal(n),
-        "next_observations": rng.standard_normal((n, OBS_DIM)),
-        "dones": np.zeros(n, dtype=bool),
-        "terminated": np.zeros(n, dtype=bool),
-    }
+    return continuous_batch(
+        n,
+        OBS_DIM,
+        ACT_DIM,
+        seed=seed,
+        low=-2.0,
+        high=2.0,
+        dones=np.zeros(n, dtype=bool),
+        terminated=False,
+    )
 
 
 def _one_at_a_time(agent, n, seed=0):

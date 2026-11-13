@@ -28,7 +28,7 @@ from tests.agent_internals import (
     replay_generator,
     weights,
 )
-from tests.helpers import ReferenceAdam, assert_gradients_match
+from tests.helpers import ReferenceAdam, assert_gradients_match, continuous_batch
 
 OBS_DIM, ACT_DIM = 3, 2
 LOW, HIGH = np.array([-2.0, -1.0]), np.array([1.0, 3.0])  # scale [1.5, 2], bias [-0.5, 1]
@@ -54,18 +54,18 @@ def _data(n: int = 8, seed: int = 1):
     return obs, actions, targets
 
 
-def _batch(n: int = 6, seed: int = 2, **extra) -> dict[str, np.ndarray]:
-    rng = np.random.default_rng(seed)
-    batch = {
-        "observations": rng.standard_normal((n, OBS_DIM)),
-        "actions": rng.uniform(LOW, HIGH, size=(n, ACT_DIM)).astype(np.float32),
-        "rewards": -rng.uniform(0.0, 5.0, size=n),
-        "next_observations": rng.standard_normal((n, OBS_DIM)),
-        "dones": np.array([False] * (n - 1) + [True]),  # Pendulum: the episode is cut ...
-        "terminated": np.zeros(n, dtype=bool),  # ... never terminated
-    }
-    batch.update(extra)
-    return batch
+def _batch(n: int = 6, seed: int = 2) -> dict[str, np.ndarray]:
+    # Pendulum: the episode is cut at the last step, never terminated.
+    return continuous_batch(
+        n,
+        OBS_DIM,
+        ACT_DIM,
+        seed=seed,
+        low=LOW,
+        high=HIGH,
+        reward_range=(-5.0, 0.0),
+        terminated=False,
+    )
 
 
 # ---------------------------------------------------------------------------

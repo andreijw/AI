@@ -71,6 +71,103 @@ def minimal_config(tmp_path, environment=None, training=None, agent=None):
     return config_path
 
 
+Ends = bool | np.ndarray | None
+
+
+def _ends(value: Ends, dones: np.ndarray, n: int) -> np.ndarray | None:
+    """``terminated`` as given: ``True`` copies ``dones``, ``False`` is all clear."""
+    if isinstance(value, bool):
+        return dones.copy() if value else np.zeros(n, dtype=bool)
+    return value
+
+
+def _transition_batch(
+    rng: np.random.Generator,
+    n: int,
+    obs_dim: int,
+    draw_actions: Callable[[], np.ndarray],
+    reward_range: tuple[float, float] | None,
+    rewards: np.ndarray | None,
+    dones: np.ndarray | None,
+    terminated: Ends,
+) -> dict[str, np.ndarray]:
+    # Drawn in this order: observations, actions, rewards, next observations.
+    observations = rng.standard_normal((n, obs_dim))
+    actions = draw_actions()
+    if rewards is None:
+        rewards = (
+            rng.standard_normal(n) if reward_range is None else rng.uniform(*reward_range, size=n)
+        )
+    batch = {
+        "observations": observations,
+        "actions": actions,
+        "rewards": rewards,
+        "next_observations": rng.standard_normal((n, obs_dim)),
+        "dones": np.array([False] * (n - 1) + [True]) if dones is None else dones,
+    }
+    ends = _ends(terminated, batch["dones"], n)
+    if ends is not None:
+        batch["terminated"] = ends
+    return batch
+
+
+def continuous_batch(
+    n: int,
+    obs_dim: int,
+    action_dim: int,
+    *,
+    seed: int = 0,
+    low: float | np.ndarray = -1.0,
+    high: float | np.ndarray = 1.0,
+    reward_range: tuple[float, float] | None = None,
+    rewards: np.ndarray | None = None,
+    dones: np.ndarray | None = None,
+    terminated: Ends = None,
+) -> dict[str, np.ndarray]:
+    """A trainer batch of ``n`` random transitions with float32 actions in ``[low, high]``.
+
+    Rewards are standard normal, uniform over ``reward_range``, or ``rewards`` as given (no draw).
+    ``dones`` defaults to the last step only; ``terminated`` is left out when ``None``, copies
+    ``dones`` when ``True`` and is all clear when ``False``.
+    """
+    rng = np.random.default_rng(seed)
+    return _transition_batch(
+        rng,
+        n,
+        obs_dim,
+        lambda: rng.uniform(low, high, size=(n, action_dim)).astype(np.float32),
+        reward_range,
+        rewards,
+        dones,
+        terminated,
+    )
+
+
+def discrete_batch(
+    n: int,
+    obs_dim: int,
+    n_actions: int,
+    *,
+    seed: int = 0,
+    reward_range: tuple[float, float] | None = None,
+    rewards: np.ndarray | None = None,
+    dones: np.ndarray | None = None,
+    terminated: Ends = None,
+) -> dict[str, np.ndarray]:
+    """``continuous_batch`` with integer actions in ``[0, n_actions)``."""
+    rng = np.random.default_rng(seed)
+    return _transition_batch(
+        rng,
+        n,
+        obs_dim,
+        lambda: rng.integers(0, n_actions, size=n),
+        reward_range,
+        rewards,
+        dones,
+        terminated,
+    )
+
+
 def numerical_grad(
     loss_fn: Callable[[], float], param: np.ndarray, eps: float = 1e-5
 ) -> np.ndarray:

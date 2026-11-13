@@ -7,9 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import rl_cartpole.benchmark
 from rl_cartpole.environments import CartPoleEnv
-from rl_core.environments import OBSERVATION_DEFAULTS
 from tests.helpers import minimal_config, run_main
 
 # ---------------------------------------------------------------------------
@@ -48,7 +46,7 @@ def test_wrap_env_with_record_video(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# train.py CLI behaviour
+# train.py --record-video and its flags
 # ---------------------------------------------------------------------------
 
 
@@ -57,72 +55,6 @@ def test_mutual_exclusion_render_and_record_video(tmp_path, monkeypatch):
     config_path = minimal_config(tmp_path)
     with pytest.raises(SystemExit):
         run_main(["--render", "--record-video", "--config", config_path], monkeypatch)
-
-
-def test_num_episodes_override_requires_positive_int(tmp_path, monkeypatch):
-    """--num-episodes must be a positive integer."""
-    config_path = minimal_config(tmp_path)
-    with pytest.raises(SystemExit):
-        run_main(["--num-episodes", "0", "--config", config_path], monkeypatch)
-
-
-def test_agent_type_and_num_episodes_overrides_apply(tmp_path, monkeypatch):
-    """CLI overrides should select the requested agent and training length."""
-    config_path = minimal_config(tmp_path)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "train.py",
-            "--config",
-            config_path,
-            "--agent-type",
-            "reinforce",
-            "--num-episodes",
-            "1",
-        ],
-    )
-    if "train" in sys.modules:
-        del sys.modules["train"]
-    import train  # noqa: PLC0415
-
-    captured = {}
-
-    class StubReinforce:
-        @classmethod
-        def class_for_config(cls, config):
-            return cls
-
-        def __init__(self, observation_dim, action_dim, config):
-            captured["agent_observation_dim"] = observation_dim
-            captured["agent_action_dim"] = action_dim
-            captured["agent_config"] = dict(config)
-
-        def record_observation_settings(self, settings, defaults):
-            captured["observation_settings"] = dict(settings)
-
-    class StubTrainer:
-        def __init__(self, env, agent, config, logger=None, **_eval):
-            captured["trainer_agent_type"] = type(agent).__name__
-            captured["trainer_num_episodes"] = config.get("num_episodes")
-            self.episode_rewards = []
-            self.episode_lengths = []
-
-        def train(self):
-            return {"ok": True}
-
-    monkeypatch.setitem(
-        rl_cartpole.benchmark.CartPoleChallenge.AGENT_CLASSES, "reinforce", StubReinforce
-    )
-    monkeypatch.setattr(train, "Trainer", StubTrainer)
-
-    train.main()
-
-    assert captured["trainer_agent_type"] == "StubReinforce"
-    assert captured["trainer_num_episodes"] == 1
-    assert captured["agent_observation_dim"] == 4
-    assert captured["agent_action_dim"] == 2
-    assert captured["observation_settings"] == OBSERVATION_DEFAULTS
 
 
 def test_record_video_missing_moviepy_raises_import_error(tmp_path, monkeypatch):
@@ -285,140 +217,3 @@ def test_video_every_must_be_positive(tmp_path, monkeypatch, capsys, value):
     with pytest.raises(SystemExit):
         run_main(["--record-video", "--video-every", value, "--config", config_path], monkeypatch)
     assert "--video-every must be a positive integer" in capsys.readouterr().err
-
-
-def test_environment_config_is_forwarded_to_cartpole_env(tmp_path, monkeypatch):
-    """train.py should forward environment config fields into CartPoleEnv."""
-    import yaml
-
-    config = {
-        "environment": {
-            "name": "CartPole-v1",
-            "render_mode": None,
-            "max_episode_steps": 20,
-            "seed": 123,
-            "obs_noise_std": 0.05,
-            "action_noise_prob": 0.1,
-            "domain_randomization": {"gravity": [8.0, 12.0]},
-        },
-        "agent": {
-            "type": "random",
-            "config": {"seed": 42},
-        },
-        "training": {
-            "num_episodes": 1,
-            "max_steps_per_episode": 10,
-            "eval_frequency": 10,
-            "save_frequency": 10,
-            "checkpoint_dir": str(tmp_path / "checkpoints"),
-            "log_dir": str(tmp_path / "logs"),
-        },
-        "logging": {"level": "INFO", "log_metrics": True},
-    }
-    config_path = str(tmp_path / "config_env_forwarding.yaml")
-    with open(config_path, "w") as f:
-        yaml.dump(config, f)
-
-    captured = {}
-
-    class _StopAfterCaptureError(Exception):
-        pass
-
-    def patched_init(self, *args, **kwargs):
-        captured.update(kwargs)
-        raise _StopAfterCaptureError()
-
-    import rl_cartpole.environments.cartpole_env as _ce_mod
-
-    monkeypatch.setattr(_ce_mod.CartPoleEnv, "__init__", patched_init)
-
-    with pytest.raises(_StopAfterCaptureError):
-        run_main(["--config", config_path], monkeypatch)
-
-    assert captured["env_name"] == "CartPole-v1"
-    assert captured["max_episode_steps"] == 20
-    assert captured["seed"] == 123
-    assert captured["obs_noise_std"] == pytest.approx(0.05)
-    assert captured["action_noise_prob"] == pytest.approx(0.1)
-    assert captured["domain_randomization"] == {"gravity": (8.0, 12.0)}
-
-
-def test_environment_null_values_fall_back_to_defaults(tmp_path, monkeypatch):
-    """Explicit YAML nulls for environment fields use defaults; --challenge supplies the name."""
-    import yaml
-
-    config = {
-        "environment": {
-            "name": None,
-            "render_mode": None,
-            "max_episode_steps": 20,
-            "seed": 123,
-            "obs_noise_std": None,
-            "action_noise_prob": None,
-        },
-        "agent": {
-            "type": "random",
-            "config": {"seed": 42},
-        },
-        "training": {
-            "num_episodes": 1,
-            "max_steps_per_episode": 10,
-            "eval_frequency": 10,
-            "save_frequency": 10,
-            "checkpoint_dir": str(tmp_path / "checkpoints"),
-            "log_dir": str(tmp_path / "logs"),
-        },
-        "logging": {"level": "INFO", "log_metrics": True},
-    }
-    config_path = str(tmp_path / "config_env_nulls.yaml")
-    with open(config_path, "w") as f:
-        yaml.dump(config, f)
-
-    captured = {}
-
-    class _StopAfterCaptureError(Exception):
-        pass
-
-    def patched_init(self, *args, **kwargs):
-        captured.update(kwargs)
-        raise _StopAfterCaptureError()
-
-    import rl_cartpole.environments.cartpole_env as _ce_mod
-
-    monkeypatch.setattr(_ce_mod.CartPoleEnv, "__init__", patched_init)
-
-    with pytest.raises(_StopAfterCaptureError):
-        run_main(["--config", config_path, "--challenge", "cartpole"], monkeypatch)
-
-    assert captured["env_name"] == "CartPole-v1"
-    assert captured["obs_noise_std"] == pytest.approx(0.0)
-    assert captured["action_noise_prob"] == pytest.approx(0.0)
-
-
-def test_total_steps_override_sets_a_step_budget(tmp_path):
-    from train import load_run_config
-
-    config, _ = load_run_config(minimal_config(tmp_path), total_steps=300)
-    assert config["training"]["total_steps"] == 300
-
-
-def test_num_episodes_override_clears_a_step_budget(tmp_path):
-    from train import load_run_config
-
-    path = minimal_config(tmp_path, training={"total_steps": 900})
-    config, _ = load_run_config(path, num_episodes=2)
-    assert config["training"]["num_episodes"] == 2 and "total_steps" not in config["training"]
-
-
-def test_num_episodes_and_total_steps_together_are_rejected(tmp_path, monkeypatch):
-    config_path = minimal_config(tmp_path)
-    with pytest.raises(SystemExit):
-        run_main(
-            ["--num-episodes", "2", "--total-steps", "50", "--config", config_path], monkeypatch
-        )
-
-
-def test_total_steps_override_requires_positive_int(tmp_path, monkeypatch):
-    config_path = minimal_config(tmp_path)
-    with pytest.raises(SystemExit):
-        run_main(["--total-steps", "0", "--config", config_path], monkeypatch)

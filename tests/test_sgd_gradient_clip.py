@@ -12,6 +12,7 @@ import pytest
 
 from rl_core.agents import ActorCriticAgent, DQNAgent, PPOAgent, ReinforceAgent
 from tests.agent_internals import weights
+from tests.helpers import discrete_batch
 
 OBS_DIM, ACTION_DIM, N = 4, 2, 6
 LR, CLIP = 0.1, 1e-3
@@ -28,14 +29,7 @@ IDS = [agent_cls.__name__ for agent_cls, _, _ in CASES]
 
 
 def _batch() -> dict[str, np.ndarray]:
-    rng = np.random.default_rng(3)
-    return {
-        "observations": rng.standard_normal((N, OBS_DIM)),
-        "actions": rng.integers(0, ACTION_DIM, size=N),
-        "rewards": rng.uniform(-1.0, 2.0, size=N),
-        "next_observations": rng.standard_normal((N, OBS_DIM)),
-        "dones": np.array([False] * (N - 1) + [True]),
-    }
+    return discrete_batch(N, OBS_DIM, ACTION_DIM, seed=3, reward_range=(-1.0, 2.0))
 
 
 def _agent(agent_cls: type, config: dict[str, Any], seed: int = 11) -> Any:

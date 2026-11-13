@@ -559,7 +559,7 @@ def policy_noise_generator(agent: SACAgent) -> np.random.Generator:
 
 
 # ---------------------------------------------------------------------------
-# The PyTorch DDPG backend (tests/test_torch_ddpg_agent.py; needs PyTorch)
+# The PyTorch backends (tests/test_torch_backends.py; needs PyTorch)
 # ---------------------------------------------------------------------------
 
 

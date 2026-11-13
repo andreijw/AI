@@ -67,6 +67,8 @@ finding, however good the code.
   themselves. Check signatures in Context7, not from memory.
 - **Python.** Mutable default arguments, a config dict mutated in place, a bare `except` that swallows the
   real error, and a `config.get("lerning_rate", 0.001)` whose default hides the typo.
+- **Entry points.** A package's `__main__.py` calls its entry point only under `if __name__ == "__main__":`;
+  the release smoke test imports every module (`tests/test_source_conventions.py` checks it).
 
 ## Pass 3: is the learning sound
 
@@ -109,7 +111,7 @@ The questions a training run, not an interpreter, would raise:
 - Seeds are pinned, files go under `tmp_path`, environments are closed, and nothing trains to convergence.
 - A new agent is in `ALL_AGENTS` in `tests/test_agent_harness.py`.
 - A changed or deleted existing test comes with a reason.
-- **The PyTorch tests ran where CI cannot run them.** CI installs no PyTorch, so `tests/test_torch_ddpg_agent.py`
+- **The PyTorch tests ran where CI cannot run them.** CI installs no PyTorch, so `tests/test_torch_backends.py`
   is skipped there. When the diff touches `off_policy.py`, `ddpg_agent.py`, `td3_agent.py`, `sac_agent.py`,
   `optim.py`, `base_agent.py`, `checkpointing.py` (save and load), or any `torch_*.py`, the hand-off must report
   `TESTING.md` `TR-15` run from `.venv-gpu`; if it did not run, that is a Warning, since the five `backend: torch`

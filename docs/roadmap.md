@@ -14,7 +14,7 @@ turned into a full item when the maintainer picks it. The ladder uses no numbers
 
 | Rung | Item |
 | :--- | :--- |
-| Classic control and Box2D | Phase 7 (MountainCar-v0 "Hold -110" is open) |
+| Classic control and Box2D | Phase 7 (MountainCar-v0's -110 hold is a documented limit; CHANGELOG.md, 2026-11-12) |
 | Inverted pendulums, locomotion, robot arms in MuJoCo | Phase 7 "MuJoCo Tasks": InvertedPendulum and InvertedDoublePendulum first, then Hopper and HalfCheetah, then Reacher and Pusher; one `mujoco` dependency decision for all |
 | Further arms | Phase 7 "Gymnasium-Robotics arms" (proposed): Fetch and Franka Kitchen; a new dependency |
 | GPU-parallel simulation | Phase 8 "GPU-parallel navigation simulation" (proposed): the simulator as PyTorch tensors on the Orin's GPU; builds on `training.num_envs` (CHANGELOG.md, 2026-11-10) |
@@ -32,8 +32,7 @@ turned into a full item when the maintainer picks it. The ladder uses no numbers
 Order (the maintainer's decision, 2026-11-04): the repo is the foundation for robotics work, so Phase 8 (Robot
 Navigation) leads. Its first item, the range-sensor navigation environment (done; CHANGELOG.md, 2026-11-07), ran in
 parallel with Phase 7's SAC and BipedalWalker item (done; CHANGELOG.md, 2026-11-05), and Phase 8 continues in order. The
-Training and Code Health items are picked as they become useful (parallel environments before a PPO comparison on
-BipedalWalker or navigation).
+Training and Code Health items are picked as they become useful.
 
 ### Workflow Tooling
 
@@ -59,12 +58,12 @@ No open items.
 
 ### Code Health
 
-The last health dashboard (brooks-health, 2026-10-22) scored 94/100 with 0 Critical findings; its four Warnings are
-fixed (CHANGELOG.md, 2026-10-22 and 2026-10-25). The five ideas the maintainer picked on 2026-10-28 are done
-(CHANGELOG.md, 2026-10-28 and 2026-10-29), and the ideas picked on 2026-11-03 are measured (CHANGELOG.md,
-2026-11-04). A learning change is committed only if, on seeds 1 to 5 against the
-committed config, more seeds hold the threshold or the mean final average is better on at least 4 of 5 paired seeds
-with no seed clearly worse; otherwise it stays opt-in and is recorded as tried.
+The last code-health passes (2026-11-12) scored brooks-health 89/100, brooks-test 70 and brooks-audit 61, with 0
+Critical findings; the cleanup they led to is in CHANGELOG.md, 2026-11-12. The five ideas the maintainer picked on
+2026-10-28 are done (CHANGELOG.md, 2026-10-28 and 2026-10-29), and the ideas picked on 2026-11-03 are measured
+(CHANGELOG.md, 2026-11-04). A learning change is committed only if, on seeds 1 to 5 against the committed config,
+more seeds hold the threshold or the mean final average is better on at least 4 of 5 paired seeds with no seed
+clearly worse; otherwise it stays opt-in and is recorded as tried.
 
 Parked ideas, not scheduled. Each needs the maintainer's pick, and some a decision on the win rule, before it becomes
 an item.
@@ -78,12 +77,21 @@ an item.
   but none holds -200 (CHANGELOG.md, 2026-11-10); adopted in `configs/pendulum_actor_critic.yaml`
   (2 of 5 reach -200, none holds it; CHANGELOG.md, 2026-11-12). Untried: gSDE exploration (its PPO version is in
   `~/rl-experiments/item5/` on the development machine). Asynchronous training environments (deferred from the
-  parallel-environments item until a measured speedup on navigation or BipedalWalker) also remain open.
-- [ ] **SAC's BipedalWalker training average does not hold**: `configs/bipedalwalker_sac.yaml` solved 300 on 4
+  parallel-environments item until a measured speedup on navigation or BipedalWalker) also remain open. Not verified:
+  Pendulum with `n_steps: 0` under `bootstrap_truncation` (the committed config's `n_steps: 8` already bootstraps;
+  CHANGELOG.md, 2026-11-12).
+- [ ] **SAC's BipedalWalker training average does not hold** (parked by the maintainer, 2026-11-12: greedy
+  evaluation is 321 to 327 on every seed and the training average includes exploration noise; revisit only with
+  gSDE): `configs/bipedalwalker_sac.yaml` solved 300 on 4
   of seeds 1 to 5 within 500,000 steps but held on 1 (final 100-episode averages 251 to 307), while every seed's
   greedy evaluation was 321 to 327 (CHANGELOG.md, 2026-11-05). The training average includes exploration noise.
   Untried: rl-zoo's gSDE exploration (`use_sde`, `log_std_init: -3`), which its recipe uses on this environment and
   this framework lacks (dropped from the item by the maintainer, 2026-11-05); TD3 at rl-zoo's 1,000,000 steps.
+- [ ] **A curriculum on a target the committed config can learn flat**: the CartPole PPO curriculum trial's target
+  (`obs_noise_std: 0.05` with length randomization) was one neither arm learned (final averages 93 to 117), and the
+  curriculum did not help (CHANGELOG.md, 2026-11-03). Untried: a target the committed config can learn flat (length
+  randomization alone, or less noise), where a curriculum could change how fast or how robustly it learns rather
+  than whether.
 
 ### Phase 6 — Advanced RL & Robotics Extensions
 
@@ -96,46 +104,6 @@ Every challenge is its own `rl_<name>` package that `rl_core.challenges` discove
 Gymnasium's `reward_threshold` unless the maintainer sets another, judged by the 100-episode training average.
 Tier 1 began with Acrobot-v1 (CHANGELOG.md, 2026-10-22). The items below are sketches to turn into full items
 when picked.
-
-- [ ] **MountainCar-v0: Hold -110**
-  - **Description**: MountainCar-v0's DQN does not reliably hold -110: with a 100,000-transition buffer, 2 of 10 seeds
-    end at or above it (both crossing it only near the end of the run), and the final averages are -107 to -132
-    (CHANGELOG.md, 2026-10-25). With observations normalised when sampled, committed 2026-11-04, all of seeds 1 to 5
-    and 11 to 15 reach -110 and 3 of 10 hold it, final averages -106 to -119 (CHANGELOG.md, 2026-11-04).
-  - **Diagnosis (2026-10-25)**: the agent reaches the flag reliably, so exploration is unlikely to be the limit. On seed
-    4 the greedy policy evaluated -100 to -107 from episode 550 to 700, then settled near -125 with a spread of about
-    20 and did not stay good: consistent with a good policy found and then forgotten. A larger buffer helps the
-    training average (better on 10 of 10 seeds, by +6 on the held-out seeds 6 to 10) but not the held-out greedy
-    evaluation. Note that -110 is judged on the training average, exploration included, while rl-zoo's -100.8 is a
-    greedy evaluation.
-  - **Diagnosis (2026-10-27)**: no bug. Through `train.py` on seeds 1 to 5 (final averages -131, -122, -108, -118,
-    -107; mean -117.2, bit-for-bit repeatable single-threaded; the -117.8 of 2026-10-25 came through the benchmark on
-    an older commit and was not reconciled): no divergence; mean Q (about -31 late) matches the discounted return of
-    the policy's episode lengths, so no gross overestimation; exploration at 0.02 costs 1 to 6 points against greedy
-    on the same 100 starts. The policy does not collapse: it wanders (greedy evaluations -100 to -180 while the rate is
-    above about 30% of its start) and freezes as the rate decays, at greedy -105 to -138 depending on the seed.
-  - **Screened 2026-10-27, no better** (seeds 1 to 5, one change each, paired against the baseline run alongside, all
-    `train.py` single-threaded): Polyak `tau` 0.0067 (the hard sync's mean lag; mean final -121.1, 1 of 5 hold, paired
-    -3.9), `learning_rate` 0.002 with the same decay (-125.3, 1 of 5, paired -8.1) and `batch_size` 256 (-118.0, 2 of
-    5, paired -0.9, one seed -20 worse); the baseline held 2 of 5. A lower rate cut greedy-action churn on a fixed grid
-    of probe states from 0.12 to 0.07 between checkpoints yet ended worse, and churn did not track the swings in
-    greedy return (correlation +0.10 over 20 runs), so "noisy Q estimates against small action gaps" is not supported
-    as the cause.
-  - **Prioritised replay, not shown to help (2026-10-27)**: proportional prioritised replay (Schaul et al. 2016) for
-    DQN, opt-in, on the parked branch `feature/dqn-prioritized-replay` (tested, not merged). Same protocol, seeds 1 to
-    5: alpha 0.6 held 1 of 5 (mean final -120.0, paired -2.9, one seed -21 worse), alpha 0.4 held 0 of 5 (-121.1,
-    paired -4.0); the baseline again held 2 of 5 with the same finals. The prediction written beforehand, fewer
-    mid-run losses of a greedy policy at -110 or better and smaller late swings, did not hold (losses 1 and 3 against
-    1; swing 13.3 and 12.2 against 11.1). Untried: keeping the best greedy policy (which does not change the training
-    average the rule judges).
-  - **Double DQN, re-checked 2026-10-29** (first probed 2026-10-23 on an older config, mean -141 against -133): through
-    the benchmark, seeds 1 to 5, it held 1 of 5 against the committed config's 2 (mean final -120.9 against -117.8;
-    +17 on two seeds, -19 and -21 on two others). There was little overestimation to remove: on seed 1 the logged mean
-    Q sat within about 1 of the discounted return in both arms (CHANGELOG.md, 2026-10-29).
-  - **Dueling DQN, 2026-10-29**: held 0 of 5 against the committed config's 2 (mean final -125.0 against -117.8; 18
-    and 19 worse on seeds 3 and 5) (CHANGELOG.md, 2026-10-29).
-  - **PPO**: never reached the flag without reward normalisation (CHANGELOG.md, 2026-10-23); a separate problem, not
-    examined by the diagnosis above.
 
 - [ ] **MuJoCo Tasks (Tier 3)**
   - **Description**: Inverted pendulums, locomotion and robot arms, with the SAC and TD3 agents (BipedalWalker:
@@ -213,6 +181,8 @@ steps 3 to 5 are sketches to turn into full items when picked.
       would also cut the 1.3 ms the term costs against `SLAM-2`'s 0.23 ms margin (CHANGELOG.md, 2026-11-12).
     - **`pose_nees` shared**: make `estimation.evaluation._nees` public and use it in `slam.evaluation.score_run`
       instead of its 3-line copy.
+    - **SLAM-1 on the 64-beam lidar after bridging**: not verified. Bridging is capped by angle, so on the 64-beam
+      lidar it bridges nothing, but SLAM-1 was not rerun there (CHANGELOG.md, 2026-11-12).
     - Left for later PRs: lidar scan matching and the grid as a `RangeMap` (PR 3), grid FastSLAM (PR 4).
   - **Description**: Occupancy-grid mapping from range readings with known poses (log-odds, an inverse sensor
     model for both presets), then SLAM without them: landmark EKF-SLAM, then a particle-filter grid SLAM

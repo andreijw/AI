@@ -23,7 +23,7 @@ from tests.agent_internals import (
     loss_and_grads,
     weights,
 )
-from tests.helpers import ReferenceAdam
+from tests.helpers import ReferenceAdam, discrete_batch
 
 OBS_DIM, ACTION_DIM = 4, 2
 
@@ -32,17 +32,12 @@ def _agent(**config) -> DQNAgent:
     return DQNAgent(OBS_DIM, ACTION_DIM, config={"seed": 5, "hidden_dim": 8, **config})
 
 
-def _batch(n: int = 6, seed: int = 0, **extra) -> dict[str, np.ndarray]:
-    rng = np.random.default_rng(seed)
-    batch = {
-        "observations": rng.standard_normal((n, OBS_DIM)),
-        "actions": rng.integers(0, ACTION_DIM, size=n),
-        "rewards": np.ones(n),
-        "next_observations": rng.standard_normal((n, OBS_DIM)),
-        "dones": np.array([False] * (n - 1) + [True]),
-    }
-    batch.update(extra)
-    return batch
+def _batch(
+    n: int = 6, seed: int = 0, terminated: np.ndarray | None = None
+) -> dict[str, np.ndarray]:
+    return discrete_batch(
+        n, OBS_DIM, ACTION_DIM, seed=seed, rewards=np.ones(n), terminated=terminated
+    )
 
 
 def _act(agent: DQNAgent, times: int, training: bool = True) -> None:

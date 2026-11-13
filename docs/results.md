@@ -13,8 +13,9 @@ NavigationContinuous-v0. It **holds** when the average over its last
 100 episodes is still at or above the threshold. Each agent trains for a budget of environment steps set against its
 rl-baselines3-zoo reference (see the config comments). Measured with the committed configs on seeds 1 to 5
 (MountainCar-v0 DQN also on seeds 11 to 15) on 2026-10-18
-(CartPole PPO on 2026-10-19, after time-limit cuts were bootstrapped), with evaluation on its own environment and named
-random streams ([`docs/benchmarks/cartpole_results.md`](benchmarks/cartpole_results.md),
+(CartPole on 2026-11-12, after time-limit cuts were bootstrapped in PPO and Actor-Critic; the Pendulum report on
+2026-11-12, with the Actor-Critic on 8 environments), with evaluation on its own environment and named random streams
+([`docs/benchmarks/cartpole_results.md`](benchmarks/cartpole_results.md),
 [`docs/benchmarks/pendulum_results.md`](benchmarks/pendulum_results.md); LunarLanderContinuous TD3 on 2026-11-01 in
 [`docs/benchmarks/lunarlander_continuous_results.md`](benchmarks/lunarlander_continuous_results.md); BipedalWalker
 SAC and TD3 on 2026-11-05 in [`docs/benchmarks/bipedalwalker_results.md`](benchmarks/bipedalwalker_results.md);

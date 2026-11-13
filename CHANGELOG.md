@@ -121,6 +121,26 @@ Acrobot-v1) and
   byte-identical to the old code's. The mean and median that return NaN when empty, repeated in the SLAM, feature and
   mapping evaluations and in `_median_steps`, are now `rl_navigation.estimation.averages`.
 
+- **Shared test batches, the docs caught up** (`refactor/test-helpers-and-docs`; the code-health cleanup, PR 4 of 4).
+  `tests/helpers.py` gains `continuous_batch` and `discrete_batch`, used by 10 test files instead of their own
+  builders (the hand-worked ones keep theirs); the CLI-override tests move from `test_train_video.py` to
+  `test_train_main.py` and run a real agent instead of stubs; `test_torch_ddpg_agent.py` is `test_torch_backends.py`.
+  A convention test requires every `__main__.py` under `packages/` to call its entry point only under
+  `if __name__ == "__main__":` (the release smoke imports every module; `comparison/__main__.py` did not, and the
+  Packages job failed on it). `ARCHITECTURE.md`'s diagrams show TD3 and SAC, the challenge registry, the one
+  `training` ↔ `challenges` cycle (through `training/robustness.py`), the checkpoint mixin and the comparison
+  package. `TESTING.md` records the published releases (`CI-10`) and the 2026-11-12 CartPole rerun dates; the
+  roadmap drops a met gate and gains the follow-ups left only in CHANGELOG. Test and assertion counts are unchanged
+  in every migrated file.
+
+- **MountainCar-v0's -110 hold closed as a documented limit** (the maintainer's decision, 2026-11-12). With the
+  committed DQN config (observations normalised when sampled), all of seeds 1 to 5 and 11 to 15 reach -110 but 3 of
+  10 hold it (final averages -106 to -119; CHANGELOG.md, 2026-11-04). Tried without closing it: Polyak `tau`, a higher
+  learning rate, `batch_size` 256 (2026-10-27), prioritised replay (2026-10-27), Double DQN and Dueling DQN
+  (2026-10-29); none held more seeds. The -110 rule judges the training average with exploration included; rl-zoo's
+  -100.8 is a greedy evaluation, the measure the agent already reaches (greedy -100 to -107 on seed 4 mid-run). The
+  SAC BipedalWalker hold is parked on the same grounds (greedy 321 to 327 on every seed), to revisit with gSDE.
+
 ## 2026-11-11
 
 ### Added

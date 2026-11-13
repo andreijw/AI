@@ -74,7 +74,7 @@ class TorchOffPolicyAgent(OffPolicyAgent):
     * Per-step metrics are summed on the device and read once per :meth:`update`.
 
     float64 matches the NumPy agent to rounding, on the CPU and on CUDA
-    (tests/test_torch_ddpg_agent.py); float32 on the GPU agrees to about 1e-3 relative over a few
+    (tests/test_torch_backends.py); float32 on the GPU agrees to about 1e-3 relative over a few
     updates and is not bit-exact across runs. Adam's step count is held in the agent's dtype, so
     in float32 it stops counting exactly after 2**24 (16.7 million) gradient steps. The agent
     changes no global PyTorch state: no seeding, default dtype or matmul precision.

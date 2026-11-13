@@ -4,7 +4,7 @@ checkpoints.
 Skipped unless PyTorch is installed (it is not in .venv or CI); the CUDA tests also need a GPU.
 Run them from the gpu profile's environment (./setup.sh --profile gpu):
 
-    .venv-gpu/bin/python -m pytest tests/test_torch_ddpg_agent.py --no-cov
+    .venv-gpu/bin/python -m pytest tests/test_torch_backends.py --no-cov
 """
 
 import numpy as np
