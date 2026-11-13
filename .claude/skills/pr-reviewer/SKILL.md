@@ -155,7 +155,8 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
   the command crashed with a `KeyError` before it got there. Only running the documented command found it.
 - The roadmap item matches what was built, including what was dropped.
 - **A change to a distribution's code adds a line to that distribution's `packages/<dist>/CHANGELOG.md`**
-  under `## [Unreleased]`: its release notes are that file. A missing line is a Warning.
+  under the open section: `## [Unreleased]`, or the undated `## [<version>]` of a bumped but unreleased version. Its
+  release notes are that file. A missing line is a Warning.
 - **Every document the change makes stale is updated in this PR**, generated ones included: the README challenge table
   and `docs/results.md`, `docs/benchmarks/*.md`, `TESTING.md` expected numbers and timings, config header comments. A
   stale one is a Warning, not a follow-up.

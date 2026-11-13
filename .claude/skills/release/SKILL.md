@@ -37,7 +37,8 @@ grep -n "^## " packages/*/CHANGELOG.md
 ```
 
 For each distribution: its in-tree version, whether a tag and a release (draft or published) exist for it, and
-whether its `[Unreleased]` section holds anything. Dependency order is rl-core first; rl-navigation and
+whether its open section (`## [Unreleased]`, or the undated `## [<version>]` of a bumped but unreleased version)
+holds anything. Dependency order is rl-core first; rl-navigation and
 rl-challenges after rl-core's release is **published**, since their runs download its published wheel and the
 workflow's read-only token cannot see a draft.
 
@@ -45,7 +46,9 @@ workflow's read-only token cannot see a draft.
 
 Through the dev loop as a small PR on its own branch (`chore/release-<dist>-<version>`): bump `__version__` where it
 is defined, turn `## [Unreleased]` into `## [<version>] - <today>` with an empty `## [Unreleased]` above it, and for
-a breaking `rl-core` bump also the dependents' `rl-core~=0.x.0` requirements and minor versions. Run
+a breaking `rl-core` bump also the dependents' `rl-core~=0.x.0` requirements and minor versions. If the version
+is already bumped with an undated `## [<version>]` section (a breaking change bumps it in its first PR), only date
+the heading and add the empty `## [Unreleased]`: `release.py check` refuses an undated section. Run
 `python -m pytest tests/test_packages.py tests/test_versions.py`. The maintainer commits; the tag waits for the
 merge.
 

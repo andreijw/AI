@@ -4,7 +4,7 @@ import ast
 import re
 from pathlib import Path
 
-from tests.helpers import FIRST_PARTY_DISCOVERY
+from tests.helpers import FIRST_PARTY_DISCOVERY, package_of, resolved_imports
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # Each distribution's import packages live in packages/<dist>/src/; rl_core's in CORE_SRC.
@@ -175,29 +175,6 @@ def test_rl_core_does_not_import_a_challenge_package():
     assert offenders == [], f"rl_core must not depend on a challenge: {offenders}"
 
 
-def _resolved_imports(source: str, package: list[str]) -> list[tuple[int, str]]:
-    """(line, module) for every static import in ``source``, a module of ``package`` (its dotted
-    parts). Relative imports are resolved, and ``from x import y`` gives ``x.y`` as well as ``x``, so
-    ``from rl_core import agents`` is seen as importing ``rl_core.agents``."""
-    found: list[tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Import):
-            found.extend((node.lineno, alias.name) for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            base = package[: len(package) - node.level + 1] if node.level else []
-            module = ".".join([*base, *([node.module] if node.module else [])])
-            found.append((node.lineno, module))
-            found.extend(
-                (node.lineno, f"{module}.{alias.name}") for alias in node.names if alias.name != "*"
-            )
-    return found
-
-
-def _package_of(path: Path) -> list[str]:
-    (root,) = [root for root in SRC_ROOTS if root in path.parents]
-    return list(path.relative_to(root).parent.parts)
-
-
 def test_environment_packages_do_not_import_the_agents_package():
     # An environment wrapper is built before any agent and must not depend on one; the config
     # readers both use live in rl_core.utils.config_values.
@@ -205,7 +182,7 @@ def test_environment_packages_do_not_import_the_agents_package():
     offenders = [
         f"{path.relative_to(REPO_ROOT)}:{line} imports {module}"
         for path in files
-        for line, module in _resolved_imports(path.read_text(encoding="utf-8"), _package_of(path))
+        for line, module in resolved_imports(path.read_text(encoding="utf-8"), package_of(path))
         if module == "rl_core.agents" or module.startswith("rl_core.agents.")
     ]
     assert files, "The scan found no environment modules to check."
@@ -220,7 +197,7 @@ def test_resolved_imports_see_every_way_of_naming_the_agents_package():
         "from . import base_env\n"
         "import numpy\n"
     )
-    found = _resolved_imports(source, ["rl_core", "environments"])
+    found = resolved_imports(source, ["rl_core", "environments"])
     assert (1, "rl_core.agents.config_values") in found
     assert (2, "rl_core.agents") in found
     assert (3, "rl_core.agents") in found

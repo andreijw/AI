@@ -4,7 +4,7 @@ What changed in `rl-navigation`, newest first, in the style of [Keep a Changelog
 with [semantic versions](https://semver.org/) (0.x: a minor version may break the API). A release's notes are its
 section here. The repository's day-by-day log is the root CHANGELOG.md.
 
-## [Unreleased]
+## [0.2.0]
 
 ### Added
 
@@ -14,6 +14,9 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 
 ### Changed
 
+- **Breaking:** the `challenge` extra requires `rl-core~=0.2.0`; the navigation environment imports
+  `check_positive_int` and `non_negative_int` from `rl_core.utils`, rl-core's public API. The robot side (NumPy only)
+  is unchanged.
 - `rl_navigation.estimation.comparison` is a package of six modules with the same public names and the same `python -m`
   entry point. New `rl_navigation.estimation.averages` (`mean_or_nan`, `median_or_nan`).
 

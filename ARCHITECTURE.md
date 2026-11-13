@@ -752,7 +752,7 @@ plots/
      still has its own validator.
    - `environments/make_env.py`: `make_env`, an `ENV_DEFAULTS` dict naming each environment setting the challenge
      supports with its default (spreading `rl_core.environments.OBSERVATION_DEFAULTS` into it), and
-     `make_env_from_config`, which reads them with `rl_core.utils.config.read_env_settings`: null takes the
+     `make_env_from_config`, which reads them with `rl_core.utils.read_env_settings`: null takes the
      default, and any other setting given a value is rejected rather than ignored. A wrapper with observation
      settings only builds through `rl_core.environments.env_from_config(wrapper, config, ENV_DEFAULTS)` (Acrobot,
      MountainCar, LunarLander, BipedalWalker). A vectorized factory only if something uses it (`rl_acrobot` has none).

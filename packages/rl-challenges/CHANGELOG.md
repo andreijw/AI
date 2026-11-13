@@ -4,7 +4,12 @@ What changed in `rl-challenges`, newest first, in the style of [Keep a Changelog
 with [semantic versions](https://semver.org/) (0.x: a minor version may break the API). A release's notes are its
 section here. The repository's day-by-day log is the root CHANGELOG.md.
 
-## [Unreleased]
+## [0.2.0]
+
+### Changed
+
+- **Breaking:** requires `rl-core~=0.2.0`. The CartPole and Pendulum factories import `read_env_settings` from
+  `rl_core.utils`, rl-core's public API.
 
 ## [0.1.0] - 2026-11-11
 

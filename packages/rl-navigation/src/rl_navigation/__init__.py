@@ -5,4 +5,4 @@
 This module imports nothing, so importing a subpackage loads only what that subpackage needs.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -39,7 +39,9 @@ anyone could publish one. Upgrade by installing the new release's URL instead.
 1. **In a pull request**, bump the version where it is defined, once per distribution: `__version__` in
    `rl_core/__init__.py`, `rl_navigation/__init__.py` or (for all six challenge packages) `rl_cartpole/__init__.py`;
    each pyproject reads it with `version = {attr = ...}`. Turn the package CHANGELOG's `## [Unreleased]` notes into a
-   `## [<version>] - <date>` section. `tests/test_packages.py` checks that the section exists, and that every
+   `## [<version>] - <date>` section. A version may be bumped earlier with an undated `## [<version>]` section (a
+   breaking change does, below); `scripts/release.py check` refuses a section without its date, so no tag passes
+   before the release PR dates it. `tests/test_packages.py` checks that the section exists, and that every
    `rl-core~=0.x.0` requirement of the other distributions still admits rl-core's `__version__`: a breaking bump that
    forgets them fails CI (below).
 2. **After it merges**, the maintainer pushes a signed tag on the merge commit:
@@ -50,8 +52,8 @@ anyone could publish one. Upgrade by installing the new release's URL instead.
    ```
 
 3. **The Release workflow** (`.github/workflows/release.yml`) runs on the tag: it checks that the tagged commit is on
-   `develop`, that the tag equals the distribution's version, that its CHANGELOG has the section, and that every
-   distribution it requires has a tag at its in-tree version admitted by the requirement
+   `develop`, that the tag equals the distribution's version, that its CHANGELOG has the section with its date, and
+   that every distribution it requires has a tag at its in-tree version admitted by the requirement
    (`scripts/release.py check`); runs the tests; builds the sdist and wheel; installs the wheel, with the released
    wheels of what it requires, in a fresh environment and imports every module a plain install can
    (`scripts/release.py smoke`; rl-navigation may load only NumPy); writes `SHA256SUMS`; and opens a **draft**
@@ -74,10 +76,12 @@ Jazzy's).
 
 ## A breaking rl-core change
 
-`rl-challenges` and `rl-navigation[challenge]` require `rl-core~=0.1.0`, which stops before 0.2. One pull request
-bumps `rl-core` to 0.2.0, the dependents' requirements to `~=0.2.0` and the dependents' own minor versions
-(`tests/test_packages.py` fails while a requirement excludes the in-tree `rl-core`). Tag `rl-core-v0.2.0` and
-publish its draft first: the dependents' runs refuse to release against an `rl-core` that is not released.
+`rl-challenges` and `rl-navigation[challenge]` require `rl-core~=0.2.0`, which stops before 0.3. The first pull
+request of a breaking change bumps `rl-core` to the next minor version, the dependents' requirements to match and the
+dependents' own minor versions, each CHANGELOG with an undated section that the later pull requests add to
+(`tests/test_packages.py` fails while a requirement excludes the in-tree `rl-core`). The release PR dates the
+sections. Tag `rl-core` and publish its draft first: the dependents' runs refuse to release against an `rl-core`
+that is not released.
 
 ## Repository settings (the maintainer's)
 

@@ -28,6 +28,8 @@ import numpy.typing as npt
 
 from rl_core.agents.inference import InferencePolicy
 
+__all__ = ["VerificationReport", "find_c_compiler", "verify_c_header"]
+
 ATOL = 1e-5
 RTOL = 1e-5
 TIMEOUT_SECONDS = 120

@@ -12,6 +12,21 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-13
+
+### Changed
+
+- **rl-core 0.2.0, part 1: a declared public API and all versions at 0.2.0** (`feature/rl-core-public-api`; the
+  maintainer's decision D, 2026-11-13; PR 1 of 4). Every rl-core package now lists its public names in `__all__`;
+  everything else is private. `tests/test_public_api.py` keeps every name 0.1.0 published (`RELEASED_0_1_0`, read
+  from the tag) and fails if rl-challenges, rl-navigation, the examples or `docs/external-challenges.md` import a
+  private name; the root scripts' deep imports are an explicit allowlist. `rl_core.utils` re-exports the four helpers
+  the dependents used from deep paths. All three distributions are 0.2.0 with undated `## [0.2.0]` sections, the
+  dependents require `rl-core~=0.2.0`, and `scripts/release.py check` refuses an undated or impossible release date,
+  so nothing can be tagged before the release PR dates them. A shared deprecation helper and a test filter that turns
+  only this repository's deprecation messages into errors come ready for parts 2 and 3. The three 0.2.0 wheels pass
+  `release.py smoke-all` (57, 30 and 36 modules imported).
+
 ## 2026-11-12
 
 ### Added

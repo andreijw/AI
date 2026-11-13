@@ -127,6 +127,60 @@ def test_a_version_without_a_changelog_section_is_refused(tmp_path):
         release.check("rl-core-v0.1.0", [], tmp_path)
 
 
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "## [0.2.0]",
+        "## [0.2.0] - unreleased",
+        "## [0.2.0] - 2026-11",
+        "## [0.2.0] - 2026-13-45",
+        "## [0.2.0] - \uff12\uff10\uff12\uff16-\uff11\uff11-\uff12\uff10",
+    ],
+    ids=["undated", "word", "month", "no-such-day", "non-ascii-digits"],
+)
+def test_an_undated_changelog_section_is_refused(heading):
+    """The version bump comes before the release PR, which dates the section: until then no tag
+    passes the check."""
+    with pytest.raises(release.ReleaseError, match=r"'## \[0.2.0\]' has no release date"):
+        release.check_release_date(f"{heading}\n\n- Changed.\n", Version("0.2.0"))
+
+
+def test_only_the_versions_first_heading_counts():
+    """A dated duplicate further down (a copy-paste) does not date the section the notes come from."""
+    text = "## [0.2.0]\n\n- New.\n\n## [0.2.0] - 2026-11-11\n\n- Old.\n"
+    with pytest.raises(release.ReleaseError, match="has no release date"):
+        release.check_release_date(text, Version("0.2.0"))
+
+
+def test_a_dated_heading_passes():
+    release.check_release_date("## [0.2.0] - 2026-11-20\n\n- New.\n", Version("0.2.0"))
+
+
+def test_an_undated_version_still_gets_the_other_checks_first(tmp_path):
+    """The date is checked last: a bumped, undated dependent still reports a missing dependency tag,
+    which the real-distributions test relies on."""
+    _dist(tmp_path, "rl-core", version="0.2.0")
+    root = _dist(tmp_path, "rl-challenges", version="0.2.0", dependencies=["rl-core~=0.2.0"])
+    changelog = root / "CHANGELOG.md"
+    changelog.write_text(
+        changelog.read_text(encoding="utf-8").replace("## [0.2.0] - 2026-11-11", "## [0.2.0]"),
+        encoding="utf-8",
+    )
+    with pytest.raises(release.ReleaseError, match="has no tag: push rl-core-v0.2.0"):
+        release.check("rl-challenges-v0.2.0", ["rl-challenges-v0.2.0"], tmp_path)
+
+
+def test_a_tag_on_an_undated_version_is_refused(tmp_path):
+    root = _dist(tmp_path, "rl-core", version="0.2.0")
+    changelog = root / "CHANGELOG.md"
+    changelog.write_text(
+        changelog.read_text(encoding="utf-8").replace("## [0.2.0] - 2026-11-11", "## [0.2.0]"),
+        encoding="utf-8",
+    )
+    with pytest.raises(release.ReleaseError, match="has no release date"):
+        release.check("rl-core-v0.2.0", [], tmp_path)
+
+
 def test_an_empty_changelog_section_is_refused():
     with pytest.raises(release.ReleaseError, match="is empty"):
         release.changelog_section("## [0.1.0] - 2026-11-11\n\n## [0.0.9]\n- x\n", Version("0.1.0"))
@@ -178,7 +232,12 @@ def test_the_real_distributions_are_releasable_once_their_dependencies_are_tagge
         for path in PACKAGES.glob("*/pyproject.toml")
     ]
     for tag in tags:
-        release.check(tag, tags)
+        try:
+            release.check(tag, tags)
+        except release.ReleaseError as error:
+            # Between a version bump and its release PR the section is undated; the date is checked
+            # last, so every other check has passed.
+            assert "has no release date" in str(error), error
 
 
 # ---------------------------------------------------------------- smoke and sums

@@ -84,7 +84,7 @@ def test_discovering_the_challenges_does_not_import_box2d():
 ONNX_PACKAGES = ("onnx", "onnxruntime")
 
 
-@pytest.mark.parametrize("module", ["train", "record", "export", "benchmark"])
+@pytest.mark.parametrize("module", ["train", "record", "export", "benchmark", "rl_core.export"])
 def test_entry_points_do_not_import_onnx(module):
     """onnx and onnxruntime are an optional extra, loaded only when an ONNX export asks for them."""
     code = (

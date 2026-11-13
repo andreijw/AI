@@ -17,7 +17,7 @@ from rl_core.environments import (
     ParameterBounds,
     checked_randomization,
 )
-from rl_core.utils.config_values import check_positive_int, non_negative_int
+from rl_core.utils import check_positive_int, non_negative_int
 from rl_navigation.gym_env import CONTINUOUS_ID, DISCRETE_ID, MAX_EPISODE_STEPS, NavigationGymEnv
 from rl_navigation.sim import LayoutParams
 

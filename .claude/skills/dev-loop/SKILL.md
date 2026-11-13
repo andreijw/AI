@@ -181,8 +181,9 @@ bullets are in the `pr-reviewer` skill's Report section), updated for the fixes 
 Complete the roadmap item in the hand-off commit: remove it from `docs/roadmap.md` and add a condensed entry to
 `CHANGELOG.md` under today's date (`## <date>`, created if it is not already the newest section; `Added`, `Changed` or
 `Fixed`): what changed, the branch, and the numbers a reader would quote (config, seeds, result). A change to a
-distribution's code also adds a line under `## [Unreleased]` in that distribution's `packages/<dist>/CHANGELOG.md`,
-which becomes its release notes (`docs/releasing.md`). The PR then merges complete, and nothing has to be dated after
+distribution's code also adds a line in that distribution's `packages/<dist>/CHANGELOG.md` under the open section:
+`## [Unreleased]`, or the undated `## [<version>]` of a bumped but unreleased version. That section becomes its
+release notes (`docs/releasing.md`). The PR then merges complete, and nothing has to be dated after
 the merge. Stage it with the rest and say so in the hand-off, so the maintainer can unstage it if they do not agree. For
 work that spans several PRs, the item stays `[~]` with a progress note until the last one. Anything still live in the
 item (a follow-up, a deferred idea) moves to the open item it belongs to, or a new one, before the item is removed.
