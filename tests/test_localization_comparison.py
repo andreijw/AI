@@ -929,3 +929,17 @@ def test_compare_localizers_refuses_a_window_past_the_kidnapping_before_running(
     monkeypatch.setattr(comparison_runner, "run_trial", None)  # nothing may run
     with pytest.raises(ValueError, match="deadline"):
         compare_localizers(SEEDS, {"lidar": lidar}, (None,), kidnap_at=60, deadline=50, hold=20)
+
+
+def test_importing_the_main_module_does_not_run_the_command_line(monkeypatch):
+    """The release smoke test imports every module; ``comparison.__main__`` must only run under ``python -m``."""
+    import importlib
+    import sys
+
+    from rl_navigation.estimation.comparison import cli
+
+    calls = []
+    monkeypatch.setattr(cli, "main", lambda *args, **kwargs: calls.append(args))
+    sys.modules.pop("rl_navigation.estimation.comparison.__main__", None)
+    importlib.import_module("rl_navigation.estimation.comparison.__main__")
+    assert calls == [], "importing comparison.__main__ ran the command line"
