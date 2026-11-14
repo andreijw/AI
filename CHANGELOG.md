@@ -54,6 +54,21 @@ Acrobot-v1) and
   verbatim. `scripts/check_doc_sources.py` also accepts a `TESTING.md` row as a source (`(TESTING.md \`TR-31\`)`).
   A numbers check of about 130 figures corrected three citation dates and one overclaim before the merge.
 
+- **Planning: a pure-pursuit follower and the navigator** (`feature/planning-follower`; roadmap, Phase 8 "Planning and
+  control", PR 2 of 3). `rl_navigation.planning` gains `PurePursuit`, which turns a planned path into the velocity
+  commands the RL agents give (curvature 2 sin α / d, a projection window that cannot jump across a U-shaped path,
+  turning on the spot past 25°), `continuous_action` and `safe_discrete_action` for the navigation environment's two
+  action spaces (the discrete one checks the next 3 steps stay on free cells), and `Navigator`, which replans on the
+  true map or on an online map built only from the readings already in each observation, steps its margin down when
+  no path fits, frees a robot caught inside the inflation band, takes a goal cell within 0.15 m, and turns one way in
+  place while no path exists. Tuned on layouts 10000 to 10199: on the true map 200 of 200 with either action kind
+  (least clearance 0.131 and 0.142 m), on the online HC-SR04 map 194 and 193 of 200 with no collision; the 13 online
+  timeouts stall behind false walls in the sonar map. Gates registered for PR 3's one judged run on seeds 30000 to
+  30499 (`TESTING.md` `PLAN-1b`, the maintainer's decisions of 2026-11-13): success at least 98 % and 97 % on the true
+  map and 93 % online, and the 99th percentile of a 10-step sliding mean at most 15 ms with every step under 100 ms
+  (tuning: 11.1 ms and 63 ms at worst). The action mappings stay planning functions, so the robot imports no Gymnasium
+  environment (the maintainer's decision).
+
 ### Changed
 
 - **rl-core 0.2.0, part 1: a declared public API and all versions at 0.2.0** (`feature/rl-core-public-api`; the
