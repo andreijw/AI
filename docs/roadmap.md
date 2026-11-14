@@ -208,8 +208,14 @@ steps 3 to 5 are sketches to turn into full items when picked.
 
 - [~] **Planning and control** (picked 2026-11-13; PR 1 grid, A\* and smoothing; PR 2 the pure-pursuit follower
   and the navigator; PR 3 the comparison with the RL policies, judged once on seeds 30000 to 30499)
-  - **Progress (PR 1, 2026-11-13)**: `rl_navigation.planning` with A\* and smoothing (CHANGELOG.md,
-    2026-11-13).
+  - **Progress (PRs 1 and 2, 2026-11-13)**: `rl_navigation.planning` with A\* and smoothing, the pure-pursuit
+    follower and the navigator; gates registered for PR 3 (CHANGELOG.md, 2026-11-13).
+  - **Follow-up: online-map stalls behind false walls.** On tuning layouts 10000 to 10199, 13 online-map runs
+    time out stalled with no path: 6 with continuous actions (10004, 10042, 10070, 10102, 10116, 10149) and 7
+    with discrete (10042, 10070, 10097, 10102, 10116, 10149, 10161). The HC-SR04's 15° cone writes false walls
+    into the log-odds map that close every route, and turning on the spot never clears them, because the same
+    cone reads them again. Candidates: decay old evidence toward unknown, or back off along the path driven and
+    look again from another angle; judge on the tuning seeds against the online gates.
   - **Description**: A* on the occupancy grid (from step 3 or the true map), path smoothing, and a pure-pursuit or
     PID follower that outputs the same velocity commands the RL agents do, as a classical baseline. Compared with
     the RL policy on the same seeded layouts: success rate, path length, time to goal and collisions, and how each

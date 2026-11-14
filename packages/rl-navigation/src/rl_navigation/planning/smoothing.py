@@ -25,45 +25,48 @@ from rl_navigation.planning.grid import PlanningGrid
 from rl_navigation.sim.geometry import FloatArray
 
 
-def segments_free(grid: PlanningGrid, a: ArrayLike, ends: ArrayLike) -> NDArray[np.bool_]:
-    """Whether each segment from ``a`` to one of ``ends`` crosses only free cells inside the grid.
+def segments_free(grid: PlanningGrid, starts: ArrayLike, ends: ArrayLike) -> NDArray[np.bool_]:
+    """Whether each segment from a start to its end crosses only free cells inside the grid.
 
     All segments are traversed in one batched call. A segment of zero length is free when its
     cell is; a segment that leaves the grid is not.
 
     Args:
         grid: The grid.
-        a: ``(2,)`` the common start.
+        starts: ``(2,)``, one start for every segment, or ``(K, 2)``, one each.
         ends: ``(K, 2)`` the ends.
 
     Returns:
         ``(K,)`` booleans.
     """
-    start = np.asarray(a, dtype=np.float64).reshape(2)
     targets = np.asarray(ends, dtype=np.float64).reshape(-1, 2)
-    delta = targets - start
+    origins = np.broadcast_to(np.asarray(starts, dtype=np.float64), targets.shape)
+    delta = targets - origins
     lengths = np.hypot(delta[:, 0], delta[:, 1])
-    try:
-        start_free = not grid.blocked[grid.cell_of(start)]
-    except ValueError:
-        start_free = False
-    free = np.full(len(targets), start_free)
+    rows, cols = grid.shape
+    cells, inside = grid.cells_of(origins)
+    free = inside & ~grid.blocked[cells[:, 0], cells[:, 1]]  # a segment of zero length
     moving = np.flatnonzero(lengths > 0.0)
     if len(moving) == 0:
         return free
     visits = traverse_cells(
-        np.broadcast_to(start, (len(moving), 2)),
+        origins[moving],
         np.arctan2(delta[moving, 1], delta[moving, 0]),
         lengths[moving],
         grid.resolution,
         grid.shape,
         grid.origin,
     )
-    rows, cols = grid.shape
     inside_blocked = grid.blocked[visits.rows.clip(0, rows - 1), visits.cols.clip(0, cols - 1)]
     bad = visits.kept & (~visits.inside | inside_blocked)
     free[moving] = ~bad.any(axis=1)
     return free
+
+
+def polyline_free(grid: PlanningGrid, points: ArrayLike) -> bool:
+    """Whether every segment of a ``(N, 2)`` polyline is free (:func:`segments_free`, one call)."""
+    path = np.asarray(points, dtype=np.float64).reshape(-1, 2)
+    return bool(segments_free(grid, path[:-1], path[1:]).all())
 
 
 def segment_free(grid: PlanningGrid, a: ArrayLike, b: ArrayLike) -> bool:

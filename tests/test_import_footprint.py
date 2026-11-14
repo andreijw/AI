@@ -179,6 +179,8 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.planning.grid",
         "rl_navigation.planning.astar",
         "rl_navigation.planning.smoothing",
+        "rl_navigation.planning.follower",
+        "rl_navigation.planning.navigator",
     ],
 )
 def test_navigation_sim_imports_neither_gymnasium_nor_rl_core(module):
@@ -431,7 +433,8 @@ def test_the_planning_core_imports_only_the_simulator_and_the_mapping_core():
     neither the estimators, SLAM, the Gymnasium layer nor the mapping desk tool. A fresh process."""
     loaded = _loaded_navigation_packages(
         "rl_navigation.planning, rl_navigation.planning.grid, rl_navigation.planning.astar, "
-        "rl_navigation.planning.smoothing"
+        "rl_navigation.planning.smoothing, rl_navigation.planning.follower, "
+        "rl_navigation.planning.navigator"
     )
     assert loaded == ["mapping", "planning", "sim"], (
         f"the planning core loaded rl_navigation.{loaded}"

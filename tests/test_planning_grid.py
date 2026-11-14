@@ -220,3 +220,13 @@ def test_an_occupied_mask_must_match_the_grid_and_be_blocked():
         PlanningGrid(np.zeros((2, 2), dtype=bool), 1.0, occupied=np.zeros((2, 3), dtype=bool))
     with pytest.raises(ValueError, match="occupied"):
         PlanningGrid(np.zeros((2, 2), dtype=bool), 1.0, occupied=np.eye(2, dtype=bool))
+
+
+def test_cells_of_agrees_with_cell_of_and_flags_points_outside():
+    grid = PlanningGrid(np.zeros((4, 6), dtype=bool), 0.5, origin=(1.0, 2.0))
+    points = np.array([[1.0, 2.0], [3.9, 3.6], [4.0, 4.0], [0.99, 2.5], [2.0, 4.01], [np.nan, 2.5]])
+    cells, inside = grid.cells_of(points)
+    assert inside.tolist() == [True, True, True, False, False, False]
+    for point, cell, ok in zip(points, cells, inside, strict=True):
+        if ok:
+            assert tuple(cell) == grid.cell_of(point)

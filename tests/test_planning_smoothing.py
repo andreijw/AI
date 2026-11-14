@@ -9,6 +9,7 @@ from rl_navigation.mapping.beams import traverse_cells
 from rl_navigation.planning.astar import astar
 from rl_navigation.planning.grid import PlanningGrid, from_arena
 from rl_navigation.planning.smoothing import (
+    polyline_free,
     polyline_length,
     segment_free,
     segments_free,
@@ -39,6 +40,8 @@ def test_a_point_segment_is_free_exactly_when_its_cell_is():
     assert segment_free(grid, [0.5, 0.5], [0.5, 0.5])
     assert not segment_free(grid, [1.5, 0.5], [1.5, 0.5])
     assert not segment_free(grid, [2.5, 0.5], [2.5, 0.5]), "a point outside the grid is not free"
+    open_grid = PlanningGrid(np.zeros((1, 2), dtype=bool), 1.0)
+    assert not segment_free(open_grid, [2.5, 0.5], [2.5, 0.5]), "even beside a free edge cell"
 
 
 def test_a_segment_through_a_corner_of_two_blocked_cells_is_free_where_astar_is_not():
@@ -167,3 +170,22 @@ def test_segments_free_matches_the_one_segment_reference():
     expected = [reference_segment_free(grid, start, end) for end in ends]
     assert segments_free(grid, start, ends).tolist() == expected
     assert segments_free(grid, start, np.zeros((0, 2))).shape == (0,)
+
+
+def test_segments_free_takes_one_start_per_segment_too():
+    rng = np.random.default_rng(9)
+    grid = PlanningGrid(rng.random((12, 12)) < 0.15, 0.5)
+    starts = rng.uniform(-0.5, 6.5, (200, 2))
+    ends = np.vstack([rng.uniform(-0.5, 6.5, (199, 2)), starts[-1]])
+    expected = [reference_segment_free(grid, a, b) for a, b in zip(starts, ends, strict=True)]
+    assert segments_free(grid, starts, ends).tolist() == expected
+
+
+@pytest.mark.parametrize("seed", range(30))
+def test_polyline_free_is_every_segment_free(seed):
+    rng = np.random.default_rng(300 + seed)
+    grid = PlanningGrid(rng.random((12, 12)) < 0.1, 0.5)
+    points = rng.uniform(0.0, 6.0, (int(rng.integers(2, 6)), 2))
+    pairs = zip(points[:-1], points[1:], strict=True)
+    expected = all(reference_segment_free(grid, a, b) for a, b in pairs)
+    assert polyline_free(grid, points) == expected
