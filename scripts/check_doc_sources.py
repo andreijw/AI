@@ -10,8 +10,9 @@ Three rules:
    is followed, and so is a method a class inherits from a base class named in the same package.
 2. **Numbers have a source.** In ``docs/learn/``, every paragraph, list item or table row with a
    numeral must also hold a link to a report under ``docs/benchmarks/`` or a citation
-   ``(CHANGELOG.md, <date>)``, and every date in such a citation must be a ``## <date>`` heading of
-   ``CHANGELOG.md``. Headings, code and link targets are not read for numerals. A numeral is a
+   ``(CHANGELOG.md, <date>)`` or a TESTING.md row ``(TESTING.md `TR-31`)``; every date in such a
+   citation must be a ``## <date>`` heading of ``CHANGELOG.md``, and every row ID a ``| ID |`` row of
+   ``TESTING.md``. Headings, code and link targets are not read for numerals. A numeral is a
    number standing alone (``475``, ``-110``, ``0.99``, ``200k``), not a digit inside a name
    (``CartPole-v1``, ``Box2D``, ``SB3``) or written as a word.
 3. **Docs media.** Every file under ``docs/images/`` must be listed in ``scripts/doc_media.json``
@@ -39,6 +40,7 @@ IMAGES_DIR = Path("docs/images")
 BENCHMARKS_DIR = Path("docs/benchmarks")
 MANIFEST = Path("scripts/doc_media.json")
 CHANGELOG = Path("CHANGELOG.md")
+TESTING = Path("TESTING.md")
 MEDIA_SUFFIXES = {".png", ".gif"}
 
 
@@ -58,6 +60,10 @@ links = _load_link_checker()
 DOTTED = re.compile(r"`([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)(?:\(\))?`")
 CITATION = re.compile(r"\(CHANGELOG\.md,([^)]*)\)")
 CITATION_LINK = re.compile(r"\[CHANGELOG\.md,([^\]]*)\]\([^)]*\)")  # the clickable form
+# (TESTING.md `TR-31`) or (TESTING.md `TR-28`, `TR-31`): read from the raw text, as the IDs are code.
+TESTING_CITATION = re.compile(r"\(TESTING\.md((?:,?\s*`[A-Z]+-\d+`)+)\)")
+ROW_ID = re.compile(r"`([A-Z]+-\d+)`")
+TESTING_ROW = re.compile(r"^\| ([A-Z]+-\d+) \|", re.MULTILINE)
 DATE = re.compile(r"\b\d{4}-\d{2}(?:-\d{2})?\b")
 CHANGELOG_HEADING = re.compile(r"^## (\d{4}-\d{2}(?:-\d{2})?)\s*$", re.MULTILINE)
 # A number standing alone: not after a letter, digit, dot or "word-" (v1, Box2D, x86-64), not before a
@@ -336,6 +342,14 @@ def changelog_dates(root: Path) -> set[str]:
     return set(CHANGELOG_HEADING.findall(path.read_text(encoding="utf-8")))
 
 
+def testing_rows(root: Path) -> set[str]:
+    """The IDs of TESTING.md's rows (``| TR-31 | ...``)."""
+    path = root / TESTING
+    if not path.is_file():
+        return set()
+    return set(TESTING_ROW.findall(path.read_text(encoding="utf-8")))
+
+
 def units(body: str) -> list[tuple[int, str]]:
     """Paragraphs, list items and table rows of prose, each with its first line number."""
     found: list[tuple[int, str]] = []
@@ -388,7 +402,9 @@ def numerals(text: str) -> list[str]:
     return NUMERAL.findall(text)
 
 
-def check_page(page: Path, root: Path, index: CodeIndex, dates: set[str]) -> list[str]:
+def check_page(
+    page: Path, root: Path, index: CodeIndex, dates: set[str], rows: set[str] | None = None
+) -> list[str]:
     where = page.relative_to(root).as_posix()
     raw = links.outside_fences(page.read_text(encoding="utf-8"))
     problems: list[str] = []
@@ -403,18 +419,25 @@ def check_page(page: Path, root: Path, index: CodeIndex, dates: set[str]) -> lis
                 f"{where}:{line}: no package of this repository is named {package}: {dotted}"
             )
     body = links.prose(raw)
+    raw_lines = raw.split("\n")
     for line, text in units(body):
         cited = CITATION.findall(text) + CITATION_LINK.findall(text)
+        raw_text = "\n".join(raw_lines[line - 1 : line + text.count("\n")])
+        tested = [ROW_ID.findall(ids) for ids in TESTING_CITATION.findall(raw_text)]
+        for row in (row for ids in tested for row in ids):
+            if row not in (rows or set()):
+                problems.append(f"{where}:{line}: TESTING.md has no row {row}")
         for citation in cited:
             for date in DATE.findall(citation) or ["(no date)"]:
                 if date not in dates:
                     problems.append(f"{where}:{line}: CHANGELOG.md has no '## {date}' section")
         found = numerals(text)
-        if found and not cited and not _has_benchmark_link(page, root, text):
+        if found and not cited and not tested and not _has_benchmark_link(page, root, text):
             shown = ", ".join(found[:3]) + (", ..." if len(found) > 3 else "")
             problems.append(
                 f"{where}:{line}: numbers without a source ({shown}): cite "
-                "(CHANGELOG.md, <date>) or link a docs/benchmarks/ report in the same paragraph"
+                "(CHANGELOG.md, <date>) or (TESTING.md `<row>`), or link a docs/benchmarks/ report in the "
+                "same paragraph"
             )
     return problems
 
@@ -541,8 +564,9 @@ def check_sources(root: Path) -> tuple[list[str], int, int]:
     """All problems, the number of teaching pages read and of media files checked."""
     index = CodeIndex.of(root)
     dates = changelog_dates(root)
+    rows = testing_rows(root)
     pages = learn_pages(root)
-    problems = [problem for page in pages for problem in check_page(page, root, index, dates)]
+    problems = [problem for page in pages for problem in check_page(page, root, index, dates, rows)]
     media_problems, media_count = check_media(root)
     return problems + media_problems, len(pages), media_count
 

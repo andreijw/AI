@@ -16,6 +16,7 @@ from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 from rl_core.environments import OBSERVATION_DEFAULTS, ObservationOptions
 from rl_core.utils import read_env_settings
 from rl_core.utils.config_values import async_envs_setting  # private: test_public_api allowlist
+from rl_core.utils.deprecation import deprecated_function  # private: test_public_api allowlist
 
 from .cartpole_env import CartPoleEnv
 
@@ -33,7 +34,7 @@ ENV_DEFAULTS: dict[str, Any] = {
 ACCEPTED_SETTINGS: dict[str, Any] = {**ENV_DEFAULTS, "async_envs": True}
 
 
-def make_env(
+def _build_env(
     env_name: str = "CartPole-v1",
     render_mode: str | None = None,
     max_episode_steps: int = 500,
@@ -79,7 +80,7 @@ def make_env(
     )
 
 
-def make_vec_env(
+def _build_vec_env(
     num_envs: int = 4,
     env_name: str = "CartPole-v1",
     render_mode: str | None = None,
@@ -128,7 +129,7 @@ def make_vec_env(
         """Create a function that returns an environment with specific seed."""
 
         def _init() -> CartPoleEnv:
-            return make_env(
+            return _build_env(
                 env_name=env_name,
                 render_mode=render_mode,
                 max_episode_steps=max_episode_steps,
@@ -189,7 +190,7 @@ def make_env_from_config(config: dict) -> CartPoleEnv:
     settings["domain_randomization"] = CartPoleEnv.check_setting(
         "domain_randomization", settings["domain_randomization"]
     )
-    return make_env(
+    return _build_env(
         env_name=settings.pop("name"),
         render_mode=config.get("render_mode"),
         seed=config.get("seed"),
@@ -197,7 +198,7 @@ def make_env_from_config(config: dict) -> CartPoleEnv:
     )
 
 
-def make_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.VectorEnv:
+def _build_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.VectorEnv:
     """
     Create vectorized CartPole environments from a configuration dictionary.
 
@@ -228,10 +229,32 @@ def make_vec_env_from_config(config: dict, num_envs: int = 4) -> gym.vector.Vect
         "domain_randomization", settings["domain_randomization"]
     )
     settings["async_envs"] = async_envs_setting(config, ACCEPTED_SETTINGS["async_envs"])
-    return make_vec_env(
+    return _build_vec_env(
         num_envs=num_envs,
         env_name=settings.pop("name"),
         render_mode=config.get("render_mode"),
         seed=config.get("seed"),
         **settings,
     )
+
+
+# Deprecated in rl-challenges 0.2.0, removed in 0.3.0: make_env_from_config is what the challenge builds
+# with, and training.num_envs gives several environments, seeded with rl_core.seeding.env_seed (these
+# seed environment i with seed + i).
+_DEPRECATED = {"dist": "rl-challenges", "since": "0.2.0", "removed_in": "0.3.0"}
+_VECTOR_REPLACEMENT = "use training.num_envs, or a Gymnasium vector env over CartPoleEnv(...)"
+make_env = deprecated_function(
+    _build_env,
+    "rl_cartpole.make_env",
+    "build CartPoleEnv(...) directly, or use make_env_from_config(section)",
+    **_DEPRECATED,
+)
+make_vec_env = deprecated_function(
+    _build_vec_env, "rl_cartpole.make_vec_env", _VECTOR_REPLACEMENT, **_DEPRECATED
+)
+make_vec_env_from_config = deprecated_function(
+    _build_vec_env_from_config,
+    "rl_cartpole.make_vec_env_from_config",
+    _VECTOR_REPLACEMENT,
+    **_DEPRECATED,
+)

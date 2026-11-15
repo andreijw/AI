@@ -7,7 +7,6 @@ import pytest
 from rl_acrobot.environments.make_env import make_env_from_config as acrobot_from_config
 from rl_cartpole.environments import CartPoleEnv
 from rl_cartpole.environments import make_env_from_config as cartpole_from_config
-from rl_cartpole.environments import make_vec_env_from_config as cartpole_vec_from_config
 from rl_core.agents import ReinforceAgent
 from rl_core.environments.observation import (
     FrameStack,
@@ -26,8 +25,7 @@ from rl_mountaincar.environments import (
 )
 from rl_mountaincar.environments import make_env_from_config as mountaincar_from_config
 from rl_pendulum.environments import make_env_from_config as pendulum_from_config
-from rl_pendulum.environments import make_vec_env_from_config as pendulum_vec_from_config
-from tests.helpers import challenge_env_factories, env_marks, minimal_config, run_main
+from tests.helpers import challenge_env_factories, env_marks, minimal_config, run_main, vector_env
 
 
 def _obs(*values: float) -> np.ndarray:
@@ -503,16 +501,16 @@ def test_a_bad_mask_velocity_is_refused_naming_the_key(value):
 # --- Vectorized environments --------------------------------------------------------------------
 
 VEC_CASES = [
-    pytest.param(cartpole_vec_from_config, 4, (1, 3), False, id="cartpole-sync"),
-    pytest.param(cartpole_vec_from_config, 4, (1, 3), True, id="cartpole-async"),
-    pytest.param(pendulum_vec_from_config, 3, (2,), False, id="pendulum-sync"),
+    pytest.param(cartpole_from_config, 4, (1, 3), False, id="cartpole-sync"),
+    pytest.param(cartpole_from_config, 4, (1, 3), True, id="cartpole-async"),
+    pytest.param(pendulum_from_config, 3, (2,), False, id="pendulum-sync"),
 ]
 
 
-@pytest.mark.parametrize(("vec_from_config", "d", "velocity", "async_envs"), VEC_CASES)
-def test_vector_envs_stack_and_mask_each_sub_environment(vec_from_config, d, velocity, async_envs):
-    config = {"seed": 10, "frame_stack": 3, "mask_velocity": True, "async_envs": async_envs}
-    vec_env = vec_from_config(config, num_envs=2)
+@pytest.mark.parametrize(("from_config", "d", "velocity", "async_envs"), VEC_CASES)
+def test_vector_envs_stack_and_mask_each_sub_environment(from_config, d, velocity, async_envs):
+    config = {"seed": 10, "frame_stack": 3, "mask_velocity": True}
+    vec_env = vector_env(from_config, config, num_envs=2, async_envs=async_envs)
     try:
         obs, _ = vec_env.reset()
         assert obs.shape == (2, 3 * d), "each sub-environment should return a stack of 3 frames"
@@ -531,7 +529,7 @@ def test_vector_envs_stack_and_mask_each_sub_environment(vec_from_config, d, vel
 
 
 def test_a_vectorized_auto_reset_restarts_the_stack():
-    vec_env = cartpole_vec_from_config({"seed": 11, "frame_stack": 3, "async_envs": False}, 2)
+    vec_env = vector_env(cartpole_from_config, {"seed": 11, "frame_stack": 3}, num_envs=2)
     try:
         vec_env.reset()
         vec_env.action_space.seed(11)
@@ -556,7 +554,7 @@ def test_a_vectorized_auto_reset_restarts_the_stack():
 
 def test_vector_envs_take_frame_deltas_and_an_auto_reset_zeroes_the_differences():
     config = {"seed": 11, "frame_stack": 3, "mask_velocity": True, "frame_deltas": True}
-    vec_env = cartpole_vec_from_config({**config, "async_envs": False}, 2)
+    vec_env = vector_env(cartpole_from_config, config, num_envs=2)
     try:
         obs, _ = vec_env.reset()
         np.testing.assert_array_equal(obs[:, 4:], 0.0, err_msg="a reset's differences are zero")

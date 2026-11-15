@@ -46,6 +46,29 @@ Acrobot-v1) and
   run ended near 0.08, the 750-episode budget from 2026-10-14 near the floor; the lesson was the unit) in the page
   and the dev-loop skill.
 
+- **Teaching pages for the challenges** (`docs/learn-challenges`; docs PR 3). `docs/learn/challenges/` explains
+  CartPole, Acrobot, MountainCar (both), Pendulum, LunarLander (both) and BipedalWalker: the task, the observation,
+  action and reward (checked against Gymnasium 1.4.0), how an episode ends and why the solve threshold is what it is,
+  who solves it (linked to `docs/results.md` and the reports), what was hard, with every caveat that left
+  `results.md`, and the commands to try it. Challenges without a benchmark report quote their CHANGELOG entry
+  verbatim. `scripts/check_doc_sources.py` also accepts a `TESTING.md` row as a source (`(TESTING.md \`TR-31\`)`).
+  A numbers check of about 130 figures corrected three citation dates and one overclaim before the merge.
+
+- **Planning: a pure-pursuit follower and the navigator** (`feature/planning-follower`; roadmap, Phase 8 "Planning and
+  control", PR 2 of 3). `rl_navigation.planning` gains `PurePursuit`, which turns a planned path into the velocity
+  commands the RL agents give (curvature 2 sin α / d, a projection window that cannot jump across a U-shaped path,
+  turning on the spot past 25°), `continuous_action` and `safe_discrete_action` for the navigation environment's two
+  action spaces (the discrete one checks the next 3 steps stay on free cells), and `Navigator`, which replans on the
+  true map or on an online map built only from the readings already in each observation, steps its margin down when
+  no path fits, frees a robot caught inside the inflation band, takes a goal cell within 0.15 m, and turns one way in
+  place while no path exists. Tuned on layouts 10000 to 10199: on the true map 200 of 200 with either action kind
+  (least clearance 0.131 and 0.142 m), on the online HC-SR04 map 194 and 193 of 200 with no collision; the 13 online
+  timeouts stall behind false walls in the sonar map. Gates registered for PR 3's one judged run on seeds 30000 to
+  30499 (`TESTING.md` `PLAN-1b`, the maintainer's decisions of 2026-11-13): success at least 98 % and 97 % on the true
+  map and 93 % online, and the 99th percentile of a 10-step sliding mean at most 15 ms with every step under 100 ms
+  (tuning: 11.1 ms and 63 ms at worst). The action mappings stay planning functions, so the robot imports no Gymnasium
+  environment (the maintainer's decision).
+
 ### Changed
 
 - **rl-core 0.2.0, part 1: a declared public API and all versions at 0.2.0** (`feature/rl-core-public-api`; the
@@ -65,6 +88,14 @@ Acrobot-v1) and
   old path is a shim for one release: each of its nine names warns once at the caller's line and is the same object
   as at the new path, a star import still gives all nine, and mypy still types them; patching a name at the old path
   no longer changes behaviour. Every caller in the repository uses the new path.
+
+- **rl-core 0.2.0, part 3: the legacy environment factories are deprecated** (`feature/rl-core-deprecate-factories`;
+  PR 3 of 4). `make_env`, `make_vec_env` and `make_vec_env_from_config` of `rl_cartpole` and `rl_pendulum` warn once
+  per call that they are removed in rl-challenges 0.3.0 and name the replacement (`CartPoleEnv(...)`,
+  `make_env_from_config`, `training.num_envs` or a Gymnasium vector environment over the wrapper); a vector factory
+  warns once in all, async included. Every challenge, `train.py` and the benchmark stay silent: all ten challenges
+  build with warnings as errors. The repository's own uses moved to the replacements or assert the warning; the
+  example script and `docs/environment_setup_summary.md` use the wrapper classes.
 
 ## 2026-11-12
 

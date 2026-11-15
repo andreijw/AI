@@ -1,4 +1,8 @@
-"""Tests for CartPole environment wrapper."""
+"""Tests for CartPole environment wrapper.
+
+The tests that call make_env, make_vec_env or make_vec_env_from_config assert their deprecation
+warning; delete them with the factories in rl-challenges 0.3.0.
+"""
 
 import gymnasium as gym
 import numpy as np
@@ -233,7 +237,8 @@ def test_domain_randomization_changes_per_episode():
 
 def test_make_env():
     """Test make_env factory function."""
-    env = make_env(seed=42, max_episode_steps=100)
+    with pytest.deprecated_call():
+        env = make_env(seed=42, max_episode_steps=100)
 
     assert env is not None
     assert isinstance(env, CartPoleEnv)
@@ -252,12 +257,13 @@ def test_make_env_with_all_features():
         "length": (0.4, 0.6),
     }
 
-    env = make_env(
-        seed=42,
-        obs_noise_std=0.01,
-        action_noise_prob=0.1,
-        domain_randomization=domain_rand,
-    )
+    with pytest.deprecated_call():
+        env = make_env(
+            seed=42,
+            obs_noise_std=0.01,
+            action_noise_prob=0.1,
+            domain_randomization=domain_rand,
+        )
 
     assert env.obs_noise_std == 0.01
     assert env.action_noise_prob == 0.1
@@ -268,7 +274,8 @@ def test_make_env_with_all_features():
 
 def test_make_vec_env():
     """Test vectorized environment creation."""
-    vec_env = make_vec_env(num_envs=4, seed=42)
+    with pytest.deprecated_call():
+        vec_env = make_vec_env(num_envs=4, seed=42)
 
     assert vec_env is not None
     assert vec_env.num_envs == 4
@@ -289,7 +296,8 @@ def test_make_vec_env():
 
 def test_make_vec_env_sync():
     """Test synchronous vectorized environment."""
-    vec_env = make_vec_env(num_envs=2, seed=42, async_envs=False)
+    with pytest.deprecated_call():
+        vec_env = make_vec_env(num_envs=2, seed=42, async_envs=False)
 
     assert vec_env is not None
     assert vec_env.num_envs == 2
@@ -333,7 +341,8 @@ def test_make_vec_env_from_config():
         "obs_noise_std": 0.01,
     }
 
-    vec_env = make_vec_env_from_config(config, num_envs=3)
+    with pytest.deprecated_call():
+        vec_env = make_vec_env_from_config(config, num_envs=3)
 
     assert vec_env.num_envs == 3
 
@@ -346,12 +355,14 @@ def test_make_vec_env_from_config():
 def test_env_name_parameter():
     """Test that env_name parameter is properly used."""
     # Test with default CartPole-v1
-    env1 = make_env()
+    with pytest.deprecated_call():
+        env1 = make_env()
     assert env1.env_name == "CartPole-v1"
     env1.close()
 
     # Test with explicit CartPole-v0
-    env2 = make_env(env_name="CartPole-v0")
+    with pytest.deprecated_call():
+        env2 = make_env(env_name="CartPole-v0")
     assert env2.env_name == "CartPole-v0"
     assert env2.env.spec.id == "CartPole-v0"
     env2.close()
@@ -382,7 +393,8 @@ def test_vec_env_name_from_config():
         "name": "CartPole-v0",
         "seed": 42,
     }
-    vec_env = make_vec_env_from_config(config, num_envs=2)
+    with pytest.deprecated_call():
+        vec_env = make_vec_env_from_config(config, num_envs=2)
     assert vec_env.num_envs == 2
     vec_env.close()
 

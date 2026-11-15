@@ -128,6 +128,11 @@ DEPENDENT_ALLOWLIST = {
     "rl_core.utils.config_values.async_envs_setting",
     "packages/rl-challenges/src/rl_pendulum/environments/make_env.py: "
     "rl_core.utils.config_values.async_envs_setting",
+    # The same factories' deprecation wrapper, so their warning has rl-core's one wording.
+    "packages/rl-challenges/src/rl_cartpole/environments/make_env.py: "
+    "rl_core.utils.deprecation.deprecated_function",
+    "packages/rl-challenges/src/rl_pendulum/environments/make_env.py: "
+    "rl_core.utils.deprecation.deprecated_function",
 }
 
 #: The private rl_core names the checkout's own scripts import.

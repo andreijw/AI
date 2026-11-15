@@ -5,7 +5,7 @@ import warnings
 
 import pytest
 
-from rl_core.utils.deprecation import warn_deprecated
+from rl_core.utils.deprecation import deprecated_function, warn_deprecated
 
 MESSAGE = (
     "rl_core.old_name is deprecated since rl-core 0.2.0 and is removed in 0.3.0: "
@@ -54,3 +54,34 @@ def test_another_projects_deprecation_is_not_made_an_error():
             stacklevel=1,
         )
     assert len(record) == 1
+
+
+def _builder(a, *, b=2):
+    """Build something."""
+    return a + b
+
+
+def test_a_deprecated_function_warns_then_calls_the_builder():
+    old = deprecated_function(
+        _builder, "pkg.old", "use pkg.new", dist="rl-challenges", since="0.2.0", removed_in="0.3.0"
+    )
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        line = inspect.currentframe().f_lineno + 1
+        assert old(1, b=3) == 4
+    assert [str(w.message) for w in record] == [
+        "pkg.old is deprecated since rl-challenges 0.2.0 and is removed in 0.3.0: use pkg.new"
+    ]
+    assert (record[0].filename, record[0].lineno) == (__file__, line)
+
+
+def test_a_deprecated_function_keeps_the_signature_and_says_it_is_deprecated():
+    old = deprecated_function(
+        _builder, "pkg.old", "use pkg.new", dist="rl-challenges", since="0.2.0", removed_in="0.3.0"
+    )
+    assert inspect.signature(old) == inspect.signature(_builder)
+    assert old.__name__ == "old"
+    assert old.__doc__.startswith(
+        "Deprecated since rl-challenges 0.2.0, removed in 0.3.0: use pkg.new."
+    )
+    assert "Build something." in old.__doc__

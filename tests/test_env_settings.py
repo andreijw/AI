@@ -295,9 +295,15 @@ def test_check_setting_is_the_constructors_rule():
         CartPoleEnv.check_setting("frame_stack", 2)
 
 
+def _deprecated_vec_env_from_config(config):
+    """The vector factory, deprecated in rl-challenges 0.2.0 (removed with this case in 0.3.0)."""
+    with pytest.deprecated_call():
+        return factories.make_vec_env_from_config(config)
+
+
 @pytest.mark.parametrize(
     "factory",
-    [factories.make_env_from_config, factories.make_vec_env_from_config],
+    [factories.make_env_from_config, _deprecated_vec_env_from_config],
     ids=["make_env_from_config", "make_vec_env_from_config"],
 )
 def test_the_cartpole_factories_check_ranges_before_building_anything(factory, monkeypatch):
@@ -307,8 +313,15 @@ def test_the_cartpole_factories_check_ranges_before_building_anything(factory, m
     def must_not_build(*args, **kwargs):
         raise AssertionError("an environment was built from an invalid config")
 
-    monkeypatch.setattr(factories, "make_env", must_not_build)
-    monkeypatch.setattr(factories, "make_vec_env", must_not_build)
+    class NotBuilt(CartPoleEnv):
+        """CartPoleEnv's own setting checks, without building one."""
+
+        def __init__(self, *args, **kwargs):
+            must_not_build()
+
+    monkeypatch.setattr(factories, "CartPoleEnv", NotBuilt)
+    monkeypatch.setattr(factories, "SyncVectorEnv", must_not_build)
+    monkeypatch.setattr(factories, "AsyncVectorEnv", must_not_build)
     with pytest.raises(ValueError, match="Unsupported domain randomization parameter 'foo'"):
         factory({"domain_randomization": {"foo": [1.0, 2.0]}})
 

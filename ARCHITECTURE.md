@@ -757,7 +757,9 @@ plots/
      `make_env_from_config`, which reads them with `rl_core.utils.read_env_settings`: null takes the
      default, and any other setting given a value is rejected rather than ignored. A wrapper with observation
      settings only builds through `rl_core.environments.env_from_config(wrapper, config, ENV_DEFAULTS)` (Acrobot,
-     MountainCar, LunarLander, BipedalWalker). A vectorized factory only if something uses it (`rl_acrobot` has none).
+     MountainCar, LunarLander, BipedalWalker). A vectorized factory only if something uses it (`rl_acrobot` has
+     none; CartPole's and Pendulum's `make_env`, `make_vec_env` and `make_vec_env_from_config` are deprecated since
+     rl-challenges 0.2.0).
    - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`. It
      implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and lists its agents
      in the class variable `AGENT_CLASSES` (agent type to class). The base class's `supported_agents` and `make_agent`

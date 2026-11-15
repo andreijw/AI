@@ -56,7 +56,7 @@ project, including observation noise, action noise, domain randomization, and ve
 **Example**:
 
 ```python
-env = make_env(obs_noise_std=0.1)
+env = CartPoleEnv(obs_noise_std=0.1)
 ```
 
 ### Velocity Masking, Frame Stacking and Frame Differences
@@ -81,8 +81,10 @@ env = make_env(obs_noise_std=0.1)
 **Example**:
 
 ```python
-env = make_env(mask_velocity=True, frame_stack=4)  # CartPole: 16 entries, velocities zero
-env = make_env(mask_velocity=True, frame_stack=4, frame_deltas=True)  # newest frame, 3 differences
+env = CartPoleEnv(mask_velocity=True, frame_stack=4)  # CartPole: 16 entries, velocities zero
+env = CartPoleEnv(
+    mask_velocity=True, frame_stack=4, frame_deltas=True
+)  # newest frame, 3 differences
 ```
 
 ### 2. Action Noise
@@ -98,7 +100,7 @@ env = make_env(mask_velocity=True, frame_stack=4, frame_deltas=True)  # newest f
 **Example**:
 
 ```python
-env = make_env(action_noise_prob=0.05)
+env = CartPoleEnv(action_noise_prob=0.05)
 ```
 
 ### 3. Domain Randomization
@@ -127,14 +129,19 @@ domain_rand = {
     "masspole": (0.09, 0.11),
     "length": (0.45, 0.55),
 }
-env = make_env(domain_randomization=domain_rand)
+env = CartPoleEnv(domain_randomization=domain_rand)
 ```
 
 ### 4. Vectorized Environments
 
 **Purpose**: Parallel environment execution for faster training
 
-**Features**:
+`make_vec_env` and `make_vec_env_from_config` are deprecated since rl-challenges 0.2.0 and removed in 0.3.0 (so is
+the keyword factory `make_env`: build `CartPoleEnv(...)` directly). To train from several environments, set
+`training.num_envs` (docs/usage.md, "Several training environments"); its environments are seeded with
+`rl_core.seeding.env_seed`. For a Gymnasium vector environment of your own, build one over the wrapper as below.
+
+**What the deprecated factories did**:
 
 - Supports both async (parallel processes) and sync (sequential) modes
 - Configurable number of environments
@@ -144,11 +151,14 @@ env = make_env(domain_randomization=domain_rand)
 **Example**:
 
 ```python
-# Create 8 parallel async environments
-vec_env = make_vec_env(num_envs=8, seed=42, async_envs=True)
+from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
+from rl_cartpole.environments import CartPoleEnv
 
-# Create 4 sequential sync environments
-vec_env = make_vec_env(num_envs=4, seed=42, async_envs=False)
+# 8 environments, each in its own process
+vec_env = AsyncVectorEnv([lambda i=i: CartPoleEnv(seed=42 + i) for i in range(8)])
+
+# 4 environments stepped in turn in this process
+vec_env = SyncVectorEnv([lambda i=i: CartPoleEnv(seed=42 + i) for i in range(4)])
 ```
 
 ### 5. Configuration-Based Creation
@@ -158,7 +168,7 @@ vec_env = make_vec_env(num_envs=4, seed=42, async_envs=False)
 **Functions**:
 
 - `make_env_from_config(config)`: Single environment
-- `make_vec_env_from_config(config, num_envs)`: Vectorized environments
+- `make_vec_env_from_config(config, num_envs)`: Vectorized environments (deprecated, removed in 0.3.0)
 
 **Example**:
 
@@ -182,7 +192,8 @@ env = make_env_from_config(config)
 
 #### `make_env(...)`
 
-Creates a single environment with noise injection and domain randomization features.
+Deprecated since rl-challenges 0.2.0 and removed in 0.3.0: build `CartPoleEnv(...)` with the same arguments, or use
+`make_env_from_config`. Creates a single environment with noise injection and domain randomization features.
 
 **Parameters**:
 
@@ -203,7 +214,8 @@ Creates a single environment with noise injection and domain randomization featu
 
 #### `make_vec_env(...)`
 
-Creates vectorized CartPole environments for parallel training.
+Deprecated since rl-challenges 0.2.0 and removed in 0.3.0: set `training.num_envs`, or build a Gymnasium vector
+environment over `CartPoleEnv(...)`. Creates vectorized CartPole environments for parallel training.
 
 **Parameters**:
 
@@ -225,7 +237,8 @@ Creates environment from configuration dictionary.
 
 #### `make_vec_env_from_config(config, num_envs)`
 
-Creates vectorized environments from configuration dictionary.
+Deprecated since rl-challenges 0.2.0 and removed in 0.3.0, as `make_vec_env`. Creates vectorized environments
+from configuration dictionary.
 
 **Parameters**:
 
@@ -255,9 +268,9 @@ All tests are located in `tests/test_environment.py` and can be run with pytest.
 ### Basic Training Loop
 
 ```python
-from rl_cartpole.environments import make_env
+from rl_cartpole.environments import CartPoleEnv
 
-env = make_env(seed=42)
+env = CartPoleEnv(seed=42)
 obs, info = env.reset()
 
 for episode in range(100):
@@ -275,22 +288,21 @@ env.close()
 ### Robust Training with All Features
 
 ```python
-from rl_cartpole.environments import make_vec_env
+from gymnasium.vector import AsyncVectorEnv
+from rl_cartpole.environments import CartPoleEnv
 
-# Create 8 parallel environments with noise and randomization
-vec_env = make_vec_env(
-    num_envs=8,
-    seed=42,
-    obs_noise_std=0.02,
-    action_noise_prob=0.05,
-    domain_randomization={
+# 8 parallel environments with noise and randomization
+settings = {
+    "obs_noise_std": 0.02,
+    "action_noise_prob": 0.05,
+    "domain_randomization": {
         "gravity": (9.0, 10.0),
         "masscart": (0.9, 1.1),
         "masspole": (0.09, 0.11),
         "length": (0.45, 0.55),
     },
-    async_envs=True,
-)
+}
+vec_env = AsyncVectorEnv([lambda i=i: CartPoleEnv(seed=42 + i, **settings) for i in range(8)])
 
 obs, info = vec_env.reset()
 for step in range(1000):

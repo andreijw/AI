@@ -11,12 +11,12 @@ import numpy as np
 import pytest
 
 from rl_cartpole.environments import CartPoleEnv
-from rl_cartpole.environments import make_vec_env as make_cartpole_vec_env
+from rl_cartpole.environments import make_env_from_config as cartpole_from_config
 from rl_core.agents import BaseAgent
 from rl_core.seeding import derive_rng
 from rl_core.training import Trainer
 from rl_pendulum.environments import PendulumEnv
-from tests.helpers import challenge_env_factories
+from tests.helpers import challenge_env_factories, vector_env
 
 # Each challenge's wrapper factory, taking environment-config settings as keywords, marked as its
 # environment needs: the Box2D ones build only where box2d-py is installed.
@@ -263,7 +263,7 @@ def test_evaluation_episodes_are_not_one_episode_repeated(tmp_path):
 
 def test_vectorized_sub_environment_gets_a_new_state_after_autoreset():
     """A seeded sub-environment does not return to its first state when it resets itself."""
-    vec_env = make_cartpole_vec_env(num_envs=2, seed=SEED, max_episode_steps=5, async_envs=False)
+    vec_env = vector_env(cartpole_from_config, {"seed": SEED, "max_episode_steps": 5}, num_envs=2)
     try:
         first_obs, _ = vec_env.reset()
         actions = np.zeros(2, dtype=np.int64)

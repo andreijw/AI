@@ -41,8 +41,8 @@ Training and Code Health items are picked as they become useful.
   repository needed, from CHANGELOG.md), a navigation track ending with the ONNX and C export, frames of every
   challenge and GIF clips of trained and random agents (seed 1, retrained after the 0.2.0 API lands, checkpoints
   attached to the release), and committed benchmark curves. The navigation track waits for planning and control.
-  - **Progress (PRs 0 and 2, 2026-11-13)**: the media rule, the source checker in CI and the page skeletons; the
-    algorithm pages
+  - **Progress (PRs 0, 2 and 3, 2026-11-13)**: the media rule, the source checker in CI and the page skeletons; the
+    algorithm and challenge pages
     (CHANGELOG.md, 2026-11-13).
 
 - [~] **rl-core 0.2.0 API** (the maintainer's decision D, 2026-11-13; plan in four PRs plus the release PR):
@@ -50,8 +50,8 @@ Training and Code Health items are picked as they become useful.
   deprecation shim; declare `__all__` throughout rl-core; deprecate the legacy `make_env`, `make_vec_env` and
   `make_vec_env_from_config` of rl_cartpole and rl_pendulum (removed in 0.3.0); make matplotlib an optional
   `rl-core[plot]` extra. The two per-challenge agent maps stay. Then release all three distributions as 0.2.0.
-  - **Progress (PRs 1 and 2, 2026-11-13)**: the public API and every version bump; the robustness benchmark moved
-    out of `training`, ending the cycle (CHANGELOG.md, 2026-11-13).
+  - **Progress (PRs 1 to 3, 2026-11-13)**: the public API and every version bump; the robustness benchmark moved
+    out of `training`, ending the cycle; the legacy factories deprecated (CHANGELOG.md, 2026-11-13).
 
 - [ ] **Library follow-ups** (deferred from the importable-libraries item, 2026-11-11; not picked). Each waits for a
   consumer that needs it:
@@ -208,8 +208,14 @@ steps 3 to 5 are sketches to turn into full items when picked.
 
 - [~] **Planning and control** (picked 2026-11-13; PR 1 grid, A\* and smoothing; PR 2 the pure-pursuit follower
   and the navigator; PR 3 the comparison with the RL policies, judged once on seeds 30000 to 30499)
-  - **Progress (PR 1, 2026-11-13)**: `rl_navigation.planning` with A\* and smoothing (CHANGELOG.md,
-    2026-11-13).
+  - **Progress (PRs 1 and 2, 2026-11-13)**: `rl_navigation.planning` with A\* and smoothing, the pure-pursuit
+    follower and the navigator; gates registered for PR 3 (CHANGELOG.md, 2026-11-13).
+  - **Follow-up: online-map stalls behind false walls.** On tuning layouts 10000 to 10199, 13 online-map runs
+    time out stalled with no path: 6 with continuous actions (10004, 10042, 10070, 10102, 10116, 10149) and 7
+    with discrete (10042, 10070, 10097, 10102, 10116, 10149, 10161). The HC-SR04's 15° cone writes false walls
+    into the log-odds map that close every route, and turning on the spot never clears them, because the same
+    cone reads them again. Candidates: decay old evidence toward unknown, or back off along the path driven and
+    look again from another angle; judge on the tuning seeds against the online gates.
   - **Description**: A* on the occupancy grid (from step 3 or the true map), path smoothing, and a pure-pursuit or
     PID follower that outputs the same velocity commands the RL agents do, as a classical baseline. Compared with
     the RL policy on the same seeded layouts: success rate, path length, time to goal and collisions, and how each

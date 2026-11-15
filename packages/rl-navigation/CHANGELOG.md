@@ -13,6 +13,8 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
   the 64-beam lidar is unchanged. `summarize_features` reports `reachable_rate`.
 - `rl_navigation.planning`: `PlanningGrid` (`from_arena`, `from_occupied`), `astar`, `reachable`, `segments_free` and
   `shortcut`. `rl_navigation.sim.layouts.connected` is the flood fill `path_exists` uses.
+- `rl_navigation.planning`: `PurePursuit`, `FollowerParams`, `Command`, `continuous_action`, `safe_discrete_action`,
+  `Navigator`, `NavigatorParams`, `TrueMap`, `OnlineMap`, `polyline_free` and `PlanningGrid.cells_of`.
 
 ### Changed
 

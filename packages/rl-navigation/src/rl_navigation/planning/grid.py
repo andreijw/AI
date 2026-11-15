@@ -87,13 +87,33 @@ class PlanningGrid:
         Raises:
             ValueError: The point is not finite or lies outside the grid.
         """
-        x, y = np.asarray(point, dtype=np.float64).reshape(-1)[:2]
+        xy = np.asarray(point, dtype=np.float64).reshape(-1)[:2]
+        cells, inside = self.cells_of(xy[None])
+        if not inside[0]:
+            raise ValueError(
+                f"PlanningGrid point ({xy[0]}, {xy[1]}) is outside the grid or not finite."
+            )
+        return int(cells[0, 0]), int(cells[0, 1])
+
+    def cells_of(self, points: ArrayLike) -> tuple[NDArray[np.intp], NDArray[np.bool_]]:
+        """:meth:`cell_of` for ``(K, 2)`` points at once, without raising.
+
+        Returns:
+            ``(cells, inside)``: ``(K, 2)`` the ``(row, col)`` of each point, clipped into the
+            grid, and ``(K,)`` whether the point lies in the grid (False for NaN).
+        """
+        xy = np.asarray(points, dtype=np.float64).reshape(-1, 2)
         rows, cols = self.shape
-        j = (x - self.origin[0]) / self.resolution
-        i = (y - self.origin[1]) / self.resolution
-        if not (0.0 <= j <= cols and 0.0 <= i <= rows):  # NaN fails both
-            raise ValueError(f"PlanningGrid point ({x}, {y}) is outside the grid or not finite.")
-        return min(int(i), rows - 1), min(int(j), cols - 1)
+        j = (xy[:, 0] - self.origin[0]) / self.resolution
+        i = (xy[:, 1] - self.origin[1]) / self.resolution
+        inside = (j >= 0.0) & (j <= cols) & (i >= 0.0) & (i <= rows)  # NaN fails every test
+        cells = np.column_stack(
+            [
+                np.clip(np.nan_to_num(i), 0, rows - 1).astype(np.intp),
+                np.clip(np.nan_to_num(j), 0, cols - 1).astype(np.intp),
+            ]
+        )
+        return cells, inside
 
     def centres(self, cells: ArrayLike) -> FloatArray:
         """``(K, 2)`` the ``(x, y)`` centres of ``(K, 2)`` ``(row, col)`` cells."""
