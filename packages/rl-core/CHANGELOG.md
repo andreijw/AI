@@ -25,6 +25,10 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
   modules now have an `__all__`, so a star import gives only those names, and the rest at those public paths
   (`WRAPPER_STREAM`, `ATOL`, ...) are private. `import rl_core.export` now loads its four modules, and through `rollout`
   also `rl_core.challenges` and Gymnasium (never onnx or onnxruntime).
+- **Breaking:** matplotlib is no longer a dependency: install `rl-core[plot]` (checkout:
+  `pip install -e "./packages/rl-core[plot]" -c requirements-lock.txt`). Without it the plot functions, now also
+  exported by `rl_core.utils`, raise `ModuleNotFoundError` with the install command, and so do `run_benchmark` and
+  `BenchmarkRunner.run` with their default `save_plot=True`.
 - Checkpoint save and load live in `rl_core.agents.checkpointing.CheckpointMixin`, which `BaseAgent` inherits; every
   name it defined in 0.1.0 still imports from `rl_core.agents.base_agent` (a private path from 0.2.0: import
   from `rl_core.agents`). The checkpoint format is unchanged.

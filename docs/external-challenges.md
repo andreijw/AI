@@ -231,14 +231,17 @@ environment's interpreter:
 ```bash
 cd my-game
 python3.12 -m venv .venv
-.venv/bin/pip install -e /path/to/AI/packages/rl-core -e .
-# or, from a release (0.2.0 once tagged; the 0.1.0 wheel needs ~=0.1.0): .venv/bin/pip install \
-#   https://github.com/andreijw/AI/releases/download/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl -e .
+.venv/bin/pip install -e "/path/to/AI/packages/rl-core[plot]" -e .
+# or, from a release (0.2.0 once tagged; the 0.1.0 wheel needs ~=0.1.0): .venv/bin/pip install -e . \
+#   "rl-core[plot] @ https://github.com/andreijw/AI/releases/download/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl"
 
 .venv/bin/python /path/to/AI/train.py --config configs/corridor_ppo.yaml --num-episodes 20
 .venv/bin/python /path/to/AI/benchmark.py --challenge corridor --agents ppo --episodes 50 --seeds 1 \
     --output-dir out/benchmark --report out/benchmark.md
 ```
+
+The `plot` extra (matplotlib) is for the benchmark's learning-curve plot and `train.py --plot`; without it, pass
+`--no-plot` to the benchmark.
 
 `train.py` picks the challenge from the config's `environment.name`. The benchmark reads each agent's config, named in
 `CONFIG_MAP`, from its `--config-dir` (default `configs` under the current directory). Without `--agents` it runs

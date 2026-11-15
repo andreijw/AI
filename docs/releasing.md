@@ -18,6 +18,9 @@ R=https://github.com/andreijw/AI/releases/download
 # A game project: the framework
 pip install $R/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl
 
+# The same with its plots (train.py --plot, the benchmark's curves): the plot extra, matplotlib
+pip install "rl-core[plot] @ $R/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl"
+
 # The robot: the navigation libraries, NumPy only (or by git tag, as docs/navigation.md shows)
 pip install $R/rl-navigation-v0.1.0/rl_navigation-0.1.0-py3-none-any.whl
 
@@ -56,8 +59,9 @@ anyone could publish one. Upgrade by installing the new release's URL instead.
    that every distribution it requires has a tag at its in-tree version admitted by the requirement
    (`scripts/release.py check`); runs the tests; builds the sdist and wheel; installs the wheel, with the released
    wheels of what it requires, in a fresh environment and imports every module a plain install can
-   (`scripts/release.py smoke`; rl-navigation may load only NumPy); writes `SHA256SUMS`; and opens a **draft**
-   GitHub Release with the files and the CHANGELOG section as notes.
+   (`scripts/release.py smoke`; rl-navigation may load only NumPy, and rl-core's plain install may not contain
+   matplotlib); writes `SHA256SUMS`; and opens a **draft** GitHub Release with the files and the CHANGELOG section as
+   notes.
 4. **The maintainer** reads the draft and publishes it, or says yes when the assistant's `release` skill asks to.
    A failed run leaves nothing public; fix the cause in a pull request, then delete and push the tag again (both
    theirs). A run on a tag whose draft exists brings the draft in line with it (notes, title, prerelease flag, files;

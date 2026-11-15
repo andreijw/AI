@@ -12,7 +12,7 @@ import rl_core.training
 from rl_cartpole.environments import CartPoleEnv
 from rl_core.agents.base_agent import OBSERVATION_KEY_PREFIX
 from rl_core.environments import OBSERVATION_DEFAULTS
-from tests.helpers import minimal_config, run_main
+from tests.helpers import minimal_config, needs_matplotlib, run_main
 
 
 class _StubTrainer:
@@ -54,6 +54,7 @@ def _stub_trainer(monkeypatch, outcome=None):
     monkeypatch.setattr(rl_core.training, "Trainer", trainer_cls)
 
 
+@needs_matplotlib
 def test_plot_flag_writes_the_training_plot(tmp_path, monkeypatch, closed_envs):
     _stub_trainer(monkeypatch)
     plot_dir = tmp_path / "plots"
@@ -64,6 +65,20 @@ def test_plot_flag_writes_the_training_plot(tmp_path, monkeypatch, closed_envs):
     assert len(set(closed_envs)) == 2
 
 
+def test_plot_without_matplotlib_stops_before_any_output(tmp_path, monkeypatch, capsys):
+    """Without the plot extra, --plot refuses at once: no checkpoint, log or plot folder."""
+    _stub_trainer(monkeypatch)
+    monkeypatch.setitem(sys.modules, "matplotlib", None)
+    config = minimal_config(tmp_path)
+    argv = ["--config", config, "--plot", "--plot-dir", str(tmp_path / "plots")]
+    with pytest.raises(SystemExit) as stopped:
+        run_main(argv, monkeypatch)
+    assert stopped.value.code == 2
+    assert "--plot" in (err := capsys.readouterr().err) and "pip install 'rl-core[plot]'" in err
+    assert [p.name for p in tmp_path.iterdir()] == ["config.yaml"]
+
+
+@needs_matplotlib
 def test_an_interrupted_run_returns_closes_both_environments_and_writes_no_plot(
     tmp_path, monkeypatch, closed_envs
 ):

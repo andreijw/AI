@@ -8,7 +8,7 @@ import pytest
 
 from rl_navigation import localization_video as video_module
 from rl_navigation.estimation import recording as recording_module
-from tests.helpers import needs_video
+from tests.helpers import needs_matplotlib, needs_video
 
 # A short, cheap run: 12 steps kidnapped at 6, 100 particles, 20 px/m (a 100 x 100 arena). A flag
 # given again later replaces its value here.
@@ -157,6 +157,7 @@ def test_the_cli_runs_without_a_kidnapping_and_passes_the_mcl_scale(
     assert "no kidnapping" in capsys.readouterr().out
 
 
+@needs_matplotlib
 def test_the_cli_writes_stills_into_a_new_directory(tmp_path, frames_written):
     from matplotlib.image import imread
 

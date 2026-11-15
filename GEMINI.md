@@ -57,9 +57,9 @@ To optimize token usage and context window limits:
     it imports both the training package and the challenges, which import training.
   * `rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
     settings that agents, trainer and environments share (`config_values.py`), structured logging (`logger.py`),
-    video recording (`video.py`), visualization helpers (`visualization.py`, imported directly: the package does
-    not re-export them, and `train.py` and `benchmark.py` import them only inside the code that plots, so a run
-    without plots never loads matplotlib), and the rolling average behind solve numbers and plots (`smoothing.py`).
+    video recording (`video.py`), the plot functions (`visualization.py`, re-exported by the package; matplotlib is
+    rl-core's optional `plot` extra, imported only on a plot function's first call, so a run without plots never
+    loads it and runs without it), and the rolling average behind solve numbers and plots (`smoothing.py`).
 * **`packages/rl-challenges/src/rl_cartpole/`**: CartPole-v1 discrete balance control challenge.
   * `rl_cartpole/environments/`: Gymnasium wrapper implementations, observation/action noise injections,
     domain randomization configurations, and vectorized environment factories.

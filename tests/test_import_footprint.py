@@ -51,7 +51,30 @@ def test_trainer_and_challenges_do_not_import_matplotlib():
     assert result.stdout.strip() == "[]", (
         "Importing rl_core.training, rl_core.utils and the challenges (with discovery) should not "
         f"load matplotlib; loaded {result.stdout.strip()}, so something on that path imports "
-        "rl_core.utils.visualization."
+        "matplotlib at module level."
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "import rl_core.utils.visualization",
+        "from rl_core.utils import plot_benchmark_comparison, plot_training_metrics",
+    ],
+)
+def test_the_plot_functions_load_matplotlib_only_when_called(statement):
+    """matplotlib is rl-core's plot extra: importing the plot functions must work without it, and
+    pyplot costs about 0.8 s of start-up on the Jetson. A fresh process."""
+    code = (
+        f"import sys; {statement}; "
+        "print(sorted(m for m in sys.modules if m.split('.')[0] == 'matplotlib')[:5])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", (
+        f"{statement} loaded {result.stdout.strip()}: import matplotlib inside _pyplot() only."
     )
 
 
@@ -69,8 +92,8 @@ def test_entry_points_do_not_import_matplotlib(module):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "[]", (
-        f"Importing {module} loaded {result.stdout.strip()}: import rl_core.utils.visualization "
-        "inside the plotting function, not at module level."
+        f"Importing {module} loaded {result.stdout.strip()}: import matplotlib only in "
+        "rl_core.utils.visualization's _pyplot(), never at module level."
     )
 
 

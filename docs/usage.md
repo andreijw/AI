@@ -62,7 +62,7 @@ build-essential python3.12-dev`). `./setup.sh` does it; by hand, inside the virt
 ```bash
 pip install swig setuptools wheel -c requirements-lock.txt   # the lock holds the versions it was verified with
 PATH="$PWD/.venv/bin:$PATH" pip install --no-build-isolation --no-binary box2d-py box2d-py -c requirements-lock.txt
-pip install -r requirements-dev.txt -c requirements-lock.txt -e "./packages/rl-core[video,onnx]" \
+pip install -r requirements-dev.txt -c requirements-lock.txt -e "./packages/rl-core[video,onnx,plot]" \
     -e "./packages/rl-challenges[box2d]"
 ```
 
@@ -86,7 +86,11 @@ cd AI
 pip install -r requirements-dev.txt -c requirements-lock.txt
 ```
 
-`requirements-lock.txt` pins every package's version (the lock); `requirements-dev.txt` names what to install.
+`requirements-lock.txt` pins every package's version (the lock); `requirements-dev.txt` names what to install,
+rl-core with its `onnx` and `plot` extras. Plots need the `plot` extra (matplotlib), which rl-core does not require
+since 0.2.0: without it the plot functions, `train.py --plot` and `benchmark.py` (unless `--no-plot`) stop at once
+with `pip install 'rl-core[plot]'` (in a checkout: `pip install -e './packages/rl-core[plot]' -c
+requirements-lock.txt`).
 
 ## Training
 
@@ -130,7 +134,8 @@ Then run:
 python train.py --config configs/quick_test.yaml
 ```
 
-To generate and save learning-curve plots during training, include `--plot` on your initial run:
+To generate and save learning-curve plots during training, include `--plot` on your initial run (it needs the
+`plot` extra, which the setup scripts and `requirements-dev.txt` install):
 
 ```bash
 python train.py --config configs/quick_test.yaml --plot
@@ -435,6 +440,9 @@ python benchmark.py --challenge cartpole \
 # Quick comparison between PPO and DQN, both for 150 episodes
 python benchmark.py --challenge cartpole --agents ppo dqn --episodes 150 --seeds 42
 ```
+
+The benchmark saves a learning-curve plot unless given `--no-plot`; without the `plot` extra it stops before any
+run and says to install it or pass `--no-plot`.
 
 Without `--episodes` or `--steps`, each agent trains for its own config's budget (`configs/<challenge>_<agent>.yaml`,
 or `<challenge>_default.yaml` for the random agent): `training.total_steps` environment steps when set, else

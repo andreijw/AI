@@ -50,8 +50,9 @@ Training and Code Health items are picked as they become useful.
   deprecation shim; declare `__all__` throughout rl-core; deprecate the legacy `make_env`, `make_vec_env` and
   `make_vec_env_from_config` of rl_cartpole and rl_pendulum (removed in 0.3.0); make matplotlib an optional
   `rl-core[plot]` extra. The two per-challenge agent maps stay. Then release all three distributions as 0.2.0.
-  - **Progress (PRs 1 to 3, 2026-11-13)**: the public API and every version bump; the robustness benchmark moved
-    out of `training`, ending the cycle; the legacy factories deprecated (CHANGELOG.md, 2026-11-13).
+  - **Progress (PRs 1 to 4, 2026-11-13 and 2026-11-15)**: the public API and every version bump; the robustness
+    benchmark moved out of `training`, ending the cycle; the legacy factories deprecated (CHANGELOG.md, 2026-11-13);
+    matplotlib made the `rl-core[plot]` extra (CHANGELOG.md, 2026-11-15). Left: the release PR.
 
 - [ ] **Library follow-ups** (deferred from the importable-libraries item, 2026-11-11; not picked). Each waits for a
   consumer that needs it:
@@ -62,9 +63,6 @@ Training and Code Health items are picked as they become useful.
   - **The committed configs as package data** of `rl-challenges`: an installed wheel could then benchmark without
     a checkout. Deferred because `config_dir` defaults to `configs` under the current directory and every run so far
     starts from a checkout.
-  - **Matplotlib as an optional `rl-core[plots]` extra**: training never imports it (`tests/test_import_footprint.py`),
-    so a game or robot need not install it. Deferred because making a required dependency optional changes every
-    install command and the plotting entry points.
   - **Native ROS 2 packaging** (`ament_python`, rosdep keys) for `rl-navigation`: the Jetson's ROS 2 node then builds
     it with colcon. Deferred until the hardware step (Phase 8) has a ROS 2 node; until then a `--system-site-packages`
     venv installs the wheel (`docs/navigation.md`, Installing on the robot).
