@@ -208,8 +208,9 @@ steps 3 to 5 are sketches to turn into full items when picked.
 
 - [~] **Planning and control** (picked 2026-11-13; PR 1 grid, A\* and smoothing; PR 2 the pure-pursuit follower
   and the navigator; PR 3 the comparison with the RL policies, judged once on seeds 30000 to 30499)
-  - **Progress (PRs 1 and 2, 2026-11-13)**: `rl_navigation.planning` with A\* and smoothing, the pure-pursuit
-    follower and the navigator; gates registered for PR 3 (CHANGELOG.md, 2026-11-13).
+  - **Progress (PRs 1 to 3, 2026-11-13 and 2026-11-15)**: `rl_navigation.planning` with A\* and smoothing, the
+    pure-pursuit follower and the navigator; gates registered (CHANGELOG.md, 2026-11-13); the comparison harness and
+    `compare_planner.py` (CHANGELOG.md, 2026-11-15). Left: the judged run on 30000 to 30499 and its results.
   - **Follow-up: online-map stalls behind false walls.** On tuning layouts 10000 to 10199, 13 online-map runs
     time out stalled with no path: 6 with continuous actions (10004, 10042, 10070, 10102, 10116, 10149) and 7
     with discrete (10042, 10070, 10097, 10102, 10116, 10149, 10161). The HC-SR04's 15° cone writes false walls

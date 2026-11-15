@@ -12,6 +12,24 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-15
+
+### Added
+
+- **Planning comparison: the planner against trained policies** (`feature/planning-comparison`; roadmap, Phase 8
+  "Planning and control", PR 3 of 3). `rl_navigation.planning_comparison` plays a `PlannerController` (the true map, or
+  an online HC-SR04 map built from the observation's own readings; continuous and discrete actions at the tuned
+  settings, now `rl_navigation.planning.TUNED_SETTINGS`) and any `Policy` on the same seeded layouts. It reports
+  success with Wilson intervals, collisions, timeouts, SPL, clearance and step times, and an exact McNemar test per
+  checkpoint against each planner (TD3 against P-online-c and DQN against P-online-d marked primary); it never imports
+  `rl_core`. The root `compare_planner.py` loads the configs and checkpoints and sweeps ROB-2's noise and dropout values
+  through `rl_core.robustness`. Records carry the commit, the working tree, the map range, the robot radius and load
+  averages, are saved after every row, and `--resume` continues a killed job; `--from-records` merges jobs. `TESTING.md`
+  `PLAN-2` (nominal, gates G1 to G4) and `PLAN-3` (sweep) are registered, to be judged once on layouts 30000 to 30499:
+  G4 on the four nominal planner rows only, from a solo timing run (`--timing-records`), and `PLAN-1`'s search timing
+  solo on the same layouts through `scripts/planning_timing/time_planner.py` (the maintainer's decisions,
+  2026-11-15). Nothing has been played on the judged layouts yet.
+
 ## 2026-11-13
 
 ### Added

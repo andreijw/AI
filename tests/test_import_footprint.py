@@ -448,3 +448,47 @@ def test_the_planning_core_imports_only_the_simulator_and_the_mapping_core():
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "False", "the planning core imported the mapping desk tool"
+
+
+PLANNING_COMPARISON_MODULES = (
+    "rl_navigation.planning_comparison",
+    "rl_navigation.planning_comparison.controllers",
+    "rl_navigation.planning_comparison.episodes",
+    "rl_navigation.planning_comparison.metrics",
+    "rl_navigation.planning_comparison.records",
+    "rl_navigation.planning_comparison.report",
+)
+
+
+def test_the_planning_comparison_desk_tool_imports_no_rl_core():
+    """The harness plays planners and policies through the Gymnasium layer: it may load the
+    planner, the mapper, the simulator, the Gymnasium environment and gymnasium, never rl_core
+    (compare_planner.py at the root holds every rl_core use). A fresh process."""
+    loaded = _loaded_navigation_packages(", ".join(PLANNING_COMPARISON_MODULES))
+    assert loaded == ["gym_env", "mapping", "planning", "planning_comparison", "sim"], (
+        f"the planning comparison loaded rl_navigation.{loaded}"
+    )
+    code = (
+        "import sys; "
+        f"import {', '.join(PLANNING_COMPARISON_MODULES)}; "
+        "print(sorted({m.split('.')[0] for m in sys.modules} & {'gymnasium', 'rl_core'}))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "['gymnasium']", (
+        f"the planning comparison loaded {result.stdout.strip()}: gymnasium only, never rl_core"
+    )
+
+
+def test_the_planning_package_does_not_import_the_comparison():
+    code = (
+        "import sys; import rl_navigation.planning; "
+        "print(any(m.startswith('rl_navigation.planning_comparison') for m in sys.modules))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False", "rl_navigation.planning imported its desk harness"
