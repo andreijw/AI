@@ -214,3 +214,10 @@ def test_every_import_package_is_marked_typed(dist):
     assert all((init.parent / "py.typed").is_file() for init in src.glob("*/__init__.py"))
     package_data = _pyproject(dist)["tool"]["setuptools"]["package-data"]
     assert "py.typed" in package_data.get("*", []), "package-data must ship py.typed in the wheel"
+
+
+def test_matplotlib_is_rl_cores_plot_extra_not_a_dependency():
+    """A game, a robot or a headless trainer installs rl-core without matplotlib (0.2.0)."""
+    project = _pyproject("rl-core")["project"]
+    assert "matplotlib" not in _requirement_names(project["dependencies"])
+    assert "matplotlib" in _requirement_names(project["optional-dependencies"]["plot"])

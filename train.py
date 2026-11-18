@@ -16,8 +16,9 @@ from rl_core.training import Trainer
 from rl_core.training.budget import apply_budget_override
 from rl_core.training.curriculum import curriculum_from_config
 from rl_core.training.parallel import num_envs_of
-from rl_core.utils import load_config, setup_logger
+from rl_core.utils import load_config, plot_training_metrics, setup_logger
 from rl_core.utils.video import TrainingVideoRecorder
+from rl_core.utils.visualization import MISSING_PLOT_EXTRA, plotting_available
 
 
 def load_run_config(config_path, agent_type=None, num_episodes=None, total_steps=None):
@@ -242,6 +243,8 @@ def parse_args(argv=None):
         parser.error("--video-every must be a positive integer.")
     if args.resume is not None and not os.path.isfile(args.resume):
         parser.error(f"--resume: no checkpoint at {args.resume}")
+    if args.plot and not plotting_available():
+        parser.error(f"--plot: {MISSING_PLOT_EXTRA}")
     return args
 
 
@@ -291,9 +294,6 @@ def train_and_plot(trainer, plot, plot_dir, challenge, agent_type, logger):
         logger.info(f"Training complete. Final stats: {stats}")
 
         if plot:
-            # Imported here: matplotlib adds about 0.8 s to every start-up, plotted or not.
-            from rl_core.utils.visualization import plot_training_metrics
-
             plot_path = plot_training_metrics(
                 episode_rewards=trainer.episode_rewards,
                 episode_lengths=trainer.episode_lengths,

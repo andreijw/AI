@@ -6,7 +6,7 @@
 # that reads this file, extras included; pip resolves it next to this file), and the packages' pyproject.toml files
 # hold the floors.
 -c requirements-lock.txt
--e ./packages/rl-core[onnx]
+-e ./packages/rl-core[onnx,plot]
 -e ./packages/rl-navigation[gym,challenge]
 -e ./packages/rl-challenges
 pytest

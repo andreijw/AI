@@ -42,7 +42,7 @@ principles, module boundaries, continuous and discrete agent abstractions, chall
 │  - BaseAgent           - Trainer (loop)          - config.py (YAML/JSON)    │
 │  - Discrete Agents     - Checkpoint manager      - logger.py (JSONL)        │
 │  - Continuous Agents                             - video.py (MP4 recording) │
-│  - ReplayBuffer                                  - visualization.py (plots) │
+│  - ReplayBuffer                                  - visualization.py [plot]  │
 │                                                  - smoothing.py (averages)  │
 │                                                                             │
 │  challenges/                                                                │
@@ -92,7 +92,8 @@ flowchart LR
     Game --> RlCore
     RlCore --> Gymnasium
     RlCore --> NumPy
-    RlCore --> Other["pyyaml, matplotlib"]
+    RlCore --> Other["pyyaml"]
+    RlCore --> Matplotlib["matplotlib (extra plot)"]
     Scripts --> RlCore
     RlCore -. entry points .-> Classic
     RlCore -. entry points .-> NavChallenge
@@ -279,7 +280,7 @@ flowchart TD
             Config["config.py"]
             Logger["logger.py"]
             Video["video.py"]
-            Viz["visualization.py"]
+            Viz["visualization.py: plots, matplotlib from the plot extra"]
             Smooth["smoothing.py"]
         end
 

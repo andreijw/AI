@@ -29,7 +29,9 @@ from rl_core.seeding import eval_seed_for
 from rl_core.training.budget import apply_budget_override, budget_of
 from rl_core.training.parallel import num_envs_of
 from rl_core.training.trainer import Trainer, success_rate
+from rl_core.utils import plot_benchmark_comparison
 from rl_core.utils.smoothing import rolling_average
+from rl_core.utils.visualization import MISSING_PLOT_EXTRA, plotting_available
 
 # ---------------------------------------------------------------------------
 # General Benchmark Metrics & Runner
@@ -269,8 +271,12 @@ class BenchmarkRunner:
             ValueError: For invalid settings, before anything is written.
             ImportError: If an agent's config needs a backend that is not installed, before any
                 agent trains.
+            ModuleNotFoundError: If ``save_plot`` and matplotlib (rl-core's plot extra) is not
+                installed, before anything is written.
         """
         resolved = self._resolve(BenchmarkSettings() if settings is None else settings)
+        if save_plot and not plotting_available():
+            raise ModuleNotFoundError(MISSING_PLOT_EXTRA, name="matplotlib")
         os.makedirs(resolved.output_dir, exist_ok=True)
         self._print_banner(resolved)
 
@@ -485,9 +491,6 @@ class BenchmarkRunner:
         settings: _ResolvedSettings,
     ) -> str | None:
         """Plot every agent's learning curves into the output folder; return the image path."""
-        # Imported here: matplotlib adds about 0.8 s to every start-up, plotted or not.
-        from rl_core.utils.visualization import plot_benchmark_comparison
-
         curve_data = {
             agent: [run.rewards for run in agent_runs] for agent, agent_runs in runs.items()
         }
@@ -821,6 +824,8 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+    if not args.no_plot and not plotting_available():
+        parser.error(f"{MISSING_PLOT_EXTRA}; or pass --no-plot")
     report_file = (
         args.report if args.report is not None else f"docs/benchmarks/{args.challenge}_results.md"
     )

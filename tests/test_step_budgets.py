@@ -10,7 +10,8 @@ from benchmark import classify_run
 from rl_core.agents.base_agent import BaseAgent
 from rl_core.training.budget import apply_budget_override
 from rl_core.training.trainer import Trainer
-from rl_core.utils.visualization import plot_benchmark_comparison
+from rl_core.utils import plot_benchmark_comparison
+from tests.helpers import needs_matplotlib
 
 
 class _FixedLengthEnv:
@@ -166,6 +167,7 @@ def test_steps_to_solve_is_none_without_episode_lengths_or_a_solve():
 # ---------------------------------------------------------------------------
 
 
+@needs_matplotlib
 def test_plot_against_steps_keeps_runs_with_different_episode_counts(tmp_path, monkeypatch):
     """A strong agent finishes its budget in fewer, longer episodes; its curve must not be cut short."""
     import matplotlib.pyplot as plt
@@ -185,14 +187,14 @@ def test_plot_against_steps_keeps_runs_with_different_episode_counts(tmp_path, m
     assert (weak[0], weak[-1]) == (20.0, 500.0)
 
 
+@needs_matplotlib
 def test_runner_plots_against_steps_only_when_every_budget_is_in_steps(tmp_path, monkeypatch):
     import benchmark
-    import rl_core.utils.visualization
 
     seen = []
-    # Patched where _save_plot imports it from, when it plots.
+    # Patched where _save_plot finds it.
     monkeypatch.setattr(
-        rl_core.utils.visualization,
+        benchmark,
         "plot_benchmark_comparison",
         lambda *a, **k: seen.append(k.get("episode_lengths")),
     )

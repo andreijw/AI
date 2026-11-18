@@ -1,6 +1,9 @@
 """Tests for the visualization utilities."""
 
 import os
+import subprocess
+import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -10,6 +13,7 @@ from rl_core.utils.visualization import (
     plot_benchmark_comparison,
     plot_training_metrics,
 )
+from tests.helpers import WITHOUT_MATPLOTLIB, needs_matplotlib
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -59,6 +63,7 @@ def test_plot_raises_on_invalid_window():
 # ---------------------------------------------------------------------------
 
 
+@needs_matplotlib
 def test_plot_saves_png(tmp_path, sample_data):
     """plot_training_metrics should write a PNG file to save_dir."""
     rewards, lengths = sample_data
@@ -69,6 +74,7 @@ def test_plot_saves_png(tmp_path, sample_data):
     assert result.endswith(".png")
 
 
+@needs_matplotlib
 def test_plot_returns_none_without_save_dir(sample_data):
     """plot_training_metrics returns None when save_dir is not provided."""
     rewards, lengths = sample_data
@@ -76,6 +82,7 @@ def test_plot_returns_none_without_save_dir(sample_data):
     assert result is None
 
 
+@needs_matplotlib
 def test_plot_creates_save_dir(tmp_path, sample_data):
     """plot_training_metrics should create the save_dir if it does not exist."""
     target = str(tmp_path / "new_dir" / "nested")
@@ -87,12 +94,14 @@ def test_plot_creates_save_dir(tmp_path, sample_data):
     assert os.path.isdir(target)
 
 
+@needs_matplotlib
 def test_plot_single_episode():
     """plot_training_metrics should work with a single data point."""
     result = plot_training_metrics([10.0], [5], save_dir=None)
     assert result is None  # no crash, nothing saved
 
 
+@needs_matplotlib
 def test_plot_window_larger_than_data(tmp_path, sample_data):
     """Rolling window larger than the data should not raise an error."""
     rewards = sample_data[0][:5]
@@ -102,6 +111,7 @@ def test_plot_window_larger_than_data(tmp_path, sample_data):
     assert os.path.isfile(result)
 
 
+@needs_matplotlib
 def test_plot_filename(tmp_path, sample_data):
     """The saved file should be named 'training_metrics.png'."""
     rewards, lengths = sample_data
@@ -109,6 +119,7 @@ def test_plot_filename(tmp_path, sample_data):
     assert os.path.basename(result) == "training_metrics.png"
 
 
+@needs_matplotlib
 def test_plot_custom_title(tmp_path, sample_data):
     """Custom title parameter should not raise an error."""
     rewards, lengths = sample_data
@@ -145,6 +156,7 @@ def test_plot_benchmark_empty_runs():
         plot_benchmark_comparison({"PPO": [[]]})
 
 
+@needs_matplotlib
 def test_plot_benchmark_returns_none_without_save_path():
     """Returns None when save_path is not specified."""
     curves = {
@@ -155,6 +167,7 @@ def test_plot_benchmark_returns_none_without_save_path():
     assert result is None
 
 
+@needs_matplotlib
 def test_plot_benchmark_saves_png(tmp_path):
     """Saves plot image to the requested path."""
     curves = {
@@ -167,6 +180,7 @@ def test_plot_benchmark_saves_png(tmp_path):
     assert os.path.isfile(target)
 
 
+@needs_matplotlib
 def test_plot_interactive_show(monkeypatch, sample_data):
     """Calling with show=True invokes plt.show."""
     import matplotlib.pyplot as plt
@@ -181,6 +195,7 @@ def test_plot_interactive_show(monkeypatch, sample_data):
     assert len(show_called) == 2
 
 
+@needs_matplotlib
 def test_plot_benchmark_unequal_run_lengths(tmp_path):
     """Unequal run lengths across seeds or agents are aligned to minimum length."""
     curves = {
@@ -243,16 +258,19 @@ def test_aligned_curves_reject_inputs_that_would_give_nan_or_a_wrong_grid(runs, 
     assert not isinstance(caught.value, visualization.EpisodeLengthsMismatchError)
 
 
+@needs_matplotlib
 def test_the_comparison_plot_does_not_call_other_errors_a_length_mismatch():
     with pytest.raises(ValueError, match="must all be positive"):
         plot_benchmark_comparison({"PPO": [[1.0, 2.0]]}, episode_lengths={"PPO": [[5, 0]]})
 
 
+@needs_matplotlib
 def test_the_comparison_plot_reports_which_agent_has_mismatched_lengths():
     with pytest.raises(ValueError, match="episode_lengths for agent 'PPO' do not match its runs"):
         plot_benchmark_comparison({"PPO": [[1.0, 2.0]]}, episode_lengths={"PPO": [[5]]})
 
 
+@needs_matplotlib
 @pytest.mark.parametrize("by_steps", [False, True])
 def test_the_comparison_plot_draws_exactly_the_aligned_curves(by_steps, monkeypatch):
     import matplotlib.pyplot as plt
@@ -278,3 +296,60 @@ def test_the_comparison_plot_draws_exactly_the_aligned_curves(by_steps, monkeypa
     edges = band.get_paths()[0].vertices[:, 1]
     np.testing.assert_allclose([edges.min(), edges.max()], [(mean - std).min(), (mean + std).max()])
     plt.close(figures[0])
+
+
+# ---------------------------------------------------------------------------
+# matplotlib is rl-core's plot extra
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _run_without_matplotlib(code):
+    """Run ``code`` in a fresh process where ``import matplotlib`` fails; return its stdout."""
+    result = subprocess.run(
+        [sys.executable, "-c", WITHOUT_MATPLOTLIB + code],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+@pytest.mark.parametrize(
+    "call", ["plot_training_metrics([1.0], [1])", "plot_benchmark_comparison({'PPO': [[1.0]]})"]
+)
+def test_without_matplotlib_each_plot_function_names_the_plot_extra(call):
+    out = _run_without_matplotlib(
+        "from rl_core.utils import plot_benchmark_comparison, plot_training_metrics\n"
+        f"try:\n    {call}\nexcept ModuleNotFoundError as error:\n"
+        "    print(error.name); print(error)\n"
+    )
+    name, _, message = out.partition("\n")
+    assert name == "matplotlib"
+    assert "pip install 'rl-core[plot]'" in message
+    assert "pip install -e './packages/rl-core[plot]' -c requirements-lock.txt" in message
+
+
+def test_plotting_is_unavailable_without_matplotlib():
+    code = "from rl_core.utils import visualization; print(visualization.plotting_available())"
+    assert _run_without_matplotlib(code) == "False"
+
+
+@needs_matplotlib
+def test_plotting_is_available_with_matplotlib():
+    assert visualization.plotting_available()
+
+
+def test_the_install_message_names_the_plot_extra():
+    assert "rl-core[plot]" in visualization.MISSING_PLOT_EXTRA
+    assert visualization.EXTRA in visualization.MISSING_PLOT_EXTRA
+
+
+def test_ci_has_matplotlib():
+    """CI installs the plot extra (requirements-dev.txt): the plotting tests must not all skip there."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        pytest.skip("only asserted on CI")
+    assert visualization.plotting_available()
