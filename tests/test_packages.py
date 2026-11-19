@@ -142,6 +142,7 @@ NAVIGATION_EXTRA_MODULES = {
     "rl_navigation.benchmark": "challenge",
     "rl_navigation.environments": "challenge",
     "rl_navigation.gym_env": "gym",
+    "rl_navigation.planning_comparison": "gym",
     "rl_navigation.localization_video": "video",
 }
 
