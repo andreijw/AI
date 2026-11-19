@@ -32,7 +32,8 @@ turned into a full item when the maintainer picks it. The ladder uses no numbers
 Order (the maintainer's decision, 2026-11-04): the repo is the foundation for robotics work, so Phase 8 (Robot
 Navigation) leads. Its first item, the range-sensor navigation environment (done; CHANGELOG.md, 2026-11-07), ran in
 parallel with Phase 7's SAC and BipedalWalker item (done; CHANGELOG.md, 2026-11-05), and Phase 8 continues in order. The
-Training and Code Health items are picked as they become useful.
+Training and Code Health items are picked as they become useful. Phase 9 (game AI) runs alongside, each item as it
+unblocks (the maintainer's decision, 2026-11-19).
 
 ### Workflow Tooling
 
@@ -252,3 +253,46 @@ steps 3 to 5 are sketches to turn into full items when picked.
     Orin on JetPack 7.2 (Isaac ROS documentation, read 2026-11-09).
   - **Needs**: the maintainer's hardware decision (an x86 RTX machine or cloud) and the new dependencies, which do
     not belong in this repository's NumPy-only core.
+
+### Phase 9 — Game AI: learned enemies for a game
+
+Trained enemies for a real-time 3D game built in Godot and C#, whose own roadmap has the game-side half of this work.
+The design (the maintainer's decisions, 2026-11-19):
+
+- **Hybrid.** Godot's navigation mesh (`NavigationAgent3D`, already in the game) moves every enemy. A policy makes only
+  the tactical choice, about 10 times a second: approach, strafe, back off, start a windup, shove or hold. The game's
+  own telegraphed behaviours carry each choice out, so a learned enemy cannot do anything a scripted one could not.
+- **Only some enemies learn.** A flanking enemy first (to prove the pipeline), then an assassin and the boss (adapting
+  to the player's habits through what it observes). Fodder enemies stay scripted, since
+  readable patterns are part of the game. Each learned enemy keeps its state machine as a fallback behind a flag.
+- **No new runtime dependency in the game.** The policy ships as exported weights run by a pure C# helper in the
+  game's own core library, not ONNX Runtime.
+- **Each policy is a build artifact with a gate**: a parity test between the C# and NumPy forward passes, and a
+  win-rate band against the game's scripted player bot, rerun when the game's balance changes.
+
+The game-side work (navigation fixes, the policy seam, seeded combat dice, the headless training arena, the step
+protocol and the C# helper) is tracked in the game's roadmap and runs in its own sessions. The items here start
+as each one unblocks, alongside the other phases.
+
+- [ ] **Headless Godot on the Jetson (probe)**: does Godot 4.7 with .NET run headless on this aarch64 machine, and
+  how many game ticks a second does one training arena reach? Settles whether the game trains here or on the
+  maintainer's Windows machine with the bridge across the network. Unblocked; about 30 minutes; installs nothing
+  into `.venv`.
+- [ ] **C# weights export** in `rl_core.export`, beside the C header: a small MLP's weights and normalisation in a
+  format the game's C# helper reads, with a golden file the game's tests check against. Unblocked once the format is
+  agreed with the game's helper.
+  - **Acceptance**: a NumPy policy and its export give the same actions on a fixed set of observations.
+- [ ] **`rl_<game>` challenge**: a Gymnasium environment that runs one headless encounter as a child process
+  and talks to it over the game's stdin and stdout step protocol, following `docs/external-challenges.md`. Blocked on
+  the game's training arena, scripted player bot and step protocol.
+  - **Edge cases**: the child process dies or hangs (a timeout, a clear error); several environments at once (one
+    process each); CI has no Godot, so the tests run against a fake process that speaks the protocol.
+  - **Needs**: the maintainer's decision on where the Godot binary comes from (a path in the config, nothing installed
+    by this repository).
+- [ ] **A learned flanking enemy**: PPO on the discrete tactical actions against the game's scripted player bot, one
+  room. The claim, the reward and the win-rate band are written down before the run. Blocked on the two items above.
+- [ ] **A learned boss**: the player's habits (parry rate, kiting, dodge timing) as observations,
+  trained against bots with different play styles. Blocked on the flanking-enemy item and the game's boss arena.
+- [ ] **An RL playtest bot (proposed)**: a player agent trained against the scripted enemies to find what humans miss
+  (unblockable combos, cheese spots, enemies that get stuck); it never ships in the game (the game's planned
+  playtest bot). Blocked on the `rl_<game>` challenge.
