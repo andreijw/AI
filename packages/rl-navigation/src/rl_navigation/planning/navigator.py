@@ -49,6 +49,9 @@ from rl_navigation.sim.kinematics import wrap_angle
 
 FOLLOWING, NO_PATH = "following", "no_path"
 
+#: The online map's farthest reading used, in metres (:class:`OnlineMap`).
+DEFAULT_MAP_RANGE = 1.0
+
 
 class PlanningMap(Protocol):
     """What the navigator plans on: a grid at any inflation, and a version that changes whenever
@@ -111,7 +114,7 @@ class OnlineMap:
         ValueError: A ``map_range`` that is not positive.
     """
 
-    def __init__(self, occupancy: OccupancyGrid, map_range: float = 1.0) -> None:
+    def __init__(self, occupancy: OccupancyGrid, map_range: float = DEFAULT_MAP_RANGE) -> None:
         if not (math.isfinite(map_range) and map_range > 0.0):
             raise ValueError(f"OnlineMap map_range must be positive, got {map_range}.")
         self._occupancy = occupancy
@@ -124,6 +127,11 @@ class OnlineMap:
     def occupancy(self) -> OccupancyGrid:
         """The log-odds grid."""
         return self._occupancy
+
+    @property
+    def map_range(self) -> float:
+        """The farthest reading used, in metres."""
+        return self._map_range
 
     @property
     def resolution(self) -> float:
@@ -199,6 +207,25 @@ class NavigatorParams:
         """The margin ladder's inflations, largest first."""
         base = self.robot_radius + resolution / 2.0
         return base + self.margin, base + self.margin / 2.0, base
+
+
+@dataclass(frozen=True)
+class PlannerSettings:
+    """One action kind's tuned settings: the navigator's ``margin`` in metres and the follower's
+    ``turn_in_place`` bearing in radians."""
+
+    margin: float
+    turn_in_place: float
+
+
+#: The settings tuned on layouts 10000 to 10199 (2026-11-13, TESTING.md ``PLAN-1b``) and judged in
+#: the planning comparison (``PLAN-2``), by action kind: continuous actions take the
+#: ``NavigatorParams`` and ``FollowerParams`` defaults (0.05 m, 25 degrees), discrete ones 0.06 m
+#: and 45 degrees through :func:`~rl_navigation.planning.follower.safe_discrete_action`.
+TUNED_SETTINGS = {
+    "continuous": PlannerSettings(0.05, math.radians(25.0)),
+    "discrete": PlannerSettings(0.06, math.radians(45.0)),
+}
 
 
 class Navigator:

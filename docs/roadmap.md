@@ -20,7 +20,7 @@ turned into a full item when the maintainer picks it. The ladder uses no numbers
 | GPU-parallel simulation | Phase 8 "GPU-parallel navigation simulation" (proposed): the simulator as PyTorch tensors on the Orin's GPU; builds on `training.num_envs` (CHANGELOG.md, 2026-11-10) |
 | Isaac Lab, deployed to the Jetson | Phase 8 "Isaac Lab on cloud or x86" (proposed, blocked on hardware): training needs an x86-64 RTX machine or cloud, deployment goes through the ONNX export |
 | Isaac ROS on the robot | Phase 8 "Hardware and ROS 2" (Isaac ROS 4.6 supports Jetson Orin on JetPack 7.2; Isaac ROS documentation, read 2026-11-09) |
-| Autonomous navigation | Phase 8 "Occupancy-grid mapping and SLAM" and "Planning and control" |
+| Autonomous navigation | Phase 8 "Occupancy-grid mapping and SLAM" and "Planning follow-ups" (planning and control: CHANGELOG.md, 2026-11-19) |
 | Sim-to-real | Phase 8 "Hardware and ROS 2" (fitting the sensor noise model to real readings) |
 | Multi-agent coordination | Phase 8 "Multi-agent navigation" (proposed): several robots in the navigation simulator, or PettingZoo (a new dependency) |
 | Learning from pixels | Phase 7 "Learning from Pixels (Tier 4)" |
@@ -205,20 +205,21 @@ steps 3 to 5 are sketches to turn into full items when picked.
     (FastSLAM-style) with scan matching for the lidar preset. Judged by map and pose error against ground truth,
     and loop closure on layouts that revisit a place.
 
-- [~] **Planning and control** (picked 2026-11-13; PR 1 grid, A\* and smoothing; PR 2 the pure-pursuit follower
-  and the navigator; PR 3 the comparison with the RL policies, judged once on seeds 30000 to 30499)
-  - **Progress (PRs 1 and 2, 2026-11-13)**: `rl_navigation.planning` with A\* and smoothing, the pure-pursuit
-    follower and the navigator; gates registered for PR 3 (CHANGELOG.md, 2026-11-13).
-  - **Follow-up: online-map stalls behind false walls.** On tuning layouts 10000 to 10199, 13 online-map runs
-    time out stalled with no path: 6 with continuous actions (10004, 10042, 10070, 10102, 10116, 10149) and 7
-    with discrete (10042, 10070, 10097, 10102, 10116, 10149, 10161). The HC-SR04's 15° cone writes false walls
-    into the log-odds map that close every route, and turning on the spot never clears them, because the same
-    cone reads them again. Candidates: decay old evidence toward unknown, or back off along the path driven and
-    look again from another angle; judge on the tuning seeds against the online gates.
-  - **Description**: A* on the occupancy grid (from step 3 or the true map), path smoothing, and a pure-pursuit or
-    PID follower that outputs the same velocity commands the RL agents do, as a classical baseline. Compared with
-    the RL policy on the same seeded layouts: success rate, path length, time to goal and collisions, and how each
-    degrades as sensor noise rises (the robustness benchmark).
+- [ ] **Planning follow-ups** (left open when Planning and control closed, 2026-11-19; CHANGELOG.md, 2026-11-19;
+  `docs/benchmarks/planning_results.md`). Not picked.
+  - **Online-map false walls under range noise**: the judged run's online planners fall to 61.6 % and 47.2 % at
+    noise 0.4 (all timeouts, no collision), where TD3 holds 95.8 to 97.4 %. On tuning layouts 10000 to 10199, 13
+    online-map runs already stall at nominal sensors: 6 with continuous actions (10004, 10042, 10070, 10102, 10116,
+    10149) and 7 with discrete (10042, 10070, 10097, 10102, 10116, 10149, 10161). The HC-SR04's 15° cone writes false
+    walls into the log-odds map that close every route, and turning on the spot never clears them, because the same
+    cone reads them again. Candidates: decay old evidence toward unknown, a noise-aware inverse sensor model, or
+    backing off along the path driven to look again from another angle; tune on 10000 to 10199, judge on fresh seeds.
+  - **The EKF pose in the loop**: every planner row uses the true pose, as the policies do; the robot will not have
+    one.
+  - **Lidar rows**: the comparison plays the HC-SR04 sensor only.
+  - **A faster search for bigger arenas**: a pathological serpentine makes the fill 106 ms, and a 400 × 400 grid is
+    about 16 times slower; a vectorised wavefront if bigger arenas come.
+  - **Teaching pages**: the planning pages of `docs/learn/navigation/` belong to the teaching-docs item.
 
 - [ ] **Hardware and ROS 2**
   - **Description**: The HC-SR04 on the Jetson's GPIO (a 5 V echo needs a level shifter or divider for the

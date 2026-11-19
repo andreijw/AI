@@ -147,6 +147,7 @@ SCRIPT_DEEP_IMPORTS = {
     "benchmark.py: rl_core.utils.smoothing.rolling_average",
     "benchmark.py: rl_core.utils.visualization.MISSING_PLOT_EXTRA",
     "benchmark.py: rl_core.utils.visualization.plotting_available",
+    "compare_planner.py: rl_core.training.checkpoints.file_sha256",
     "export.py: rl_core.training.checkpoints.file_sha256",
     "record.py: rl_core.training.parallel.single_env_training",
     "record.py: rl_core.utils.video.merge_episode_clips",

@@ -15,6 +15,10 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
   `shortcut`. `rl_navigation.sim.layouts.connected` is the flood fill `path_exists` uses.
 - `rl_navigation.planning`: `PurePursuit`, `FollowerParams`, `Command`, `continuous_action`, `safe_discrete_action`,
   `Navigator`, `NavigatorParams`, `TrueMap`, `OnlineMap`, `polyline_free` and `PlanningGrid.cells_of`.
+- `rl_navigation.planning`: `TUNED_SETTINGS`, `PlannerSettings`, `DEFAULT_MAP_RANGE` and `OnlineMap.map_range`.
+- `rl_navigation.planning_comparison`: `PlannerController`, `PolicyController`, `play` and `EpisodeRecord`,
+  `wilson_interval`, `spl`, `mcnemar`, `common_successes`, `summarize`, `GATES`, `save_records` and `merge_records`,
+  `render_report`; a desk harness that imports the Gymnasium layer, `planning`, `mapping` and `sim` only.
 
 ### Changed
 
