@@ -8,6 +8,8 @@ policy export to C and ONNX. Part of [andreijw/AI](https://github.com/andreijw/A
 pip install https://github.com/andreijw/AI/releases/download/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl
 ```
 
-Extras: `video` (training videos), `torch` (the PyTorch backend), `onnx` (ONNX export). Another project adds a
+Extras: `plot` (matplotlib: the plot functions, `train.py --plot` and the benchmark's plot; since 0.2.0 matplotlib
+is not a dependency), `video` (training videos), `torch` (the PyTorch backend), `onnx` (ONNX export). With the plot
+extra, from a release: `pip install "rl-core[plot] @ <wheel URL>"`. Another project adds a
 challenge by declaring a module in the `rl_core.challenges` entry-point group; see the repository's
 `docs/external-challenges.md`. Changes: [CHANGELOG.md](CHANGELOG.md).

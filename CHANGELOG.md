@@ -47,7 +47,19 @@ Acrobot-v1) and
   `PLAN-2` (nominal, gates G1 to G4) and `PLAN-3` (sweep) are registered, to be judged once on layouts 30000 to 30499:
   G4 on the four nominal planner rows only, from a solo timing run (`--timing-records`), and `PLAN-1`'s search timing
   solo on the same layouts through `scripts/planning_timing/time_planner.py` (the maintainer's decisions,
-  2026-11-15). Judged on 2026-11-19 (below).
+  2026-11-15). Judged on 2026-11-19 (above).
+
+### Changed
+
+- **rl-core 0.2.0, part 4: matplotlib becomes the `rl-core[plot]` extra** (`feature/rl-core-plot-extra`; PR 4 of 4,
+  the maintainer's decision D). A plain rl-core install no longer brings matplotlib: `rl_core.utils.visualization`
+  imports it on a plot function's first call, and `rl_core.utils` now re-exports `plot_training_metrics` and
+  `plot_benchmark_comparison`. Without the extra, the plot functions raise `ModuleNotFoundError` with the install
+  command, and `train.py --plot`, `benchmark.py` without `--no-plot` and `BenchmarkRunner.run(save_plot=True)` stop
+  before any checkpoint, log or output folder exists. `requirements-dev.txt`, `setup.sh` and `setup.ps1` install the
+  extra, so CI still runs the plotting tests (`needs_matplotlib`, `test_ci_has_matplotlib`), and `release.py smoke`
+  fails if rl-core's plain install contains matplotlib. Rule C1, the architect skill, ARCHITECTURE.md and the install
+  docs say so. The full suite with matplotlib blocked: 5257 passed, 46 skipped.
 
 ## 2026-11-13
 

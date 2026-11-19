@@ -12,7 +12,8 @@ runs these steps for it, and the ``Packages`` CI job runs ``smoke-all`` on every
         The tags of the in-repo distributions <dist> requires, one a line (for `gh release download`).
     python scripts/release.py smoke <dist> <wheel> [<dependency wheel> ...]
         Install the wheels in a fresh virtual environment (dependencies from PyPI) and import every module of
-        the distribution except those its extras need; for rl-navigation, assert only NumPy is loaded.
+        the distribution except those its extras need; for rl-navigation, assert only NumPy is loaded,
+        and for rl-core, that matplotlib (its plot extra) is not installed.
     python scripts/release.py smoke-all <wheel dir>
         ``smoke`` for every distribution under packages/, each with the wheels of the in-repo
         distributions it requires from the same directory (the CI job, on code not yet released).
@@ -65,6 +66,9 @@ EXTRA_ONLY: dict[str, tuple[str, ...]] = {
 
 #: Third-party top-level modules a plain install may load, where the footprint is a promise.
 FOOTPRINT: dict[str, frozenset[str]] = {"rl-navigation": frozenset({"numpy"})}
+
+#: Distributions a plain install must not contain: an extra's, which no base requirement may pull in.
+NOT_INSTALLED: dict[str, tuple[str, ...]] = {"rl-core": ("matplotlib",)}
 
 
 class ReleaseError(Exception):
@@ -239,10 +243,12 @@ def import_packages(dist: str, packages: Path = PACKAGES) -> list[str]:
 
 
 # Run in the fresh environment: import every module of the packages except the skipped prefixes, then
-# print the loaded third-party top-level modules as JSON.
+# print the loaded third-party top-level modules, and which of the distributions that must not be
+# installed are, as JSON.
 _SMOKE_CHILD = """
-import importlib, importlib.resources, json, pkgutil, sys
+import importlib, importlib.metadata, importlib.resources, json, pkgutil, sys
 packages, skipped = json.loads(sys.argv[1]), tuple(json.loads(sys.argv[2]))
+absent = json.loads(sys.argv[3])
 imported = []
 def visit(name):
     # Not pkgutil.walk_packages: it imports every subpackage to walk it, the skipped ones too.
@@ -256,7 +262,14 @@ for name in packages:
 stdlib = set(sys.stdlib_module_names) | set(sys.builtin_module_names)
 loaded = sorted({m.split(".")[0] for m in sys.modules} - stdlib - {"__main__"})
 untyped = [name for name in packages if not (importlib.resources.files(name) / "py.typed").is_file()]
-print(json.dumps({"imported": imported, "loaded": loaded, "untyped": untyped}))
+def installed(dist):
+    try:
+        importlib.metadata.distribution(dist)
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    return True
+present = [dist for dist in absent if installed(dist)]
+print(json.dumps({"imported": imported, "loaded": loaded, "untyped": untyped, "installed": present}))
 """
 
 
@@ -299,6 +312,7 @@ def smoke(dist: str, wheels: list[Path], packages: Path = PACKAGES) -> list[str]
                 _SMOKE_CHILD,
                 json.dumps(names),
                 json.dumps(EXTRA_ONLY[dist]),
+                json.dumps(NOT_INSTALLED.get(dist, ())),
             ],
             cwd=tmp,
             capture_output=True,
@@ -310,6 +324,10 @@ def smoke(dist: str, wheels: list[Path], packages: Path = PACKAGES) -> list[str]
     report = json.loads(result.stdout)
     if report["untyped"]:
         raise ReleaseError(f"{dist}'s wheel has no py.typed in {report['untyped']}")
+    if report["installed"]:
+        raise ReleaseError(
+            f"{dist}'s plain install has {report['installed']}: they belong to an extra"
+        )
     bad = footprint_violations(dist, report["loaded"], names)
     if bad:
         raise ReleaseError(f"{dist} loaded {bad} beyond its footprint {sorted(FOOTPRINT[dist])}")

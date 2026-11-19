@@ -1,6 +1,8 @@
 """scripts/release.py: what makes a tag releasable, and which modules a plain install can import."""
 
 import ast
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -406,7 +408,6 @@ fi
 def _publish(tmp_path, state):
     """Run the publish step's script with a stub gh; return (exit code, gh calls)."""
     import shutil
-    import subprocess
 
     if shutil.which("bash") is None:
         pytest.skip("needs bash")
@@ -456,23 +457,37 @@ def test_publish_creates_a_draft_only_when_none_exists(tmp_path):
     assert any(c.startswith("gh release create rl-core-v0.1.0") and "--draft" in c for c in calls)
 
 
-def test_smoke_installs_the_wheels_with_the_lock_as_constraints(tmp_path, monkeypatch):
-    """The Packages job and the Release workflow decide whether a wheel ships: no floating version."""
-    import json as json_module
-    import subprocess
-
+def _fake_smoke_run(monkeypatch, installed=()):
+    """Replace the venv and the subprocesses of ``smoke``; the child reports ``installed`` as the
+    distributions of the plain install that belong to an extra. Returns the commands run."""
     calls = []
 
     def run(args, **kwargs):
         calls.append([str(a) for a in args])
         out = {"imported": ["rl_core"], "loaded": ["numpy"], "untyped": []}
-        return subprocess.CompletedProcess(args, 0, stdout=json_module.dumps(out), stderr="")
+        out["installed"] = list(installed)
+        return subprocess.CompletedProcess(args, 0, stdout=json.dumps(out), stderr="")
 
     monkeypatch.setattr(release.venv, "create", lambda *a, **k: None)
     monkeypatch.setattr(release.subprocess, "run", run)
+    return calls
+
+
+def test_smoke_installs_the_wheels_with_the_lock_as_constraints(tmp_path, monkeypatch):
+    """The Packages job and the Release workflow decide whether a wheel ships: no floating version."""
+    calls = _fake_smoke_run(monkeypatch)
     release.smoke("rl-core", [tmp_path / "rl_core-0.1.0-py3-none-any.whl"])
     (install,) = [c for c in calls if "install" in c]
     assert install[-2:] == ["-c", str(release.LOCK)]
+
+
+def test_smoke_refuses_an_rl_core_whose_plain_install_brings_matplotlib(tmp_path, monkeypatch):
+    """matplotlib is rl-core's plot extra: the child is asked for it, and finding it fails."""
+    calls = _fake_smoke_run(monkeypatch, installed=["matplotlib"])
+    with pytest.raises(release.ReleaseError, match="matplotlib"):
+        release.smoke("rl-core", [tmp_path / "rl_core-0.2.0-py3-none-any.whl"])
+    (child,) = [c for c in calls if "-I" in c]
+    assert "matplotlib" in json.loads(child[-1])
 
 
 def test_smoke_refuses_to_run_without_the_lock(tmp_path, monkeypatch):

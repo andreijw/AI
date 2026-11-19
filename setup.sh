@@ -2,7 +2,7 @@
 # Create a virtual environment for this project on Linux or macOS (Windows: setup.ps1).
 #
 # Both install requirements-dev.txt (the three distributions under packages/, editable, and the dev tools) plus:
-#   cpu (default)  .venv      rl-core[video,onnx], rl-challenges[box2d], rl-navigation[video]
+#   cpu (default)  .venv      rl-core[video,onnx,plot], rl-challenges[box2d], rl-navigation[video]
 #                             No PyTorch: the default environment for every tool.
 #   gpu            .venv-gpu  the same and rl-core[torch]: PyTorch for the optional DDPG, TD3 and SAC backend
 #                             (backend: torch) and its tests, from PyTorch's CUDA 13.2 index, which drives the
@@ -28,9 +28,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$profile" in
-    cpu) venv=".venv"; core_extras="video,onnx"; index_args=() ;;
+    cpu) venv=".venv"; core_extras="video,onnx,plot"; index_args=() ;;
     gpu)
-        venv=".venv-gpu"; core_extras="video,onnx,torch"
+        venv=".venv-gpu"; core_extras="video,onnx,plot,torch"
         index_args=(--index-url https://download.pytorch.org/whl/cu132 --extra-index-url https://pypi.org/simple)
         ;;
     *) echo "--profile must be cpu or gpu, got '$profile'" >&2; exit 2 ;;

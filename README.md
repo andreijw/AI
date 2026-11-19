@@ -121,7 +121,7 @@ The code is three distributions, released on GitHub (not PyPI) from tags `<dist>
 
 | Distribution | What it is | Needs |
 | :--- | :--- | :--- |
-| `rl-core` | the framework: agents, trainer, challenge interface, export | Gymnasium, NumPy, PyYAML, Matplotlib |
+| `rl-core` | the framework: agents, trainer, challenge interface, export | Gymnasium, NumPy, PyYAML (Matplotlib as the extra `plot`) |
 | `rl-navigation` | the robot's simulator, localization, mapping and SLAM | NumPy only (Gymnasium and `rl-core` as extras) |
 | `rl-challenges` | CartPole to BipedalWalker on `rl-core` | `rl-core` |
 

@@ -24,7 +24,6 @@ dependencies = [
     "gymnasium>=1.0.0",
     "numpy>=1.26",
     "pyyaml>=6.0",
-    "matplotlib>=3.9.4",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +36,10 @@ video = [
 # see docs/pytorch_jetson_timing.md.
 torch = [
     "torch>=2.14",
+]
+# Plots (the plot functions of rl_core.utils, train.py --plot, benchmark.py without --no-plot).
+plot = [
+    "matplotlib>=3.9.4",
 ]
 # ONNX export (export.py --format onnx): onnx builds and checks the model, onnxruntime verifies it.
 onnx = [

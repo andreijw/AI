@@ -24,6 +24,7 @@ from rl_core.challenges import CHALLENGES, BenchmarkChallenge
 from rl_core.utils.config import load_config
 from rl_mountaincar.benchmark import MountainCarContinuousChallenge
 from rl_pendulum.benchmark import PendulumChallenge
+from tests.helpers import needs_matplotlib
 
 
 def test_find_solved_episode_empty():
@@ -79,6 +80,7 @@ def test_cartpole_challenge_registered():
     assert CHALLENGES["cartpole"] is CartPoleChallenge
 
 
+@needs_matplotlib
 def test_run_benchmark_cartpole_minimal_execution(tmp_path):
     """Run minimal end-to-end benchmark on CartPole across 2 agents and verify outputs."""
     out_dir = str(tmp_path / "bench_out")
@@ -132,6 +134,52 @@ def test_run_benchmark_no_plot(tmp_path):
     )
     assert bench_res["plot_path"] is None
     assert not os.path.exists(os.path.join(out_dir, "benchmark_comparison.png"))
+
+
+REPO_CONFIGS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs")
+# One random-agent run of one episode, writing under the current folder.
+TINY_CLI = ["benchmark", "--agents", "random", "--episodes", "1", "--seeds", "1"]
+TINY_CLI += ["--eval-episodes", "1", "--config-dir", REPO_CONFIGS]
+TINY_CLI += ["--output-dir", "out", "--report", "report.md"]
+
+
+def test_without_matplotlib_the_cli_refuses_to_plot_before_any_output(
+    tmp_path, monkeypatch, capsys
+):
+    """Plotting is on by default: without the plot extra the CLI stops at once and says why."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(sys.modules, "matplotlib", None)
+    monkeypatch.setattr(sys, "argv", TINY_CLI)
+    with pytest.raises(SystemExit) as stopped:
+        main()
+    assert stopped.value.code == 2
+    err = capsys.readouterr().err
+    assert "pip install 'rl-core[plot]'" in err and "--no-plot" in err
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_without_matplotlib_the_cli_runs_with_no_plot(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(sys.modules, "matplotlib", None)
+    monkeypatch.setattr(sys, "argv", [*TINY_CLI, "--no-plot"])
+    main()
+    assert sorted(os.listdir(tmp_path / "out")) == ["benchmark_metrics.json"]
+    assert (tmp_path / "report.md").is_file()
+
+
+def test_without_matplotlib_the_runner_refuses_to_plot_before_the_first_run(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, "matplotlib", None)
+    out_dir = tmp_path / "out"
+    settings = BenchmarkSettings(
+        agents=("random",), seeds=(1,), episodes=1, eval_episodes=1, output_dir=str(out_dir)
+    )
+    runner = BenchmarkRunner(CartPoleChallenge())
+    monkeypatch.setattr(
+        CartPoleChallenge, "setup_run", lambda *a, **k: pytest.fail("a run started")
+    )
+    with pytest.raises(ModuleNotFoundError, match=r"rl-core\[plot\]"):
+        runner.run(settings, report_path=str(tmp_path / "report.md"))
+    assert not out_dir.exists()
 
 
 class CustomGenericChallenge(BenchmarkChallenge):
@@ -221,6 +269,7 @@ def test_benchmark_cli_help(monkeypatch, capsys):
     assert "General Reinforcement Learning Benchmark Suite" in captured.out
 
 
+@needs_matplotlib
 def test_benchmark_cli_execution(tmp_path, monkeypatch):
     """CLI runs and produces outputs when invoked via main."""
     out_dir = str(tmp_path / "cli_out")
@@ -264,6 +313,7 @@ def cli_call(monkeypatch):
     return called
 
 
+@needs_matplotlib
 def test_benchmark_cli_default_report(monkeypatch, cli_call):
     """CLI defaults report path to docs/benchmarks/<challenge>_results.md when omitted."""
     monkeypatch.setattr(
@@ -294,6 +344,7 @@ def test_benchmark_cli_passes_its_flags_as_settings(monkeypatch, cli_call):
     assert cli_call["save_plot"] is False
 
 
+@needs_matplotlib
 def test_benchmark_settings_defaults_match_the_cli_defaults(monkeypatch, cli_call):
     """Called from Python with no settings, the benchmark runs as the bare CLI does."""
     monkeypatch.setattr(sys, "argv", ["benchmark"])
@@ -826,6 +877,7 @@ def test_report_without_threshold_says_nothing_can_solve(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+@needs_matplotlib
 def test_runner_trains_for_a_step_budget_and_records_steps(tmp_path):
     res = BenchmarkRunner(CartPoleChallenge()).run(
         settings=BenchmarkSettings(
@@ -892,6 +944,7 @@ def test_cli_rejects_episodes_and_steps_together(monkeypatch, capsys):
     assert "not allowed with argument" in capsys.readouterr().err
 
 
+@needs_matplotlib
 def test_cli_default_window_is_100(monkeypatch, cli_call):
     monkeypatch.setattr(sys, "argv", ["benchmark", "--agents", "random", "--steps", "60"])
     main()

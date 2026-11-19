@@ -215,7 +215,7 @@ function Initialize-Venv([string]$Python) {
 
     Write-Host "[*] Installing the distributions under packages/ in editable mode, with the dev tools..." -ForegroundColor Cyan
     $pipArgs = @("-m", "pip", "install", "-r", "requirements-dev.txt") + $LockArgs + @(
-        "-e", "./packages/rl-core[video,onnx]", "-e", "./packages/rl-navigation[gym,challenge,video]")
+        "-e", "./packages/rl-core[video,onnx,plot]", "-e", "./packages/rl-navigation[gym,challenge,video]")
     if ($Update) {
         $pipArgs += "--upgrade"
     }

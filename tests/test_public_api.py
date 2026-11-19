@@ -117,6 +117,8 @@ PUBLIC_API = {
         *RELEASED_0_1_0["rl_core.utils"],
         "check_positive_int",
         "non_negative_int",
+        "plot_benchmark_comparison",
+        "plot_training_metrics",
         "read_env_settings",
     },
 }
@@ -143,7 +145,8 @@ SCRIPT_DEEP_IMPORTS = {
     "benchmark.py: rl_core.training.trainer.Trainer",
     "benchmark.py: rl_core.training.trainer.success_rate",
     "benchmark.py: rl_core.utils.smoothing.rolling_average",
-    "benchmark.py: rl_core.utils.visualization.plot_benchmark_comparison",
+    "benchmark.py: rl_core.utils.visualization.MISSING_PLOT_EXTRA",
+    "benchmark.py: rl_core.utils.visualization.plotting_available",
     "compare_planner.py: rl_core.training.checkpoints.file_sha256",
     "export.py: rl_core.training.checkpoints.file_sha256",
     "record.py: rl_core.training.parallel.single_env_training",
@@ -154,7 +157,8 @@ SCRIPT_DEEP_IMPORTS = {
     "train.py: rl_core.training.curriculum.curriculum_from_config",
     "train.py: rl_core.training.parallel.num_envs_of",
     "train.py: rl_core.utils.video.TrainingVideoRecorder",
-    "train.py: rl_core.utils.visualization.plot_training_metrics",
+    "train.py: rl_core.utils.visualization.MISSING_PLOT_EXTRA",
+    "train.py: rl_core.utils.visualization.plotting_available",
 }
 
 DEPENDENT_SOURCES = [

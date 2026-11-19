@@ -1,27 +1,73 @@
-"""Visualization utilities for training metrics."""
+"""
+Visualization utilities for training metrics.
 
+matplotlib is rl-core's optional ``plot`` extra: it is imported on the first call of a plot function
+(:func:`_pyplot`), never when this module is imported, so training, benchmarking with ``--no-plot``
+and the challenges run without it.
+"""
+
+from __future__ import annotations
+
+import functools
+import importlib.util
 import os
+from types import ModuleType
 
-import matplotlib
+import numpy as np
 
-# On headless machines (no display server and no explicit MPLBACKEND configured)
-# fall back to the non-interactive Agg backend so that saving plots works
-# without a display.  Users with a display or an explicit MPLBACKEND override
-# this behaviour automatically.
-_has_display = bool(
-    os.environ.get("DISPLAY")
-    or os.environ.get("WAYLAND_DISPLAY")
-    or os.name == "nt"  # Windows always has display infrastructure
+from .smoothing import rolling_average
+
+__all__ = [
+    "EXTRA",
+    "MISSING_PLOT_EXTRA",
+    "plot_benchmark_comparison",
+    "plot_training_metrics",
+    "plotting_available",
+]
+
+#: What plotting needs, for an installed rl-core as for a checkout.
+EXTRA = "rl-core's plot extra (matplotlib)"
+#: Why a plot cannot be drawn without the extra, and how to install it.
+MISSING_PLOT_EXTRA = (
+    f"plotting needs {EXTRA}: pip install 'rl-core[plot]' "
+    "(checkout: pip install -e './packages/rl-core[plot]' -c requirements-lock.txt)"
 )
-if not _has_display and not os.environ.get("MPLBACKEND"):
-    matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
 
-from .smoothing import rolling_average  # noqa: E402
+def plotting_available() -> bool:
+    """Whether matplotlib is installed, found without importing it."""
+    return importlib.util.find_spec("matplotlib") is not None
 
-__all__ = ["plot_training_metrics", "plot_benchmark_comparison"]
+
+@functools.cache
+def _pyplot() -> ModuleType:
+    """
+    matplotlib.pyplot, imported on first use.
+
+    On headless machines (no display server and no explicit MPLBACKEND configured) it falls back to
+    the non-interactive Agg backend so that saving plots works without a display. Users with a
+    display or an explicit MPLBACKEND override this behaviour automatically.
+
+    Raises:
+        ModuleNotFoundError: If matplotlib is not installed, naming the plot extra.
+    """
+    try:
+        import matplotlib
+    except ImportError as error:
+        raise ModuleNotFoundError(MISSING_PLOT_EXTRA, name="matplotlib") from error
+
+    has_display = bool(
+        os.environ.get("DISPLAY")
+        or os.environ.get("WAYLAND_DISPLAY")
+        or os.name == "nt"  # Windows always has display infrastructure
+    )
+    if not has_display and not os.environ.get("MPLBACKEND"):
+        matplotlib.use("Agg")
+
+    import matplotlib.pyplot as plt
+
+    return plt
+
 
 _PLOT_FILENAME = "training_metrics.png"
 
@@ -56,6 +102,7 @@ def plot_training_metrics(
         Absolute path to the saved PNG, or ``None`` if *save_dir* is not set.
 
     Raises:
+        ModuleNotFoundError: If matplotlib (the plot extra) is not installed.
         ValueError: If *episode_rewards* or *episode_lengths* is empty.
         ValueError: If *episode_rewards* and *episode_lengths* have different lengths.
         ValueError: If *window* is less than 1.
@@ -76,6 +123,7 @@ def plot_training_metrics(
     rewards_avg = rolling_average(episode_rewards, window)
     lengths_avg = rolling_average([float(x) for x in episode_lengths], window)
 
+    plt = _pyplot()
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
     fig.suptitle(title, fontsize=14)
 
@@ -230,11 +278,13 @@ def plot_benchmark_comparison(
         Absolute path to the saved PNG, or None if save_path is not set.
 
     Raises:
+        ModuleNotFoundError: If matplotlib (the plot extra) is not installed.
         ValueError: If agent_curves is empty or contains empty run data.
         ValueError: If window is less than 1.
     """
     _check_benchmark_curves(agent_curves, window)
 
+    plt = _pyplot()
     fig, ax = plt.subplots(figsize=(11, 6))
     fig.suptitle(title, fontsize=14)
 

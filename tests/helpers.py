@@ -393,6 +393,15 @@ needs_onnx = pytest.mark.skipif(
     reason=NEEDS_ONNX_REASON,
 )
 
+# Drawing a plot needs the plot extra (pip install -e "./packages/rl-core[plot]"): matplotlib. CI installs it
+# (requirements-dev.txt); test_visualization.test_ci_has_matplotlib holds it to that.
+needs_matplotlib = pytest.mark.skipif(
+    importlib.util.find_spec("matplotlib") is None,
+    reason='the plot extra is not installed (pip install -e "./packages/rl-core[plot]")',
+)
+
+# Child-process code that makes ``import matplotlib`` fail, as an install without the plot extra does.
+WITHOUT_MATPLOTLIB = "import sys; sys.modules['matplotlib'] = None; "
 
 # Writing an MP4 needs imageio-ffmpeg, from the video extra (pip install -e "./packages/rl-core[video]"); CI does not
 # install it.
