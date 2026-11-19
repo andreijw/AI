@@ -286,8 +286,10 @@ Training runs and the test suite write bulky outputs that must never be committe
   `docs/images/` only, as `.png` (at most 60 KiB each) or `.gif` (at most 600 KiB each), and all of them together
   within 6 MiB: git keeps every version, so the budget is per regeneration of the whole set. Each file is listed in
   `scripts/doc_media.json` with the command that made it, and linked from a Markdown page;
-  `scripts/check_doc_sources.py` enforces all of this in CI's `Checks` job. A video, a checkpoint or a plot anywhere
-  else is still training output. Diagrams are Mermaid in the Markdown, not images (the `doc-sync` skill).
+  `scripts/check_doc_sources.py` enforces all of this in CI's `Checks` job. `benchmark.py` writing a tracked report
+  puts its learning curves in `docs/images/benchmarks/` and lists them itself; with `--report` elsewhere it writes
+  nothing under `docs/`. A video, a checkpoint or a plot anywhere else is still training output. Diagrams are
+  Mermaid in the Markdown, not images (the `doc-sync` skill).
 
 - **Gitignored artifact directories** — keep these out of git (already blocked in `.gitignore`):
   - `logs/` (TensorBoard and raw metrics logs)

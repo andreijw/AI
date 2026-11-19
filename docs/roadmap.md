@@ -41,9 +41,9 @@ Training and Code Health items are picked as they become useful.
   repository needed, from CHANGELOG.md), a navigation track ending with the ONNX and C export, frames of every
   challenge and GIF clips of trained and random agents (seed 1, retrained after the 0.2.0 API lands, checkpoints
   attached to the release), and committed benchmark curves. The navigation track waits for planning and control.
-  - **Progress (PRs 0, 2 and 3, 2026-11-13)**: the media rule, the source checker in CI and the page skeletons; the
-    algorithm and challenge pages
-    (CHANGELOG.md, 2026-11-13).
+  - **Progress (PRs 0, 2, 3 and 4, 2026-11-13 and 2026-11-19)**: the media rule, the source checker in CI and the page
+    skeletons; the algorithm and challenge pages (CHANGELOG.md, 2026-11-13); benchmark curves committed under
+    `docs/images/benchmarks/` at a report's next full rerun (CHANGELOG.md, 2026-11-19).
 
 - [~] **rl-core 0.2.0 API** (the maintainer's decision D, 2026-11-13; plan in four PRs plus the release PR):
   break the `challenges` ↔ `training` cycle by moving `training/robustness.py` to `rl_core/robustness.py` behind a

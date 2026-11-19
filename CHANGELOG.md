@@ -12,6 +12,23 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-19
+
+### Changed
+
+- **Benchmark curves that render on GitHub** (`feature/benchmark-curves-committed`; teaching docs PR 4). `benchmark.py`
+  writing a tracked report (`docs/benchmarks/<challenge>_results.md` under the repository root, now found from
+  `benchmark.py`'s own location, so a run from a subfolder, or with a relative, absolute or symlinked `--report` to it,
+  writes the tracked report) puts its learning curves in `docs/images/benchmarks/<challenge>_learning_curves.png`,
+  links them relatively, and lists the PNG with the command that made it in `scripts/doc_media.json` (updated in place,
+  written atomically after the report). Every benchmark plot is drawn at 100 dpi in 64 colours, about 31 KiB for seven
+  agents by five seeds; a tracked PNG over the docs media budget (60 KiB) is redrawn smaller, and if it still does not
+  fit the run stops before writing the report (its metrics JSON kept). A tracked `--no-plot` rerun keeps linking the
+  committed curves and says they are from an earlier run; a `--report` elsewhere writes nothing under `docs/`. The
+  reports published so far keep their broken `../../plots/` links until their next full rerun. The curves are
+  shrunk with Pillow, imported only when plotting (matplotlib's own dependency; the maintainer's decision,
+  2026-11-19).
+
 ## 2026-11-15
 
 ### Changed

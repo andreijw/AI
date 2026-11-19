@@ -315,7 +315,7 @@ def cli_call(monkeypatch):
 
 @needs_matplotlib
 def test_benchmark_cli_default_report(monkeypatch, cli_call):
-    """CLI defaults report path to docs/benchmarks/<challenge>_results.md when omitted."""
+    """CLI defaults report path to docs/benchmarks/<challenge>_results.md under the repository."""
     monkeypatch.setattr(
         sys,
         "argv",
@@ -323,7 +323,10 @@ def test_benchmark_cli_default_report(monkeypatch, cli_call):
     )
     main()
 
-    assert cli_call.get("report_path") == "docs/benchmarks/cartpole_results.md"
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    assert cli_call.get("report_path") == os.path.join(
+        repo_root, "docs", "benchmarks", "cartpole_results.md"
+    )
 
 
 def test_benchmark_cli_passes_its_flags_as_settings(monkeypatch, cli_call):
