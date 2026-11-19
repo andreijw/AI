@@ -27,7 +27,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# rl_navigation.gym_env: the Gymnasium environments Navigation-v0 and NavigationContinuous-v0.
+# rl_navigation.gym_env: the Gymnasium environments Navigation-v0 and NavigationContinuous-v0; and
+# rl_navigation.planning_comparison, the desk harness that plays them.
 gym = [
     "gymnasium>=1.0.0",
 ]

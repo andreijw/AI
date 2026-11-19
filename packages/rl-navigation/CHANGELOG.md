@@ -18,7 +18,8 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 - `rl_navigation.planning`: `TUNED_SETTINGS`, `PlannerSettings`, `DEFAULT_MAP_RANGE` and `OnlineMap.map_range`.
 - `rl_navigation.planning_comparison`: `PlannerController`, `PolicyController`, `play` and `EpisodeRecord`,
   `wilson_interval`, `spl`, `mcnemar`, `common_successes`, `summarize`, `GATES`, `save_records` and `merge_records`,
-  `render_report`; a desk harness that imports the Gymnasium layer, `planning`, `mapping` and `sim` only.
+  `render_report`; a desk harness that imports the Gymnasium layer, `planning`, `mapping` and `sim` only, so it needs
+  the `gym` extra.
 
 ### Changed
 
