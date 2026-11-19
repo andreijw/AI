@@ -66,6 +66,8 @@ def save_records(path: Path | str, rows: Sequence[Row], header: Sequence[tuple[s
     partial = f"{path}.partial"
     with open(partial, "w", encoding="utf-8") as f:
         json.dump(data, f)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(partial, path)
 
 

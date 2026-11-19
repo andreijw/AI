@@ -12,17 +12,17 @@ harness is ``rl_navigation.planning_comparison``; this script holds every ``rl_c
 Records are saved after every row; ``--resume`` continues a killed run from its records file,
 playing only the rows it does not hold. A run split into jobs (``--records`` each) is reported
 together with ``--from-records``. The header records the commit, whether the working tree was
-clean (the index's tree when it was not), the settings, and the load average at the start and the
+clean (else a hash of its changes against the commit, untracked files included), the settings, and the load average at the start and the
 end, since the step times are measured in the run.
 """
 
 import argparse
 import os
-import subprocess  # nosec B404 - git, for the records' provenance
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+import run_provenance
 from rl_core.challenges import discover_challenges
 from rl_core.robustness import Perturbation, parse_sweep, perturbed_section
 from rl_core.training.checkpoints import file_sha256
@@ -269,39 +269,41 @@ def _plan(parser, args, sweeps):
     return plan, header
 
 
-def _git(*args: str) -> str:
-    """git's output in the checkout this script is in, or "unknown" where git cannot say."""
-    try:
-        result = subprocess.run(  # nosec B603 B607 - fixed git arguments
-            ["git", "-C", ROOT, *args], capture_output=True, text=True, timeout=60, check=True
-        )
-    except (OSError, subprocess.SubprocessError):
-        return "unknown"
-    return result.stdout.strip()
-
-
 def _load_average() -> str:
     return " ".join(f"{load:.2f}" for load in os.getloadavg())
 
 
 def _provenance(job: str) -> list[tuple[str, str]]:
     """The commit and working tree the run plays, and the load average now (the start)."""
-    dirty = _git("status", "--porcelain")
-    tree = "clean" if not dirty else f"dirty; index tree {_git('write-tree')}"
     return [
-        ("Commit", _git("rev-parse", "HEAD")),
-        ("Working tree", tree),
+        ("Commit", run_provenance.commit(ROOT)),
+        ("Working tree", run_provenance.working_tree(ROOT)),
         (f"Load average at start ({job})", _load_average()),
     ]
 
 
-#: The header lines a resumed run must share with its records file.
-_RESUME_KEYS = {"Commit": "commit", "Working tree": "working tree", "Seeds": "seeds"}
+def _plan_lines(header):
+    """The header without its load averages: what a resumed run must share with its records."""
+    return [line for line in header if not line[0].startswith("Load average")]
 
 
-def _resumed(parser, args, header):
-    """The rows already in ``--records``, and the header to keep (its start load average), or
-    nothing to resume; refusing a file of another run, or an existing file without --resume."""
+def _check_same(parser, what, saved, ours):
+    """Refuse ``what`` unless every line of ``saved`` and ``ours`` agrees (``unknown`` never
+    does)."""
+    saved_lines, our_lines = dict(saved), dict(ours)
+    for key in dict.fromkeys([*saved_lines, *our_lines]):
+        if not run_provenance.same(saved_lines.get(key), our_lines.get(key)):
+            parser.error(
+                f"{what} is not this run: its {key!r} is {saved_lines.get(key)!r}, this run's "
+                f"{our_lines.get(key)!r}"
+            )
+
+
+def _resumed(parser, args, header, plan):
+    """The rows already in ``--records`` and the header to go on with (the saved one, with a
+    resume load average), or nothing to resume. Refuses an existing file without --resume, and a
+    file whose header (load averages aside) differs from this run's or that holds a row this
+    run's plan does not."""
     if not args.records or not os.path.exists(args.records):
         return [], header
     if not args.resume:
@@ -310,15 +312,17 @@ def _resumed(parser, args, header):
         rows, saved = load_records(args.records)
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    saved_lines, ours = dict(saved), dict(header)
-    for key, name in _RESUME_KEYS.items():
-        if saved_lines.get(key) != ours.get(key):
+    _check_same(parser, args.records, _plan_lines(saved), _plan_lines(header))
+    planned = {(p.name, setting, value) for p in plan for setting, value, _ in p.sections}
+    for row in rows:
+        if (row.name, row.setting, row.value) not in planned:
             parser.error(
-                f"{args.records} was played with another {name} ({saved_lines.get(key)}): "
-                "resume it with the run that made it"
+                f"{args.records} holds {row.name} at {row.setting or 'nominal'} "
+                f"{'' if row.value is None else row.value}, not in this run's plan"
             )
-    start = next(line for line in saved if line[0].startswith("Load average at start"))
-    return rows, [start if line[0].startswith("Load average at start") else line for line in header]
+    job = os.path.basename(args.records)
+    kept = [line for line in saved if not line[0].startswith("Load average at end")]
+    return rows, [*kept, (f"Load average at resume ({job})", _load_average())]
 
 
 def _play(parser, args, sweeps):
@@ -330,6 +334,8 @@ def _play(parser, args, sweeps):
     header = [
         ("Seeds", f"{args.first_seed} to {last} ({args.episodes} layouts)"),
         *_provenance(job),
+        ("Planners", ", ".join(args.planners) or "none"),
+        ("Sweeps", " ".join(args.sweep) or "none"),
         *lines,
         (
             "Planner settings",
@@ -341,7 +347,7 @@ def _play(parser, args, sweeps):
         ("Online map range", f"{DEFAULT_MAP_RANGE:g} m"),
         ("Robot radius", ", ".join(f"{r:g} m" for r in radii)),
     ]
-    rows, header = _resumed(parser, args, header)
+    rows, header = _resumed(parser, args, header, plan)
     done = {(row.name, row.setting, row.value) for row in rows}
 
     def current_header():
@@ -375,26 +381,59 @@ def _play(parser, args, sweeps):
     return rows, current_header()
 
 
+def _merged(parser, paths):
+    """The rows and header of one run's records files, refusing files of different or unknown
+    code."""
+    try:
+        rows, header = merge_records(paths)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    for key in ("Commit", "Working tree"):
+        values = [value for name, value in header if name == key]
+        # One value across the files, and a known one: "unknown" never matches itself.
+        agree = len(values) == 1 and run_provenance.same(values[0], values[0])
+        if len(paths) > 1 and not agree:
+            parser.error(f"the records were played with different or unknown {key!r}: {values}")
+    return rows, header
+
+
+#: The header lines solo timing records must share with the run they judge G4 for.
+_TIMING_KEYS = ("Commit", "Working tree", "Seeds")
+
+
+def _timing(parser, path, header):
+    """The solo timing run's rows and header: the same code and seeds as ``header``'s run, and
+    exactly the four planner rows at nominal sensors."""
+    try:
+        rows, timing_header = load_records(path)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    ours, theirs = dict(header), dict(timing_header)
+    _check_same(
+        parser,
+        path,
+        [(k, theirs.get(k)) for k in _TIMING_KEYS],
+        [(k, ours.get(k)) for k in _TIMING_KEYS],
+    )
+    played = sorted(((r.name, r.kind, r.setting) for r in rows), key=str)
+    if played != sorted(((name, "planner", None) for name in PLANNER_ROWS), key=str):
+        parser.error(
+            f"{path} must hold the four planner rows at nominal sensors only "
+            f"({', '.join(PLANNER_ROWS)}), got {played}"
+        )
+    return rows, timing_header
+
+
 def main():
     """Play every row, or report records already played, and write what was asked for."""
     parser, args, sweeps = _parse_args()
     if args.from_records:
-        try:
-            rows, header = merge_records(args.from_records)
-        except (OSError, ValueError) as error:
-            parser.error(str(error))
-        for key in ("Commit", "Working tree"):
-            values = [value for name, value in header if name == key]
-            if len(values) > 1:
-                parser.error(f"the records were played with different {key.lower()}s: {values}")
+        rows, header = _merged(parser, args.from_records)
     else:
         rows, header = _play(parser, args, sweeps)
     timing_rows = None
     if args.timing_records:
-        try:
-            timing_rows, timing_header = load_records(args.timing_records)
-        except (OSError, ValueError) as error:
-            parser.error(str(error))
+        timing_rows, timing_header = _timing(parser, args.timing_records, header)
         header = [
             *header,
             ("G4 timing", f"`{args.timing_records}`"),

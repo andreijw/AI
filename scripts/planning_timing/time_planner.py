@@ -15,6 +15,8 @@ milliseconds as the row's one-line command did. Run alone on the machine with
 """
 
 import argparse
+import os
+import sys
 import time
 from collections.abc import Callable, Sequence
 
@@ -29,6 +31,10 @@ from rl_navigation.planning import (
     shortcut,
 )
 from rl_navigation.sim import LayoutParams, generate_layout
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, ROOT)  # run_provenance.py, at the repository root
+import run_provenance  # noqa: E402
 
 
 def timed(f: Callable[[], object]) -> float:
@@ -56,6 +62,11 @@ def parse_seeds(argv: Sequence[str] | None = None) -> range:
 
 def main(argv: Sequence[str] | None = None) -> None:
     seeds = parse_seeds(argv)
+    print(
+        f"commit {run_provenance.commit(ROOT)}; working tree {run_provenance.working_tree(ROOT)}; "
+        f"seeds {seeds.start} to {seeds.stop - 1}",
+        flush=True,
+    )
     p = LayoutParams()
     r = p.grid_resolution
     i0 = p.robot_radius + r / 2
@@ -72,15 +83,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         (g, g.cell_of(layout.start[:2]), g.cell_of(layout.goal))
         for g, layout in zip(grids, layouts, strict=True)
     ]
-    searches = [timed(lambda c=c: astar(*c)) for c in cases]
+
+    def search(case: tuple[PlanningGrid, tuple[int, int], tuple[int, int]]) -> Callable[[], object]:
+        return lambda: astar(*case)
+
+    def smooth(grid: PlanningGrid, points: np.ndarray) -> Callable[[], object]:
+        return lambda: shortcut(grid, points)
+
+    searches = [timed(search(c)) for c in cases]
     paths = []
     for c, layout in zip(cases, layouts, strict=True):
         path = astar(*c)
         assert path is not None
         paths.append(np.vstack([layout.start[:2], c[0].centres(path.cells[1:-1]), layout.goal]))
-    smoothing = [
-        timed(lambda g=c[0], q=q: shortcut(g, q)) for c, q in zip(cases, paths, strict=True)
-    ]
+    smoothing = [timed(smooth(c[0], q)) for c, q in zip(cases, paths, strict=True)]
     walled = np.zeros((100, 100), bool)
     walled[30:70, 30:70] = True
     walled[35:65, 35:65] = False

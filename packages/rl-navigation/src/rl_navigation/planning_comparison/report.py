@@ -59,9 +59,16 @@ def _robot_radius(rows: Sequence[Row]) -> float:
     return radii.pop()
 
 
-def _g4_rows(planners: Sequence[Row]) -> list[Row]:
-    """The planner rows G4 judges, by :data:`~.metrics.G4_SCOPE`."""
-    return [r for r in planners if G4_SCOPE == "every" or r.setting is None]
+def _g4_rows(planners: Sequence[Row]) -> list[Row | str]:
+    """The planner rows G4 judges, by :data:`~.metrics.G4_SCOPE`: each planner's nominal row in
+    :data:`PLANNER_ROWS` order, or its name where the run has none, then (``"every"``) the
+    perturbed rows."""
+    nominal = {r.name: r for r in planners if r.setting is None}
+    judged: list[Row | str] = [nominal.get(name, name) for name in PLANNER_ROWS]
+    judged += [r for r in nominal.values() if r.name not in PLANNER_ROWS]
+    if G4_SCOPE == "every":
+        judged += [r for r in planners if r.setting is not None]
+    return judged
 
 
 def _gates(
@@ -118,6 +125,9 @@ def _gates(
         "| :--- | :--- | :---: | :---: | :---: | :---: |",
     ]
     for row in _g4_rows(timed):
+        if isinstance(row, str):
+            lines.append(f"| {row} | nominal | – | – | – | not played |")
+            continue
         speed = speed_verdict(summarize(row.episodes))
         lines.append(
             f"| {row.name} | {_setting(row)} | {speed.sliding_ms_p99:.2f} "

@@ -633,7 +633,9 @@ def test_g4_judges_the_nominal_planner_rows_by_the_maintainers_decision():
     assert G4_SCOPE == "nominal"
 
 
-@pytest.mark.parametrize(("scope", "rows_timed"), [("nominal", 2), ("every", 5)])
+# _rows() has P-true-c and P-online-c nominal (P-true-d and P-online-d not played) and three
+# perturbed P-online-c rows.
+@pytest.mark.parametrize(("scope", "rows_timed"), [("nominal", 4), ("every", 7)])
 def test_the_g4_scope_chooses_the_rows_timed_and_the_wording(monkeypatch, scope, rows_timed):
     monkeypatch.setattr(report_module, "G4_SCOPE", scope)
     report = render_report(_rows(), title="t", header=[])
@@ -660,11 +662,25 @@ def test_g4_is_judged_from_the_solo_timing_rows_when_given():
     g4 = report[report.index("| G4 Row |") :].split("\n\n")[0].splitlines()[2:]
     assert g4 == [
         "| P-true-c | nominal | – | 50.00 | 50.0 | FAIL |",
+        "| P-true-d | nominal | – | – | – | not played |",
         "| P-online-c | nominal | – | 2.00 | 2.0 | pass |",
-    ], "the solo run's rows, not the comparison's"
+        "| P-online-d | nominal | – | – | – | not played |",
+    ], "the solo run's rows, not the comparison's, every planner named"
     assert "G4 is judged from the solo timing run, `g4-solo.json`" in report
 
 
 def test_without_solo_timing_the_report_says_g4_is_not_judged_from_a_solo_run():
     report = render_report(_rows(), title="t", header=[])
     assert "not the solo timing run G4 is judged from" in report
+
+
+def test_a_nominal_planner_row_missing_from_the_run_is_not_played_for_g4():
+    report = render_report([_row("P-online-d", "s")], title="t", header=[])
+    g4 = report[report.index("| G4 Row |") :].split("\n\n")[0].splitlines()[2:]
+    assert [line.split(" | ")[0] for line in g4] == [
+        "| P-true-c",
+        "| P-true-d",
+        "| P-online-c",
+        "| P-online-d",
+    ]
+    assert sum(line.endswith("| not played |") for line in g4) == 3

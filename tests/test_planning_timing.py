@@ -26,7 +26,15 @@ def test_an_empty_range_is_refused(time_planner, capsys):
     assert "--count" in capsys.readouterr().err
 
 
-def test_the_script_runs_on_two_tuning_layouts(time_planner, capsys):
+def test_the_script_runs_on_two_tuning_layouts_and_names_its_code_and_seeds(time_planner, capsys):
+    import run_provenance
+
     time_planner.main(["--count", "2"])
-    out = capsys.readouterr().out.split()
+    first, timings = capsys.readouterr().out.splitlines()[:2]
+    root = time_planner.ROOT
+    assert first == (
+        f"commit {run_provenance.commit(root)}; working tree {run_provenance.working_tree(root)}; "
+        "seeds 10000 to 10001"
+    )
+    out = timings.split()
     assert out[0] == "astar" and "from_occupied" in out

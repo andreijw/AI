@@ -23,8 +23,11 @@ Acrobot-v1) and
   success with Wilson intervals, collisions, timeouts, SPL, clearance and step times, and an exact McNemar test per
   checkpoint against each planner (TD3 against P-online-c and DQN against P-online-d marked primary); it never imports
   `rl_core`. The root `compare_planner.py` loads the configs and checkpoints and sweeps ROB-2's noise and dropout values
-  through `rl_core.robustness`. Records carry the commit, the working tree, the map range, the robot radius and load
-  averages, are saved after every row, and `--resume` continues a killed job; `--from-records` merges jobs. `TESTING.md`
+  through `rl_core.robustness`. Records carry the commit, the working tree (with a content hash of any change, from the
+  new stdlib `run_provenance.py`), the full setup, the map range, the robot radius and load averages, and are saved
+  after every row; `--resume` continues a killed job only under an identical setup, and `--from-records` and
+  `--timing-records` merge only records of the same code and seeds, listing any missing gate row as not played.
+  `TESTING.md`
   `PLAN-2` (nominal, gates G1 to G4) and `PLAN-3` (sweep) are registered, to be judged once on layouts 30000 to 30499:
   G4 on the four nominal planner rows only, from a solo timing run (`--timing-records`), and `PLAN-1`'s search timing
   solo on the same layouts through `scripts/planning_timing/time_planner.py` (the maintainer's decisions,

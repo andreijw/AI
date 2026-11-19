@@ -268,7 +268,7 @@ def test_the_header_records_the_code_the_map_range_the_radius_and_the_load(tmp_p
     header = dict(load_records(records)[1])
     assert header["Commit"] == _git("rev-parse", "HEAD")
     dirty = bool(_git("status", "--porcelain"))
-    assert header["Working tree"].startswith("dirty; index tree " if dirty else "clean")
+    assert header["Working tree"].startswith("dirty; content sha256 " if dirty else "clean")
     assert header["Online map range"] == "1 m"
     assert header["Robot radius"] == "0.1 m"
     for when in ("start", "end"):
@@ -276,7 +276,9 @@ def test_the_header_records_the_code_the_map_range_the_radius_and_the_load(tmp_p
         assert len(values) == 3 and all(float(v) >= 0 for v in values)
 
 
-def test_records_are_written_after_each_row_and_a_resume_plays_only_the_rest(tmp_path, monkeypatch):
+def test_records_are_written_after_each_row_and_a_resume_plays_only_the_rest(
+    tmp_path, monkeypatch, fixed_code
+):
     module = importlib.import_module("compare_planner")
     real, played = module.play_row, []
 
@@ -308,9 +310,13 @@ def test_records_are_written_after_each_row_and_a_resume_plays_only_the_rest(tmp
     )
     module.main()
     assert calls == ["Navigation-v0"], "only P-true-d is played"
-    resumed, _ = load_records(records)
+    resumed, header = load_records(records)
     assert [r.name for r in resumed] == ["P-true-c", "P-true-d"]
     assert resumed[0] == rows[0], "the saved row is kept, not replayed"
+    names = [name for name, _ in header]
+    assert names.count("Load average at start (records.json)") == 1
+    assert names.count("Load average at resume (records.json)") == 1
+    assert names.count("Load average at end (records.json)") == 1
 
 
 def test_existing_records_are_refused_without_resume(tmp_path, monkeypatch, capsys):
@@ -321,12 +327,23 @@ def test_existing_records_are_refused_without_resume(tmp_path, monkeypatch, caps
     assert "--resume" in capsys.readouterr().err
 
 
+@pytest.fixture
+def fixed_code(monkeypatch):
+    """The same commit and tree for every run of a test (the real tree may change as the suite
+    writes files); compare_planner reads them through run_provenance."""
+    import run_provenance
+
+    monkeypatch.setattr(run_provenance, "commit", lambda root: "c0ffee")
+    monkeypatch.setattr(run_provenance, "working_tree", lambda root: "clean")
+    return run_provenance
+
+
 @pytest.mark.parametrize(
     ("change", "message"),
-    [("Commit", "commit"), ("Seeds", "seeds")],
+    [("Commit", "'Commit'"), ("Seeds", "'Seeds'"), ("Working tree", "'Working tree'")],
 )
 def test_a_resume_refuses_records_of_other_code_or_seeds(
-    tmp_path, monkeypatch, capsys, change, message
+    tmp_path, monkeypatch, capsys, fixed_code, change, message
 ):
     records = tmp_path / "records.json"
     _planner_run(tmp_path, monkeypatch, records, planners=("P-true-c",))
@@ -338,7 +355,7 @@ def test_a_resume_refuses_records_of_other_code_or_seeds(
     assert message in capsys.readouterr().err
 
 
-def test_merging_refuses_records_of_other_code(tmp_path, monkeypatch, capsys):
+def test_merging_refuses_records_of_other_code(tmp_path, monkeypatch, capsys, fixed_code):
     first, second = tmp_path / "a.json", tmp_path / "b.json"
     _planner_run(tmp_path, monkeypatch, first, planners=("P-true-c",))
     _planner_run(tmp_path, monkeypatch, second, planners=("P-true-d",))
@@ -350,13 +367,16 @@ def test_merging_refuses_records_of_other_code(tmp_path, monkeypatch, capsys):
     )
     with pytest.raises(SystemExit):
         _module().main()
-    assert "commit" in capsys.readouterr().err
+    assert "'Commit'" in capsys.readouterr().err
 
 
-def test_cli_takes_g4_from_the_solo_timing_records(tmp_path, monkeypatch):
+ALL_PLANNERS = ("P-true-c", "P-true-d", "P-online-c", "P-online-d")
+
+
+def test_cli_takes_g4_from_the_solo_timing_records(tmp_path, monkeypatch, fixed_code):
     comparison, timing = tmp_path / "a.json", tmp_path / "g4-solo.json"
     _planner_run(tmp_path, monkeypatch, comparison, planners=("P-true-c",))
-    _planner_run(tmp_path, monkeypatch, timing, planners=("P-true-c",))
+    _planner_run(tmp_path, monkeypatch, timing, planners=ALL_PLANNERS)
     report = tmp_path / "report.md"
     run_main(
         [
@@ -381,3 +401,113 @@ def test_timing_records_go_with_from_records_only(monkeypatch, capsys):
         module.main()
     assert "--timing-records goes with --from-records" in capsys.readouterr().err
     assert not played, "refused before anything is played"
+
+
+def _edit_header(path, key, value):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["header"] = [[k, value if k == key else v] for k, v in data["header"]]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def _report_with_timing(tmp_path, monkeypatch, comparison, timing):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["compare_planner.py", "--from-records", str(comparison), "--timing-records", str(timing)],
+    )
+    _module().main()
+
+
+@pytest.mark.parametrize(
+    ("timing_args", "edit", "message"),
+    [
+        ((), ("Commit", "other"), "'Commit'"),
+        ((), ("Working tree", "other"), "'Working tree'"),
+        ((), ("Commit", "unknown"), "'Commit'"),
+        (("--first-seed", str(FIRST + 1)), None, "'Seeds'"),
+        (("--planners", "P-true-c"), None, "the four planner rows at nominal"),
+        (("--sweep", "dropout_prob=0.4"), None, "the four planner rows at nominal"),
+    ],
+)
+def test_timing_records_must_be_the_same_code_seeds_and_the_four_nominal_planner_rows(
+    tmp_path, monkeypatch, capsys, fixed_code, timing_args, edit, message
+):
+    comparison, timing = tmp_path / "a.json", tmp_path / "t.json"
+    _planner_run(tmp_path, monkeypatch, comparison, planners=("P-true-c",))
+    args = list(timing_args)
+    planners = ALL_PLANNERS
+    if args[:1] == ["--planners"]:
+        planners, args = tuple(args[1:]), []
+    seeds = ["--first-seed", str(FIRST), "--episodes", "1"]
+    if args[:1] == ["--first-seed"]:
+        seeds, args = [*args, "--episodes", "1"], []
+    run_main(
+        [*seeds, "--planners", *planners, "--records", str(timing), *args],
+        monkeypatch,
+        module="compare_planner",
+    )
+    if edit:
+        _edit_header(timing, *edit)
+    with pytest.raises(SystemExit):
+        _report_with_timing(tmp_path, monkeypatch, comparison, timing)
+    assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        (["--sweep", "dropout_prob=0.4"], "'Sweeps'"),
+        (["--planners", "P-true-c", "P-true-d"], "'Planners'"),
+        (["--planners", "P-true-c", "--discrete-config", "x.yaml"], None),
+    ],
+)
+def test_a_resume_refuses_any_other_plan(tmp_path, monkeypatch, capsys, fixed_code, extra, message):
+    records = tmp_path / "records.json"
+    _planner_run(tmp_path, monkeypatch, records, planners=("P-true-c",))
+    if message is None:
+        # A config the planner rows played does not change, so the plan is the same: resumed.
+        _planner_run(tmp_path, monkeypatch, records, "--resume", *extra[2:], planners=("P-true-c",))
+        return
+    with pytest.raises(SystemExit):
+        run_main(
+            ["--first-seed", str(FIRST), "--episodes", "1", "--planners", "P-true-c",
+             "--records", str(records), "--resume", *extra],
+            monkeypatch,
+            module="compare_planner",
+        )  # fmt: skip
+    assert message in capsys.readouterr().err
+
+
+def test_a_resume_refuses_a_saved_row_that_is_not_in_its_plan(
+    tmp_path, monkeypatch, capsys, fixed_code
+):
+    records = tmp_path / "records.json"
+    _planner_run(tmp_path, monkeypatch, records, planners=("P-true-c",))
+    data = json.loads(records.read_text(encoding="utf-8"))
+    data["rows"][0]["setting"], data["rows"][0]["value"] = "dropout_prob", 0.4
+    records.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit):
+        _planner_run(tmp_path, monkeypatch, records, "--resume", planners=("P-true-c",))
+    assert "not in this run's plan" in capsys.readouterr().err
+
+
+def test_an_unknown_tree_is_never_resumed(tmp_path, monkeypatch, capsys, fixed_code):
+    monkeypatch.setattr(fixed_code, "working_tree", lambda root: "unknown")
+    records = tmp_path / "records.json"
+    _planner_run(tmp_path, monkeypatch, records, planners=("P-true-c",))
+    with pytest.raises(SystemExit):
+        _planner_run(tmp_path, monkeypatch, records, "--resume", planners=("P-true-c",))
+    assert "'Working tree'" in capsys.readouterr().err
+
+
+def test_merging_refuses_records_whose_code_is_unknown(tmp_path, monkeypatch, capsys, fixed_code):
+    monkeypatch.setattr(fixed_code, "commit", lambda root: "unknown")
+    first, second = tmp_path / "a.json", tmp_path / "b.json"
+    _planner_run(tmp_path, monkeypatch, first, planners=("P-true-c",))
+    _planner_run(tmp_path, monkeypatch, second, planners=("P-true-d",))
+    monkeypatch.setattr(
+        sys, "argv", ["compare_planner.py", "--from-records", str(first), str(second)]
+    )
+    with pytest.raises(SystemExit):
+        _module().main()
+    assert "unknown" in capsys.readouterr().err
