@@ -53,7 +53,13 @@ averages -90 to -96), evaluation -85 ± 6; random scores -500".
 ![The random agent's first seconds: the tip never nears the line](../../images/acrobot_random.gif)
 
 The random agent of `configs/acrobot_default.yaml`: random torques on the middle joint never lift the tip above the
-line. A trained agent's clip is added once the agents are retrained.
+line.
+
+![Acrobot-v1, trained DQN: the links swing higher until the tip crosses the line](../../images/acrobot_dqn.gif)
+
+The trained agent: DQN of `configs/acrobot_dqn.yaml`, seed 1, trained 2026-11-19, not the reported run. Its final
+checkpoint plays one greedy episode from reset seed 5, the middle of 20 such episodes (reset seeds 0 to 19, mean
+-88): the tip crosses the line after 89 steps, a return of -88 (CHANGELOG.md, 2026-11-19).
 
 ## Try it
 

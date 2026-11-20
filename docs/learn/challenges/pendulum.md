@@ -82,7 +82,13 @@ The report has no TD3 or SAC row; for SAC that was the maintainer's decision (CH
 ![The random agent's whole episode: the pendulum swings and never stands up](../../images/pendulum_random.gif)
 
 The random agent of `configs/pendulum_default.yaml`: random torques swing the pendulum about but never hold it upright.
-A trained agent's clip is added once the agents are retrained.
+
+![Pendulum-v1, trained SAC: one swing up, then held near upright](../../images/pendulum_sac.gif)
+
+The trained agent: SAC of `configs/pendulum_sac.yaml`, seed 1, trained 2026-11-19, not the reported run (the report has
+no SAC row; final training average -135.93, held). Its final checkpoint plays one greedy episode from reset seed 7,
+the middle of 20 such episodes (reset seeds 0 to 19): it swings the pendulum up and holds it near upright for the
+rest of the 200 steps, a return of -128.14 (CHANGELOG.md, 2026-11-19).
 
 ## Try it
 

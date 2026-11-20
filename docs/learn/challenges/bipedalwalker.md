@@ -60,7 +60,16 @@ BipedalWalker report](../../benchmarks/bipedalwalker_results.md).
 ![The random agent's first seconds: the walker goes nowhere](../../images/bipedalwalker_random.gif)
 
 The random agent of `configs/bipedalwalker_default.yaml`: random joint torques fold the walker onto its knees near the
-start. A trained agent's clip is added once the agents are retrained.
+start.
+
+![BipedalWalker-v3, trained SAC: a steady gait to the end of the course](../../images/bipedalwalker_sac.gif)
+
+The trained agent: SAC of `configs/bipedalwalker_sac.yaml`, seed 1, trained 2026-11-19 on the PyTorch backend; its
+training gives the reported seed 1's result, a final training average of 306.78 over 534 episodes, held (the
+[BipedalWalker report](../../benchmarks/bipedalwalker_results.md)). The NumPy agent plays its final checkpoint for one
+greedy episode from reset seed 0, the middle of 20 such episodes (reset seeds 0 to 19): it walks the whole course in
+745 steps, a return of 325.47. The clip keeps every third frame, so it runs 1.5 times as fast as the environment's own
+50 frames a second (CHANGELOG.md, 2026-11-19).
 
 ## Try it
 

@@ -295,7 +295,10 @@ Training runs and the test suite write bulky outputs that must never be committe
   config's and checkpoint's SHA-256, the script's own SHA-256, the commit, whether any input differs from it
   (`tree`; `unknown` when git cannot say), the platform and the library versions. A clip is a GIF 300 px wide,
   32 to 64 colours, of one episode or its first 10 s, at 15 to 25 fps as played: a GIF stores whole hundredths of a
-  second a frame, so 16, 20 and 25 fps are allowed and 15 (stored as 70 ms, 14.3 fps) is not.
+  second a frame, so 16, 20 and 25 fps are allowed and 15 (stored as 70 ms, 14.3 fps) is not. A trained agent's
+  recipe names its `checkpoint` under the git-ignored `checkpoints/release/` and the `release_asset` a GitHub Release
+  carries it as (`seed1-<challenge>-<agent>.pt`); the checkpoint itself is never committed, and the script stops,
+  naming the asset to download, when it is missing (TESTING.md `CI-13`).
 
 - **Gitignored artifact directories** — keep these out of git (already blocked in `.gitignore`):
   - `logs/` (TensorBoard and raw metrics logs)
