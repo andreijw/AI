@@ -14,6 +14,20 @@ Acrobot-v1) and
 
 ## 2026-11-19
 
+### Added
+
+- **Planning comparison judged** (`feature/planning-comparison`; the planning item's last PR). Played once on the
+  held-out layouts 30000 to 30499 from a frozen copy of commit 4515bfc; the report is
+  `docs/benchmarks/planning_results.md` (the maintainer's decision to publish it, 2026-11-19). Every registered gate
+  passes: the true-map planners reach 500 of 500 with either action kind and no collision (least clearance 0.157 and
+  0.146 m), the online HC-SR04 map 490 and 489 of 500 with no collision; G4, from the solo timing run, a sliding
+  10-step 99th percentile of at most 11.3 ms and no step over 54.2 ms; `PLAN-1` on the same layouts, `astar` median
+  1.2 ms and 99th percentile 15.75 ms, a missing path found in at most 8.1 ms. Against the trained policies: at
+  nominal sensors the online planner matches TD3 seeds 1 and 42 (exact McNemar p 0.61 and 0.11) and beats seed 2
+  (p 0.002), with shorter paths and no collision where TD3 has 6 to 8 and DQN 21. Under range noise the order
+  reverses: the online map's false walls stall the planner (61.6 % and 47.2 % at noise 0.4) while TD3 holds 95.8 to
+  97.4 %. Dropout leaves the planners unhurt. (`TESTING.md` `PLAN-1`, `PLAN-2`, `PLAN-3`.)
+
 ### Changed
 
 - **Benchmark curves that render on GitHub** (`feature/benchmark-curves-committed`; teaching docs PR 4). `benchmark.py`
@@ -30,6 +44,25 @@ Acrobot-v1) and
   2026-11-19).
 
 ## 2026-11-15
+
+### Added
+
+- **Planning comparison: the planner against trained policies** (`feature/planning-comparison`; roadmap, Phase 8
+  "Planning and control", PR 3 of 3). `rl_navigation.planning_comparison` plays a `PlannerController` (the true map, or
+  an online HC-SR04 map built from the observation's own readings; continuous and discrete actions at the tuned
+  settings, now `rl_navigation.planning.TUNED_SETTINGS`) and any `Policy` on the same seeded layouts. It reports
+  success with Wilson intervals, collisions, timeouts, SPL, clearance and step times, and an exact McNemar test per
+  checkpoint against each planner (TD3 against P-online-c and DQN against P-online-d marked primary); it never imports
+  `rl_core`. The root `compare_planner.py` loads the configs and checkpoints and sweeps ROB-2's noise and dropout values
+  through `rl_core.robustness`. Records carry the commit, the working tree (with a content hash of any change, from the
+  new stdlib `run_provenance.py`), the full setup, the map range, the robot radius and load averages, and are saved
+  after every row; `--resume` continues a killed job only under an identical setup, and `--from-records` and
+  `--timing-records` merge only records of the same code and seeds, listing any missing gate row as not played.
+  `TESTING.md`
+  `PLAN-2` (nominal, gates G1 to G4) and `PLAN-3` (sweep) are registered, to be judged once on layouts 30000 to 30499:
+  G4 on the four nominal planner rows only, from a solo timing run (`--timing-records`), and `PLAN-1`'s search timing
+  solo on the same layouts through `scripts/planning_timing/time_planner.py` (the maintainer's decisions,
+  2026-11-15). Judged on 2026-11-19 (above).
 
 ### Changed
 
