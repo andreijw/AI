@@ -72,8 +72,23 @@ report](../../benchmarks/lunarlander_continuous_results.md).
 
 ![LunarLander-v3, the random agent's whole episode: it crashes](../../images/lunarlander_random.gif)
 
-The random agent of `configs/lunarlander_default.yaml`. A still of a landing needs a trained agent, as the random one
-does not land; the trained agent's frame and clip are added once the agents are retrained.
+The random agent of `configs/lunarlander_default.yaml`, which does not land.
+
+![LunarLander-v3, trained DQN: landed on both legs between the flags](../../images/lunarlander_dqn_still.png)
+
+![LunarLander-v3, trained DQN: a descent with short burns, then a landing](../../images/lunarlander_dqn.gif)
+
+The trained DQN of `configs/lunarlander_dqn.yaml`, seed 1, trained 2026-11-19, not the reported run (final training
+average 250.76, held). Its final checkpoint plays one greedy episode from reset seed 15, the middle of 20 such
+episodes (reset seeds 0 to 19): it lands after 262 steps, a return of 269.88; the still is frame 250 of the same
+episode (CHANGELOG.md, 2026-11-19).
+
+![LunarLanderContinuous-v3, trained SAC: a throttled descent and a landing](../../images/lunarlander_continuous_sac.gif)
+
+The trained SAC of `configs/lunarlander_continuous_sac.yaml`, seed 1, trained 2026-11-19 on the PyTorch backend, not the
+reported run (final training average 283.97, held); its checkpoint plays in the NumPy agent. From reset seed 15, the
+middle of 20 greedy episodes (reset seeds 0 to 19), it lands after 194 steps, a return of 278.58 (CHANGELOG.md,
+2026-11-19).
 
 ## Try it
 

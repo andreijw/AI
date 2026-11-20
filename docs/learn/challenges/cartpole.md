@@ -71,7 +71,14 @@ report](../../benchmarks/cartpole_results.md). The random agent's floor is in th
 ![The random agent's whole episode, slowed down](../../images/cartpole_random.gif)
 
 The random agent of `configs/cartpole_default.yaml`: pushing left or right at random, it loses the pole almost at once,
-so its clip is slowed down to be seen at all. A trained agent's clip is added once the agents are retrained.
+so its clip is slowed down to be seen at all.
+
+![CartPole-v1, trained PPO agent: small pushes keep the pole upright for the whole clip](../../images/cartpole_ppo.gif)
+
+The trained agent: PPO of `configs/cartpole_ppo.yaml`, seed 1, retrained on 2026-11-19 with the same training result as
+the [CartPole report](../../benchmarks/cartpole_results.md)'s seed 1. Its final checkpoint plays one greedy episode
+from reset seed 0, the middle of 20 such episodes (reset seeds 0 to 19, every one 500); the clip shows the first 10 s
+of its 500 steps (CHANGELOG.md, 2026-11-19).
 
 ## Try it
 

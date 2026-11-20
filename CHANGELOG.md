@@ -40,6 +40,25 @@ Acrobot-v1) and
   together; `TESTING.md` `CI-12` regenerates them and expects the same bytes. The trained-agent clips follow, from the
   seed-1 checkpoints retrained on 2026-11-19.
 
+- **Trained agents on the teaching pages** (`docs/learn-clips`; teaching docs PR 5). Each challenge page's "See it" now
+  shows, after the random agent's clip, one greedy episode of the seed-1 checkpoint of each committed config, retrained
+  on 2026-11-19 from `develop` at c2d246a (seed 1 in `environment.seed` and `agent.config.seed`, outputs in scratch; 9
+  of 10 reach and hold their threshold; CartPole PPO, Navigation DQN, NavigationContinuous TD3 and BipedalWalker SAC
+  give their reports' seed-1 training results). Final 100-episode training averages: CartPole PPO 500.00, Acrobot DQN
+  -93.36, MountainCar DQN -118.95 (it reached -110 at episode 924 and does not hold it), MountainCarContinuous DDPG
+  91.02, Pendulum SAC -135.93, LunarLander DQN 250.76, LunarLanderContinuous SAC 283.97 and BipedalWalker SAC 306.78
+  (both on the PyTorch backend, played by the NumPy agent), Navigation DQN 7.99, NavigationContinuous TD3 8.25. Each
+  clip plays, of 20 greedy episodes from reset seeds 0 to 19, the one whose return is nearest their median, the lower
+  seed on a tie: CartPole seed 0, 500 (all 20 at 500, the clip its first 10 s); Acrobot seed 5, -88 in 89 steps (mean
+  -88.15); MountainCar seed 2, -113 in 113 steps (all 20 reach the flag, in 84 to 174 steps, mean -112.95);
+  MountainCarContinuous seed 16, 93.62 in 66 steps; Pendulum seed 7, -128.14; LunarLander seed 15, 269.88 in 262
+  steps (and a still of its landing, frame 250); LunarLanderContinuous seed 15, 278.58 in 194 steps; BipedalWalker seed
+  0, 325.47 in 745 steps; Navigation DQN seed 1, 8.59 in 85 steps (goal reached in all 20); NavigationContinuous TD3
+  seed 8, 8.65 in 83 steps (goal reached in 19 of 20, seed 1 fails). The checkpoints are not committed: each recipe
+  names `checkpoints/release/seed1-<challenge>-<agent>.pt` (git-ignored) and the 0.2.0 release asset that carries it,
+  and `make_doc_media.py` stops before writing anything, naming the asset to download, when one is missing
+  (`TESTING.md` `CI-13`). 11 new media files; `docs/images/` 1.84 MiB.
+
 ### Changed
 
 - **Benchmark curves that render on GitHub** (`feature/benchmark-curves-committed`; teaching docs PR 4). `benchmark.py`

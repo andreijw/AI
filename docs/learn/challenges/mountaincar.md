@@ -82,8 +82,21 @@ continuous version. The table is in [results.md](../../results.md#which-agents-s
 ![The random agent's whole episode: the car never climbs](../../images/mountaincar_random.gif)
 
 The random agent of `configs/mountaincar_default.yaml`: random pushes cancel out, so the car never builds the swing
-it needs, and the reward never says how close it came. MountainCarContinuous-v0 draws the same car and valley. A
-trained agent's clip is added once the agents are retrained.
+it needs, and the reward never says how close it came. MountainCarContinuous-v0 draws the same car and valley.
+
+![MountainCar-v0, trained DQN: the car rocks back and forth, then climbs](../../images/mountaincar_dqn.gif)
+
+The trained DQN of `configs/mountaincar_dqn.yaml`, seed 1, trained 2026-11-19, not the reported run, and showing this
+page's limit: its training average reached -110 at episode 924 and ended at -118.95, so it does not hold the threshold.
+Its final checkpoint plays one greedy episode from reset seed 2, the middle of 20 such episodes (reset seeds 0 to
+19): the car reaches the flag after 113 steps, a return of -113. Every one of the 20 reaches the flag, in 84 to 174
+steps, but their mean, -112.95, is still short of -110 (CHANGELOG.md, 2026-11-19).
+
+![MountainCarContinuous-v0, trained DDPG: one swing back, then up](../../images/mountaincar_continuous_ddpg.gif)
+
+The trained DDPG of `configs/mountaincar_continuous_ddpg.yaml`, seed 1, trained 2026-11-19, not the reported run
+(final training average 91.02, held). From reset seed 16, the middle of 20 greedy episodes (reset seeds 0 to 19), it
+swings back once and drives up to the flag in 66 steps, a return of 93.62 (CHANGELOG.md, 2026-11-19).
 
 ## Try it
 

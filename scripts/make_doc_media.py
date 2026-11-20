@@ -12,11 +12,12 @@ command's output) says in ``made_by`` how it was made, and is left alone. A reci
 
 A still or clip builds the environment and agent from ``config`` as ``record.py`` does (with the
 recipe's ``environment`` settings over the config's, and the agent loaded from ``checkpoint`` when
-one is named, with the ``release_asset`` it is published as), resets with the recipe's ``seed``,
-and captures ``env.render()``. Images are written with Pillow, only under ``docs/images/``, and only
-within the manifest's budget. Each entry made gets ``made_by`` (the command that remakes it) and
-``made_with``: the config's SHA-256, the checkpoint's, the commit, the platform and the versions of
-Python, NumPy, Gymnasium, Pillow and pygame-ce.
+one is named, with the ``release_asset`` it is published as: a missing checkpoint stops the run,
+before anything is written, naming the asset to download into its folder), resets with the recipe's
+``seed`` and captures ``env.render()``. Images are written with Pillow, only under ``docs/images/``,
+and only within the manifest's budget. Each entry made gets ``made_by`` (the command that remakes
+it) and ``made_with``: the config's SHA-256, the checkpoint's, the commit, the platform and the
+versions of Python, NumPy, Gymnasium, Pillow and pygame-ce.
 
 Run from the repository's own environment (``.venv/bin/python``; Box2D items need ``./setup.sh``):
 
@@ -380,7 +381,14 @@ def make(root: Path, paths: Sequence[str] | None) -> list[str]:
         if "recipe" not in entries[path]:
             raise MediaError(f"{path}: made by another command ({entries[path]['made_by']})")
         output_path(root, path)
-        check_recipe(path, entries[path]["recipe"])
+        recipe = entries[path]["recipe"]
+        check_recipe(path, recipe)
+        checkpoint = recipe.get("checkpoint")
+        if checkpoint is not None and not (root / checkpoint).is_file():
+            raise MediaError(
+                f"{path}: no checkpoint at {checkpoint}: download the release asset "
+                f"{recipe['release_asset']} into {Path(checkpoint).parent.as_posix()}/"
+            )
     written = []
     for path in paths:
         entry = entries[path]

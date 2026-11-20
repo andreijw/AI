@@ -503,6 +503,26 @@ def test_make_refuses_an_item_it_cannot_make(tmp_path, path):
         make_doc_media.make(root, [path])
 
 
+def test_make_names_the_release_asset_of_a_missing_checkpoint_and_writes_nothing(tmp_path):
+    trained = {
+        **CLIP,
+        "checkpoint": "checkpoints/release/seed1-cartpole-ppo.pt",
+        "release_asset": "seed1-cartpole-ppo.pt",
+    }
+    media = [
+        {"path": CARTPOLE_STILL, "made_by": "x", "recipe": STILL},
+        {"path": "docs/images/cartpole_ppo.gif", "made_by": "x", "recipe": trained},
+    ]
+    root = _root_with(tmp_path, media)
+
+    with pytest.raises(make_doc_media.MediaError) as refused:
+        make_doc_media.make(root, None)
+    assert "asset seed1-cartpole-ppo.pt into checkpoints/release/" in str(refused.value), (
+        "the asset to download and the folder it goes in should be named"
+    )
+    assert not (root / "docs").exists(), "nothing should be made before every checkpoint is there"
+
+
 def test_main_needs_paths_or_all(capsys):
     with pytest.raises(SystemExit):
         make_doc_media.main([])
