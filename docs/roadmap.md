@@ -41,13 +41,13 @@ unblocks (the maintainer's decision, 2026-11-19).
   with a learning path, a foundations page, seven challenge pages, the algorithm families (with the fixes this
   repository needed, from CHANGELOG.md), a navigation track ending with the ONNX and C export, frames of every
   challenge and GIF clips of trained and random agents (seed 1, retrained after the 0.2.0 API lands, checkpoints
-  attached to the release), and committed benchmark curves. The navigation track waits for planning and control.
+  attached to the release), and committed benchmark curves.
   - **Progress (2026-11-13 to 2026-11-20)**: the media rule, the source checker in CI and the page
     skeletons; the algorithm and challenge pages (CHANGELOG.md, 2026-11-13); the media script with the random agents'
     frames and clips, benchmark curves committed under `docs/images/benchmarks/` at a report's next full rerun, and
     the trained agents' clips from seed-1 checkpoints retrained on 2026-11-19, to be attached to the 0.2.0 release as
-    `seed1-<challenge>-<agent>.pt` (CHANGELOG.md, 2026-11-19); the foundations page (CHANGELOG.md, 2026-11-20). Left:
-    the navigation pages and the front page.
+    `seed1-<challenge>-<agent>.pt` (CHANGELOG.md, 2026-11-19); the foundations page and the navigation track
+    (CHANGELOG.md, 2026-11-20). Left: the front page.
 
 - [~] **rl-core 0.2.0 API** (the maintainer's decision D, 2026-11-13; plan in four PRs plus the release PR):
   break the `challenges` ↔ `training` cycle by moving `training/robustness.py` to `rl_core/robustness.py` behind a
@@ -222,7 +222,6 @@ steps 3 to 5 are sketches to turn into full items when picked.
   - **Lidar rows**: the comparison plays the HC-SR04 sensor only.
   - **A faster search for bigger arenas**: a pathological serpentine makes the fill 106 ms, and a 400 × 400 grid is
     about 16 times slower; a vectorised wavefront if bigger arenas come.
-  - **Teaching pages**: the planning pages of `docs/learn/navigation/` belong to the teaching-docs item.
 
 - [ ] **Hardware and ROS 2**
   - **Description**: The HC-SR04 on the Jetson's GPIO (a 5 V echo needs a level shifter or divider for the

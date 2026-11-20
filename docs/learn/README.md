@@ -16,8 +16,10 @@ Not written yet.
   [Navigation-v0](challenges/navigation.md)
 - Algorithms: [Policy gradients](algorithms/policy-gradient.md), [PPO](algorithms/ppo.md),
   [DQN and its variants](algorithms/dqn.md), [DDPG and TD3](algorithms/ddpg-td3.md), [SAC](algorithms/sac.md)
-- Navigation: the sensors, estimation, mapping, SLAM, planning and export pages follow once planning and
-  control is built.
+- Navigation track, after the Navigation challenge: [the simulator and its sensors](navigation/sim-and-sensors.md),
+  [estimation](navigation/estimation.md), [mapping](navigation/mapping.md), [SLAM](navigation/slam.md),
+  [planning and control](navigation/planning.md) and [export to the robot](navigation/export-to-robot.md), where a
+  trained policy reaches the Jetson
 
 ## Glossary
 

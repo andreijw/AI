@@ -56,7 +56,8 @@ which is what SLAM is for.
 
 ![One frame of the seed-101 lidar localization video](docs/images/localization_seed101_step381.png)
 
-Details, the API and the measurements are in [docs/navigation.md](docs/navigation.md).
+Details and the measurements are in [the navigation track](docs/learn/navigation/sim-and-sensors.md); installing on a
+robot is in [docs/navigation.md](docs/navigation.md).
 
 ## The robotics ladder
 
@@ -132,7 +133,8 @@ project, such as a game, trains agents on its own environment by depending on `r
 ## Documentation
 
 - [docs/usage.md](docs/usage.md): install, train, record, export, benchmark, configure, develop
-- [docs/navigation.md](docs/navigation.md): the navigation simulator and state estimation
+- [docs/navigation.md](docs/navigation.md): installing the navigation libraries on a robot, and the index of the
+  navigation track
 - [docs/external-challenges.md](docs/external-challenges.md): training on another project's environment (a game)
 - [docs/releasing.md](docs/releasing.md): the distributions' versions, releases and installing them
 - [docs/results.md](docs/results.md): which agents solve which challenge, with the caveats
