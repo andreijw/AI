@@ -145,6 +145,11 @@ may sit elsewhere under `docs/` or `packages/`. CI runs it on every pull request
 it. Numbers inside code spans are not checked, so a current config value written as code (`gamma: 0.9`) is the
 numbers-check agent's to match against `configs/`.
 
+Then run `python -m ruff format --check .` (and `python -m ruff check .`) even when no `.py` file changed: Ruff
+formats the Python code blocks in Markdown too, but CI's Checks job skips its Python steps, Ruff included, on a
+docs-only change (`.github/actions/docs-only`). On 2026-11-20 a 104-character line in a `docs/learn/navigation/`
+example merged green in #250 and failed the next full CI run; put a long comment on its own line above the code.
+
 ## 5. Report
 
 List the documents changed and the one-line reason for each, the documents checked and left alone, and any
