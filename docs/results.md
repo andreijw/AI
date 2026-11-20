@@ -56,4 +56,4 @@ measurements that have no published report, is on each challenge's page:
 [CartPole](learn/challenges/cartpole.md), [Acrobot](learn/challenges/acrobot.md),
 [MountainCar](learn/challenges/mountaincar.md), [Pendulum](learn/challenges/pendulum.md),
 [LunarLander](learn/challenges/lunarlander.md), [BipedalWalker](learn/challenges/bipedalwalker.md) and
-[Navigation](navigation.md).
+[Navigation](learn/challenges/navigation.md).

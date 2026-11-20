@@ -11,9 +11,9 @@ commands. The [README](../README.md) is the front page; this page holds the deta
 - [Environments and checkpoints](#environments-and-checkpoints): the wrapper, observation settings, the pipeline
 - [Development](#development): tests, formatting, linting, types, security, Markdown, CI, pre-commit
 
-Where the rest lives: [navigation.md](navigation.md) (the simulator and state estimation),
-[results.md](results.md) (what each agent measured), [agents.md](agents.md) (how each agent works),
-[ai-assistants.md](ai-assistants.md) (Claude Code setup).
+Where the rest lives: [navigation.md](navigation.md) (installing the navigation libraries on a robot; the explanations
+are in [learn/navigation/](learn/navigation/sim-and-sensors.md)), [results.md](results.md) (what each agent measured),
+[agents.md](agents.md) (how each agent works), [ai-assistants.md](ai-assistants.md) (Claude Code setup).
 
 ## Installation
 
@@ -211,12 +211,12 @@ python train.py --config configs/bipedalwalker_default.yaml
 .venv-gpu/bin/python train.py --config configs/bipedalwalker_sac.yaml
 .venv-gpu/bin/python train.py --config configs/bipedalwalker_td3.yaml
 
-# Navigation random baselines, discrete and continuous (threshold 7.0, far above random; see docs/navigation.md)
+# Navigation random baselines, discrete and continuous (threshold 7.0, far above random; see docs/learn/challenges/navigation.md)
 python train.py --config configs/navigation_default.yaml
 python train.py --config configs/navigation_continuous_default.yaml
 
 # Navigation PPO and DQN (Navigation-v0), PPO and TD3 (NavigationContinuous-v0); about 5 minutes for PPO, 15 for DQN
-# and TD3 a seed with three runs sharing the CPU (DQN's result: see docs/navigation.md)
+# and TD3 a seed with three runs sharing the CPU (DQN's result: see docs/learn/challenges/navigation.md)
 python train.py --config configs/navigation_ppo.yaml
 python train.py --config configs/navigation_dqn.yaml
 python train.py --config configs/navigation_continuous_ppo.yaml
@@ -353,7 +353,7 @@ Every recorded episode is rendered and encoded frame by frame, so small interval
 down (recording all 1000 random-agent episodes takes ~6 minutes instead of ~8 seconds).
 
 The localization video (`python -m rl_navigation.localization_video`, see
-[State estimation](navigation.md#state-estimation)) does not record an
+[Estimation](learn/navigation/estimation.md#watching-one-trial)) does not record an
 agent: it takes a required `--output` path and never writes into `videos/` on its own. Recordings kept by hand go in
 `videos/navigation/localization/`, git-ignored like the rest of `videos/`.
 
@@ -626,8 +626,8 @@ from the PyTorch backend loads into the NumPy agent, so no PyTorch is needed.
 The `CartPoleEnv` class wraps Gymnasium's CartPole-v1 environment, `PendulumEnv` wraps Pendulum-v1, `AcrobotEnv`
 wraps Acrobot-v1, `MountainCarEnv` wraps MountainCar-v0 and MountainCarContinuous-v0, `LunarLanderEnv` wraps
 LunarLander-v3 and LunarLanderContinuous-v3 and `BipedalWalkerEnv` wraps BipedalWalker-v3 (observation noise only for
-those four), and `NavigationEnv` wraps this project's Navigation-v0 and NavigationContinuous-v0 ([Range-Sensor
-Navigation](navigation.md#range-sensor-navigation)). All seven subclass
+those four), and `NavigationEnv` wraps this project's Navigation-v0 and NavigationContinuous-v0 ([the challenge
+page](learn/challenges/navigation.md)). All seven subclass
 `rl_core.environments.BaseEnvWrapper`, which owns seeding, observation noise and episode statistics. They provide:
 
 - Episode tracking and statistics

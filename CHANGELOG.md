@@ -22,6 +22,13 @@ Acrobot-v1) and
   under a 500-step cut, what "solves" and "holds" mean as `benchmark.py` computes them, and the nine fixes that changed
   how every agent is trained, measured or saved, each with its date here. It quotes no benchmark number; it links the
   reports.
+- **The navigation teaching track** (`docs/learn-navigation`; teaching docs). Six pages in `docs/learn/navigation/`
+  take a reader from the Gymnasium challenges to the robot: the simulator and its sensors, estimation (EKF and MCL),
+  mapping, SLAM, planning and control (linking the planning comparison report), and export to the robot (ONNX and C).
+  The teaching sections of `docs/navigation.md` moved there; it keeps the install on the robot, a short guide to using
+  the environment on its own, and an index of the track. `docs/learn/challenges/navigation.md` is written in full and
+  leads into the track. The pages restate no benchmark numbers beyond those `docs/navigation.md` already carried for
+  localization; the planning results are linked, not restated.
 
 ## 2026-11-19
 
