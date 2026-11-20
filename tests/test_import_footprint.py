@@ -188,6 +188,7 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.estimation.comparison.cli",
         "rl_navigation.estimation.averages",
         "rl_navigation.estimation.recording",
+        "rl_navigation.estimation.runs",
         "rl_navigation.localization_video",
         "rl_navigation.mapping",
         "rl_navigation.mapping.beams",
@@ -231,7 +232,7 @@ def test_navigation_estimation_imports_only_the_simulator():
         "import sys; "
         "import rl_navigation.estimation, rl_navigation.estimation.evaluation, "
         "rl_navigation.estimation.mcl, rl_navigation.estimation.comparison, "
-        "rl_navigation.estimation.recording; "
+        "rl_navigation.estimation.recording, rl_navigation.estimation.runs; "
         "print(sorted(m for m in sys.modules if m.startswith('rl_navigation.') "
         "and m.split('.')[1] not in ('sim', 'estimation')))"
     )
@@ -313,7 +314,7 @@ def test_the_slam_core_imports_only_the_simulator_and_the_estimation_core():
 )
 def test_the_slam_desk_tools_stay_inside_the_navigation_library(tool):
     loaded = _loaded_navigation_packages(tool)
-    assert set(loaded) <= {"estimation", "mapping", "sim", "slam"}, f"loaded rl_navigation.{loaded}"
+    assert set(loaded) <= {"estimation", "sim", "slam"}, f"loaded rl_navigation.{loaded}"
 
 
 def test_the_slam_package_does_not_import_its_desk_tools():
@@ -413,7 +414,7 @@ def test_importing_rl_navigation_loads_none_of_its_subpackages():
     assert result.stdout.strip() == "[]", f"import rl_navigation loaded {result.stdout.strip()}."
 
 
-@pytest.mark.parametrize("tool", ["comparison", "recording"])
+@pytest.mark.parametrize("tool", ["comparison", "recording", "runs"])
 def test_the_estimation_package_does_not_import_its_desk_tools(tool):
     """The comparison report and the recording are tools, not part of the library a robot
     imports. A fresh process."""

@@ -4,13 +4,15 @@ import time
 from collections.abc import Callable
 from typing import Any, cast
 
-import numpy as np
 from numpy.typing import ArrayLike
 
 from rl_navigation.estimation.ekf import EkfLocalizer, UpdateResult
-from rl_navigation.estimation.evaluation import Localizer, LocalizerFactory, ScanResult
-from rl_navigation.estimation.maps import SensorMap
-from rl_navigation.sim import WheelOdometry
+from rl_navigation.estimation.evaluation import (
+    FactoryContext,
+    Localizer,
+    LocalizerFactory,
+    ScanResult,
+)
 from rl_navigation.sim.geometry import FloatArray
 
 TIMED_CALLS = ("predict", "update", "pose", "covariance")
@@ -74,24 +76,6 @@ class InstrumentedFactory:
         self.factory = factory
         self.built: InstrumentedLocalizer | None = None
 
-    def __call__(
-        self,
-        *,
-        range_map: SensorMap,
-        odometry: WheelOdometry,
-        start: FloatArray,
-        covariance: FloatArray,
-        rng: np.random.Generator,
-        robot_radius: float,
-    ) -> Localizer:
-        self.built = InstrumentedLocalizer(
-            self.factory(
-                range_map=range_map,
-                odometry=odometry,
-                start=start,
-                covariance=covariance,
-                rng=rng,
-                robot_radius=robot_radius,
-            )
-        )
+    def __call__(self, context: FactoryContext) -> Localizer:
+        self.built = InstrumentedLocalizer(self.factory(context))
         return self.built

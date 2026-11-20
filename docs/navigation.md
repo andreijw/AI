@@ -23,9 +23,9 @@ robot's installer needs: the install, the module map and the environment's stand
 | Policy export to C and ONNX | [export-to-robot](learn/navigation/export-to-robot.md) | `rl_core.export` | the `onnx` extra for ONNX |
 
 The desk tools are not imported by the libraries: `rl_navigation.estimation.comparison`,
-`rl_navigation.mapping.evaluation`, `rl_navigation.slam.evaluation`, `rl_navigation.slam.feature_evaluation`,
-`rl_navigation.localization_video` and `rl_navigation.planning_comparison` (which imports the Gymnasium layer but never
-`rl_core`).
+`rl_navigation.estimation.runs`, `rl_navigation.mapping.evaluation`, `rl_navigation.slam.evaluation`,
+`rl_navigation.slam.feature_evaluation`, `rl_navigation.localization_video` and `rl_navigation.planning_comparison`
+(which imports the Gymnasium layer but never `rl_core`).
 
 ## Installing on the robot
 

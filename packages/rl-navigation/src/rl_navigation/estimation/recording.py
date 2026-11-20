@@ -22,6 +22,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from rl_navigation.estimation.evaluation import (
+    FactoryContext,
     Localizer,
     LocalizerFactory,
     ScanResult,
@@ -30,11 +31,9 @@ from rl_navigation.estimation.evaluation import (
     mcl,
     run_trial,
 )
-from rl_navigation.estimation.maps import SensorMap
 from rl_navigation.estimation.mcl import MclSettings
 from rl_navigation.sim import render
 from rl_navigation.sim.geometry import Arena, FloatArray
-from rl_navigation.sim.odometry import WheelOdometry
 from rl_navigation.sim.sensors import RangeSensor
 
 # Particles kept per snapshot, at a fixed stride: after low-variance resampling the weights are
@@ -135,26 +134,11 @@ class SnapshotFactory:
         self.sensor: RangeSensor | None = None
         self.robot_radius: float | None = None
 
-    def __call__(
-        self,
-        *,
-        range_map: SensorMap,
-        odometry: WheelOdometry,
-        start: FloatArray,
-        covariance: FloatArray,
-        rng: np.random.Generator,
-        robot_radius: float,
-    ) -> Localizer:
-        self.arena, self.sensor, self.robot_radius = range_map.arena, range_map.sensor, robot_radius
-        inner = self.factory(
-            range_map=range_map,
-            odometry=odometry,
-            start=start,
-            covariance=covariance,
-            rng=rng,
-            robot_radius=robot_radius,
-        )
-        self.built = SnapshotLocalizer(inner, self.max_particles)
+    def __call__(self, context: FactoryContext) -> Localizer:
+        range_map = context.range_map
+        self.arena, self.sensor = range_map.arena, range_map.sensor
+        self.robot_radius = context.robot_radius
+        self.built = SnapshotLocalizer(self.factory(context), self.max_particles)
         return self.built
 
 

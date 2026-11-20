@@ -70,8 +70,9 @@ heading was poorly known stays linearized there. The gates keep such a filter fr
 from being wrong (OC-EKF is the follow-up). The second-order term is a Taylor term: past about
 0.5 rad of heading error it limits an update's damage but no longer makes it consistent.
 
-Shares ``kalman_update``, ``motion_jacobians`` and ``chi2_quantile`` with ``estimation``. When a
-third package needs them, they move to a shared module (``sim`` for the motion model).
+Shares ``kalman_update``, ``predict_pose`` (the pose's predict, whose ``F`` FEJ replaces) and
+``chi2_quantile`` with ``estimation``. When a third package needs them, they move to a shared
+module (``sim`` for the motion model).
 
 Frames and units: metres and radians, the world frame, ``theta`` in ``[-pi, pi)``.
 """
@@ -83,11 +84,11 @@ from typing import Literal
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from rl_navigation.estimation.ekf import chi2_quantile, motion_jacobians
+from rl_navigation.estimation.ekf import chi2_quantile, predict_pose
 from rl_navigation.estimation.kalman import kalman_update, symmetrized
 from rl_navigation.estimation.poses import checked_start, checked_wheel_travel
 from rl_navigation.sim.geometry import FloatArray
-from rl_navigation.sim.kinematics import unicycle_step, wrap_angle
+from rl_navigation.sim.kinematics import wrap_angle
 from rl_navigation.sim.odometry import WheelOdometry
 from rl_navigation.sim.sensors import RangeSensor
 from rl_navigation.slam.features import CircleFeature, FeatureSettings, extract_circles
@@ -607,17 +608,12 @@ class EkfSlam:
             ValueError: ``wheel_travel`` is not two finite numbers.
         """
         travel = checked_wheel_travel(wheel_travel, "EkfSlam.predict")
-        distance, turn = self.odometry.increments(travel)
-        pose = self._x[:3]
-        F, G = motion_jacobians(pose, distance, turn)
-        new = unicycle_step(pose, distance, turn, 1.0)
+        prediction = predict_pose(self._x[:3], travel, self.odometry)
+        new, F = prediction.pose, prediction.F
         if self.settings.jacobians == "fej":
             F = fej_motion_jacobian(self._previous_prediction, new)
-        GA = G @ self.odometry.increments_jacobian()
         P = self._P  # private: the properties hand out copies, so it is changed in place
-        P[:3, :3] = symmetrized(
-            F @ P[:3, :3] @ F.T + GA @ self.odometry.wheel_covariance(travel) @ GA.T
-        )
+        P[:3, :3] = symmetrized(F @ P[:3, :3] @ F.T + prediction.noise)
         P[:3, 3:] = F @ P[:3, 3:]
         P[3:, :3] = P[:3, 3:].T  # an exact transpose: P stays symmetric
         self._previous_prediction = new.copy()

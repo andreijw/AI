@@ -4,6 +4,23 @@ What changed in `rl-navigation`, newest first, in the style of [Keep a Changelog
 with [semantic versions](https://semver.org/) (0.x: a minor version may break the API). A release's notes are its
 section here. The repository's day-by-day log is the root CHANGELOG.md.
 
+## [Unreleased]
+
+### Added
+
+- `rl_navigation.estimation.predict_pose` and `PosePrediction`: one encoder reading's predict of a pose (the arc, its
+  Jacobian `F` and the reading's noise), shared by `EkfLocalizer.predict` and `EkfSlam.predict` (results unchanged bit
+  for bit).
+- `rl_navigation.estimation.runs`: `record_run` and `MappingRun`, moved from `rl_navigation.mapping.evaluation`, which
+  still re-exports both.
+
+### Changed
+
+- **Breaking:** a `run_trial` filter factory (`LocalizerFactory`, and the ones `ekf()` and `mcl()` return) now takes
+  one `rl_navigation.estimation.evaluation.FactoryContext` (`range_map`, `odometry`, `start`, `covariance`, `rng`,
+  `robot_radius`) instead of those six keywords. `run_trial(make_localizer=ekf())` and every seeded result are
+  unchanged.
+
 ## [0.2.0] - 2026-11-20
 
 ### Added

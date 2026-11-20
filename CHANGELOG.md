@@ -39,6 +39,16 @@ Acrobot-v1) and
 
 ### Changed
 
+- **One builder for the localizer factories, and `record_run` in a neutral module** (`feature/slam-factory-seam`; PR
+  3-0 of the occupancy-grid mapping and SLAM item). A localizer factory is now called with one frozen
+  `FactoryContext(range_map, odometry, start, covariance, rng, robot_radius)` instead of six keywords: `run_trial`,
+  `ekf()`, `mcl()` and the four wrapping factories (`SnapshotFactory`, `InstrumentedFactory`, the run recorder and
+  `SlamFactory`) all use it, so the next filter or a factory that needs another input changes one dataclass.
+  `record_run` and `MappingRun` moved from `mapping.evaluation` (which re-exports them) to the new desk tool
+  `rl_navigation.estimation.runs`, so the SLAM desk tools no longer load `mapping`. `EkfLocalizer` and `EkfSlam` share
+  the new `predict_pose`. Breaking for a custom factory written against the six keywords (rl-navigation's CHANGELOG).
+  No behaviour change: 59 seeded outputs (EKF and MCL trials, mapping, SLAM, feature and comparison runs) hash the
+  same before and after, and a 2⁻⁴⁰ change to the EKF's predict noise changes 20 of them.
 - **The 0.2.0 releases are ready to tag** (`chore/release-0.2.0`; the last PR of the rl-core 0.2.0 API item). The
   `[0.2.0]` sections of the three package CHANGELOGs are dated 2026-11-20 and become the releases' notes; the wheel
   URLs in `docs/releasing.md`, `docs/external-challenges.md` and the three package READMEs, and the robot's tag
