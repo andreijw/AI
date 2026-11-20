@@ -42,12 +42,12 @@ unblocks (the maintainer's decision, 2026-11-19).
   repository needed, from CHANGELOG.md), a navigation track ending with the ONNX and C export, frames of every
   challenge and GIF clips of trained and random agents (seed 1, retrained after the 0.2.0 API lands, checkpoints
   attached to the release), and committed benchmark curves. The navigation track waits for planning and control.
-  - **Progress (PRs 0 to 5, 2026-11-13 and 2026-11-19)**: the media rule, the source checker in CI and the page
+  - **Progress (2026-11-13 to 2026-11-20)**: the media rule, the source checker in CI and the page
     skeletons; the algorithm and challenge pages (CHANGELOG.md, 2026-11-13); the media script with the random agents'
     frames and clips, benchmark curves committed under `docs/images/benchmarks/` at a report's next full rerun, and
     the trained agents' clips from seed-1 checkpoints retrained on 2026-11-19, to be attached to the 0.2.0 release as
-    `seed1-<challenge>-<agent>.pt` (CHANGELOG.md, 2026-11-19). Left: the navigation pages, the foundations page and
-    the front page.
+    `seed1-<challenge>-<agent>.pt` (CHANGELOG.md, 2026-11-19); the foundations page (CHANGELOG.md, 2026-11-20). Left:
+    the navigation pages and the front page.
 
 - [~] **rl-core 0.2.0 API** (the maintainer's decision D, 2026-11-13; plan in four PRs plus the release PR):
   break the `challenges` ↔ `training` cycle by moving `training/robustness.py` to `rl_core/robustness.py` behind a

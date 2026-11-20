@@ -12,6 +12,17 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-20
+
+### Added
+
+- **The foundations teaching page** (`docs/learn-foundations`; teaching docs). `docs/learn/foundations.md`, the
+  page read before any algorithm, is written: the episode loop as the `Trainer` runs it (with a diagram), terminated
+  against truncated and how each agent treats a time-limit cut, returns and bootstrapping with CartPole's numbers
+  under a 500-step cut, what "solves" and "holds" mean as `benchmark.py` computes them, and the nine fixes that changed
+  how every agent is trained, measured or saved, each with its date here. It quotes no benchmark number; it links the
+  reports.
+
 ## 2026-11-19
 
 ### Added
