@@ -37,6 +37,15 @@ Acrobot-v1) and
   `docs/learn/` (a new agent now needs an algorithm page and a table row). No page under `docs/learn/` is a skeleton
   any more.
 
+### Changed
+
+- **The 0.2.0 releases are ready to tag** (`chore/release-0.2.0`; the last PR of the rl-core 0.2.0 API item). The
+  `[0.2.0]` sections of the three package CHANGELOGs are dated 2026-11-20 and become the releases' notes; the wheel
+  URLs in `docs/releasing.md`, `docs/external-challenges.md` and the three package READMEs, and the robot's tag
+  install in `docs/navigation.md` and rl-navigation's README, name 0.2.0. `scripts/release.py check` passes for
+  `rl-core-v0.2.0`; rl-navigation and rl-challenges wait for its release to be published, as their `rl-core~=0.2.0`
+  requires. The 0.3.0 removal of the deprecated factories moved to the library follow-ups.
+
 ## 2026-11-19
 
 ### Added

@@ -37,15 +37,6 @@ unblocks (the maintainer's decision, 2026-11-19).
 
 ### Workflow Tooling
 
-- [~] **rl-core 0.2.0 API** (the maintainer's decision D, 2026-11-13; plan in four PRs plus the release PR):
-  break the `challenges` ↔ `training` cycle by moving `training/robustness.py` to `rl_core/robustness.py` behind a
-  deprecation shim; declare `__all__` throughout rl-core; deprecate the legacy `make_env`, `make_vec_env` and
-  `make_vec_env_from_config` of rl_cartpole and rl_pendulum (removed in 0.3.0); make matplotlib an optional
-  `rl-core[plot]` extra. The two per-challenge agent maps stay. Then release all three distributions as 0.2.0.
-  - **Progress (PRs 1 to 4, 2026-11-13 and 2026-11-15)**: the public API and every version bump; the robustness
-    benchmark moved out of `training`, ending the cycle; the legacy factories deprecated (CHANGELOG.md, 2026-11-13);
-    matplotlib made the `rl-core[plot]` extra (CHANGELOG.md, 2026-11-15). Left: the release PR.
-
 - [ ] **Library follow-ups** (deferred from the importable-libraries item, 2026-11-11; not picked). Each waits for a
   consumer that needs it:
   - **The CLIs as `rl-core` console scripts** (`rl-train`, `rl-record`, `rl-benchmark`, ...): a game project then
@@ -58,6 +49,9 @@ unblocks (the maintainer's decision, 2026-11-19).
   - **Native ROS 2 packaging** (`ament_python`, rosdep keys) for `rl-navigation`: the Jetson's ROS 2 node then builds
     it with colcon. Deferred until the hardware step (Phase 8) has a ROS 2 node; until then a `--system-site-packages`
     venv installs the wheel (`docs/navigation.md`, Installing on the robot).
+  - **Remove the deprecated factories in 0.3.0**: `make_env`, `make_vec_env` and `make_vec_env_from_config` of
+    rl_cartpole and rl_pendulum warn since 0.2.0 (CHANGELOG.md, 2026-11-13) and go in the next minor release, with
+    the `rl_core.training.robustness` shim (its docstring says 0.3.0).
 
 ### Training
 

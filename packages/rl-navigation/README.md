@@ -6,10 +6,10 @@ estimation with an EKF and a particle filter (`rl_navigation.estimation`), occup
 only. Part of [andreijw/AI](https://github.com/andreijw/AI).
 
 ```bash
-pip install "rl-navigation @ git+https://github.com/andreijw/AI@rl-navigation-v0.1.0#subdirectory=packages/rl-navigation"
+pip install "rl-navigation @ git+https://github.com/andreijw/AI@rl-navigation-v0.2.0#subdirectory=packages/rl-navigation"
 ```
 
-(From the first release on; until `rl-navigation-v0.1.0` is tagged, use `@develop`.) The `challenge` extra requires
+(The newest release's tag; `@develop` for unreleased work.) The `challenge` extra requires
 `rl-core`, which is not on PyPI: name rl-core's release wheel in the same command (the repository's
 `docs/releasing.md`).
 

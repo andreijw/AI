@@ -232,8 +232,8 @@ environment's interpreter:
 cd my-game
 python3.12 -m venv .venv
 .venv/bin/pip install -e "/path/to/AI/packages/rl-core[plot]" -e .
-# or, from a release (0.2.0 once tagged; the 0.1.0 wheel needs ~=0.1.0): .venv/bin/pip install -e . \
-#   "rl-core[plot] @ https://github.com/andreijw/AI/releases/download/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl"
+# or, from the 0.2.0 release: .venv/bin/pip install -e . \
+#   "rl-core[plot] @ https://github.com/andreijw/AI/releases/download/rl-core-v0.2.0/rl_core-0.2.0-py3-none-any.whl"
 
 .venv/bin/python /path/to/AI/train.py --config configs/corridor_ppo.yaml --num-episodes 20
 .venv/bin/python /path/to/AI/benchmark.py --challenge corridor --agents ppo --episodes 50 --seeds 1 \

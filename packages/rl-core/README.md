@@ -5,7 +5,7 @@ PyTorch backend for DDPG, TD3 and SAC), the trainer, the `BenchmarkChallenge` in
 policy export to C and ONNX. Part of [andreijw/AI](https://github.com/andreijw/AI).
 
 ```bash
-pip install https://github.com/andreijw/AI/releases/download/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl
+pip install https://github.com/andreijw/AI/releases/download/rl-core-v0.2.0/rl_core-0.2.0-py3-none-any.whl
 ```
 
 Extras: `plot` (matplotlib: the plot functions, `train.py --plot` and the benchmark's plot; since 0.2.0 matplotlib
