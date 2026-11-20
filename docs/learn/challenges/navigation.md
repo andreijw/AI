@@ -27,7 +27,21 @@ Not written yet.
 
 ## See it
 
-Not written yet.
+![Navigation-v0, random agent: robot (blue), goal (green), sonar rays](../../images/navigation_random_still.png)
+
+![The same moment with sensor: lidar, the robot's full circle of beams](../../images/navigation_lidar_still.png)
+
+![The random agent's whole episode, sped up](../../images/navigation_random.gif)
+
+The random agent of `configs/navigation_default.yaml`, and the same moment with the config's `sensor` set to `lidar`.
+The clip is sped up.
+
+![Occupancy grids from true poses (left) and dead reckoning (right)](../../images/mapping_true_vs_dead_reckoning.png)
+
+Mapping with known poses: `rl_navigation.mapping.evaluation.build_map` on the lidar scans of one run of
+`rl_navigation.mapping.evaluation.record_run` with seed 101 and 600 steps, the first run that `MAP-1` scores
+(TESTING.md `MAP-1`). Dark cells are occupied, light ones free, grey unknown. Mapped from the encoders' dead
+reckoning instead, the same scans smear the walls into the free space.
 
 ## Try it
 

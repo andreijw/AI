@@ -152,6 +152,7 @@ SCRIPT_DEEP_IMPORTS = {
     "record.py: rl_core.utils.video.merge_episode_clips",
     "robustness.py: rl_core.training.checkpoints.file_sha256",
     "robustness.py: rl_core.training.curriculum.curriculum_from_config",
+    "scripts/make_doc_media.py: rl_core.training.checkpoints.file_sha256",
     "train.py: rl_core.training.budget.apply_budget_override",
     "train.py: rl_core.training.curriculum.curriculum_from_config",
     "train.py: rl_core.training.parallel.num_envs_of",

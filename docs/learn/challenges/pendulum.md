@@ -77,7 +77,12 @@ The report has no TD3 or SAC row; for SAC that was the maintainer's decision (CH
 
 ## See it
 
-Frames and clips of a trained agent and of the random agent are added with the docs media pull request.
+![Pendulum-v1, random agent: the pendulum below its pivot, the arrow its torque](../../images/pendulum_random_still.png)
+
+![The random agent's whole episode: the pendulum swings and never stands up](../../images/pendulum_random.gif)
+
+The random agent of `configs/pendulum_default.yaml`: random torques swing the pendulum about but never hold it upright.
+A trained agent's clip is added once the agents are retrained.
 
 ## Try it
 

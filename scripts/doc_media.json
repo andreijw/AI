@@ -9,6 +9,402 @@
       "path": "docs/images/localization_seed101_step381.png",
       "made_by": "python -m rl_navigation.localization_video --seed 101 --sensor lidar --steps 600 --kidnap-at 300 --mcl-scale 0.130 0.124 0.308 --output <scratch>/seed101.mp4 --stills 381 --stills-dir <scratch> (TESTING.md EST-4), the still copied here",
       "added_in": "eb716e9"
+    },
+    {
+      "path": "docs/images/cartpole_random_still.png",
+      "made_by": "python scripts/make_doc_media.py docs/images/cartpole_random_still.png",
+      "recipe": {
+        "kind": "still",
+        "config": "configs/cartpole_default.yaml",
+        "seed": 42,
+        "frame": 8
+      },
+      "made_with": {
+        "config": "configs/cartpole_default.yaml",
+        "config_sha256": "f4d58dcde84b5b3e9851cade067db339be354774f592148019269131eb0cc770",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 50
+      }
+    },
+    {
+      "path": "docs/images/cartpole_random.gif",
+      "made_by": "python scripts/make_doc_media.py docs/images/cartpole_random.gif",
+      "recipe": {
+        "kind": "clip",
+        "config": "configs/cartpole_default.yaml",
+        "seed": 42,
+        "fps": 16,
+        "frame_step": 1,
+        "colours": 32,
+        "width": 300
+      },
+      "made_with": {
+        "config": "configs/cartpole_default.yaml",
+        "config_sha256": "f4d58dcde84b5b3e9851cade067db339be354774f592148019269131eb0cc770",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 50,
+        "frames": 11,
+        "delay_ms": 60
+      }
+    },
+    {
+      "path": "docs/images/acrobot_random_still.png",
+      "made_by": "python scripts/make_doc_media.py docs/images/acrobot_random_still.png",
+      "recipe": {
+        "kind": "still",
+        "config": "configs/acrobot_default.yaml",
+        "seed": 42,
+        "frame": 60
+      },
+      "made_with": {
+        "config": "configs/acrobot_default.yaml",
+        "config_sha256": "024226b38c4cf89900aabc4ead27fa10f5a5907b9d2d603e1c03233cf4653012",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 15
+      }
+    },
+    {
+      "path": "docs/images/acrobot_random.gif",
+      "made_by": "python scripts/make_doc_media.py docs/images/acrobot_random.gif",
+      "recipe": {
+        "kind": "clip",
+        "config": "configs/acrobot_default.yaml",
+        "seed": 42,
+        "fps": 16,
+        "frame_step": 1,
+        "colours": 32,
+        "width": 300
+      },
+      "made_with": {
+        "config": "configs/acrobot_default.yaml",
+        "config_sha256": "024226b38c4cf89900aabc4ead27fa10f5a5907b9d2d603e1c03233cf4653012",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 15,
+        "frames": 166,
+        "delay_ms": 60
+      }
+    },
+    {
+      "path": "docs/images/mountaincar_random_still.png",
+      "made_by": "python scripts/make_doc_media.py docs/images/mountaincar_random_still.png",
+      "recipe": {
+        "kind": "still",
+        "config": "configs/mountaincar_default.yaml",
+        "seed": 42,
+        "frame": 100
+      },
+      "made_with": {
+        "config": "configs/mountaincar_default.yaml",
+        "config_sha256": "a2eff45c8e7fcfbeb81a89d8b97acc765bce256699b3014d97bb2002b8604e1e",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 30
+      }
+    },
+    {
+      "path": "docs/images/mountaincar_random.gif",
+      "made_by": "python scripts/make_doc_media.py docs/images/mountaincar_random.gif",
+      "recipe": {
+        "kind": "clip",
+        "config": "configs/mountaincar_default.yaml",
+        "seed": 42,
+        "fps": 16,
+        "frame_step": 2,
+        "colours": 32,
+        "width": 300
+      },
+      "made_with": {
+        "config": "configs/mountaincar_default.yaml",
+        "config_sha256": "a2eff45c8e7fcfbeb81a89d8b97acc765bce256699b3014d97bb2002b8604e1e",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 30,
+        "frames": 101,
+        "delay_ms": 60
+      }
+    },
+    {
+      "path": "docs/images/pendulum_random_still.png",
+      "made_by": "python scripts/make_doc_media.py docs/images/pendulum_random_still.png",
+      "recipe": {
+        "kind": "still",
+        "config": "configs/pendulum_default.yaml",
+        "seed": 42,
+        "frame": 50
+      },
+      "made_with": {
+        "config": "configs/pendulum_default.yaml",
+        "config_sha256": "cd1bbf944b0d35cec0153a18c7a0cb40caf4fe49a0c4ad78558516e10e837a48",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 30
+      }
+    },
+    {
+      "path": "docs/images/pendulum_random.gif",
+      "made_by": "python scripts/make_doc_media.py docs/images/pendulum_random.gif",
+      "recipe": {
+        "kind": "clip",
+        "config": "configs/pendulum_default.yaml",
+        "seed": 42,
+        "fps": 16,
+        "frame_step": 2,
+        "colours": 32,
+        "width": 300
+      },
+      "made_with": {
+        "config": "configs/pendulum_default.yaml",
+        "config_sha256": "cd1bbf944b0d35cec0153a18c7a0cb40caf4fe49a0c4ad78558516e10e837a48",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 30,
+        "frames": 101,
+        "delay_ms": 60
+      }
+    },
+    {
+      "path": "docs/images/lunarlander_random.gif",
+      "made_by": "python scripts/make_doc_media.py docs/images/lunarlander_random.gif",
+      "recipe": {
+        "kind": "clip",
+        "config": "configs/lunarlander_default.yaml",
+        "seed": 42,
+        "fps": 25,
+        "frame_step": 2,
+        "colours": 32,
+        "width": 300
+      },
+      "made_with": {
+        "config": "configs/lunarlander_default.yaml",
+        "config_sha256": "0868b318798f72f6103083c77ad5b3d608398d47121ffaf19e93374ca64cfeef",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 50,
+        "frames": 54,
+        "delay_ms": 40
+      }
+    },
+    {
+      "path": "docs/images/bipedalwalker_random_still.png",
+      "made_by": "python scripts/make_doc_media.py docs/images/bipedalwalker_random_still.png",
+      "recipe": {
+        "kind": "still",
+        "config": "configs/bipedalwalker_default.yaml",
+        "seed": 42,
+        "frame": 100
+      },
+      "made_with": {
+        "config": "configs/bipedalwalker_default.yaml",
+        "config_sha256": "78025316d3f74ae836ecdf09744a32c16a312b9ccdb78aea601286dfaa9e4de8",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 50
+      }
+    },
+    {
+      "path": "docs/images/bipedalwalker_random.gif",
+      "made_by": "python scripts/make_doc_media.py docs/images/bipedalwalker_random.gif",
+      "recipe": {
+        "kind": "clip",
+        "config": "configs/bipedalwalker_default.yaml",
+        "seed": 42,
+        "fps": 25,
+        "frame_step": 2,
+        "colours": 32,
+        "width": 300
+      },
+      "made_with": {
+        "config": "configs/bipedalwalker_default.yaml",
+        "config_sha256": "78025316d3f74ae836ecdf09744a32c16a312b9ccdb78aea601286dfaa9e4de8",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 50,
+        "frames": 250,
+        "delay_ms": 40
+      }
+    },
+    {
+      "path": "docs/images/navigation_random_still.png",
+      "made_by": "python scripts/make_doc_media.py docs/images/navigation_random_still.png",
+      "recipe": {
+        "kind": "still",
+        "config": "configs/navigation_default.yaml",
+        "seed": 42,
+        "frame": 60
+      },
+      "made_with": {
+        "config": "configs/navigation_default.yaml",
+        "config_sha256": "2ad422b5b0a0c50eaf96019d3ad5362759945e20aa407399dd7e439232525233",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 10
+      }
+    },
+    {
+      "path": "docs/images/navigation_lidar_still.png",
+      "made_by": "python scripts/make_doc_media.py docs/images/navigation_lidar_still.png",
+      "recipe": {
+        "kind": "still",
+        "config": "configs/navigation_default.yaml",
+        "seed": 42,
+        "frame": 60,
+        "environment": {
+          "sensor": "lidar"
+        }
+      },
+      "made_with": {
+        "config": "configs/navigation_default.yaml",
+        "config_sha256": "2ad422b5b0a0c50eaf96019d3ad5362759945e20aa407399dd7e439232525233",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 10
+      }
+    },
+    {
+      "path": "docs/images/navigation_random.gif",
+      "made_by": "python scripts/make_doc_media.py docs/images/navigation_random.gif",
+      "recipe": {
+        "kind": "clip",
+        "config": "configs/navigation_default.yaml",
+        "seed": 42,
+        "fps": 20,
+        "frame_step": 2,
+        "colours": 32,
+        "width": 300
+      },
+      "made_with": {
+        "config": "configs/navigation_default.yaml",
+        "config_sha256": "2ad422b5b0a0c50eaf96019d3ad5362759945e20aa407399dd7e439232525233",
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8",
+        "render_fps": 10,
+        "frames": 107,
+        "delay_ms": 50
+      }
+    },
+    {
+      "path": "docs/images/mapping_true_vs_dead_reckoning.png",
+      "made_by": "python scripts/make_doc_media.py docs/images/mapping_true_vs_dead_reckoning.png",
+      "recipe": {
+        "kind": "mapping",
+        "seed": 101,
+        "steps": 600,
+        "sensor": "lidar",
+        "scale": 3
+      },
+      "made_with": {
+        "commit": "c2d246ac16b31c42077c23715d678ce5b6f81b34",
+        "tree": "clean",
+        "script_sha256": "74c42c8ceee95add649b7c9905c5e9450d6263699f2e349dd9f88b618faf5f12",
+        "platform": "Linux aarch64",
+        "python": "3.12.3",
+        "numpy": "2.5.4",
+        "gymnasium": "1.4.0",
+        "pillow": "11.3.0",
+        "pygame_ce": "2.5.8"
+      }
     }
   ]
 }

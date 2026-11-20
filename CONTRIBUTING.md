@@ -288,6 +288,12 @@ Training runs and the test suite write bulky outputs that must never be committe
   `scripts/doc_media.json` with the command that made it, and linked from a Markdown page;
   `scripts/check_doc_sources.py` enforces all of this in CI's `Checks` job. A video, a checkpoint or a plot anywhere
   else is still training output. Diagrams are Mermaid in the Markdown, not images (the `doc-sync` skill).
+  `scripts/make_doc_media.py` makes every entry that has a `recipe` (`--all`, or the paths named) from a seeded episode
+  of the recipe's config, writes only under `docs/images/` and within the budget, and records in `made_with` the
+  config's and checkpoint's SHA-256, the script's own SHA-256, the commit, whether any input differs from it
+  (`tree`; `unknown` when git cannot say), the platform and the library versions. A clip is a GIF 300 px wide,
+  32 to 64 colours, of one episode or its first 10 s, at 15 to 25 fps as played: a GIF stores whole hundredths of a
+  second a frame, so 16, 20 and 25 fps are allowed and 15 (stored as 70 ms, 14.3 fps) is not.
 
 - **Gitignored artifact directories** — keep these out of git (already blocked in `.gitignore`):
   - `logs/` (TensorBoard and raw metrics logs)
