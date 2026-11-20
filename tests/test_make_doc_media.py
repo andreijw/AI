@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from tests.helpers import load_script
+from tests.helpers import load_script, needs_pygame
 
 make_doc_media = load_script("make_doc_media")
 
@@ -82,6 +82,7 @@ def _manifest(root: Path) -> dict:
 # --- playing an episode as record.py builds it ---------------------------------------------------
 
 
+@needs_pygame
 def test_a_seeded_cartpole_episode_plays_the_pinned_trajectory(clear_sdl):
     episode = make_doc_media.play(REPO_ROOT, STILL)
 
@@ -100,6 +101,7 @@ def test_a_seeded_cartpole_episode_plays_the_pinned_trajectory(clear_sdl):
     assert episode.render_fps == 50, "CartPole-v1 renders at 50 fps"
 
 
+@needs_pygame
 def test_the_episode_seed_is_the_recipes(clear_sdl):
     other = make_doc_media.play(REPO_ROOT, {**STILL, "seed": 7})
 
@@ -121,6 +123,7 @@ def test_environment_settings_in_a_recipe_reach_the_environment():
     )
 
 
+@needs_pygame
 def test_frame_step_keeps_every_nth_frame(clear_sdl):
     every = make_doc_media.play(REPO_ROOT, STILL)
     second = make_doc_media.play(REPO_ROOT, STILL, frame_step=2)
@@ -134,6 +137,7 @@ def test_frame_step_keeps_every_nth_frame(clear_sdl):
 # --- stills -------------------------------------------------------------------------------------
 
 
+@needs_pygame
 def test_a_cartpole_still_decodes_to_the_committed_pixels(clear_sdl):
     data, _ = make_doc_media.render_item(REPO_ROOT, CARTPOLE_STILL, STILL)
 
@@ -147,6 +151,7 @@ def test_a_cartpole_still_decodes_to_the_committed_pixels(clear_sdl):
     )
 
 
+@needs_pygame
 def test_a_still_is_the_recipes_frame(clear_sdl):
     data, _ = make_doc_media.render_item(REPO_ROOT, CARTPOLE_STILL, STILL)
     frames = make_doc_media.play(REPO_ROOT, STILL).frames
@@ -156,6 +161,7 @@ def test_a_still_is_the_recipes_frame(clear_sdl):
     )
 
 
+@needs_pygame
 def test_a_still_is_cropped_then_scaled(clear_sdl):
     recipe = {**STILL, "crop": [100, 50, 500, 350], "width": 200}
     data, _ = make_doc_media.render_item(REPO_ROOT, CARTPOLE_STILL, recipe)
@@ -166,6 +172,7 @@ def test_a_still_is_cropped_then_scaled(clear_sdl):
 # --- clips --------------------------------------------------------------------------------------
 
 
+@needs_pygame
 def test_a_clip_is_a_gif_in_the_format(clear_sdl):
     data, made = make_doc_media.render_item(REPO_ROOT, "docs/images/clip.gif", CLIP)
 
@@ -327,16 +334,19 @@ def test_the_manifests_recipes_follow_the_rules():
         )
 
 
+@needs_pygame
 def test_a_crop_outside_the_frame_is_refused(clear_sdl):
     with pytest.raises(make_doc_media.MediaError, match="600 x 400"):
         make_doc_media.render_item(REPO_ROOT, CARTPOLE_STILL, {**STILL, "crop": [0, 0, 601, 400]})
 
 
+@needs_pygame
 def test_an_episode_that_ends_before_the_frame_is_refused(clear_sdl):
     with pytest.raises(make_doc_media.MediaError, match="frame 50"):
         make_doc_media.render_item(REPO_ROOT, CARTPOLE_STILL, {**STILL, "frame": 50})
 
 
+@needs_pygame
 def test_an_item_over_its_budget_is_refused_and_not_written(tmp_path, clear_sdl):
     entry = {"path": CARTPOLE_STILL, "made_by": "x", "recipe": STILL}
     root = _root_with(tmp_path, [entry], budget={"png_kib": 1, "gif_kib": 1, "total_kib": 2})
@@ -349,6 +359,7 @@ def test_an_item_over_its_budget_is_refused_and_not_written(tmp_path, clear_sdl)
 # --- what the manifest records ------------------------------------------------------------------
 
 
+@needs_pygame
 def test_an_item_records_how_it_was_made(clear_sdl):
     _, made = make_doc_media.render_item(REPO_ROOT, CARTPOLE_STILL, STILL)
 
@@ -368,6 +379,7 @@ def test_an_item_records_how_it_was_made(clear_sdl):
     assert "checkpoint_sha256" not in made, "a random agent has no checkpoint to record"
 
 
+@needs_pygame
 def test_a_checkpoint_is_loaded_and_its_hash_recorded(tmp_path, clear_sdl):
     from train import load_run_config, numpy_agent_config, select_run_challenge
 
@@ -394,6 +406,7 @@ def test_a_checkpoint_is_loaded_and_its_hash_recorded(tmp_path, clear_sdl):
         make_doc_media.render_item(REPO_ROOT, CARTPOLE_STILL, recipe)
 
 
+@needs_pygame
 def test_make_writes_one_item_and_records_it_leaving_the_rest(tmp_path, clear_sdl):
     other = {"path": "docs/images/other.png", "made_by": "another command"}
     root = _root_with(tmp_path, [{"path": CARTPOLE_STILL, "made_by": "x", "recipe": STILL}, other])
@@ -440,6 +453,7 @@ def test_a_git_failure_is_recorded_as_unknown_not_clean(tmp_path, monkeypatch):
     assert made["tree"] == "unknown", "a tree that could not be checked is not clean"
 
 
+@needs_pygame
 def test_the_tree_is_clean_when_only_outputs_changed_and_modified_when_an_input_did(
     tmp_path, clear_sdl
 ):
@@ -473,6 +487,7 @@ def test_the_tree_is_clean_when_only_outputs_changed_and_modified_when_an_input_
     )
 
 
+@needs_pygame
 def test_make_all_skips_entries_made_by_other_commands(tmp_path, clear_sdl):
     other = {"path": "docs/images/other.png", "made_by": "another command"}
     root = _root_with(tmp_path, [{"path": CARTPOLE_STILL, "made_by": "x", "recipe": STILL}, other])
