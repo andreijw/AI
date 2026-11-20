@@ -29,6 +29,13 @@ Acrobot-v1) and
   the environment on its own, and an index of the track. `docs/learn/challenges/navigation.md` is written in full and
   leads into the track. The pages restate no benchmark numbers beyond those `docs/navigation.md` already carried for
   localization; the planning results are linked, not restated.
+- **The learning track's front page** (`docs/learn-front-page`; the last teaching-docs PR, which completes the item).
+  `docs/learn/README.md` gains "Start here", a table of the ten challenges with their action space, what makes each
+  hard, the algorithms with a committed config and which of them solve and hold (in words, linking `docs/results.md`
+  and the reports, no numbers restated), and the glossary every page shares. The README's documentation map starts
+  learners there; CLAUDE.md, GEMINI.md and the doc-sync, pr-reviewer and algorithm-crafter skills point at
+  `docs/learn/` (a new agent now needs an algorithm page and a table row). No page under `docs/learn/` is a skeleton
+  any more.
 
 ## 2026-11-19
 

@@ -140,10 +140,17 @@ To optimize token usage and context window limits:
   configs for training default, REINFORCE, Actor-Critic, and PPO algorithms.
 * **`scripts/`** (located at [scripts/](scripts/)): Automation scripts
   (e.g., `sync_workflow_docs.py`), and `pytorch_timing/`, the DDPG timing scripts behind
-  `docs/pytorch_jetson_timing.md` (`time_ddpg.py`; its `torch` mode needs a separate PyTorch environment).
+  `docs/pytorch_jetson_timing.md` (`time_ddpg.py`; its `torch` mode needs a separate PyTorch environment),
+  `planning_timing/` (the timing scripts behind `docs/benchmarks/planning_results.md`), `make_doc_media.py` with
+  `doc_media.json` (writes the frames and clips under `docs/images/` and lists how each was made), and the two
+  documentation checks CI runs, `check_doc_links.py` (every Markdown link resolves) and `check_doc_sources.py`
+  (the teaching pages cite their numbers, resolve their code pointers and list their media).
 * **`docs/`** (located at [docs/](docs/)): Feature guides, setup documents, summaries,
-  and roadmaps (`roadmap.md`, `agents.md` (how each agent works), `environment_setup_summary.md`,
-  `pytorch_jetson_timing.md`).
+  and roadmaps (`roadmap.md`, `agents.md` (the agent classes, replay buffer, PyTorch backend and policy export),
+  `environment_setup_summary.md`, `pytorch_jetson_timing.md`).
+  * `docs/learn/`: the teaching track, starting at `README.md` (learning path, challenges and algorithms at a glance,
+    glossary): `foundations.md`, `challenges/` (a page per challenge), `algorithms/` (a page per algorithm family) and
+    `navigation/` (sensors, estimation, mapping, SLAM, planning, export to the robot). `docs/images/` holds its media.
 * **`examples/`** (located at [examples/](examples/)): Demonstration scripts showcasing
   features (e.g., [demo_env_features.py](examples/demo_env_features.py)).
 * **`train.py`** (located at [train.py](train.py)): The main command-line entrypoint for

@@ -167,8 +167,9 @@ logs, script injection from PR titles or branch names). Most algorithm changes t
   either removes them or names the command to remove them (`dev-loop` step 9). A leftover is a Warning.
 - `TESTING.md` has a row, with a runnable command and an expected number, for anything a person should now
   run.
-- A new agent has its section in `docs/agents.md`, and a changed update rule, option, committed config or
-  measured result is reflected in the agent's section there.
+- A new agent is in `docs/agents.md`'s class list and has its section on an algorithm page under
+  `docs/learn/algorithms/`, and a changed update rule, option, committed config or measured result is reflected on that
+  page and in the challenge's row of the at-a-glance table in `docs/learn/README.md`.
 - `docs/usage.md`, the README front page, ARCHITECTURE.md (the class diagram, the extension steps) and config
   comments still describe the code, `python scripts/check_doc_links.py` reports no broken link, and
   `python scripts/check_doc_sources.py` reports no problem.
