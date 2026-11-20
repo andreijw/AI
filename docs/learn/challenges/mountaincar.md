@@ -77,7 +77,13 @@ continuous version. The table is in [results.md](../../results.md#which-agents-s
 
 ## See it
 
-Frames and clips of a trained agent and of the random agent are added with the docs media pull request.
+![MountainCar-v0, random agent: the car low in the valley, far from the flag](../../images/mountaincar_random_still.png)
+
+![The random agent's whole episode: the car never climbs](../../images/mountaincar_random.gif)
+
+The random agent of `configs/mountaincar_default.yaml`: random pushes cancel out, so the car never builds the swing
+it needs, and the reward never says how close it came. MountainCarContinuous-v0 draws the same car and valley. A
+trained agent's clip is added once the agents are retrained.
 
 ## Try it
 

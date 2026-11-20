@@ -70,7 +70,10 @@ report](../../benchmarks/lunarlander_continuous_results.md).
 
 ## See it
 
-Frames and clips of a trained agent and of the random agent are added with the docs media pull request.
+![LunarLander-v3, the random agent's whole episode: it crashes](../../images/lunarlander_random.gif)
+
+The random agent of `configs/lunarlander_default.yaml`. A still of a landing needs a trained agent, as the random one
+does not land; the trained agent's frame and clip are added once the agents are retrained.
 
 ## Try it
 

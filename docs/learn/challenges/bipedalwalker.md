@@ -55,7 +55,12 @@ BipedalWalker report](../../benchmarks/bipedalwalker_results.md).
 
 ## See it
 
-Frames and clips of a trained agent and of the random agent are added with the docs media pull request.
+![BipedalWalker-v3, random agent: the walker on its knees near the start](../../images/bipedalwalker_random_still.png)
+
+![The random agent's first seconds: the walker goes nowhere](../../images/bipedalwalker_random.gif)
+
+The random agent of `configs/bipedalwalker_default.yaml`: random joint torques fold the walker onto its knees near the
+start. A trained agent's clip is added once the agents are retrained.
 
 ## Try it
 

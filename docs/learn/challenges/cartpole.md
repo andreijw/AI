@@ -66,7 +66,12 @@ report](../../benchmarks/cartpole_results.md). The random agent's floor is in th
 
 ## See it
 
-Frames and clips of a trained agent and of the random agent are added with the docs media pull request.
+![CartPole-v1, random agent: the pole leans right as the cart rolls left](../../images/cartpole_random_still.png)
+
+![The random agent's whole episode, slowed down](../../images/cartpole_random.gif)
+
+The random agent of `configs/cartpole_default.yaml`: pushing left or right at random, it loses the pole almost at once,
+so its clip is slowed down to be seen at all. A trained agent's clip is added once the agents are retrained.
 
 ## Try it
 

@@ -48,7 +48,12 @@ averages -90 to -96), evaluation -85 ± 6; random scores -500".
 
 ## See it
 
-Frames and clips of a trained agent and of the random agent are added with the docs media pull request.
+![Acrobot-v1 during the random agent's episode: both links hang below the line](../../images/acrobot_random_still.png)
+
+![The random agent's first seconds: the tip never nears the line](../../images/acrobot_random.gif)
+
+The random agent of `configs/acrobot_default.yaml`: random torques on the middle joint never lift the tip above the
+line. A trained agent's clip is added once the agents are retrained.
 
 ## Try it
 

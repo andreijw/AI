@@ -28,6 +28,18 @@ Acrobot-v1) and
   reverses: the online map's false walls stall the planner (61.6 % and 47.2 % at noise 0.4) while TD3 holds 95.8 to
   97.4 %. Dropout leaves the planners unhurt. (`TESTING.md` `PLAN-1`, `PLAN-2`, `PLAN-3`.)
 
+- **Frames and clips for the teaching pages** (`feature/doc-media-script`; teaching docs PR 1).
+  `scripts/make_doc_media.py` makes each entry of `scripts/doc_media.json` that has a recipe (config, seed, frame or
+  fps, crop, colours) from a seeded episode, writes only under `docs/images/` and within the media budget, and records
+  in `made_with` the config's and checkpoint's SHA-256, the script's own SHA-256, the commit, whether any input differs
+  from it, the platform and the library versions. A GIF stores whole hundredths of a second a frame, so clips run at
+  16, 20 or 25 fps. The "See it" sections of the challenge pages now show the random agent of each challenge's
+  `configs/<challenge>_default.yaml` (reset seed 42, the config's): stills of CartPole, Acrobot, MountainCar,
+  Pendulum, BipedalWalker and Navigation (sonar and lidar), and "before" clips, LunarLander's included; the navigation
+  page shows one `MAP-1` run (seed 101) mapped from the true poses and from dead reckoning. 16 media files, 872 KiB
+  together; `TESTING.md` `CI-12` regenerates them and expects the same bytes. The trained-agent clips follow, from the
+  seed-1 checkpoints retrained on 2026-11-19.
+
 ### Changed
 
 - **Benchmark curves that render on GitHub** (`feature/benchmark-curves-committed`; teaching docs PR 4). `benchmark.py`
