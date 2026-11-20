@@ -45,6 +45,12 @@ Acrobot-v1) and
   install in `docs/navigation.md` and rl-navigation's README, name 0.2.0. `scripts/release.py check` passes for
   `rl-core-v0.2.0`; rl-navigation and rl-challenges wait for its release to be published, as their `rl-core~=0.2.0`
   requires. The 0.3.0 removal of the deprecated factories moved to the library follow-ups.
+- **The assistant tags a release on the maintainer's yes** (`docs/release-tag-on-yes`; the maintainer's decision,
+  2026-11-20). The `release` skill asks for each tag by name and, on a yes, signs it with the maintainer's key on this
+  machine and pushes it over HTTPS, then checks that GitHub verifies the signature; without a yes, or when signing
+  fails, it prints the commands as before. Publishing keeps its own yes; moving or deleting a tag stays the
+  maintainer's. The rl-core, rl-navigation and rl-challenges 0.2.0 releases are published, rl-challenges with the ten
+  seed-1 checkpoints the teaching pages name as assets.
 
 ## 2026-11-19
 

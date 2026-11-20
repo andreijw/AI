@@ -3,8 +3,9 @@ name: release
 description: >
   Takes a distribution of the RL framework (rl-core, rl-navigation, rl-challenges) from "ready to release" to a
   published GitHub Release: the version bump and CHANGELOG section in a pull request, the
-  local `scripts/release.py check`, the maintainer's signed tag commands in dependency order, watching the Release
-  workflow, checking the draft, publishing it once the maintainer says yes, and the next distribution's tag once a dependency is published. Use this whenever
+  local `scripts/release.py check`, the signed tags in dependency order once the maintainer says yes to each,
+  watching the Release workflow, checking the draft, publishing it once the maintainer says yes, and the next
+  distribution's tag once a dependency is published. Use this whenever
   the user asks to release, tag, publish or cut a version of a distribution, asks what the next release step is,
   or a Release workflow run has finished or failed.
 ---
@@ -17,12 +18,16 @@ PyPI.
 
 ## What is the maintainer's, always
 
-- **The tag.** It is signed with their key (`git tag -s`), SSH is refused from this machine's shell, and the
-  `Release tags` ruleset lets only admins create, move or delete a `*-v*` tag. You print the commands; they run them.
+- **The yes to tag.** A tag is signed with their key (`git tag -s`, the signing key this machine's git is set up
+  with) and the `Release tags` ruleset lets only admins create one; you push over HTTPS with their `gh` login. You
+  ask for each tag by name, with what `check` said, and create and push only the tags they say yes to (the
+  maintainer's decision, 2026-11-20). The signature then shows that their machine made the tag, not that they typed
+  it: their yes is the record of that. Without a yes, or if they prefer to run it, print the commands instead.
 - **The yes to publish.** Immutable releases are on: a published release's tag and files can never be changed.
   You say the draft is ready and why, and ask for each tag by name; you publish only the tags they say yes to
   (the maintainer's decision, 2026-11-12). Without a yes, nothing is published.
-- **Deleting or re-pushing a tag** after a failed run, and the version number itself (SemVer 0.x: in 0.x a minor
+- **Deleting or moving a pushed tag** after a failed run (re-tagging after their delete is step 4 again, with a
+  fresh yes), and the version number itself (SemVer 0.x: in 0.x a minor
   version may break the API; a breaking `rl-core` change bumps the dependents too, `docs/releasing.md`).
 
 ## Steps
@@ -63,15 +68,26 @@ python scripts/release.py check <dist>-v<version> --notes <scratch>/notes.md
 It needs the tags of what the distribution requires (`python scripts/release.py dependency-tags <dist>`); fetch them
 first. A refusal here is a refusal the workflow would give; fix it before asking for a tag.
 
-### 4. Hand the maintainer the tag commands
+### 4. Ask for the tag, then tag
 
-Exactly, one distribution or several whose dependencies are all published:
+Ask for each tag by name (AskUserQuestion), one distribution or several whose dependencies are all published. On a
+yes, from the main checkout (SSH is refused from this machine's shell, so fetch and push over HTTPS). `<commit>` is
+the `develop` commit step 3's `check` ran on; if `develop` has moved since, rerun step 3 first:
 
 ```bash
-git fetch origin
-git tag -s <dist>-v<version> origin/develop -m "<dist> <version>"
-git push origin <dist>-v<version>
+T=<dist>-v<version>
+git fetch https://github.com/andreijw/AI.git develop
+[ "$(git rev-parse FETCH_HEAD)" = "<commit>" ] || { echo "develop moved: rerun step 3"; exit 1; }
+git tag -s "$T" FETCH_HEAD -m "<dist> <version>" || exit 1
+git cat-file -p "$T" | grep -q 'BEGIN SSH SIGNATURE' || { git tag -d "$T"; echo "not signed"; exit 1; }
+git -c credential.helper='!gh auth git-credential' push https://github.com/andreijw/AI.git "refs/tags/$T"
+gh api "repos/andreijw/AI/git/tags/$(git rev-parse "$T")" -q .verification.verified   # must print true
 ```
+
+`git tag -v` needs an allowed-signers file this machine does not have, so GitHub checks the signature against the
+maintainer's signing key, in the last line. If `git tag -s` cannot sign (a passphrase, no key), nothing is pushed:
+print the commands for the maintainer, as `docs/releasing.md` gives them. If the last line prints `false`, stop:
+the tag is public, so tell the maintainer before its Release run's draft goes further; deleting it is theirs.
 
 ### 5. Watch the run
 
@@ -81,8 +97,8 @@ gh run watch <run id> --exit-status
 ```
 
 A red run leaves nothing public. Read the failing job's log (`gh run view <id> --log-failed`), fix the cause in a
-PR, and once it merges ask the maintainer to delete and re-push the tag (`git push origin :refs/tags/<tag>`, then
-step 4). A run on a tag whose draft exists refreshes the draft.
+PR, and once it merges ask the maintainer to delete the tag (`git push origin :refs/tags/<tag>`, theirs), then step 4
+with a fresh yes. A run on a tag whose draft exists refreshes the draft.
 
 ### 6. Check the draft
 
@@ -110,7 +126,8 @@ distributions it unblocked. Update `~/rl-experiments/STATUS.md` at each hand-ove
 
 ## Never
 
-- `git tag`, `git push` of a tag, `gh release create` or `gh release delete`.
+- `git tag` or a tag push without the maintainer's yes for that tag; moving, deleting or force-pushing a tag; `gh
+  release create` or `gh release delete`.
 - `gh release edit --draft=false` without the maintainer's yes for that tag, or any other `gh release edit`.
 - Editing `.github/workflows/release.yml` without the maintainer's go (anything under `.github/` is theirs).
 - `pip install -U` of an `rl-*` name: these names are not on PyPI, so it asks an index anyone could publish to.
