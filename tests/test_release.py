@@ -264,6 +264,23 @@ IMPORT_DISTS = {
 }
 
 
+def _module_level_own_imports(path, ours):
+    """Dotted names of the distribution's own modules a module imports at module level."""
+    names = set()
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        for inner in ast.walk(node) if isinstance(node, ast.If | ast.Try) else [node]:
+            if isinstance(inner, ast.Import):
+                names.update(a.name for a in inner.names if a.name.split(".")[0] in ours)
+            elif (
+                isinstance(inner, ast.ImportFrom)
+                and inner.level == 0
+                and inner.module
+                and inner.module.split(".")[0] in ours
+            ):
+                names.add(inner.module)
+    return names
+
+
 def _module_level_imports(path):
     """Top-level names a module imports when it is imported (not inside a function)."""
     names = set()
@@ -296,6 +313,22 @@ def test_the_extra_only_modules_are_exactly_those_that_import_an_extra(dist):
         assert not unknown, f"{path}: add {unknown} to IMPORT_DISTS"
         if {IMPORT_DISTS.get(name, name) for name in third_party} - base:
             needs_extra.add(_module_name(src, path))
+    # A module that imports one of those, directly or through the distribution's own modules, needs
+    # the extra too (rl_navigation.planning_comparison reached gymnasium only through gym_env).
+    own = {
+        _module_name(src, path): _module_level_own_imports(path, ours) for path in src.rglob("*.py")
+    }
+    grew = True
+    while grew:
+        grew = False
+        for module, imported in own.items():
+            if module not in needs_extra and any(
+                name == dep or name.startswith(dep + ".")
+                for name in imported
+                for dep in needs_extra
+            ):
+                needs_extra.add(module)
+                grew = True
     skipped = release.EXTRA_ONLY[dist]
     assert all(name.startswith(skipped) for name in needs_extra), (
         f"{sorted(n for n in needs_extra if not n.startswith(skipped))} need an extra: "

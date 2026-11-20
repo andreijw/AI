@@ -458,9 +458,21 @@ ddpg`).
 
 Outputs:
 
-- Comparative learning curve plot: `plots/benchmarks/cartpole/benchmark_comparison.png`
-- Markdown summary table: [`docs/benchmarks/cartpole_results.md`](benchmarks/cartpole_results.md)
-- Raw metrics JSON: `plots/benchmarks/cartpole/benchmark_metrics.json`
+- Markdown summary table: [`docs/benchmarks/cartpole_results.md`](benchmarks/cartpole_results.md), the tracked
+  report (without `--report`; under the repository root from any folder)
+- Comparative learning curve plot: for the tracked report `docs/images/benchmarks/cartpole_learning_curves.png`,
+  which the report links and the benchmark lists in `scripts/doc_media.json` with the command that made it, so a
+  full rerun commits all three; for any other `--report`, `benchmark_comparison.png` in the output folder, and
+  nothing under `docs/` is written. A tracked rerun with `--no-plot` keeps linking the committed PNG and says it
+  is from an earlier run
+- Raw metrics JSON: `plots/benchmarks/cartpole/benchmark_metrics.json` (or `--output-dir`)
+
+Every curve PNG is drawn at 100 dpi in 64 colours. A tracked one is checked against the PNG budget in
+`scripts/doc_media.json` (`png_kib`, 60 KiB;
+[CONTRIBUTING.md §5](../CONTRIBUTING.md#5-generated-artifacts-logs--checkpoints)): if it is over, the
+benchmark redraws it with 32 colours, then at 80 and 60 dpi, and if it is still over it stops with an error naming
+the file and the budget before it writes the report or the manifest (the metrics JSON is already saved). A smoke
+or scratch run passes `--report` and `--output-dir` into scratch.
 
 ### Configuration
 

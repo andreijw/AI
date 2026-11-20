@@ -16,7 +16,6 @@ percentile and its maximum. Run alone on the machine with ``OPENBLAS_NUM_THREADS
     python scripts/planning_timing/time_navigator.py
 """
 
-import math
 import time
 
 import numpy as np
@@ -24,6 +23,7 @@ import numpy as np
 from rl_navigation.gym_env import DISCRETE_ACTIONS, GOAL_AND_COMMAND, NavigationGymEnv
 from rl_navigation.mapping import HC_SR04_LOG_ODDS, OccupancyGrid
 from rl_navigation.planning import (
+    TUNED_SETTINGS,
     FollowerParams,
     Navigator,
     NavigatorParams,
@@ -33,11 +33,9 @@ from rl_navigation.planning import (
     continuous_action,
     safe_discrete_action,
 )
+from rl_navigation.planning_comparison import REPLAN_PERIOD, sliding_means
 
 SEEDS = range(10000, 10200)
-PERIOD = NavigatorParams().replan_every
-# Tuned settings per action kind (2026-11-13): margin in metres, turn-in-place in degrees.
-SETTINGS = {"continuous": (0.05, 25.0), "discrete": (0.06, 45.0)}
 
 
 def run(seed: int, kind: str, actions: str) -> tuple[list[float], float]:
@@ -52,11 +50,11 @@ def run(seed: int, kind: str, actions: str) -> tuple[list[float], float]:
             world_map = TrueMap(env.layout.arena, 0.05)
         else:
             world_map = OnlineMap(OccupancyGrid(env.sensor, (100, 100), 0.05, HC_SR04_LOG_ODDS))
-        margin, turn = SETTINGS[actions]
+        settings = TUNED_SETTINGS[actions]
         follower = FollowerParams(
-            env.v_max, env.omega_max, env.dt, turn_in_place=math.radians(turn)
+            env.v_max, env.omega_max, env.dt, turn_in_place=settings.turn_in_place
         )
-        navigator = Navigator(env.layout.goal, NavigatorParams(margin=margin), follower)
+        navigator = Navigator(env.layout.goal, NavigatorParams(margin=settings.margin), follower)
         start = time.perf_counter()
         navigator.prepare(world_map)
         prepare = 1e3 * (time.perf_counter() - start) if kind == "true" else 0.0
@@ -84,17 +82,9 @@ def run(seed: int, kind: str, actions: str) -> tuple[list[float], float]:
         env.close()
 
 
-def sliding_means(ticks: list[float]) -> list[float]:
-    """The mean of every window of ``PERIOD`` consecutive steps (one, of all, if shorter)."""
-    if len(ticks) <= PERIOD:
-        return [float(np.mean(ticks))]
-    window = np.convolve(ticks, np.ones(PERIOD) / PERIOD, mode="valid")
-    return [float(v) for v in window]
-
-
 def main() -> None:
     for kind in ("true", "online"):
-        for actions in SETTINGS:
+        for actions in TUNED_SETTINGS:
             steps: list[float] = []
             means: list[float] = []
             prepares: list[float] = []
@@ -106,7 +96,7 @@ def main() -> None:
             print(
                 f"{kind} {actions}: step median {np.median(steps):.2f} ms, "
                 f"p99 {np.quantile(steps, 0.99):.1f}, max {max(steps):.1f}; "
-                f"sliding {PERIOD}-step mean: median {np.median(means):.2f}, "
+                f"sliding {REPLAN_PERIOD}-step mean: median {np.median(means):.2f}, "
                 f"p99 {np.quantile(means, 0.99):.1f}, max {max(means):.1f}"
                 + (f"; prepare median {np.median(prepares):.1f} ms" if kind == "true" else "")
             )

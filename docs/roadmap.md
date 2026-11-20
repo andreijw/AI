@@ -20,7 +20,7 @@ turned into a full item when the maintainer picks it. The ladder uses no numbers
 | GPU-parallel simulation | Phase 8 "GPU-parallel navigation simulation" (proposed): the simulator as PyTorch tensors on the Orin's GPU; builds on `training.num_envs` (CHANGELOG.md, 2026-11-10) |
 | Isaac Lab, deployed to the Jetson | Phase 8 "Isaac Lab on cloud or x86" (proposed, blocked on hardware): training needs an x86-64 RTX machine or cloud, deployment goes through the ONNX export |
 | Isaac ROS on the robot | Phase 8 "Hardware and ROS 2" (Isaac ROS 4.6 supports Jetson Orin on JetPack 7.2; Isaac ROS documentation, read 2026-11-09) |
-| Autonomous navigation | Phase 8 "Occupancy-grid mapping and SLAM" and "Planning and control" |
+| Autonomous navigation | Phase 8 "Occupancy-grid mapping and SLAM" and "Planning follow-ups" (planning and control: CHANGELOG.md, 2026-11-19) |
 | Sim-to-real | Phase 8 "Hardware and ROS 2" (fitting the sensor noise model to real readings) |
 | Multi-agent coordination | Phase 8 "Multi-agent navigation" (proposed): several robots in the navigation simulator, or PettingZoo (a new dependency) |
 | Learning from pixels | Phase 7 "Learning from Pixels (Tier 4)" |
@@ -32,7 +32,8 @@ turned into a full item when the maintainer picks it. The ladder uses no numbers
 Order (the maintainer's decision, 2026-11-04): the repo is the foundation for robotics work, so Phase 8 (Robot
 Navigation) leads. Its first item, the range-sensor navigation environment (done; CHANGELOG.md, 2026-11-07), ran in
 parallel with Phase 7's SAC and BipedalWalker item (done; CHANGELOG.md, 2026-11-05), and Phase 8 continues in order. The
-Training and Code Health items are picked as they become useful.
+Training and Code Health items are picked as they become useful. Phase 9 (game AI) runs alongside, each item as it
+unblocks (the maintainer's decision, 2026-11-19).
 
 ### Workflow Tooling
 
@@ -41,10 +42,11 @@ Training and Code Health items are picked as they become useful.
   repository needed, from CHANGELOG.md), a navigation track ending with the ONNX and C export, frames of every
   challenge and GIF clips of trained and random agents (seed 1, retrained after the 0.2.0 API lands, checkpoints
   attached to the release), and committed benchmark curves. The navigation track waits for planning and control.
-  - **Progress (PRs 0 to 3, 2026-11-13 and 2026-11-19)**: the media rule, the source checker in CI and the page
+  - **Progress (PRs 0 to 4, 2026-11-13 and 2026-11-19)**: the media rule, the source checker in CI and the page
     skeletons; the algorithm and challenge pages (CHANGELOG.md, 2026-11-13); the media script with the random agents'
-    frames and clips (CHANGELOG.md, 2026-11-19). The seed-1 checkpoints for the trained clips were retrained on
-    2026-11-19 (9 of 10 hold their threshold; MountainCar DQN reaches -110 without holding it).
+    frames and clips, and benchmark curves committed under `docs/images/benchmarks/` at a report's next full rerun
+    (CHANGELOG.md, 2026-11-19). The seed-1 checkpoints for the trained clips were retrained on 2026-11-19 (9 of 10
+    hold their threshold; MountainCar DQN reaches -110 without holding it).
 
 - [~] **rl-core 0.2.0 API** (the maintainer's decision D, 2026-11-13; plan in four PRs plus the release PR):
   break the `challenges` ↔ `training` cycle by moving `training/robustness.py` to `rl_core/robustness.py` behind a
@@ -205,20 +207,21 @@ steps 3 to 5 are sketches to turn into full items when picked.
     (FastSLAM-style) with scan matching for the lidar preset. Judged by map and pose error against ground truth,
     and loop closure on layouts that revisit a place.
 
-- [~] **Planning and control** (picked 2026-11-13; PR 1 grid, A\* and smoothing; PR 2 the pure-pursuit follower
-  and the navigator; PR 3 the comparison with the RL policies, judged once on seeds 30000 to 30499)
-  - **Progress (PRs 1 and 2, 2026-11-13)**: `rl_navigation.planning` with A\* and smoothing, the pure-pursuit
-    follower and the navigator; gates registered for PR 3 (CHANGELOG.md, 2026-11-13).
-  - **Follow-up: online-map stalls behind false walls.** On tuning layouts 10000 to 10199, 13 online-map runs
-    time out stalled with no path: 6 with continuous actions (10004, 10042, 10070, 10102, 10116, 10149) and 7
-    with discrete (10042, 10070, 10097, 10102, 10116, 10149, 10161). The HC-SR04's 15° cone writes false walls
-    into the log-odds map that close every route, and turning on the spot never clears them, because the same
-    cone reads them again. Candidates: decay old evidence toward unknown, or back off along the path driven and
-    look again from another angle; judge on the tuning seeds against the online gates.
-  - **Description**: A* on the occupancy grid (from step 3 or the true map), path smoothing, and a pure-pursuit or
-    PID follower that outputs the same velocity commands the RL agents do, as a classical baseline. Compared with
-    the RL policy on the same seeded layouts: success rate, path length, time to goal and collisions, and how each
-    degrades as sensor noise rises (the robustness benchmark).
+- [ ] **Planning follow-ups** (left open when Planning and control closed, 2026-11-19; CHANGELOG.md, 2026-11-19;
+  `docs/benchmarks/planning_results.md`). Not picked.
+  - **Online-map false walls under range noise**: the judged run's online planners fall to 61.6 % and 47.2 % at
+    noise 0.4 (all timeouts, no collision), where TD3 holds 95.8 to 97.4 %. On tuning layouts 10000 to 10199, 13
+    online-map runs already stall at nominal sensors: 6 with continuous actions (10004, 10042, 10070, 10102, 10116,
+    10149) and 7 with discrete (10042, 10070, 10097, 10102, 10116, 10149, 10161). The HC-SR04's 15° cone writes false
+    walls into the log-odds map that close every route, and turning on the spot never clears them, because the same
+    cone reads them again. Candidates: decay old evidence toward unknown, a noise-aware inverse sensor model, or
+    backing off along the path driven to look again from another angle; tune on 10000 to 10199, judge on fresh seeds.
+  - **The EKF pose in the loop**: every planner row uses the true pose, as the policies do; the robot will not have
+    one.
+  - **Lidar rows**: the comparison plays the HC-SR04 sensor only.
+  - **A faster search for bigger arenas**: a pathological serpentine makes the fill 106 ms, and a 400 × 400 grid is
+    about 16 times slower; a vectorised wavefront if bigger arenas come.
+  - **Teaching pages**: the planning pages of `docs/learn/navigation/` belong to the teaching-docs item.
 
 - [ ] **Hardware and ROS 2**
   - **Description**: The HC-SR04 on the Jetson's GPIO (a 5 V echo needs a level shifter or divider for the
@@ -253,3 +256,46 @@ steps 3 to 5 are sketches to turn into full items when picked.
     Orin on JetPack 7.2 (Isaac ROS documentation, read 2026-11-09).
   - **Needs**: the maintainer's hardware decision (an x86 RTX machine or cloud) and the new dependencies, which do
     not belong in this repository's NumPy-only core.
+
+### Phase 9 — Game AI: learned enemies for a game
+
+Trained enemies for a real-time 3D game built in Godot and C#, whose own roadmap has the game-side half of this work.
+The design (the maintainer's decisions, 2026-11-19):
+
+- **Hybrid.** Godot's navigation mesh (`NavigationAgent3D`, already in the game) moves every enemy. A policy makes only
+  the tactical choice, about 10 times a second: approach, strafe, back off, start a windup, shove or hold. The game's
+  own telegraphed behaviours carry each choice out, so a learned enemy cannot do anything a scripted one could not.
+- **Only some enemies learn.** A flanking enemy first (to prove the pipeline), then an assassin and the boss (adapting
+  to the player's habits through what it observes). Fodder enemies stay scripted, since
+  readable patterns are part of the game. Each learned enemy keeps its state machine as a fallback behind a flag.
+- **No new runtime dependency in the game.** The policy ships as exported weights run by a pure C# helper in the
+  game's own core library, not ONNX Runtime.
+- **Each policy is a build artifact with a gate**: a parity test between the C# and NumPy forward passes, and a
+  win-rate band against the game's scripted player bot, rerun when the game's balance changes.
+
+The game-side work (navigation fixes, the policy seam, seeded combat dice, the headless training arena, the step
+protocol and the C# helper) is tracked in the game's roadmap and runs in its own sessions. The items here start
+as each one unblocks, alongside the other phases.
+
+- [ ] **Headless Godot on the Jetson (probe)**: does Godot 4.7 with .NET run headless on this aarch64 machine, and
+  how many game ticks a second does one training arena reach? Settles whether the game trains here or on the
+  maintainer's Windows machine with the bridge across the network. Unblocked; about 30 minutes; installs nothing
+  into `.venv`.
+- [ ] **C# weights export** in `rl_core.export`, beside the C header: a small MLP's weights and normalisation in a
+  format the game's C# helper reads, with a golden file the game's tests check against. Unblocked once the format is
+  agreed with the game's helper.
+  - **Acceptance**: a NumPy policy and its export give the same actions on a fixed set of observations.
+- [ ] **`rl_<game>` challenge**: a Gymnasium environment that runs one headless encounter as a child process
+  and talks to it over the game's stdin and stdout step protocol, following `docs/external-challenges.md`. Blocked on
+  the game's training arena, scripted player bot and step protocol.
+  - **Edge cases**: the child process dies or hangs (a timeout, a clear error); several environments at once (one
+    process each); CI has no Godot, so the tests run against a fake process that speaks the protocol.
+  - **Needs**: the maintainer's decision on where the Godot binary comes from (a path in the config, nothing installed
+    by this repository).
+- [ ] **A learned flanking enemy**: PPO on the discrete tactical actions against the game's scripted player bot, one
+  room. The claim, the reward and the win-rate band are written down before the run. Blocked on the two items above.
+- [ ] **A learned boss**: the player's habits (parry rate, kiting, dodge timing) as observations,
+  trained against bots with different play styles. Blocked on the flanking-enemy item and the game's boss arena.
+- [ ] **An RL playtest bot (proposed)**: a player agent trained against the scripted enemies to find what humans miss
+  (unblockable combos, cheese spots, enemies that get stuck); it never ships in the game (the game's planned
+  playtest bot). Blocked on the `rl_<game>` challenge.

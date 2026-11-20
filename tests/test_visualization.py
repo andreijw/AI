@@ -181,6 +181,19 @@ def test_plot_benchmark_saves_png(tmp_path):
 
 
 @needs_matplotlib
+@pytest.mark.parametrize(("dpi", "size"), [(None, (1650, 900)), (100, (1100, 600))])
+def test_plot_benchmark_saves_an_11_by_6_inch_figure_at_the_given_dpi(tmp_path, dpi, size):
+    """150 dpi unless told otherwise; the benchmark asks for less so a committed PNG stays small."""
+    from PIL import Image
+
+    target = tmp_path / "curves.png"
+    resolution = {} if dpi is None else {"dpi": dpi}
+    plot_benchmark_comparison({"PPO": [[1.0, 2.0, 3.0]]}, save_path=str(target), **resolution)
+    with Image.open(target) as image:
+        assert image.size == size
+
+
+@needs_matplotlib
 def test_plot_interactive_show(monkeypatch, sample_data):
     """Calling with show=True invokes plt.show."""
     import matplotlib.pyplot as plt

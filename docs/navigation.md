@@ -2,8 +2,9 @@
 
 The navigation half of the project: a NumPy robot simulator with Gymnasium environments to train agents in, and a
 state-estimation library meant to run on a Jetson robot. Phase 8 of [roadmap.md](roadmap.md) holds what is still
-open (SLAM, planning, the real robot). How to train and benchmark the navigation agents is in
-[usage.md](usage.md); their numbers are in [results.md](results.md).
+open (SLAM, the planning follow-ups, the real robot); the planner's judged comparison with the trained policies is
+[benchmarks/planning_results.md](benchmarks/planning_results.md). How to train and benchmark the navigation agents is
+in [usage.md](usage.md); their numbers are in [results.md](results.md).
 
 ## Installing on the robot
 

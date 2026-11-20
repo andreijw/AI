@@ -192,12 +192,14 @@ def test_runner_plots_against_steps_only_when_every_budget_is_in_steps(tmp_path,
     import benchmark
 
     seen = []
+
+    def recording_plot(path, curves, **options):
+        """Records the episode lengths each plot is given; draws nothing."""
+        seen.append(options.get("episode_lengths"))
+        return path
+
     # Patched where _save_plot finds it.
-    monkeypatch.setattr(
-        benchmark,
-        "plot_benchmark_comparison",
-        lambda *a, **k: seen.append(k.get("episode_lengths")),
-    )
+    monkeypatch.setattr(benchmark, "write_curves_png", recording_plot)
     from rl_cartpole.benchmark import CartPoleChallenge
 
     runner = benchmark.BenchmarkRunner(CartPoleChallenge())

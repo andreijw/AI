@@ -195,7 +195,8 @@ Never choose which seeds to report after seeing them.
 
 ## Republishing benchmark results
 
-`docs/benchmarks/*.md` and the plots under `plots/benchmarks/` are the project's published numbers.
-Regenerate them only when asked or when the roadmap item says so, with each agent's config budget and the seeds
-the maintainer names, by running the benchmark without `--report` and `--output-dir`. Show the diff of the
-report before staging it.
+`docs/benchmarks/*.md` and their curves, `docs/images/benchmarks/<challenge>_learning_curves.png`, are the
+project's published numbers. Regenerate them only when asked or when the roadmap item says so, with each agent's
+config budget and the seeds the maintainer names, by running the benchmark without `--report` (it writes the
+report, the PNG and the PNG's `scripts/doc_media.json` entry; `plots/benchmarks/` keeps only the metrics JSON).
+Show the diff of the report before staging it, and stage all three together.

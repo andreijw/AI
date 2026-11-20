@@ -60,6 +60,7 @@ EXTRA_ONLY: dict[str, tuple[str, ...]] = {
         "rl_navigation.benchmark",
         "rl_navigation.environments",
         "rl_navigation.gym_env",
+        "rl_navigation.planning_comparison",
     ),
     "rl-challenges": (),
 }

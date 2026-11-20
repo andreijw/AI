@@ -7,7 +7,8 @@ A pure-NumPy reinforcement-learning framework and a NumPy robot navigation libra
 
 **Works:** ten benchmark challenges with agents from REINFORCE to SAC, and localization (EKF and Monte Carlo) in
 simulation. **Not yet:** nothing has run on a real robot; SLAM is in progress (landmark EKF-SLAM runs in simulation
-and failed 2 of its 9 judged gates), and planning and the hardware are open.
+and failed 2 of its 9 judged gates), A\* planning with a path follower passed its judged gates in simulation, and the
+hardware is open.
 
 ## What's inside
 
@@ -65,7 +66,9 @@ Where this is going, from the roadmap ([docs/roadmap.md](docs/roadmap.md)):
 - **Knowing where it is: current.** Odometry, EKF and MCL work in simulation, and so does mapping with known poses;
   landmark EKF-SLAM on a 360-beam lidar runs in simulation, 6.4 cm aligned error on fresh seeds, but
   failed 2 of its 9 judged gates.
-- **Planning and driving: planned.** A* and a path follower as a classical baseline for the learned policy.
+- **Planning and driving: done in simulation.** A\* on an occupancy grid, path smoothing and a pure-pursuit follower,
+  judged once on 500 held-out layouts against TD3 and DQN: as good as the best policy at nominal sensors and never
+  colliding, but stalled by false walls under range noise ([report](docs/benchmarks/planning_results.md)).
 - **The real robot: planned, nothing run yet.** HC-SR04 and lidar on the Jetson, ROS 2 nodes, fitting the simulated
   noise to real readings. Beyond it, proposed only: MuJoCo robots and arms, GPU-parallel simulation, Isaac Lab,
   multi-agent navigation.
