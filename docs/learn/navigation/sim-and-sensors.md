@@ -88,7 +88,8 @@ import numpy as np
 from rl_navigation.sim import LayoutParams, World, generate_layout, hc_sr04
 
 rng = np.random.default_rng(0)
-layout = generate_layout(rng, LayoutParams())  # an arena, a start pose and a goal; a path is guaranteed
+# an arena, a start pose and a goal, with a path between them guaranteed
+layout = generate_layout(rng, LayoutParams())
 sensor = hc_sr04()
 world = World(layout.arena, sensor, layout.start, layout.goal)
 readings, _ = world.read_sensors(rng)  # 5 ranges in metres; max_range where there is no echo

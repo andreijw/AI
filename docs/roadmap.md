@@ -37,27 +37,6 @@ unblocks (the maintainer's decision, 2026-11-19).
 
 ### Workflow Tooling
 
-- [~] **Teaching docs for 0.2.0** (the maintainer's request, 2026-11-13; plan in seven PRs): a `docs/learn/` tree
-  with a learning path, a foundations page, seven challenge pages, the algorithm families (with the fixes this
-  repository needed, from CHANGELOG.md), a navigation track ending with the ONNX and C export, frames of every
-  challenge and GIF clips of trained and random agents (seed 1, retrained after the 0.2.0 API lands, checkpoints
-  attached to the release), and committed benchmark curves.
-  - **Progress (2026-11-13 to 2026-11-20)**: the media rule, the source checker in CI and the page
-    skeletons; the algorithm and challenge pages (CHANGELOG.md, 2026-11-13); the media script with the random agents'
-    frames and clips, benchmark curves committed under `docs/images/benchmarks/` at a report's next full rerun, and
-    the trained agents' clips from seed-1 checkpoints retrained on 2026-11-19, to be attached to the 0.2.0 release as
-    `seed1-<challenge>-<agent>.pt` (CHANGELOG.md, 2026-11-19); the foundations page and the navigation track
-    (CHANGELOG.md, 2026-11-20). Left: the front page.
-
-- [~] **rl-core 0.2.0 API** (the maintainer's decision D, 2026-11-13; plan in four PRs plus the release PR):
-  break the `challenges` ↔ `training` cycle by moving `training/robustness.py` to `rl_core/robustness.py` behind a
-  deprecation shim; declare `__all__` throughout rl-core; deprecate the legacy `make_env`, `make_vec_env` and
-  `make_vec_env_from_config` of rl_cartpole and rl_pendulum (removed in 0.3.0); make matplotlib an optional
-  `rl-core[plot]` extra. The two per-challenge agent maps stay. Then release all three distributions as 0.2.0.
-  - **Progress (PRs 1 to 4, 2026-11-13 and 2026-11-15)**: the public API and every version bump; the robustness
-    benchmark moved out of `training`, ending the cycle; the legacy factories deprecated (CHANGELOG.md, 2026-11-13);
-    matplotlib made the `rl-core[plot]` extra (CHANGELOG.md, 2026-11-15). Left: the release PR.
-
 - [ ] **Library follow-ups** (deferred from the importable-libraries item, 2026-11-11; not picked). Each waits for a
   consumer that needs it:
   - **The CLIs as `rl-core` console scripts** (`rl-train`, `rl-record`, `rl-benchmark`, ...): a game project then
@@ -70,6 +49,9 @@ unblocks (the maintainer's decision, 2026-11-19).
   - **Native ROS 2 packaging** (`ament_python`, rosdep keys) for `rl-navigation`: the Jetson's ROS 2 node then builds
     it with colcon. Deferred until the hardware step (Phase 8) has a ROS 2 node; until then a `--system-site-packages`
     venv installs the wheel (`docs/navigation.md`, Installing on the robot).
+  - **Remove the deprecated factories in 0.3.0**: `make_env`, `make_vec_env` and `make_vec_env_from_config` of
+    rl_cartpole and rl_pendulum warn since 0.2.0 (CHANGELOG.md, 2026-11-13) and go in the next minor release, with
+    the `rl_core.training.robustness` shim (its docstring says 0.3.0).
 
 ### Training
 

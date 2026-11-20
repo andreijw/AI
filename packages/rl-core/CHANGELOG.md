@@ -4,7 +4,7 @@ What changed in `rl-core`, newest first, in the style of [Keep a Changelog](http
 with [semantic versions](https://semver.org/) (0.x: a minor version may break the API). A release's notes are its
 section here. The repository's day-by-day log is the root CHANGELOG.md.
 
-## [0.2.0]
+## [0.2.0] - 2026-11-20
 
 ### Added
 

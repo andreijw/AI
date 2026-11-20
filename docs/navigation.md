@@ -34,13 +34,13 @@ simulator, `estimation`, `mapping`, `slam` and `planning` import nothing else. I
 (Gymnasium, for `rl_navigation.gym_env`), `challenge` (`rl-core`, for the navigation challenge on the framework) and
 `video` (`rl_navigation.localization_video`). Ubuntu 24.04's system Python is externally managed (PEP 668), so a ROS 2
 node uses a virtual environment created with `--system-site-packages`, which keeps `rclpy` and the apt NumPy visible,
-and installs `rl-navigation` from its tag into it (from the first release on; until `rl-navigation-v0.1.0` is tagged,
-`@develop` instead of the tag):
+and installs `rl-navigation` from its release tag into it (the newest release's tag; `@develop` for unreleased
+work):
 
 ```bash
 python3 -m venv --system-site-packages ~/robot-venv
 ~/robot-venv/bin/pip install \
-    "rl-navigation @ git+https://github.com/andreijw/AI@rl-navigation-v0.1.0#subdirectory=packages/rl-navigation"
+    "rl-navigation @ git+https://github.com/andreijw/AI@rl-navigation-v0.2.0#subdirectory=packages/rl-navigation"
 ```
 
 ROS 2 Jazzy runs Python 3.12, which the distribution requires, and its apt NumPy is 1.26, the oldest it allows:

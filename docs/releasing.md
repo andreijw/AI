@@ -16,21 +16,21 @@ considers for its name.
 R=https://github.com/andreijw/AI/releases/download
 
 # A game project: the framework
-pip install $R/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl
+pip install $R/rl-core-v0.2.0/rl_core-0.2.0-py3-none-any.whl
 
 # The same with its plots (train.py --plot, the benchmark's curves): the plot extra, matplotlib
-pip install "rl-core[plot] @ $R/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl"
+pip install "rl-core[plot] @ $R/rl-core-v0.2.0/rl_core-0.2.0-py3-none-any.whl"
 
 # The robot: the navigation libraries, NumPy only (or by git tag, as docs/navigation.md shows)
-pip install $R/rl-navigation-v0.1.0/rl_navigation-0.1.0-py3-none-any.whl
+pip install $R/rl-navigation-v0.2.0/rl_navigation-0.2.0-py3-none-any.whl
 
 # The challenges: they require rl-core, so its wheel goes in the same command
-pip install $R/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl \
-    $R/rl-challenges-v0.1.0/rl_challenges-0.1.0-py3-none-any.whl
+pip install $R/rl-core-v0.2.0/rl_core-0.2.0-py3-none-any.whl \
+    $R/rl-challenges-v0.2.0/rl_challenges-0.2.0-py3-none-any.whl
 
 # The navigation challenge: rl-navigation's challenge extra requires rl-core too
-pip install $R/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl \
-    "rl-navigation[challenge] @ $R/rl-navigation-v0.1.0/rl_navigation-0.1.0-py3-none-any.whl"
+pip install $R/rl-core-v0.2.0/rl_core-0.2.0-py3-none-any.whl \
+    "rl-navigation[challenge] @ $R/rl-navigation-v0.2.0/rl_navigation-0.2.0-py3-none-any.whl"
 ```
 
 The release's `SHA256SUMS` lists each file's checksum (`sha256sum -c SHA256SUMS` after downloading them).

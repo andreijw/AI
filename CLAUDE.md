@@ -25,6 +25,9 @@ optional **onnx** and **onnxruntime** for the ONNX export (`onnx` extra) · opti
 - **Directory layout and build/test/lint commands** → **[GEMINI.md](GEMINI.md)** §2 and §4. GEMINI.md is written for
   another assistant; translate its tool names with the mapping below.
 - **Manual test procedures** → [TESTING.md](TESTING.md). **Architecture** → [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Teaching docs** → [docs/learn/README.md](docs/learn/README.md) (learning path, the one glossary, challenges and
+  algorithms at a glance). `doc-sync` owns it; `scripts/check_doc_sources.py` and `scripts/check_doc_links.py` gate it
+  in CI, and `scripts/make_doc_media.py` with `scripts/doc_media.json` makes its images.
 
 ## Dev Team Workflow
 

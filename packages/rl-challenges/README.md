@@ -10,15 +10,15 @@ It requires `rl-core`, which is not on PyPI: install both release wheels in one 
 
 ```bash
 R=https://github.com/andreijw/AI/releases/download
-pip install $R/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl $R/rl-challenges-v0.1.0/rl_challenges-0.1.0-py3-none-any.whl
+pip install $R/rl-core-v0.2.0/rl_core-0.2.0-py3-none-any.whl $R/rl-challenges-v0.2.0/rl_challenges-0.2.0-py3-none-any.whl
 ```
 
 The benchmark plots its learning curves unless given `--no-plot`, and `train.py --plot` plots too: both need
 `rl-core`'s `plot` extra (matplotlib), so name its wheel with the extra:
 
 ```bash
-pip install "rl-core[plot] @ $R/rl-core-v0.1.0/rl_core-0.1.0-py3-none-any.whl" \
-    $R/rl-challenges-v0.1.0/rl_challenges-0.1.0-py3-none-any.whl
+pip install "rl-core[plot] @ $R/rl-core-v0.2.0/rl_core-0.2.0-py3-none-any.whl" \
+    $R/rl-challenges-v0.2.0/rl_challenges-0.2.0-py3-none-any.whl
 ```
 
 Extras: `box2d` (LunarLander and BipedalWalker; build Box2D first as the repository's `./setup.sh` does). Changes:

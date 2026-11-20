@@ -10,6 +10,10 @@ simulation. **Not yet:** nothing has run on a real robot; SLAM is in progress (l
 and failed 2 of its 9 judged gates), A\* planning with a path follower passed its judged gates in simulation, and the
 hardware is open.
 
+New to reinforcement learning or to robot navigation? Start with the
+[learning track](docs/learn/README.md): foundations, a page for each challenge and each algorithm, and the
+navigation track from sensors to the robot, with a glossary and a one-table overview of every challenge.
+
 ## What's inside
 
 Eight Gymnasium environments and two navigation environments of this project's own, each with a committed config per
@@ -132,13 +136,17 @@ project, such as a game, trains agents on its own environment by depending on `r
 
 ## Documentation
 
+- [docs/learn/README.md](docs/learn/README.md): **start here to learn**: the learning track, its glossary and a table of
+  every challenge and the algorithms that solve it. [Foundations](docs/learn/foundations.md); a page for each
+  [challenge](docs/learn/challenges/cartpole.md) and each [algorithm](docs/learn/algorithms/policy-gradient.md); the
+  [navigation track](docs/learn/navigation/sim-and-sensors.md)
 - [docs/usage.md](docs/usage.md): install, train, record, export, benchmark, configure, develop
 - [docs/navigation.md](docs/navigation.md): installing the navigation libraries on a robot, and the index of the
   navigation track
 - [docs/external-challenges.md](docs/external-challenges.md): training on another project's environment (a game)
 - [docs/releasing.md](docs/releasing.md): the distributions' versions, releases and installing them
 - [docs/results.md](docs/results.md): which agents solve which challenge, with the caveats
-- [docs/agents.md](docs/agents.md): how each agent works
+- [docs/agents.md](docs/agents.md): the agent classes, the replay buffer, the PyTorch backend and policy export
 - [docs/roadmap.md](docs/roadmap.md): open work and the robotics ladder
 - [docs/pytorch_jetson_timing.md](docs/pytorch_jetson_timing.md): what the Jetson's GPU buys
 - [docs/ai-assistants.md](docs/ai-assistants.md): Claude Code setup, MCP servers and skills

@@ -29,6 +29,22 @@ Acrobot-v1) and
   the environment on its own, and an index of the track. `docs/learn/challenges/navigation.md` is written in full and
   leads into the track. The pages restate no benchmark numbers beyond those `docs/navigation.md` already carried for
   localization; the planning results are linked, not restated.
+- **The learning track's front page** (`docs/learn-front-page`; the last teaching-docs PR, which completes the item).
+  `docs/learn/README.md` gains "Start here", a table of the ten challenges with their action space, what makes each
+  hard, the algorithms with a committed config and which of them solve and hold (in words, linking `docs/results.md`
+  and the reports, no numbers restated), and the glossary every page shares. The README's documentation map starts
+  learners there; CLAUDE.md, GEMINI.md and the doc-sync, pr-reviewer and algorithm-crafter skills point at
+  `docs/learn/` (a new agent now needs an algorithm page and a table row). No page under `docs/learn/` is a skeleton
+  any more.
+
+### Changed
+
+- **The 0.2.0 releases are ready to tag** (`chore/release-0.2.0`; the last PR of the rl-core 0.2.0 API item). The
+  `[0.2.0]` sections of the three package CHANGELOGs are dated 2026-11-20 and become the releases' notes; the wheel
+  URLs in `docs/releasing.md`, `docs/external-challenges.md` and the three package READMEs, and the robot's tag
+  install in `docs/navigation.md` and rl-navigation's README, name 0.2.0. `scripts/release.py check` passes for
+  `rl-core-v0.2.0`; rl-navigation and rl-challenges wait for its release to be published, as their `rl-core~=0.2.0`
+  requires. The 0.3.0 removal of the deprecated factories moved to the library follow-ups.
 
 ## 2026-11-19
 
