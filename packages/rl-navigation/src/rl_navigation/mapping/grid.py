@@ -14,6 +14,12 @@ mount with the mount's single reading. A reading without a range (a dropout, "no
 range", a reading clipped at ``min_range``, NaN; :func:`rl_navigation.sim.sensors.usable_readings`)
 changes nothing: a dropout reads ``max_range`` too, so free space is never carved from one.
 
+An optional ``hit_range`` (``OccupancyGrid.update``) splits the reach of hits from that of misses,
+as ROS ``costmap_2d``'s obstacle and raytrace ranges do: a usable reading beyond it marks no hit,
+and its rays are free only in the cells they leave by ``hit_range``. Without it every usable
+reading is a hit. The online planner's map (:class:`rl_navigation.planning.OnlineMap`) uses it:
+a sonar cone's far reading still clears the false walls its near readings wrote.
+
 Imports NumPy and ``rl_navigation.sim`` only, so it runs on the robot.
 """
 
@@ -210,16 +216,28 @@ class OccupancyGrid:
         free: NDArray[np.bool_] = self._log_odds < 0.0
         return free
 
-    def update(self, pose: ArrayLike, readings: ArrayLike) -> None:
+    def update(
+        self, pose: ArrayLike, readings: ArrayLike, *, hit_range: float | None = None
+    ) -> None:
         """Add one scan taken at a known pose.
 
         Args:
             pose: ``(3,)`` the robot's pose ``(x, y, theta)`` when the scan was read.
             readings: ``(N,)`` the scan, in the sensor's mount order (NaN allowed: unusable).
+            hit_range: Farthest reading that marks a hit, in metres; a usable reading beyond it
+                marks no hit and its rays are free only where they end by ``hit_range`` (the cell
+                ``hit_range`` falls in is left alone). None, as ``max_range`` or ``inf``, makes
+                every usable reading a hit.
 
         Raises:
-            ValueError: A pose that is not three finite numbers, or a scan of the wrong length.
+            ValueError: A pose that is not three finite numbers, a scan of the wrong length, or a
+                ``hit_range`` that is not above the sensor's ``min_range``.
         """
+        if hit_range is not None and not hit_range > self._sensor.min_range:
+            raise ValueError(
+                f"OccupancyGrid.update hit_range must be above min_range "
+                f"{self._sensor.min_range}, got {hit_range}."
+            )
         poses = np.asarray(pose, dtype=np.float64)
         if poses.shape != (3,) or not np.isfinite(poses).all():
             raise ValueError(f"OccupancyGrid.update needs a finite (3,) pose, got {poses}.")
@@ -235,6 +253,11 @@ class OccupancyGrid:
             return
         origins, angles = sensor_rays(self._sensor, poses[None])
         z = z[usable]
+        # A reading beyond hit_range is followed as if it ended there, then its end is no hit.
+        far = np.zeros(len(z), dtype=bool)
+        if hit_range is not None:
+            far = z > hit_range
+            z = np.minimum(z, hit_range)
         # Follow each ray a cell past its reading, so a hit on a border reaches the cell behind.
         visits = traverse_cells(
             origins[usable],
@@ -245,6 +268,7 @@ class OccupancyGrid:
             self._origin,
         )
         occupied_visits, free_visits = endpoint_visits(visits, z)
+        occupied_visits[far] = False
         occupied = np.zeros(self._shape, dtype=bool)
         occupied[visits.rows[occupied_visits], visits.cols[occupied_visits]] = True
         free = np.zeros(self._shape, dtype=bool)

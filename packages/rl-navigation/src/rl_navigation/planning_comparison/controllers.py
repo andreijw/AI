@@ -111,7 +111,8 @@ class PlannerController:
     Args:
         map_source: ``"true"`` or ``"online"``.
         resolution: The grid's cell size in metres.
-        map_range: The online map's farthest reading used, in metres.
+        map_range: The online map's farthest reading that marks a hit, in metres (farther ones
+            only clear).
 
     Raises:
         ValueError: An unknown map source.

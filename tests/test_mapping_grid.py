@@ -4,6 +4,7 @@ Hand cases use 1 m cells, a one-beam sensor at the robot's centre and the lidar 
 evidence values are written ``A`` (a hit, logit 0.7) and ``B`` (a miss, logit 0.45).
 """
 
+import hashlib
 import math
 
 import numpy as np
@@ -23,6 +24,7 @@ from rl_navigation.sim import (
     cast_rays,
     clearance,
     generate_layout,
+    hc_sr04,
     lidar,
     occupancy_grid,
 )
@@ -302,3 +304,89 @@ def test_endpoint_visits_and_update_agree_on_one_ray():
     grid.update(CENTRE_OF_CELL_0, [2.25])
     np.testing.assert_array_equal(grid.occupied()[0], np.isin(np.arange(5), visits.cols[occupied]))
     np.testing.assert_array_equal(grid.free()[0], np.isin(np.arange(5), visits.cols[free]))
+
+
+# Recorded on 2026-11-20 from develop (9afbfb3) before ``hit_range`` existed, on aarch64: the
+# SHA-256 of the log-odds (rounded to 1e-9) and the observed mask after 40 noisy scans of a seeded
+# layout, with the observed and occupied counts. Every caller that passes no ``hit_range`` (the
+# mapping evaluation, SLAM) must keep building exactly this map.
+GOLDEN_MAPS = {
+    "lidar": ("59f6d862e5c87287399a71e3f777fec2a7c52313867a07c3a7882420d329df8d", 9421, 656),
+    "hc_sr04": ("44c78fdea736ac63d15a0f2ae7d1b6950aef63bbf038b4c6b0608f5d9d3a47ff", 8023, 543),
+}
+
+
+@pytest.mark.parametrize("name", sorted(GOLDEN_MAPS))
+def test_the_default_update_builds_the_recorded_map(name):
+    make, model = {"lidar": (lidar, LIDAR_LOG_ODDS), "hc_sr04": (hc_sr04, HC_SR04_LOG_ODDS)}[name]
+    arena = generate_layout(np.random.default_rng(7), LayoutParams()).arena
+    sensor = make()
+    grid = OccupancyGrid(sensor, (100, 100), 0.05, model)
+    rng = np.random.default_rng(11)
+    for pose in free_poses(arena, 40, seed=8):
+        readings, _ = sensor.read(arena, pose, rng, noise_std=0.05, dropout_prob=0.1)
+        grid.update(pose, readings)
+    digest = hashlib.sha256(np.round(grid.log_odds, 9).tobytes())
+    digest.update(grid.observed.tobytes())
+    found = (digest.hexdigest(), int(grid.observed.sum()), int(grid.occupied().sum()))
+    assert found == GOLDEN_MAPS[name]
+
+
+# hit_range: a reading beyond it is a miss up to it, never a hit (the online planner's map).
+
+
+def test_a_reading_beyond_the_hit_range_frees_the_cells_before_it_and_marks_none():
+    """The ray from x = 0.5 reads 4.25 but hits only to 2.5: cells 0 to 2 end by then and are
+    free; cell 3, where 2.5 lands, and everything past it are left alone."""
+    grid = row_grid(5)
+    grid.update(CENTRE_OF_CELL_0, [4.25], hit_range=2.5)
+    np.testing.assert_allclose(grid.log_odds, [[B, B, B, 0.0, 0.0]], rtol=1e-15)
+    np.testing.assert_array_equal(grid.observed, [[True, True, True, False, False]])
+    inside = row_grid(5)
+    inside.update(CENTRE_OF_CELL_0, [4.25], hit_range=2.25)
+    np.testing.assert_allclose(inside.log_odds, [[B, B, 0.0, 0.0, 0.0]], rtol=1e-15)
+
+
+def test_a_reading_at_the_hit_range_is_still_a_hit():
+    grid = row_grid(5)
+    grid.update(CENTRE_OF_CELL_0, [2.25], hit_range=2.25)
+    np.testing.assert_allclose(grid.log_odds, [[B, B, A, 0.0, 0.0]], rtol=1e-15)
+
+
+@pytest.mark.parametrize("reading", [10.0, np.nan, 0.05])
+def test_a_reading_without_a_range_carves_nothing_under_a_hit_range(reading):
+    """A dropout reads max_range: it must not clear the cells in front of a wall it missed."""
+    grid = row_grid(3)
+    grid.update(CENTRE_OF_CELL_0, [reading], hit_range=1.5)
+    assert not grid.observed.any()
+
+
+def test_a_hit_wins_over_a_far_reading_in_the_same_scan():
+    """Two mounts at the same angle: one hits cell 2, the other reads far and clears to 3.5."""
+    sensor = RangeSensor(mount_angles=[0.0, 0.0], min_range=0.05, max_range=10.0)
+    grid = OccupancyGrid(sensor, (1, 5), 1.0, LIDAR_LOG_ODDS)
+    grid.update(CENTRE_OF_CELL_0, [2.25, 4.25], hit_range=3.5)
+    np.testing.assert_allclose(grid.log_odds, [[B, B, A, B, 0.0]], rtol=1e-15)
+
+
+@pytest.mark.parametrize("make", [lidar, hc_sr04])
+def test_no_hit_range_a_max_range_one_and_an_infinite_one_build_the_same_map(make):
+    arena = generate_layout(np.random.default_rng(3), LayoutParams()).arena
+    sensor = make()
+    grids = [OccupancyGrid(sensor, (100, 100), 0.05, HC_SR04_LOG_ODDS) for _ in range(3)]
+    rng = np.random.default_rng(4)
+    for pose in free_poses(arena, 15, seed=5):
+        readings, _ = sensor.read(arena, pose, rng, noise_std=0.05, dropout_prob=0.1)
+        for grid, hit_range in zip(grids, (None, sensor.max_range, math.inf), strict=True):
+            grid.update(pose, readings, hit_range=hit_range)
+    for grid in grids[1:]:
+        np.testing.assert_array_equal(grid.log_odds, grids[0].log_odds)
+        np.testing.assert_array_equal(grid.observed, grids[0].observed)
+
+
+@pytest.mark.parametrize("hit_range", [0.05, 0.01, -1.0, np.nan])
+def test_a_hit_range_not_beyond_min_range_is_refused(hit_range):
+    with pytest.raises(
+        ValueError, match=f"hit_range must be above min_range 0.05, got {hit_range}"
+    ):
+        row_grid(3).update(CENTRE_OF_CELL_0, [2.25], hit_range=hit_range)

@@ -49,7 +49,7 @@ from rl_navigation.sim.kinematics import wrap_angle
 
 FOLLOWING, NO_PATH = "following", "no_path"
 
-#: The online map's farthest reading used, in metres (:class:`OnlineMap`).
+#: The online map's farthest reading that marks a hit, in metres (:class:`OnlineMap`).
 DEFAULT_MAP_RANGE = 1.0
 
 
@@ -99,16 +99,16 @@ class OnlineMap:
     whose occupied cells (``l > 0``; unknown cells free) are inflated by
     :func:`~rl_navigation.planning.grid.from_occupied`.
 
-    Readings farther than ``map_range`` are given to the grid as NaN, so they change nothing: a
-    sonar's 15-degree cone puts a far or oblique hit's whole arc at the nearest range, marking free
-    space as occupied, which closed the way to the goal on 4 of 20 tuning layouts at the HC-SR04's
-    full 4 m. The default, 1.0 m, reached the goal on 194 and 193 of layouts 10000 to 10199
-    (continuous and discrete actions) against 190 at 1.5 m (2026-11-13). The version goes up when
-    the set of occupied cells changes.
+    Only readings up to ``map_range`` mark hits (the grid's ``hit_range``): a sonar's 15-degree cone
+    puts a far or oblique hit's whole arc at the nearest range, marking free space as occupied. A
+    reading beyond ``map_range`` still clears its cone's rays up to it, which is what removes those
+    false walls; until 2026-11-20 such readings were dropped and nothing cleared them. The 1.0 m
+    default against 1.5 m with the clearing, and what the clearing changed, are in CHANGELOG.md
+    (2026-11-20). The version goes up when the set of occupied cells changes.
 
     Args:
         occupancy: The log-odds grid to build; this map updates it.
-        map_range: Farthest reading used, in metres (> 0).
+        map_range: Farthest reading that marks a hit, in metres (> 0); farther ones only clear.
 
     Raises:
         ValueError: A ``map_range`` that is not positive.
@@ -130,7 +130,7 @@ class OnlineMap:
 
     @property
     def map_range(self) -> float:
-        """The farthest reading used, in metres."""
+        """The farthest reading that marks a hit, in metres; farther ones only clear."""
         return self._map_range
 
     @property
@@ -142,10 +142,8 @@ class OnlineMap:
         return self._version
 
     def update(self, pose: ArrayLike, readings: ArrayLike) -> None:
-        """Add one scan taken at ``pose``, readings beyond ``map_range`` left out."""
-        scan = np.array(readings, dtype=np.float64)
-        scan[scan > self._map_range] = np.nan
-        self._occupancy.update(pose, scan)
+        """Add one scan taken at ``pose``; readings beyond ``map_range`` clear but mark no hit."""
+        self._occupancy.update(pose, readings, hit_range=self._map_range)
         occupied = self._occupancy.occupied()
         if not np.array_equal(occupied, self._occupied):
             self._occupied = occupied
