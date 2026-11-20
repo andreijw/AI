@@ -37,7 +37,7 @@ and traces each of its five cone rays with the mount's single reading. The grid 
 ![Occupancy grids from true poses (left) and dead reckoning (right)](../../images/mapping_true_vs_dead_reckoning.png)
 
 Mapping with known poses: `rl_navigation.mapping.evaluation.build_map` on the lidar scans of one run of
-`rl_navigation.mapping.evaluation.record_run` with seed 101 and 600 steps, the first run that `MAP-1` scores (TESTING.md
+`rl_navigation.estimation.runs.record_run` with seed 101 and 600 steps, the first run that `MAP-1` scores (TESTING.md
 `MAP-1`). Dark cells are occupied, light ones free, grey unknown. Mapped from the encoders' dead reckoning instead, the
 same scans smear the walls into the free space. The pose is as important as the sensor: a map is only as good as the
 poses its scans were taken from.

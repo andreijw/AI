@@ -4,7 +4,7 @@ A desk tool: :mod:`rl_navigation.slam` does not import it. Each run is ``run_tri
 robot with :class:`~rl_navigation.slam.ekf_slam.EkfSlam` as its filter, built by
 :class:`SlamFactory`, which keeps the filter and each update's report. The known-correspondence
 row hands the filter an *oracle*: each feature, placed with the *true* pose from
-:func:`~rl_navigation.mapping.evaluation.record_run` (whose poses are ``run_trial``'s, bit for
+:func:`~rl_navigation.estimation.runs.record_run` (whose poses are ``run_trial``'s, bit for
 bit), is labelled with the true circle within 0.15 m of it; the filter still gates those labels.
 
 **Every map figure is computed after alignment.** The estimated trajectory is aligned to the
@@ -24,11 +24,10 @@ aligned trajectory error (ATE) and the map figures are the SLAM figures.
 - A *loop closure* is a landmark associated again after :data:`LOOP_GAP` scans unseen.
 
 Imports NumPy, ``rl_navigation.sim``, ``rl_navigation.estimation`` (``run_trial``,
-``summarize``), ``rl_navigation.mapping.evaluation`` (``record_run``) and the slam package. The
-mapping desk tool now serves mapping, the features' scoring and this oracle; a fourth user should
-promote ``record_run`` to a neutral module. ``SlamFactory`` is the fourth implementation of the
-six-keyword factory seam; a fifth user, or a change to the keywords, should refactor the seam to
-one builder.
+``summarize``, and ``runs.record_run`` for the oracle's true poses) and the slam package.
+``SlamFactory`` builds its filter from the trial's
+:class:`~rl_navigation.estimation.evaluation.FactoryContext`, the one builder seam of the desk
+tools.
 """
 
 import time
@@ -40,13 +39,17 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from rl_navigation.estimation.averages import mean_or_nan, median_or_nan
-from rl_navigation.estimation.evaluation import Localizer, Trial, run_trial, summarize
-from rl_navigation.estimation.maps import SensorMap
+from rl_navigation.estimation.evaluation import (
+    FactoryContext,
+    Localizer,
+    Trial,
+    run_trial,
+    summarize,
+)
 from rl_navigation.estimation.poses import pose_difference
-from rl_navigation.mapping.evaluation import record_run
+from rl_navigation.estimation.runs import record_run
 from rl_navigation.sim.geometry import Arena, FloatArray
 from rl_navigation.sim.layouts import LayoutParams
-from rl_navigation.sim.odometry import WheelOdometry
 from rl_navigation.sim.sensors import RangeSensor
 from rl_navigation.slam.ekf_slam import EkfSlam, SlamSettings, SlamUpdate
 from rl_navigation.slam.feature_evaluation import MATCH_RADIUS, match_features, visible_circles
@@ -139,24 +142,22 @@ class SlamFactory:
         self.oracle_poses = oracle_poses
         self.made: _RecordedSlam | None = None
 
-    def __call__(
-        self,
-        *,
-        range_map: SensorMap,
-        odometry: WheelOdometry,
-        start: FloatArray,
-        covariance: FloatArray,
-        rng: np.random.Generator,
-        robot_radius: float,
-    ) -> Localizer:
-        arena = range_map.arena
+    def __call__(self, context: FactoryContext) -> Localizer:
+        arena = context.range_map.arena
         bounds = (
             -BOUNDS_MARGIN,
             -BOUNDS_MARGIN,
             arena.width + BOUNDS_MARGIN,
             arena.height + BOUNDS_MARGIN,
         )
-        slam = EkfSlam(range_map.sensor, odometry, start, covariance, self.settings, bounds=bounds)
+        slam = EkfSlam(
+            context.range_map.sensor,
+            context.odometry,
+            context.start,
+            context.covariance,
+            self.settings,
+            bounds=bounds,
+        )
         self.made = _RecordedSlam(slam, arena, self.oracle_poses)
         return self.made
 

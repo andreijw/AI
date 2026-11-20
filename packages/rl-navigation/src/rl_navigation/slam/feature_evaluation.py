@@ -1,7 +1,7 @@
 """Circle features scored against the simulator's truth, over seeded runs (``CIRC-1``).
 
 A desk tool: :mod:`rl_navigation.slam` does not import it. Each run is
-:func:`~rl_navigation.mapping.evaluation.record_run`'s wandering robot (the trajectories of
+:func:`~rl_navigation.estimation.runs.record_run`'s wandering robot (the trajectories of
 ``run_trial``, bit for bit). Every scan's features are placed with the *true* pose and matched to
 the true circle whose centre lies within :data:`MATCH_RADIUS`; a feature matching none is a false
 fit. A circle is *visible* in a scan when at least ``min_points`` noise-free beams end on it, and
@@ -19,7 +19,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from rl_navigation.estimation.averages import mean_or_nan
-from rl_navigation.mapping.evaluation import record_run
+from rl_navigation.estimation.runs import record_run
 from rl_navigation.sim.geometry import Arena, FloatArray
 from rl_navigation.sim.sensors import RangeSensor, usable_readings
 from rl_navigation.slam.features import CircleFeature, FeatureSettings, extract_circles

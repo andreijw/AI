@@ -155,8 +155,8 @@ steps 3 to 5 are sketches to turn into full items when picked.
   - **Out of scope**: SLAM and unknown maps (step 3), odometry calibration (step 5).
 
 - [~] **Occupancy-grid mapping and SLAM** (picked 2026-11-09; PR 1 mapping with known poses; PR 2 landmark EKF-SLAM;
-  PR 3 lidar scan matching and the grid as a `RangeMap` (`GridMap`); PR 4 grid FastSLAM; possibly PR 5 a report and
-  CLI)
+  PR 3 split into 3-0 the evaluation seam, 3a lidar scan matching and 3b the grid as a `RangeMap` (`GridMap`) (the
+  maintainer's approval, 2026-11-20); PR 4 grid FastSLAM; possibly PR 5 a report and CLI)
   - **Progress (PR 1, 2026-11-09)**: `rl_navigation.mapping` builds a log-odds occupancy grid from range scans at
     known poses (5 cm cells, an exact vectorised beam traversal, presets for both sensors), as a peer of
     `estimation`. On fresh seeds 101 to 150 the lidar maps pass every gate (accuracy 0.9996, precision 1.0000, recall
@@ -174,6 +174,12 @@ steps 3 to 5 are sketches to turn into full items when picked.
     mean, 11 mm median); it fails the ratio to dead reckoning (0.443 against ≤ 0.40) and the count of runs above 0.10 m
     after alignment (9 against ≤ 8). Shipped with the failure recorded (the maintainer's decision; CHANGELOG.md,
     2026-11-10).
+  - **Progress (PR 3-0, 2026-11-20)**: ARCHITECTURE.md's two move triggers are done before a fifth filter arrives.
+    Every localizer factory takes one frozen `FactoryContext`, `record_run` moved to the neutral desk tool
+    `rl_navigation.estimation.runs`, and `EkfLocalizer` and `EkfSlam` share `predict_pose`. No behaviour change: 59
+    seeded outputs are bit-identical before and after (CHANGELOG.md, 2026-11-20). The plan for 3a and 3b, with its
+    gates to register after tuning on seeds 1 to 50 and to judge once on seeds 251 to 300, is approved; the
+    `pose_nees` follow-up below goes with 3a.
   - **Follow-ups**:
     - **One gauge projection for the second-order term**: project the frame out once over the pose and all landmark
       centres per scan and slice that covariance for both association and the update, so the two gate on the same

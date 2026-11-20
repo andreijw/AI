@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 
 from rl_navigation.estimation import evaluation as estimation_evaluation
-from rl_navigation.estimation.evaluation import run_trial
 from rl_navigation.mapping.evaluation import (
     MappingRun,
     build_map,
@@ -37,29 +36,6 @@ BOX_ROOM = Arena(2.0, 2.0, boxes=[[0.8, 0.8, 1.2, 1.2]])
 AROUND_THE_BOX = np.array(
     [[0.4, 1.0, 0.0], [1.6, 1.0, math.pi], [1.0, 0.4, math.pi / 2], [1.0, 1.6, -math.pi / 2]]
 )
-
-
-def test_a_recorded_run_follows_run_trials_trajectory_exactly():
-    run = record_run(3, lidar(), steps=50)
-    trial = run_trial(3, lidar(), steps=50)
-    np.testing.assert_array_equal(run.true_poses, trial.true_poses)
-    np.testing.assert_array_equal(run.dead_reckoning, trial.dead_reckoning)
-    assert run.readings.shape == (50, 64)
-    assert not run.collided
-
-
-def test_the_recorded_scans_are_the_ones_the_filter_would_read():
-    """The same seed and sensor read the same scans whatever the filter: the recorder sees the
-    scan at each recorded pose, so a noise-free re-read of the first pose agrees within noise."""
-    sensor = lidar(noise_std=0.0)
-    run = record_run(4, sensor, steps=5)
-    expected = np.minimum(sensor.true_ranges(run.arena, run.true_poses), sensor.max_range)
-    np.testing.assert_allclose(run.readings, np.maximum(expected, sensor.min_range), atol=1e-12)
-
-
-def test_a_run_without_steps_is_refused():
-    with pytest.raises(ValueError, match="no steps"):
-        record_run(3, lidar(), steps=0)
 
 
 def test_true_maps_reuse_the_simulators_occupancy_grid():
