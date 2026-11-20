@@ -411,6 +411,14 @@ needs_video = pytest.mark.skipif(
 )
 
 
+# Gymnasium's classic-control and Box2D renderers need pygame-ce (rl-challenges' box2d extra, or the video extra);
+# CI installs neither, so a test that renders one of them skips there.
+needs_pygame = pytest.mark.skipif(
+    importlib.util.find_spec("pygame") is None,
+    reason="pygame-ce is not installed (the box2d or video extra)",
+)
+
+
 def uses_onnx(item: pytest.Item) -> bool:
     """Whether a collected test is marked ``needs_onnx``."""
     return any(m.kwargs.get("reason") == NEEDS_ONNX_REASON for m in item.iter_markers("skipif"))
