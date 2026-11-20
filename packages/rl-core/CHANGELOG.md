@@ -6,6 +6,10 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 
 ## [0.2.0]
 
+### Added
+
+- `plot_benchmark_comparison` takes `dpi` (default 150, unchanged).
+
 ### Fixed
 
 - `ActorCriticAgent` and `ContinuousActorCritic` (with `n_steps: 0`) take `bootstrap_truncation` (default false):

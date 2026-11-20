@@ -14,6 +14,7 @@ import os
 import textwrap
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -32,6 +33,123 @@ from rl_core.training.trainer import Trainer, success_rate
 from rl_core.utils import plot_benchmark_comparison
 from rl_core.utils.smoothing import rolling_average
 from rl_core.utils.visualization import MISSING_PLOT_EXTRA, plotting_available
+
+# The report a full rerun commits, and the curve PNG it links, committed beside the other docs
+# media and listed in its manifest. All under the repository root (this file's folder), whatever
+# the current folder. Any other report keeps its plot in the output folder, so a smoke or scratch
+# run never rewrites a committed image.
+REPO_ROOT = Path(__file__).resolve().parent
+TRACKED_REPORTS_DIR = "docs/benchmarks"
+TRACKED_CURVES_DIR = "docs/images/benchmarks"
+MEDIA_MANIFEST = "scripts/doc_media.json"
+# A committed PNG must fit the manifest's budget (png_kib, 60 KiB). At 100 dpi with a 64-colour
+# palette, seven agents by five seeds of 3,000 noisy episodes measure about 31 KiB (at 150 dpi in
+# full colour, about 160 KiB). A tracked PNG over the budget is redrawn with fewer colours, then
+# at lower resolutions, in this order.
+CURVE_DPI = 100
+CURVE_COLOURS = 64
+CURVE_ATTEMPTS = ((CURVE_DPI, CURVE_COLOURS), (CURVE_DPI, 32), (80, 32), (60, 32))
+
+
+class CurvesOverBudgetError(RuntimeError):
+    """A tracked curve PNG is over the docs media budget at the smallest drawing."""
+
+
+def tracked_report_path(challenge_key: str) -> str:
+    """The committed report of a challenge, under the repository root: the CLI's default."""
+    return os.path.join(REPO_ROOT, TRACKED_REPORTS_DIR, f"{challenge_key}_results.md")
+
+
+def tracked_curves_path(challenge_key: str) -> str:
+    """The committed learning-curve PNG that a challenge's tracked report links."""
+    return os.path.join(REPO_ROOT, TRACKED_CURVES_DIR, f"{challenge_key}_learning_curves.png")
+
+
+def _in_repo(path: str) -> str | None:
+    """``path`` relative to the repository root, in ``/`` form; None when it is outside."""
+    real, root = os.path.realpath(path), os.path.realpath(REPO_ROOT)
+    if os.path.commonpath([real, root]) != root:
+        return None
+    return Path(os.path.relpath(real, root)).as_posix()
+
+
+def write_curves_png(
+    path: str,
+    curves: dict[str, list[list[float]]],
+    *,
+    window: int,
+    title: str,
+    target_score: float | None,
+    episode_lengths: dict[str, list[list[int]]] | None = None,
+    dpi: int = CURVE_DPI,
+    colours: int = CURVE_COLOURS,
+) -> str:
+    """Plot the agents' learning curves to ``path`` as a palette PNG; return its absolute path.
+
+    Every benchmark plot is made this way, so a scratch run shows what a tracked run commits.
+    Needs rl-core's plot extra (matplotlib, which brings Pillow).
+    """
+    plot_benchmark_comparison(
+        curves,
+        window=window,
+        save_path=path,
+        target_score=target_score,
+        title=title,
+        episode_lengths=episode_lengths,
+        dpi=dpi,
+    )
+    from PIL import Image  # matplotlib's own dependency, installed wherever plotting is
+
+    saved = os.path.abspath(path)
+    with Image.open(saved) as image:
+        palette = image.convert("RGB").quantize(colors=colours)
+    palette.save(saved, optimize=True)
+    return saved
+
+
+def _media_manifest() -> dict[str, Any] | None:
+    """The docs media manifest under the repository root; None, with a note, when there is none."""
+    path = os.path.join(REPO_ROOT, MEDIA_MANIFEST)
+    if not os.path.isfile(path):
+        print(f"{MEDIA_MANIFEST} not found: its PNG budget is not checked, and the curves must be")
+        print("listed in it before they are committed.")
+        return None
+    with open(path, encoding="utf-8") as f:
+        manifest: dict[str, Any] = json.load(f)
+    return manifest
+
+
+def _png_budget_bytes(manifest: dict[str, Any] | None) -> int | None:
+    """The manifest's PNG budget in bytes, or None without one."""
+    budget = (manifest or {}).get("budget")
+    kib = budget.get("png_kib") if isinstance(budget, dict) else None
+    return kib * 1024 if isinstance(kib, int) and kib > 0 else None
+
+
+def _record_in_media_manifest(manifest: dict[str, Any], png: str, made_by: str) -> None:
+    """List ``png`` (repository-relative) in the manifest with the command that made it.
+
+    A rerun updates the entry's ``made_by`` in place and keeps its other keys and position; a new
+    PNG is listed last. The file is replaced whole: written beside it, then moved over it.
+    """
+    media = manifest.setdefault("media", [])
+    for entry in media:
+        if entry.get("path") == png:
+            entry["made_by"] = made_by
+            break
+    else:
+        media.append({"path": png, "made_by": made_by})
+    path = os.path.join(REPO_ROOT, MEDIA_MANIFEST)
+    partial = f"{path}.partial"
+    try:
+        with open(partial, "w", encoding="utf-8") as f:
+            f.write(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+        os.replace(partial, path)
+    finally:
+        if os.path.exists(partial):
+            os.remove(partial)
+    print(f"Listed {png} in {MEDIA_MANIFEST}")
+
 
 # ---------------------------------------------------------------------------
 # General Benchmark Metrics & Runner
@@ -189,7 +307,8 @@ class BenchmarkSettings:
         steps: Training environment steps for every agent; at most one of the two budgets.
         window: Episodes averaged for the solve rule, held and the learning curves.
         eval_episodes: Greedy evaluation episodes at the end of each run.
-        output_dir: Folder for the plot and metrics JSON. None means plots/benchmarks/<key>.
+        output_dir: Folder for the plot and metrics JSON. None means plots/benchmarks/<key>. A
+            run writing the tracked report puts its plot in docs/images/benchmarks/ instead.
     """
 
     agents: tuple[str, ...] | None = None
@@ -261,7 +380,9 @@ class BenchmarkRunner:
 
         Args:
             settings: What to run and how to score it (default: ``BenchmarkSettings()``).
-            report_path: Path for Markdown summary report.
+            report_path: Path for Markdown summary report. The tracked report
+                (:func:`tracked_report_path`) links a plot at :func:`tracked_curves_path`, listed
+                in the docs media manifest; any other report links the output folder's plot.
             save_plot: Whether to generate and save comparative learning curve plots.
 
         Returns:
@@ -300,16 +421,51 @@ class BenchmarkRunner:
             if agent_runs[-1].num_envs > 1
         }
 
-        plot_file = self._save_plot(runs, budgets, resolved) if save_plot else None
+        key = self.challenge.key
+        tracked = report_path is not None and _same_path(report_path, tracked_report_path(key))
+        if tracked:
+            report_path = tracked_report_path(key)
+        # Before the plot: a tracked plot over the docs budget stops the run, and the numbers stay.
         metrics_json_path = self._write_metrics_json(resolved, summary, results, budgets)
+        manifest = _media_manifest() if tracked and save_plot else None
+        earlier_curves = False
+        if save_plot and tracked:
+            plot_file: str | None = self._save_tracked_plot(
+                runs, budgets, resolved, _png_budget_bytes(manifest), metrics_json_path
+            )
+        elif save_plot:
+            plot_file = self._save_plot(
+                runs,
+                budgets,
+                resolved,
+                os.path.join(resolved.output_dir, "benchmark_comparison.png"),
+            )
+        else:
+            # A tracked --no-plot rerun keeps linking the curves an earlier run committed.
+            earlier_curves = tracked and os.path.isfile(tracked_curves_path(key))
+            plot_file = tracked_curves_path(key) if earlier_curves else None
         if report_path:
             os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
             report_md = self._generate_markdown_report(
-                summary, resolved, plot_file, report_path, separate_eval, curricula, parallel
+                summary,
+                resolved,
+                plot_file,
+                report_path,
+                separate_eval,
+                curricula,
+                parallel,
+                earlier_curves,
             )
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write(report_md)
             print(f"Benchmark markdown report saved to: {report_path}")
+        if manifest is not None:
+            report_name = f"{TRACKED_REPORTS_DIR}/{key}_results.md"
+            _record_in_media_manifest(
+                manifest,
+                f"{TRACKED_CURVES_DIR}/{key}_learning_curves.png",
+                f"{self._command(resolved)} (the curves of {report_name})",
+            )
 
         return {
             "challenge": self.challenge.name,
@@ -484,23 +640,76 @@ class BenchmarkRunner:
             "window": window,
         }
 
+    def _command(self, settings: _ResolvedSettings) -> str:
+        """The benchmark.py command line that runs ``settings`` on this challenge."""
+        parts = ["python benchmark.py", "--challenge", self.challenge.key]
+        parts += ["--agents", *settings.agents, "--seeds", *map(str, settings.seeds)]
+        if settings.episodes is not None:
+            parts += ["--episodes", str(settings.episodes)]
+        if settings.steps is not None:
+            parts += ["--steps", str(settings.steps)]
+        parts += ["--window", str(settings.window), "--eval-episodes", str(settings.eval_episodes)]
+        config_dir = getattr(self.challenge, "config_dir", "configs")
+        relative = _in_repo(config_dir)
+        if relative is None:
+            real = os.path.realpath(config_dir)
+            print(
+                f"Note: --config-dir {real} is outside the repository, so {MEDIA_MANIFEST} will "
+                "hold this machine's path."
+            )
+            parts += ["--config-dir", real]
+        elif relative != "configs":
+            parts += ["--config-dir", relative]
+        return " ".join(parts)
+
+    def _save_tracked_plot(
+        self,
+        runs: dict[str, list[SeedRun]],
+        budgets: dict[str, tuple[int, str]],
+        settings: _ResolvedSettings,
+        budget: int | None,
+        metrics_json_path: str,
+    ) -> str:
+        """Plot the tracked curves within ``budget`` bytes, smaller in turn (``CURVE_ATTEMPTS``).
+
+        Raises:
+            CurvesOverBudgetError: If even the smallest drawing is over the budget.
+        """
+        path = tracked_curves_path(self.challenge.key)
+        if budget is None:
+            return self._save_plot(runs, budgets, settings, path)
+        for dpi, colours in CURVE_ATTEMPTS:
+            plot_file = self._save_plot(runs, budgets, settings, path, dpi=dpi, colours=colours)
+            size = os.path.getsize(plot_file)
+            if size <= budget:
+                return plot_file
+            print(f"{size / 1024:.1f} KiB at {dpi} dpi and {colours} colours is over the budget.")
+        raise CurvesOverBudgetError(
+            f"{TRACKED_CURVES_DIR}/{self.challenge.key}_learning_curves.png is {size / 1024:.1f} "
+            f"KiB at {dpi} dpi and {colours} colours, over the {budget // 1024} KiB budget "
+            f"(png_kib in {MEDIA_MANIFEST}); the report and the manifest were not written. The "
+            f"run's numbers are in {metrics_json_path}."
+        )
+
     def _save_plot(
         self,
         runs: dict[str, list[SeedRun]],
         budgets: dict[str, tuple[int, str]],
         settings: _ResolvedSettings,
-    ) -> str | None:
-        """Plot every agent's learning curves into the output folder; return the image path."""
+        plot_path: str,
+        **drawing: int,
+    ) -> str:
+        """Plot every agent's learning curves to ``plot_path``; return the image's absolute path."""
         curve_data = {
             agent: [run.rewards for run in agent_runs] for agent, agent_runs in runs.items()
         }
         length_data = {
             agent: [run.lengths for run in agent_runs] for agent, agent_runs in runs.items()
         }
-        plot_file = plot_benchmark_comparison(
+        plot_file = write_curves_png(
+            plot_path,
             curve_data,
             window=settings.window,
-            save_path=os.path.join(settings.output_dir, "benchmark_comparison.png"),
             target_score=self.challenge.solve_threshold,
             title=f"{self.challenge.name} Multi-Agent Benchmark Comparison",
             # Against steps only when every agent has a step budget: under episode budgets
@@ -508,6 +717,7 @@ class BenchmarkRunner:
             episode_lengths=(
                 length_data if all(u == "steps" for _, u in budgets.values()) else None
             ),
+            **drawing,
         )
         print(f"\nBenchmark comparison plot saved to: {plot_file}")
         return plot_file
@@ -557,9 +767,11 @@ class BenchmarkRunner:
         separate_eval: bool,
         curricula: dict[str, str] | None = None,
         parallel: dict[str, int] | None = None,
+        earlier_curves: bool = False,
     ) -> str:
         """Generate formatted Markdown report text for this challenge. ``parallel`` maps each agent
-        that trained from several environments to its ``training.num_envs``."""
+        that trained from several environments to its ``training.num_envs``; ``earlier_curves``
+        says the linked plot is from an earlier run."""
         has_step_budget = any(stats["budget_unit"] == "steps" for stats in summary.values())
         lines = [
             *self._report_header(),
@@ -567,7 +779,7 @@ class BenchmarkRunner:
             *self._report_solve_rule(settings, separate_eval, has_step_budget, parallel or {}),
             *_report_curricula(curricula or {}),
             *_report_table(settings.agents, summary),
-            *_report_plot_link(plot_file, report_path),
+            *_report_plot_link(plot_file, report_path, earlier_curves),
             "",
         ]
         return "\n".join(lines)
@@ -703,14 +915,28 @@ def _report_curricula(curricula: dict[str, str]) -> list[str]:
     ]
 
 
-def _report_plot_link(plot_file: str | None, report_path: str) -> list[str]:
-    """The Learning Trajectories section, linking the plot relative to the report; none without one."""
+def _same_path(first: str, second: str) -> bool:
+    """Whether two paths, relative to the current folder, absolute or through a symlink, name the
+    same file."""
+    return os.path.normcase(os.path.realpath(first)) == os.path.normcase(os.path.realpath(second))
+
+
+def _report_plot_link(plot_file: str | None, report_path: str, earlier: bool = False) -> list[str]:
+    """The Learning Trajectories section, linking the plot relative to the report; none without
+    one. ``earlier`` adds a line saying the plot is from an earlier run."""
     if not plot_file:
         return []
     rel_plot = os.path.relpath(
         plot_file, start=os.path.dirname(os.path.abspath(report_path))
     ).replace("\\", "/")
-    return ["", "## Learning Trajectories", "", f"![Benchmark Learning Curves]({rel_plot})"]
+    note = ["The curves are from an earlier run: this one was run with `--no-plot`.", ""]
+    return [
+        "",
+        "## Learning Trajectories",
+        "",
+        *(note if earlier else []),
+        f"![Benchmark Learning Curves]({rel_plot})",
+    ]
 
 
 def run_benchmark(
@@ -826,9 +1052,7 @@ def main() -> None:
     args = parser.parse_args()
     if not args.no_plot and not plotting_available():
         parser.error(f"{MISSING_PLOT_EXTRA}; or pass --no-plot")
-    report_file = (
-        args.report if args.report is not None else f"docs/benchmarks/{args.challenge}_results.md"
-    )
+    report_file = args.report if args.report is not None else tracked_report_path(args.challenge)
 
     settings = BenchmarkSettings(
         agents=None if args.agents is None else tuple(args.agents),
@@ -839,13 +1063,16 @@ def main() -> None:
         eval_episodes=args.eval_episodes,
         output_dir=args.output_dir,
     )
-    run_benchmark(
-        challenge_name=args.challenge,
-        settings=settings,
-        config_dir=args.config_dir,
-        report_path=report_file,
-        save_plot=not args.no_plot,
-    )
+    try:
+        run_benchmark(
+            challenge_name=args.challenge,
+            settings=settings,
+            config_dir=args.config_dir,
+            report_path=report_file,
+            save_plot=not args.no_plot,
+        )
+    except CurvesOverBudgetError as error:
+        parser.exit(1, f"benchmark.py: error: {error}\n")
 
 
 if __name__ == "__main__":

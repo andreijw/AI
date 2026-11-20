@@ -253,6 +253,7 @@ def plot_benchmark_comparison(
     title: str = "CartPole Multi-Agent Benchmark Comparison",
     target_score: float | None = 475.0,
     episode_lengths: dict[str, list[list[int]]] | None = None,
+    dpi: int = 150,
 ) -> str | None:
     """
     Plot comparative reward trajectories for multiple agents across training episodes, or across
@@ -273,6 +274,8 @@ def plot_benchmark_comparison(
             When given, the x-axis is cumulative environment steps: each run's smoothed curve is
             interpolated onto a common step grid up to the shortest run's total steps, so runs with
             different episode counts (step budgets) are compared at equal training effort.
+        dpi: Resolution of the saved PNG; the figure is 11 by 6 inches (1650 by 900 pixels at
+            the default 150).
 
     Returns:
         Absolute path to the saved PNG, or None if save_path is not set.
@@ -334,7 +337,7 @@ def plot_benchmark_comparison(
     if save_path is not None:
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
         saved_path = os.path.abspath(save_path)
-        fig.savefig(saved_path, dpi=150)
+        fig.savefig(saved_path, dpi=dpi)
 
     if show:
         plt.show()
