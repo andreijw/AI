@@ -49,9 +49,6 @@ unblocks (the maintainer's decision, 2026-11-19).
   - **Native ROS 2 packaging** (`ament_python`, rosdep keys) for `rl-navigation`: the Jetson's ROS 2 node then builds
     it with colcon. Deferred until the hardware step (Phase 8) has a ROS 2 node; until then a `--system-site-packages`
     venv installs the wheel (`docs/navigation.md`, Installing on the robot).
-  - **Remove the deprecated factories in 0.3.0**: `make_env`, `make_vec_env` and `make_vec_env_from_config` of
-    rl_cartpole and rl_pendulum warn since 0.2.0 (CHANGELOG.md, 2026-11-13) and go in the next minor release, with
-    the `rl_core.training.robustness` shim (its docstring says 0.3.0).
 
 ### Training
 

@@ -1,8 +1,4 @@
-"""Unit tests for the Pendulum-v1 environment wrapper, vectorization, and challenge.
-
-The tests that call make_env, make_vec_env or make_vec_env_from_config assert their deprecation
-warning; delete them with the factories in rl-challenges 0.3.0.
-"""
+"""Unit tests for the Pendulum-v1 environment wrapper, vectorization, and challenge."""
 
 from __future__ import annotations
 
@@ -12,13 +8,7 @@ import pytest
 
 from rl_core.challenges import CHALLENGES
 from rl_pendulum.benchmark import PendulumChallenge
-from rl_pendulum.environments import (
-    PendulumEnv,
-    make_env,
-    make_env_from_config,
-    make_vec_env,
-    make_vec_env_from_config,
-)
+from rl_pendulum.environments import PendulumEnv, make_env_from_config
 
 
 def test_pendulum_env_basic_step_and_reset():
@@ -132,8 +122,8 @@ def test_pendulum_wrap_env_and_metadata():
     env.close()
 
 
-def test_pendulum_factory_make_env_and_configs():
-    """Verify make_env and make_env_from_config factory functions."""
+def test_pendulum_factory_make_env_from_config():
+    """Verify the make_env_from_config factory, and the wrapper built directly."""
     config = {
         "name": "Pendulum-v1",
         "max_episode_steps": 150,
@@ -151,33 +141,9 @@ def test_pendulum_factory_make_env_and_configs():
     assert env.domain_randomization == {"g": (9.0, 11.0)}
     env.close()
 
-    with pytest.deprecated_call():
-        env_direct = make_env(env_name="Pendulum-v1", seed=123)
+    env_direct = PendulumEnv(env_name="Pendulum-v1", seed=123)
     assert env_direct.seed == 123
     env_direct.close()
-
-
-def test_pendulum_vectorized_environments():
-    """Verify make_vec_env and make_vec_env_from_config create functional sync/async vector envs."""
-    # Sync Vector Env
-    with pytest.deprecated_call():
-        vec_sync = make_vec_env(num_envs=2, seed=42, async_envs=False)
-    obs_sync, _ = vec_sync.reset()
-    assert obs_sync.shape == (2, 3)
-
-    actions = np.zeros((2, 1), dtype=np.float32)
-    next_obs, rewards, dones, truncs, _ = vec_sync.step(actions)
-    assert next_obs.shape == (2, 3)
-    assert rewards.shape == (2,)
-    vec_sync.close()
-
-    # Async Vector Env via config
-    cfg = {"name": "Pendulum-v1", "seed": 100, "async_envs": False}
-    with pytest.deprecated_call():
-        vec_cfg = make_vec_env_from_config(cfg, num_envs=2)
-    obs_cfg, _ = vec_cfg.reset()
-    assert obs_cfg.shape == (2, 3)
-    vec_cfg.close()
 
 
 def test_pendulum_benchmark_challenge_registration_and_setup():

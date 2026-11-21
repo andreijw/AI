@@ -136,17 +136,10 @@ env = CartPoleEnv(domain_randomization=domain_rand)
 
 **Purpose**: Parallel environment execution for faster training
 
-`make_vec_env` and `make_vec_env_from_config` are deprecated since rl-challenges 0.2.0 and removed in 0.3.0 (so is
-the keyword factory `make_env`: build `CartPoleEnv(...)` directly). To train from several environments, set
+There are no vector factories (`make_vec_env` and `make_vec_env_from_config` were removed in rl-challenges 0.3.0, and
+so was the keyword factory `make_env`: build `CartPoleEnv(...)` directly). To train from several environments, set
 `training.num_envs` (docs/usage.md, "Several training environments"); its environments are seeded with
 `rl_core.seeding.env_seed`. For a Gymnasium vector environment of your own, build one over the wrapper as below.
-
-**What the deprecated factories did**:
-
-- Supports both async (parallel processes) and sync (sequential) modes
-- Configurable number of environments
-- Automatic seed management (base_seed + i per environment)
-- Full compatibility with Gymnasium's VectorEnv API
 
 **Example**:
 
@@ -165,10 +158,7 @@ vec_env = SyncVectorEnv([lambda i=i: CartPoleEnv(seed=42 + i) for i in range(4)]
 
 **Purpose**: Easy environment creation from config files
 
-**Functions**:
-
-- `make_env_from_config(config)`: Single environment
-- `make_vec_env_from_config(config, num_envs)`: Vectorized environments (deprecated, removed in 0.3.0)
+**Function**: `make_env_from_config(config)`: a single environment
 
 **Example**:
 
@@ -188,67 +178,18 @@ env = make_env_from_config(config)
 
 ## API Reference
 
-### Factory Functions
-
-#### `make_env(...)`
-
-Deprecated since rl-challenges 0.2.0 and removed in 0.3.0: build `CartPoleEnv(...)` with the same arguments, or use
-`make_env_from_config`. Creates a single environment with noise injection and domain randomization features.
-
-**Parameters**:
-
-- `env_name`: Name of the Gymnasium environment to create (default: "CartPole-v1")
-- `render_mode`: Rendering mode (None, 'human', 'rgb_array')
-- `max_episode_steps`: Maximum steps per episode (default: 500)
-- `seed`: Random seed for reproducibility
-- `obs_noise_std`: Observation noise standard deviation (default: 0.0)
-- `mask_velocity`: Zero the velocity entries (default: False)
-- `frame_stack`: Observations stacked into one, oldest first (default: 1, off)
-- `frame_deltas`: The stack as its newest frame and the differences between frames, newest first (default: False)
-- `action_noise_prob`: Action flip probability (default: 0.0)
-- `domain_randomization`: Dict of parameter ranges (default: None)
-
-**Returns**: `CartPoleEnv` instance
-
-**Note**: Domain randomization is CartPole-specific and action noise requires Discrete(2) action spaces.
-
-#### `make_vec_env(...)`
-
-Deprecated since rl-challenges 0.2.0 and removed in 0.3.0: set `training.num_envs`, or build a Gymnasium vector
-environment over `CartPoleEnv(...)`. Creates vectorized CartPole environments for parallel training.
-
-**Parameters**:
-
-- `num_envs`: Number of parallel environments (default: 4)
-- All parameters from `make_env()`
-- `async_envs`: Use async (True) or sync (False) execution (default: True)
-
-**Returns**: `gym.vector.VectorEnv` instance
+### Factory Function
 
 #### `make_env_from_config(config)`
 
-Creates environment from configuration dictionary.
+Creates environment from configuration dictionary. `CartPoleEnv(...)` takes the same settings as keywords
+(`env_name` for the config's `name`).
 
 **Parameters**:
 
 - `config`: Dictionary with environment parameters
 
 **Returns**: `CartPoleEnv` instance
-
-#### `make_vec_env_from_config(config, num_envs)`
-
-Deprecated since rl-challenges 0.2.0 and removed in 0.3.0, as `make_vec_env`. Creates vectorized environments
-from configuration dictionary.
-
-**Parameters**:
-
-- `config`: Dictionary with environment parameters
-- `num_envs`: Number of parallel environments (default: 4)
-- `config["async_envs"]`: `true` (the default when unset) runs each environment in its own process; `false` or `null`
-  runs them in this one. Anything else, such as a quoted `"false"`, raises `ValueError`, and so does
-  `make_env_from_config`, since one environment section may serve both
-
-**Returns**: `gym.vector.VectorEnv` instance
 
 ## Testing
 
@@ -257,7 +198,7 @@ The environment implementation includes comprehensive tests covering:
 - **Basic Environment Functionality**: Environment creation, reset, step, episode tracking, and completion
 - **Noise Injection**: Observation noise and action noise application
 - **Domain Randomization**: Parameter randomization and per-episode variation
-- **Factory Functions**: Single and vectorized environment creation, with and without features
+- **Factory Function**: Environment creation from a config, with and without features
 - **Configuration-based Creation**: Creating environments from configuration dictionaries
 - **Environment Name Support**: Using different Gymnasium environments with the wrapper
 

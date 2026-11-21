@@ -38,7 +38,8 @@ my_game = "my_game.benchmark"
 where = ["src"]
 ```
 
-`rl-core~=0.2.0` accepts 0.2.x and stops before 0.3, which may change the API ([releasing.md](releasing.md)).
+`rl-core~=0.2.0` accepts 0.2.x and stops before the next minor version, which may change the API
+([releasing.md](releasing.md)).
 
 ## 2. The game as a Gymnasium environment
 

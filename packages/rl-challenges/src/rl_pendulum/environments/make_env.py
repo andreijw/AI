@@ -2,16 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any, Unpack
+from typing import Any
 
-import gymnasium as gym
-from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
-
-from rl_core.environments import OBSERVATION_DEFAULTS, ObservationOptions
+from rl_core.environments import OBSERVATION_DEFAULTS
 from rl_core.utils import read_env_settings
-from rl_core.utils.config_values import async_envs_setting  # private: test_public_api allowlist
-from rl_core.utils.deprecation import deprecated_function  # private: test_public_api allowlist
 
 from .pendulum_env import PendulumEnv
 
@@ -24,155 +18,20 @@ ENV_DEFAULTS: dict[str, Any] = {
     "action_noise_std": 0.0,
     "domain_randomization": None,
 }
-# What both factories accept: the vectorized one also reads async_envs, and one environment section may
-# serve both, so the single-environment factory accepts it and has no use for it.
-ACCEPTED_SETTINGS: dict[str, Any] = {**ENV_DEFAULTS, "async_envs": True}
-
-
-def _build_env(
-    env_name: str = "Pendulum-v1",
-    render_mode: str | None = None,
-    max_episode_steps: int = 200,
-    seed: int | None = None,
-    obs_noise_std: float = 0.0,
-    action_noise_std: float = 0.0,
-    domain_randomization: dict[str, tuple[float, float]] | None = None,
-    **observation: Unpack[ObservationOptions],
-) -> PendulumEnv:
-    """
-    Create a Pendulum environment with optional continuous noise and domain randomization.
-
-    Args:
-        env_name: Name of the Gymnasium environment (default: "Pendulum-v1").
-        render_mode: Rendering mode ('human', 'rgb_array', or None).
-        max_episode_steps: Maximum steps per episode (default: 200).
-        seed: Random seed for reproducibility.
-        obs_noise_std: Standard deviation of Gaussian observation noise.
-        observation: The observation settings (``ObservationOptions``; see ``BaseEnvWrapper``).
-        action_noise_std: Standard deviation of Gaussian action noise.
-        domain_randomization: Physical parameter randomization ranges.
-
-    Returns:
-        PendulumEnv instance.
-    """
-    return PendulumEnv(
-        env_name=env_name,
-        render_mode=render_mode,
-        max_episode_steps=max_episode_steps,
-        seed=seed,
-        obs_noise_std=obs_noise_std,
-        action_noise_std=action_noise_std,
-        domain_randomization=domain_randomization,
-        **observation,
-    )
-
-
-def _build_vec_env(
-    num_envs: int = 4,
-    env_name: str = "Pendulum-v1",
-    render_mode: str | None = None,
-    max_episode_steps: int = 200,
-    seed: int | None = None,
-    obs_noise_std: float = 0.0,
-    action_noise_std: float = 0.0,
-    domain_randomization: dict[str, tuple[float, float]] | None = None,
-    async_envs: bool = True,
-    **observation: Unpack[ObservationOptions],
-) -> gym.vector.VectorEnv:
-    """
-    Create vectorized Pendulum environments for parallel rollouts.
-
-    Args:
-        num_envs: Number of parallel environments.
-        env_name: Name of Gymnasium environment.
-        render_mode: Rendering mode.
-        max_episode_steps: Maximum steps per episode.
-        seed: Base random seed.
-        obs_noise_std: Gaussian observation noise std.
-        observation: The observation settings (``ObservationOptions``; see ``BaseEnvWrapper``).
-        action_noise_std: Gaussian action noise std.
-        domain_randomization: Physical parameter ranges.
-        async_envs: If True, use AsyncVectorEnv; if False, use SyncVectorEnv.
-
-    Returns:
-        VectorEnv instance with num_envs parallel environments.
-    """
-
-    def _make_env(env_seed: int | None) -> Callable[[], PendulumEnv]:
-        def _init() -> PendulumEnv:
-            return _build_env(
-                env_name=env_name,
-                render_mode=render_mode,
-                max_episode_steps=max_episode_steps,
-                seed=env_seed,
-                obs_noise_std=obs_noise_std,
-                action_noise_std=action_noise_std,
-                domain_randomization=domain_randomization,
-                **observation,
-            )
-
-        return _init
-
-    env_fns = [_make_env(seed + i if seed is not None else None) for i in range(num_envs)]
-    if async_envs:
-        return AsyncVectorEnv(env_fns)  # type: ignore[arg-type]
-    return SyncVectorEnv(env_fns)  # type: ignore[arg-type]
+# What make_env_from_config accepts: every setting, nothing else.
+ACCEPTED_SETTINGS: dict[str, Any] = dict(ENV_DEFAULTS)
 
 
 def make_env_from_config(config: dict[str, Any]) -> PendulumEnv:
     """Create a Pendulum environment from a configuration dictionary.
 
     Raises:
-        ValueError: If the config sets a setting Pendulum does not support (see ACCEPTED_SETTINGS),
-            or async_envs is not true, false or null.
+        ValueError: If the config sets a setting Pendulum does not support (see ACCEPTED_SETTINGS).
     """
     settings = read_env_settings(config, ACCEPTED_SETTINGS, "Pendulum-v1")
-    # Checked although unused here: one environment section may serve both factories.
-    async_envs_setting(config, ACCEPTED_SETTINGS["async_envs"])
-    del settings["async_envs"]
-    return _build_env(
+    return PendulumEnv(
         env_name=settings.pop("name"),
         render_mode=config.get("render_mode"),
         seed=config.get("seed"),
         **settings,
     )
-
-
-def _build_vec_env_from_config(config: dict[str, Any], num_envs: int = 4) -> gym.vector.VectorEnv:
-    """Create vectorized Pendulum environments from a configuration dictionary.
-
-    Raises:
-        ValueError: If the config sets a setting Pendulum does not support (see ACCEPTED_SETTINGS),
-            or async_envs is not true, false or null.
-    """
-    settings = read_env_settings(config, ACCEPTED_SETTINGS, "Pendulum-v1")
-    settings["async_envs"] = async_envs_setting(config, ACCEPTED_SETTINGS["async_envs"])
-    return _build_vec_env(
-        num_envs=num_envs,
-        env_name=settings.pop("name"),
-        render_mode=config.get("render_mode"),
-        seed=config.get("seed"),
-        **settings,
-    )
-
-
-# Deprecated in rl-challenges 0.2.0, removed in 0.3.0: make_env_from_config is what the challenge builds
-# with, and training.num_envs gives several environments, seeded with rl_core.seeding.env_seed (these
-# seed environment i with seed + i).
-_DEPRECATED = {"dist": "rl-challenges", "since": "0.2.0", "removed_in": "0.3.0"}
-_VECTOR_REPLACEMENT = "use training.num_envs, or a Gymnasium vector env over PendulumEnv(...)"
-make_env = deprecated_function(
-    _build_env,
-    "rl_pendulum.make_env",
-    "build PendulumEnv(...) directly, or use make_env_from_config(section)",
-    **_DEPRECATED,
-)
-make_vec_env = deprecated_function(
-    _build_vec_env, "rl_pendulum.make_vec_env", _VECTOR_REPLACEMENT, **_DEPRECATED
-)
-make_vec_env_from_config = deprecated_function(
-    _build_vec_env_from_config,
-    "rl_pendulum.make_vec_env_from_config",
-    _VECTOR_REPLACEMENT,
-    **_DEPRECATED,
-)

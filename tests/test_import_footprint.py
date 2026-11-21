@@ -13,11 +13,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_the_training_package_loads_no_challenge():
-    """The challenges import the training package, so training importing them back would be a cycle; the
-    deprecated rl_core.training.robustness path loads rl_core.robustness only when a name is used. A fresh
-    process."""
+    """The challenges import the training package, so training importing them back would be a cycle (the
+    robustness benchmark lives in rl_core.robustness, outside training). A fresh process."""
     code = (
-        "import sys; import rl_core.training, rl_core.training.robustness; "
+        "import sys; import rl_core.training; "
         "print(sorted(m for m in sys.modules "
         "if m.startswith(('rl_core.challenges', 'rl_core.robustness'))))"
     )
