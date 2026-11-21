@@ -483,7 +483,7 @@ def torch_backend_cases(ddpg_config: Mapping[str, object]) -> list[tuple[type, d
 def vector_env(factory, config, num_envs, async_envs=False):
     """``num_envs`` environments from ``factory(section)`` (a challenge package's
     ``make_env_from_config``) in one Gymnasium vector environment, environment i seeded with seed + i
-    as CartPole's and Pendulum's deprecated ``make_vec_env_from_config`` does."""
+    (the convention the removed 0.2.0 vector factories had)."""
     seed = config.get("seed")
     sections = [{**config, "seed": None if seed is None else seed + i} for i in range(num_envs)]
     vector = gym.vector.AsyncVectorEnv if async_envs else gym.vector.SyncVectorEnv

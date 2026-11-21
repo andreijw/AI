@@ -39,6 +39,17 @@ Acrobot-v1) and
 
 ### Changed
 
+- **The 0.2.0 deprecations are removed; rl-core, rl-challenges and rl-navigation are 0.3.0**
+  (`chore/remove-deprecated-0-3-0`; the library follow-ups' 0.3.0 item). `make_env`, `make_vec_env` and
+  `make_vec_env_from_config` of `rl_cartpole` and `rl_pendulum` are gone (build `CartPoleEnv(...)` or
+  `PendulumEnv(...)`, or use `make_env_from_config`; several environments come from `training.num_envs`, which seeds
+  environment i with `rl_core.seeding.env_seed` where the removed factories used seed + i), and so is the
+  `rl_core.training.robustness` shim (import from `rl_core.robustness`). The `async_envs` environment setting, which
+  only the removed factories read, goes too: `async_envs: true` in an environment section now fails as an unsupported
+  setting. Following `docs/releasing.md`'s rule for a breaking change, this PR bumps all three distributions to 0.3.0,
+  with `rl-core~=0.3.0` and undated `[0.3.0]` sections the release PR will date (the maintainer's decision, 2026-11-20).
+  The install URLs, and the sample `rl-core~=0.2.0` dependency in `docs/external-challenges.md`, keep naming 0.2.0, the
+  published release, until the release PR moves them.
 - **One builder for the localizer factories, and `record_run` in a neutral module** (`feature/slam-factory-seam`; PR
   3-0 of the occupancy-grid mapping and SLAM item). A localizer factory is now called with one frozen
   `FactoryContext(range_map, odometry, start, covariance, rng, robot_radius)` instead of six keywords: `run_trial`,

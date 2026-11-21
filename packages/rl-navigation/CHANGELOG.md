@@ -4,7 +4,7 @@ What changed in `rl-navigation`, newest first, in the style of [Keep a Changelog
 with [semantic versions](https://semver.org/) (0.x: a minor version may break the API). A release's notes are its
 section here. The repository's day-by-day log is the root CHANGELOG.md.
 
-## [Unreleased]
+## [0.3.0]
 
 ### Added
 
@@ -16,6 +16,7 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
 
 ### Changed
 
+- **Breaking:** requires `rl-core~=0.3.0`.
 - **Breaking:** a `run_trial` filter factory (`LocalizerFactory`, and the ones `ekf()` and `mcl()` return) now takes
   one `rl_navigation.estimation.evaluation.FactoryContext` (`range_map`, `odometry`, `start`, `covariance`, `rng`,
   `robot_radius`) instead of those six keywords. `run_trial(make_localizer=ekf())` and every seeded result are
