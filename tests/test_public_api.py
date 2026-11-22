@@ -123,19 +123,8 @@ PUBLIC_API = {
     },
 }
 
-#: Private names a dependent may import, each with its reason. Its ``rl-core~=0.2.0`` pin guards them.
-DEPENDENT_ALLOWLIST = {
-    # The legacy vector factories' async_envs check: private, as they are deprecated (removed in 0.3.0).
-    "packages/rl-challenges/src/rl_cartpole/environments/make_env.py: "
-    "rl_core.utils.config_values.async_envs_setting",
-    "packages/rl-challenges/src/rl_pendulum/environments/make_env.py: "
-    "rl_core.utils.config_values.async_envs_setting",
-    # The same factories' deprecation wrapper, so their warning has rl-core's one wording.
-    "packages/rl-challenges/src/rl_cartpole/environments/make_env.py: "
-    "rl_core.utils.deprecation.deprecated_function",
-    "packages/rl-challenges/src/rl_pendulum/environments/make_env.py: "
-    "rl_core.utils.deprecation.deprecated_function",
-}
+#: Private names a dependent may import, each with its reason. Its ``rl-core~=0.3.0`` pin guards them.
+DEPENDENT_ALLOWLIST: set[str] = set()  # none: every dependent imports public names only
 
 #: The private rl_core names the checkout's own scripts import.
 SCRIPT_DEEP_IMPORTS = {
@@ -273,7 +262,7 @@ def test_the_scripts_deep_imports_are_the_listed_ones():
         ("from rl_core.export import c_header\n", []),
         ("from rl_core.agents import no_such_name\n", ["rl_core.agents.no_such_name"]),
         ("from .utils.config_values import flag\n", ["rl_core.utils.config_values.flag"]),
-        ("import numpy\nfrom rl_cartpole.environments import make_env\n", []),
+        ("import numpy\nfrom rl_cartpole.environments import make_env_from_config\n", []),
     ],
 )
 def test_the_private_import_scan(source, expected):

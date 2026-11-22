@@ -52,7 +52,7 @@ To optimize token usage and context window limits:
   * `rl_core/training/`: Training pipeline orchestration (`trainer.py`), the checkpoint's trainer file
     (`checkpoints.py`), curriculum scheduling of the training environment's noise and randomization
     (`curriculum.py`), the pool of training environments `training.num_envs` steps in lockstep
-    (`parallel.py`). `training/robustness.py` is the robustness benchmark's 0.1.0 path, which warns until 0.3.0.
+    (`parallel.py`).
   * `rl_core/robustness.py`: The robustness benchmark's perturbations and greedy rows, beside `rl_core/seeding.py`:
     it imports both the training package and the challenges, which import training.
   * `rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
@@ -190,8 +190,8 @@ Always consult [CONTRIBUTING.md](CONTRIBUTING.md) when writing, refactoring, or 
   * Adhere to Gymnasium v1.0+ signatures. Always expect `terminated` and `truncated` as separate boolean outputs from
     environment step calls.
   * Always ensure environments are correctly closed with `.close()` when done to prevent resource leaks.
-* **Vectorized Training**: Use `training.num_envs` for several training environments stepped together (CartPole's
-  and Pendulum's `make_vec_env` is deprecated since rl-challenges 0.2.0 and removed in 0.3.0).
+* **Vectorized Training**: Use `training.num_envs` for several training environments stepped together (there are no
+  vector factories since rl-challenges 0.3.0).
 * **Pure NumPy Framework**: The neural network architectures (Actor-Critic/PPO) are custom built on top of NumPy without
   external heavy DL dependencies. Maintain optimization cleanliness and verify numerical stability (e.g., stable
   softmax).

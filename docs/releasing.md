@@ -81,10 +81,10 @@ Jazzy's).
 
 ## A breaking rl-core change
 
-`rl-challenges` and `rl-navigation[challenge]` require `rl-core~=0.2.0`, which stops before 0.3. The first pull
-request of a breaking change bumps `rl-core` to the next minor version, the dependents' requirements to match and the
-dependents' own minor versions, each CHANGELOG with an undated section that the later pull requests add to
-(`tests/test_packages.py` fails while a requirement excludes the in-tree `rl-core`). The release PR dates the
+`rl-challenges` and `rl-navigation[challenge]` require `rl-core~=0.x.0`, which stops before the next minor version.
+The first pull request of a breaking change bumps `rl-core` to the next minor version, the dependents' requirements to
+match and the dependents' own minor versions, each CHANGELOG with an undated section that the later pull requests add
+to (`tests/test_packages.py` fails while a requirement excludes the in-tree `rl-core`). The release PR dates the
 sections. Tag `rl-core` and publish its draft first: the dependents' runs refuse to release against an `rl-core`
 that is not released.
 
