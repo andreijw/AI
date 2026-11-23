@@ -122,11 +122,15 @@ tags are in [docs/releasing.md](docs/releasing.md).
      it, and overlay painters for points, paths and pose markers) imports only NumPy and the standard library, never
      Gymnasium or `rl_core`.
    - `rl_navigation.estimation` is the robot's own code beside the Gymnasium layer, not under it: pose estimation on a
-     known map (`ekf`: `EkfLocalizer`; `kalman`: `kalman_update` in Joseph form; `mcl`: `MclLocalizer`, augmented Monte
+     known map (`ekf`: `EkfLocalizer`, and `predict_pose`, the one-reading predict (`PosePrediction`: pose, Jacobian
+     `F`, noise) that `EkfSlam` shares; `kalman`: `kalman_update` in Joseph form; `mcl`: `MclLocalizer`, augmented Monte
      Carlo localization with its pure resampling and likelihood functions; `evaluation`: seeded trials with either
-     filter, optionally with a kidnapping, against the simulator's true pose; `averages`: the NaN-on-empty mean and
-     median of the evaluation tools; `comparison`: the EKF and MCL on the same seeds as a Markdown report
-     and a command line, a desk-tool package (`instrumentation`, `records`, `metrics`, `runner`, `report`, `cli`,
+     filter, optionally with a kidnapping, against the simulator's true pose, and the `FactoryContext` (`range_map`,
+     `odometry`, `start`, `covariance`, `rng`, `robot_radius`) that every filter factory is called with, as
+     `factory(context)`; `runs`: `record_run`, the seeded wander with no filter in the loop whose scans and true poses
+     the mapping and SLAM desk tools read, a desk tool the package's `__init__` does not import; `averages`: the
+     NaN-on-empty mean and median of the evaluation tools; `comparison`: the EKF and MCL on the same seeds as a Markdown
+     report and a command line, a desk-tool package (`instrumentation`, `records`, `metrics`, `runner`, `report`, `cli`,
      re-exported by its `__init__`) that the package's `__init__` does not import;
      `recording`: snapshots of both filters on one seeded trial and the frames painted from them, another desk tool the
      package does not import; the `rl_navigation.localization_video` command, outside the package, writes them to an
@@ -144,8 +148,9 @@ tags are in [docs/releasing.md](docs/releasing.md).
      scans at known poses (`beams`: the exact, vectorised traversal of the cells a ray crosses and the inverse sensor
      model's choice of free and occupied cells; `grid`: `OccupancyGrid` and its `LogOddsModel` presets for the lidar and
      the HC-SR04). Its core imports NumPy and `rl_navigation.sim` only, so it runs on the robot without the estimators.
-     `evaluation`, seeded runs on `run_trial`'s trajectory scored against the arena rasterised with `occupancy_grid`, is
-     a desk tool the package's `__init__` does not import, and the only module of `mapping` that imports `estimation`;
+     `evaluation`, seeded runs on `run_trial`'s trajectory (recorded by `estimation.runs.record_run`, which it
+     re-exports) scored against the arena rasterised with `occupancy_grid`, is a desk tool the package's `__init__` does
+     not import, and the only module of `mapping` that imports `estimation`;
      neither `estimation` nor the challenge imports `mapping`. The grid is not yet a `RangeMap`: that arrives with the
      first filter to localize on a built map (Phase 8, step 3, PR 3).
    - `rl_navigation.slam` is a layer above `estimation`: simultaneous localization and mapping. `features` cuts a
@@ -158,14 +163,15 @@ tags are in [docs/releasing.md](docs/releasing.md).
      out (`second_order_covariance`, so that one update after a long unseen stretch does not collapse the heading), and
      guards so that it never raises on a scan's content. `EkfSlam` keeps the `Localizer` protocol, so `run_trial` drives
      it like the localizers. Its core imports NumPy, `rl_navigation.sim` and the `estimation` core (`kalman_update`,
-     `symmetrized`, `motion_jacobians`, `chi2_quantile`, the pose checks), never `mapping` or `estimation`'s desk tools.
+     `symmetrized`, `predict_pose`, `chi2_quantile`, the pose checks), never `mapping` or `estimation`'s desk tools.
      `feature_evaluation` and `evaluation` (`slam_trial`, `SlamFactory`, the oracle, the aligned scoring) are desk tools
-     the package's `__init__` does not import; `evaluation` also imports `mapping.evaluation.record_run` for the
-     oracle's true poses. Nothing below it (`estimation`, `mapping`, the Gymnasium layer, the challenge) imports it.
-     **Move triggers:** when a third package needs `motion_jacobians`, `kalman_update` and `chi2_quantile`, they move to
-     a shared module (`sim` for the motion model); if a further desk tool uses `record_run`, it moves from
-     `mapping.evaluation` to a neutral desk-tool module; `SlamFactory` is the fourth implementation of the six-keyword
-     `LocalizerFactory` seam, and a fifth, or any change to the keywords, refactors the seam to one builder.
+     the package's `__init__` does not import; both take their scans and true poses from
+     `estimation.runs.record_run`, so `slam` loads no `mapping`. Nothing below it
+     (`estimation`, `mapping`, the Gymnasium layer, the challenge) imports it.
+     **Move triggers:** when a third package needs `predict_pose`, `kalman_update` and `chi2_quantile`, they move to a
+     shared module (`sim` for the motion model). Done: `record_run` moved to `estimation.runs` when `slam` became its
+     second user, and the filter factories take one `FactoryContext` instead of six keywords when `SlamFactory` became
+     the fourth (CHANGELOG.md, 2026-11-20).
    - `rl_navigation.gym_env` (`NavigationGymEnv`) is the Gymnasium environment over the simulator, and importing it
      registers `Navigation-v0` and `NavigationContinuous-v0`. It imports Gymnasium and `rl_navigation.sim` only, so
      `import rl_navigation.gym_env; gym.make("NavigationContinuous-v0")` works without the training framework.
@@ -260,6 +266,7 @@ flowchart TD
         NavEst["rl_navigation.estimation: EkfLocalizer and MclLocalizer over a RangeMap (NumPy + sim only)"]
         NavAvg["rl_navigation.estimation.averages: NaN-on-empty mean and median (NumPy only)"]
         NavCmp["rl_navigation.estimation.comparison: EKF against MCL, report and CLI (desk tool)"]
+        NavRuns["rl_navigation.estimation.runs: record_run, scans and true poses with no filter (desk tool)"]
         NavMap["rl_navigation.mapping: log-odds OccupancyGrid from scans at known poses (core: NumPy + sim)"]
         NavSlam["rl_navigation.slam: circle features and landmark EKF-SLAM (core: NumPy + sim + estimation core)"]
     end
@@ -321,10 +328,11 @@ flowchart TD
     NavCmp --> NavEst
     NavCmp --> NavSim
     NavMap --> NavSim
-    NavMap -. evaluation .-> NavEst
     NavSlam --> NavEst
     NavSlam --> NavSim
-    NavSlam -. evaluation .-> NavMap
+    NavSlam -. evaluation .-> NavRuns
+    NavMap -. evaluation .-> NavRuns
+    NavRuns --> NavEst
 ```
 
 ---
@@ -758,9 +766,9 @@ plots/
      `make_env_from_config`, which reads them with `rl_core.utils.read_env_settings`: null takes the
      default, and any other setting given a value is rejected rather than ignored. A wrapper with observation
      settings only builds through `rl_core.environments.env_from_config(wrapper, config, ENV_DEFAULTS)` (Acrobot,
-     MountainCar, LunarLander, BipedalWalker). A vectorized factory only if something uses it (`rl_acrobot` has
-     none; CartPole's and Pendulum's `make_env`, `make_vec_env` and `make_vec_env_from_config` are deprecated since
-     rl-challenges 0.2.0).
+     MountainCar, LunarLander, BipedalWalker). No vectorized factory: `training.num_envs` builds several
+     environments (CartPole's and Pendulum's `make_env`, `make_vec_env` and `make_vec_env_from_config` were removed in
+     rl-challenges 0.3.0; they have `make_env_from_config` only).
    - `benchmark.py`: a `BenchmarkChallenge` subclass from `rl_core.challenges`, decorated with `@register_challenge`. It
      implements `make_env(env_config, render_mode)` (usually the package's `make_env_from_config`) and lists its agents
      in the class variable `AGENT_CLASSES` (agent type to class). The base class's `supported_agents` and `make_agent`

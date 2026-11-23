@@ -12,9 +12,11 @@ deliberately not imported here.
 from rl_navigation.estimation.ekf import (
     EkfLocalizer,
     Linearization,
+    PosePrediction,
     UpdateResult,
     linearize_ranges,
     motion_jacobians,
+    predict_pose,
 )
 from rl_navigation.estimation.kalman import kalman_update
 from rl_navigation.estimation.maps import ParticleMap, RangeMap, SensorMap, usable_readings
@@ -38,6 +40,7 @@ __all__ = [
     "MclSettings",
     "MclUpdate",
     "ParticleMap",
+    "PosePrediction",
     "RangeMap",
     "SensorMap",
     "UpdateResult",
@@ -49,6 +52,7 @@ __all__ = [
     "measurement_log_likelihood",
     "motion_jacobians",
     "pose_difference",
+    "predict_pose",
     "recovery_update",
     "sample_free_poses",
     "usable_readings",

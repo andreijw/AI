@@ -14,9 +14,10 @@ from rl_navigation.estimation import (
     linearize_ranges,
     motion_jacobians,
 )
-from rl_navigation.estimation.ekf import chi2_quantile
+from rl_navigation.estimation.ekf import PosePrediction, chi2_quantile, predict_pose
 from rl_navigation.estimation.evaluation import ekf as ekf_factory
 from rl_navigation.estimation.evaluation import run_trial
+from rl_navigation.estimation.kalman import symmetrized
 from rl_navigation.sim import (
     Arena,
     RangeSensor,
@@ -62,6 +63,35 @@ def test_predict_a_straight_move_by_hand():
     np.testing.assert_allclose(
         ekf.covariance, F @ P0 @ F.T + Q, rtol=1e-12, atol=1e-18, err_msg="P' = F P F^T + Q."
     )
+
+
+def test_predict_pose_by_hand():
+    """The shared 3x3 predict: the arc, its Jacobian F and the encoders' noise (G A) Sigma_w
+    (G A)^T, for the straight move worked above."""
+    prediction = predict_pose([1.0, 2.0, 0.0], [0.1, 0.1], ODOMETRY)
+    assert isinstance(prediction, PosePrediction)
+    np.testing.assert_allclose(prediction.pose, [1.1, 2.0, 0.0], atol=1e-15)
+    np.testing.assert_allclose(
+        prediction.F, [[1.0, 0.0, 0.0], [0.0, 1.0, 0.1], [0.0, 0.0, 1.0]], atol=1e-15
+    )
+    np.testing.assert_allclose(
+        prediction.noise,
+        [[1.25e-5, 0.0, 0.0], [0.0, 3.125e-6, 6.25e-5], [0.0, 6.25e-5, 1.25e-3]],
+        rtol=1e-12,
+        atol=1e-18,
+    )
+
+
+def test_the_localizers_predict_is_predict_pose_bit_for_bit():
+    rng = np.random.default_rng(3)
+    ekf = _ekf(SensorMap(ROOM, lidar()), [1.0, 2.0, 0.3], np.diag([0.05, 0.04, 0.03]) ** 2)
+    for travel in rng.uniform(-0.02, 0.05, (30, 2)):
+        before, covariance = ekf.pose, ekf.covariance
+        prediction = predict_pose(before, travel, ODOMETRY)
+        ekf.predict(travel)
+        np.testing.assert_array_equal(ekf.pose, prediction.pose)
+        expected = prediction.F @ covariance @ prediction.F.T + prediction.noise
+        np.testing.assert_array_equal(ekf.covariance, symmetrized(expected))
 
 
 def test_predict_a_quarter_turn_in_place_by_hand():

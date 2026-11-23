@@ -23,7 +23,7 @@ contributing, writing code, refactoring components, or submitting pull requests.
 - **Resource Management**: Always ensure environments are closed cleanly using `env.close()` or context managers to
   prevent memory leaks and process zombies.
 - **Standardized Vectorized Interfaces**: When utilizing vectorized rollouts (a `gym.vector.VectorEnv` built over a
-  wrapper; CartPole's and Pendulum's `make_vec_env` is deprecated), interact through standard batch semantics.
+  wrapper), interact through standard batch semantics.
 
 ### Pure NumPy Mathematical Integrity
 

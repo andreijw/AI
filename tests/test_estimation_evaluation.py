@@ -1,5 +1,6 @@
 """Seeded localization trials against the simulator's ground truth, and their summary."""
 
+import dataclasses
 import math
 
 import numpy as np
@@ -7,6 +8,7 @@ import pytest
 
 from rl_navigation.estimation import EkfLocalizer, MclSettings, SensorMap
 from rl_navigation.estimation.evaluation import (
+    FactoryContext,
     Trial,
     average_nees,
     ekf,
@@ -192,18 +194,45 @@ def test_the_default_localizer_is_the_ekf():
 def test_the_ekf_factory_passes_the_reset_settings_on():
     make = ekf(reset_after=None, min_candidates=4, reset_std=(0.3, 0.3, 0.2), reset_window=10)
     localizer = make(
-        range_map=SensorMap(Arena(4.0, 4.0), lidar()),
-        odometry=WheelOdometry(),
-        start=np.array([2.0, 2.0, 0.0]),
-        covariance=0.01 * np.eye(3),
-        rng=np.random.default_rng(0),
-        robot_radius=0.1,
+        FactoryContext(
+            range_map=SensorMap(Arena(4.0, 4.0), lidar()),
+            odometry=WheelOdometry(),
+            start=np.array([2.0, 2.0, 0.0]),
+            covariance=0.01 * np.eye(3),
+            rng=np.random.default_rng(0),
+            robot_radius=0.1,
+        )
     )
     assert isinstance(localizer, EkfLocalizer)
     assert localizer.reset_after is None, "The factory should pass reset_after on."
     assert localizer.min_candidates == 4, "The factory should pass min_candidates on."
     np.testing.assert_array_equal(localizer.reset_std, [0.3, 0.3, 0.2])
     assert localizer.reset_window == 10, "The factory should pass reset_window on."
+
+
+def test_run_trial_hands_its_factory_one_frozen_context():
+    """One builder seam: the factory gets a single :class:`FactoryContext` holding the trial's
+    map, encoder model, noisy start, initial covariance, filter stream and robot radius."""
+    sensor = hc_sr04()
+    seen = []
+
+    def make(context):
+        seen.append(context)
+        return ekf()(context)
+
+    trial = run_trial(4, sensor, steps=3, make_localizer=make, initial_std=(0.02, 0.03, 0.04))
+    (context,) = seen
+    assert isinstance(context, FactoryContext)
+    assert isinstance(context.range_map, SensorMap) and context.range_map.sensor is sensor
+    assert context.odometry == WheelOdometry()
+    assert context.robot_radius == LayoutParams().robot_radius
+    np.testing.assert_array_equal(context.covariance, np.diag([0.02, 0.03, 0.04]) ** 2)
+    assert context.start.shape == (3,) and np.isfinite(context.start).all()
+    assert isinstance(context.rng, np.random.Generator)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        context.robot_radius = 0.2  # type: ignore[misc]
+    default = run_trial(4, sensor, steps=3, initial_std=(0.02, 0.03, 0.04))
+    np.testing.assert_array_equal(trial.estimates, default.estimates)
 
 
 @pytest.mark.parametrize("ekf_argument", [{"iterations": 2}, {"linearity_tol": 0.01}])

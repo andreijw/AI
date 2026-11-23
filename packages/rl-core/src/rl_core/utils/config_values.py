@@ -1,8 +1,7 @@
 """Strict readers for config values, so a mistyped setting fails at construction.
 
-The agents and the trainer read their settings here, the environment wrappers their observation
-settings, and the challenges' environment factories ``async_envs``. It lives in ``rl_core.utils`` so
-that none of those depends on another for it.
+The agents and the trainer read their settings here, and the environment wrappers their observation
+settings. It lives in ``rl_core.utils`` so that none of those depends on another for it.
 """
 
 from collections.abc import Mapping
@@ -32,17 +31,7 @@ def flag(config: Mapping[str, Any], key: str, default: bool) -> bool:
 
     A quoted ``"false"`` from a hand-written YAML file would otherwise be truthy.
     """
-    return _checked_bool(key, config.get(key, default), "true or false")
-
-
-def async_envs_setting(config: Mapping[str, Any], default: bool) -> bool:
-    """An environment section's ``async_envs`` (or ``default`` if unset), with null meaning false.
-
-    Null has always meant synchronous environments. Anything but null or a boolean is rejected:
-    a quoted ``"false"`` would otherwise start one process per environment.
-    """
-    value = config.get("async_envs", default)
-    return False if value is None else _checked_bool("async_envs", value, "true, false or null")
+    return _checked_bool(key, config.get(key, default))
 
 
 def check_positive_int(name: str, value: Any) -> int:
@@ -52,12 +41,12 @@ def check_positive_int(name: str, value: Any) -> int:
 
 def check_bool(name: str, value: Any) -> bool:
     """One value as a bool, checked as :func:`flag` does under ``name``."""
-    return _checked_bool(name, value, "true or false")
+    return _checked_bool(name, value)
 
 
-def _checked_bool(name: str, value: Any, allowed: str) -> bool:
+def _checked_bool(name: str, value: Any) -> bool:
     if not isinstance(value, bool | np.bool_):
-        raise ValueError(f"{name} must be {allowed}, got {value!r}")
+        raise ValueError(f"{name} must be true or false, got {value!r}")
     return bool(value)
 
 

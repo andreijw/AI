@@ -4,6 +4,13 @@ What changed in `rl-core`, newest first, in the style of [Keep a Changelog](http
 with [semantic versions](https://semver.org/) (0.x: a minor version may break the API). A release's notes are its
 section here. The repository's day-by-day log is the root CHANGELOG.md.
 
+## [0.3.0]
+
+### Removed
+
+- `rl_core.training.robustness`, deprecated since 0.2.0: import the nine names from `rl_core.robustness`.
+- `rl_core.utils.config_values.async_envs_setting` (private), unused since the challenges' vector factories went.
+
 ## [0.2.0] - 2026-11-20
 
 ### Added

@@ -105,6 +105,45 @@ def motion_jacobians(
     return F, G
 
 
+class PosePrediction(NamedTuple):
+    """One encoder reading's prediction of a pose (:func:`predict_pose`).
+
+    ``pose`` is ``(3,)``, the arc's end; ``F`` is ``(3, 3)``, its Jacobian with respect to the
+    pose; ``noise`` is ``(3, 3)``, the reading's covariance carried to the pose,
+    ``(G A) Sigma_w (G A)^T``. A filter's pose covariance becomes ``F P F^T + noise``.
+    """
+
+    pose: FloatArray
+    F: FloatArray
+    noise: FloatArray
+
+
+def predict_pose(
+    pose: ArrayLike, wheel_travel: ArrayLike, odometry: WheelOdometry
+) -> PosePrediction:
+    """Move a pose by one encoder reading: the arc, its Jacobian and the reading's noise.
+
+    The one predict of every pose filter (:class:`EkfLocalizer` and the SLAM filters, which may
+    replace ``F`` by their own, as first-estimate Jacobians do). ``A`` maps wheel travel to
+    distance and turn (:meth:`~rl_navigation.sim.WheelOdometry.increments_jacobian`) and
+    ``Sigma_w`` is the reading's covariance; ``F`` and ``G`` are :func:`motion_jacobians`.
+
+    Args:
+        pose: ``(3,)`` pose before the reading.
+        wheel_travel: ``(2,)`` ``(left, right)`` travel in metres, already checked finite.
+        odometry: The encoders' model.
+
+    Returns:
+        The prediction.
+    """
+    travel = np.asarray(wheel_travel, dtype=np.float64)
+    distance, turn = odometry.increments(travel)
+    F, G = motion_jacobians(pose, distance, turn)
+    GA = G @ odometry.increments_jacobian()
+    noise = GA @ odometry.wheel_covariance(travel) @ GA.T
+    return PosePrediction(unicycle_step(pose, distance, turn, 1.0), F, noise)
+
+
 def chi2_quantile(q: float, dof: int) -> float:
     """The ``q`` quantile of chi-square with ``dof`` degrees of freedom, by Wilson and Hilferty's
     cube-root normal approximation: ``k (1 - 2/(9k) + z sqrt(2/(9k)))^3`` with ``z`` the normal
@@ -377,7 +416,7 @@ class EkfLocalizer:
         """Move the estimate by one encoder reading and grow its covariance.
 
         ``P' = F P F^T + (G A) Sigma_w (G A)^T``, where ``A`` maps wheel travel to distance and
-        turn and ``Sigma_w`` is the reading's covariance (see :func:`motion_jacobians`).
+        turn and ``Sigma_w`` is the reading's covariance (see :func:`predict_pose`).
 
         Args:
             wheel_travel: ``(2,)`` finite ``(left, right)`` wheel travel in metres since the last
@@ -387,12 +426,10 @@ class EkfLocalizer:
             ValueError: ``wheel_travel`` is not two finite numbers.
         """
         travel = checked_wheel_travel(wheel_travel, "EkfLocalizer.predict")
-        distance, turn = self.odometry.increments(travel)
-        F, G = motion_jacobians(self._pose, distance, turn)
-        GA = G @ self.odometry.increments_jacobian()
-        covariance = F @ self._covariance @ F.T + GA @ self.odometry.wheel_covariance(travel) @ GA.T
-        self._pose = unicycle_step(self._pose, distance, turn, 1.0)
-        self._covariance = symmetrized(covariance)
+        prediction = predict_pose(self._pose, travel, self.odometry)
+        F = prediction.F
+        self._pose = prediction.pose
+        self._covariance = symmetrized(F @ self._covariance @ F.T + prediction.noise)
 
     def update(self, readings: ArrayLike) -> UpdateResult:
         """Correct the estimate with one scan.

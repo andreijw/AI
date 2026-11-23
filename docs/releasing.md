@@ -47,7 +47,8 @@ anyone could publish one. Upgrade by installing the new release's URL instead.
    before the release PR dates it. `tests/test_packages.py` checks that the section exists, and that every
    `rl-core~=0.x.0` requirement of the other distributions still admits rl-core's `__version__`: a breaking bump that
    forgets them fails CI (below).
-2. **After it merges**, the maintainer pushes a signed tag on the merge commit:
+2. **After it merges**, the maintainer pushes a signed tag on the merge commit, or says yes to it when the
+   assistant's `release` skill asks, and the assistant signs and pushes it from the maintainer's machine:
 
    ```bash
    git fetch origin && git tag -s rl-navigation-v0.1.0 origin/develop -m "rl-navigation 0.1.0"
@@ -80,10 +81,10 @@ Jazzy's).
 
 ## A breaking rl-core change
 
-`rl-challenges` and `rl-navigation[challenge]` require `rl-core~=0.2.0`, which stops before 0.3. The first pull
-request of a breaking change bumps `rl-core` to the next minor version, the dependents' requirements to match and the
-dependents' own minor versions, each CHANGELOG with an undated section that the later pull requests add to
-(`tests/test_packages.py` fails while a requirement excludes the in-tree `rl-core`). The release PR dates the
+`rl-challenges` and `rl-navigation[challenge]` require `rl-core~=0.x.0`, which stops before the next minor version.
+The first pull request of a breaking change bumps `rl-core` to the next minor version, the dependents' requirements to
+match and the dependents' own minor versions, each CHANGELOG with an undated section that the later pull requests add
+to (`tests/test_packages.py` fails while a requirement excludes the in-tree `rl-core`). The release PR dates the
 sections. Tag `rl-core` and publish its draft first: the dependents' runs refuse to release against an `rl-core`
 that is not released.
 
@@ -101,7 +102,8 @@ Two settings protect the releases; both are on (2026-11-12). Each is one command
 
   Or Settings → General → Releases → tick **Enable release immutability**.
 
-- **A tag ruleset**: only repository admins may create, move or delete a release tag (`*-v*`).
+- **A tag ruleset**: only repository admins may create, move or delete a release tag (`*-v*`); the assistant pushes
+  one with the maintainer's admin login, on their yes.
 
   ```bash
   gh api --method POST repos/andreijw/AI/rulesets --input - <<'EOF'

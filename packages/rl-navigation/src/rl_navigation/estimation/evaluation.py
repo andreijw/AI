@@ -99,19 +99,32 @@ class Localizer(Protocol):
     def update(self, readings: ArrayLike) -> ScanResult: ...
 
 
-class LocalizerFactory(Protocol):
-    """Builds a trial's filter; :func:`run_trial` calls it with keywords only."""
+@dataclass(frozen=True, eq=False)
+class FactoryContext:
+    """What a trial hands its filter's builder (:class:`LocalizerFactory`).
 
-    def __call__(
-        self,
-        *,
-        range_map: SensorMap,
-        odometry: WheelOdometry,
-        start: FloatArray,
-        covariance: FloatArray,
-        rng: np.random.Generator,
-        robot_radius: float,
-    ) -> Localizer: ...
+    Attributes:
+        range_map: The trial's true map seen through its sensor.
+        odometry: The filter's encoder model.
+        start: ``(3,)`` the trial's noisy start.
+        covariance: ``(3, 3)`` the start's covariance.
+        rng: The filter's own stream.
+        robot_radius: The simulated robot's radius in metres.
+    """
+
+    range_map: SensorMap
+    odometry: WheelOdometry
+    start: FloatArray
+    covariance: FloatArray
+    rng: np.random.Generator
+    robot_radius: float
+
+
+class LocalizerFactory(Protocol):
+    """Builds a trial's filter from the trial's :class:`FactoryContext`: the one builder seam
+    of every desk tool (:func:`ekf`, :func:`mcl` and the wrappers that record or time a filter)."""
+
+    def __call__(self, context: FactoryContext) -> Localizer: ...
 
 
 def ekf(
@@ -131,20 +144,12 @@ def ekf(
     :class:`EkfLocalizer`).
     """
 
-    def make(
-        *,
-        range_map: SensorMap,
-        odometry: WheelOdometry,
-        start: FloatArray,
-        covariance: FloatArray,
-        rng: np.random.Generator,
-        robot_radius: float,
-    ) -> Localizer:
+    def make(context: FactoryContext) -> Localizer:
         return EkfLocalizer(
-            range_map,
-            odometry,
-            start,
-            covariance,
+            context.range_map,
+            context.odometry,
+            context.start,
+            context.covariance,
             iterations=iterations,
             linearity_tol=linearity_tol,
             reset_after=reset_after,
@@ -169,22 +174,14 @@ def mcl(
     simulated robot's.
     """
 
-    def make(
-        *,
-        range_map: SensorMap,
-        odometry: WheelOdometry,
-        start: FloatArray,
-        covariance: FloatArray,
-        rng: np.random.Generator,
-        robot_radius: float,
-    ) -> Localizer:
+    def make(context: FactoryContext) -> Localizer:
         return MclLocalizer(
-            range_map,
-            odometry,
-            None if global_start else start,
-            None if global_start else covariance,
-            rng=rng,
-            settings=replace(settings, robot_radius=robot_radius),
+            context.range_map,
+            context.odometry,
+            None if global_start else context.start,
+            None if global_start else context.covariance,
+            rng=context.rng,
+            settings=replace(settings, robot_radius=context.robot_radius),
         )
 
     return make
@@ -275,12 +272,14 @@ def run_trial(
     start = world.pose + std * initial_rng.standard_normal(3)
     start[2] = wrap_angle(start[2])
     localizer = make_localizer(
-        range_map=range_map,
-        odometry=model,
-        start=start,
-        covariance=np.diag(std**2),
-        rng=filter_rng,
-        robot_radius=params.robot_radius,
+        FactoryContext(
+            range_map=range_map,
+            odometry=model,
+            start=start,
+            covariance=np.diag(std**2),
+            rng=filter_rng,
+            robot_radius=params.robot_radius,
+        )
     )
     dead = start
     rows: list[tuple[FloatArray, FloatArray, FloatArray, FloatArray, int]] = []

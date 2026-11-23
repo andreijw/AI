@@ -52,7 +52,7 @@ To optimize token usage and context window limits:
   * `rl_core/training/`: Training pipeline orchestration (`trainer.py`), the checkpoint's trainer file
     (`checkpoints.py`), curriculum scheduling of the training environment's noise and randomization
     (`curriculum.py`), the pool of training environments `training.num_envs` steps in lockstep
-    (`parallel.py`). `training/robustness.py` is the robustness benchmark's 0.1.0 path, which warns until 0.3.0.
+    (`parallel.py`).
   * `rl_core/robustness.py`: The robustness benchmark's perturbations and greedy rows, beside `rl_core/seeding.py`:
     it imports both the training package and the challenges, which import training.
   * `rl_core/utils/`: Configuration parsing (`config.py`) and the strict readers for integer and boolean
@@ -98,22 +98,23 @@ To optimize token usage and context window limits:
   * `rl_navigation/estimation/`: pose estimation on a known map for the robot's own program, NumPy and
     `rl_navigation.sim` only (never Gymnasium, `gym_env` or `rl_core`): `maps.py` (the `RangeMap` and `ParticleMap`
     protocols and `SensorMap`), `kalman.py` (the Kalman update in Joseph form), `ekf.py` (`EkfLocalizer`, iterated
-    EKF localization), `mcl.py` (`MclLocalizer`, augmented Monte Carlo localization), `evaluation.py`
+    EKF localization, `predict_pose`), `mcl.py` (`MclLocalizer`, augmented Monte Carlo localization), `evaluation.py`
     (`run_trial`, `summarize` and `summarize_localization`: seeded trials of either filter against the true pose,
     with an optional kidnapping), `averages.py` (`mean_or_nan` and `median_or_nan`, the NaN-on-empty mean and median
     of the evaluation tools), the `comparison/` package (the EKF against MCL on the same seeds:
     `instrumentation.py`, `records.py`, `metrics.py`, `runner.py`, `report.py` and `cli.py`, all re-exported by its
     `__init__.py`; a Markdown report and the `python -m rl_navigation.estimation.comparison` command; not imported by
-    the package) and `recording.py` (snapshots of the EKF and MCL on one seeded trial and the frames painted from them;
-    not imported by the package). No
-    environment or benchmark challenge uses it.
+    the package), `runs.py` (`record_run`, `MappingRun`: the seeded wander with no filter, whose scans and true poses
+    the mapping and SLAM desk tools read; not imported by the package) and `recording.py` (snapshots of the EKF and MCL
+    on one seeded trial and the frames painted from them; not imported by the package). No environment or benchmark
+    challenge uses it.
   * `rl_navigation/mapping/`: occupancy-grid mapping with known poses, a peer of `estimation`: `beams.py`
     (`traverse_cells`, the exact vectorised cell traversal, `endpoint_visits`, the inverse sensor model's free and
     occupied cells, and `sensor_rays`) and `grid.py` (`OccupancyGrid`, the log-odds grid, and `LogOddsModel` with the
     `LIDAR_LOG_ODDS` and `HC_SR04_LOG_ODDS` presets) import NumPy and `rl_navigation.sim` only; `evaluation.py`
-    (`record_run`, `build_map`, `score_map`, `map_trial`, `summarize_maps`: seeded runs on `run_trial`'s trajectory
-    scored against the true map) is a desk tool, the one module that imports `estimation`, and the package does not
-    import it.
+    (`build_map`, `score_map`, `map_trial`, `summarize_maps`, and a re-export of `record_run`: seeded runs on
+    `run_trial`'s trajectory scored against the true map) is a desk tool, the one module that imports `estimation`, and
+    the package does not import it.
   * `rl_navigation/slam/`: simultaneous localization and mapping, a layer above `estimation`: `features.py`
     (`FeatureSettings`, `CircleFeature`, `scan_points`, `segment_scan`, `fit_circle`, `extract_circles`: circles fitted
     to the segments of a lidar scan, the landmarks) and `ekf_slam.py` (`SlamSettings`, `SlamUpdate`, `EkfSlam`, and the
@@ -189,8 +190,8 @@ Always consult [CONTRIBUTING.md](CONTRIBUTING.md) when writing, refactoring, or 
   * Adhere to Gymnasium v1.0+ signatures. Always expect `terminated` and `truncated` as separate boolean outputs from
     environment step calls.
   * Always ensure environments are correctly closed with `.close()` when done to prevent resource leaks.
-* **Vectorized Training**: Use `training.num_envs` for several training environments stepped together (CartPole's
-  and Pendulum's `make_vec_env` is deprecated since rl-challenges 0.2.0 and removed in 0.3.0).
+* **Vectorized Training**: Use `training.num_envs` for several training environments stepped together (there are no
+  vector factories since rl-challenges 0.3.0).
 * **Pure NumPy Framework**: The neural network architectures (Actor-Critic/PPO) are custom built on top of NumPy without
   external heavy DL dependencies. Maintain optimization cleanliness and verify numerical stability (e.g., stable
   softmax).
