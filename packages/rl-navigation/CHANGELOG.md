@@ -4,6 +4,16 @@ What changed in `rl-navigation`, newest first, in the style of [Keep a Changelog
 with [semantic versions](https://semver.org/) (0.x: a minor version may break the API). A release's notes are its
 section here. The repository's day-by-day log is the root CHANGELOG.md.
 
+## [Unreleased]
+
+### Fixed
+
+- `OnlineMap` no longer drops readings beyond its `map_range`: they clear the cells their rays leave by it, without a
+  hit, so the false walls a sonar cone writes are cleared. `OccupancyGrid.update` takes a keyword-only `hit_range`
+  for this; without it the map is unchanged. The online planner's success at range noise 0.4 rose from 59.4 % and
+  48.4 % to 94.8 % and 95.2 % (continuous and discrete actions) on 500 layouts, with 21 and 18 collisions where it had
+  3 and 0: noise-long readings can now clear a real wall. See the root CHANGELOG.md, 2026-11-22.
+
 ## [0.2.0] - 2026-11-20
 
 ### Added

@@ -5,6 +5,11 @@ played once on 2026-11-19 from a frozen copy of commit 4515bfc. In this copy the
 paths (the checkpoints are the scratch `train.py` runs of 2026-11-07, identified by their SHA-256) and the prose is
 wrapped to 120 columns; every number is as generated.
 
+**History.** The `P-online-c` and `P-online-d` rows here predate the online map's false-wall fix (CHANGELOG.md,
+2026-11-22), which made readings beyond the map range clear the cells they cross. That fix was judged on fresh layouts
+40000 to 40499 instead of a rerun of this report (TESTING.md `PLAN-4`); the true-map rows and the policies' rows are
+unaffected by it.
+
 - **Seeds**: 30000 to 30499 (500 layouts)
 - **Commit**: 4515bfcb6e0597981bc74ef2e66b9e7d71f6f45f
 - **Working tree**: clean

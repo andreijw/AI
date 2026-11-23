@@ -72,8 +72,10 @@ Where this is going, from the roadmap ([docs/roadmap.md](docs/roadmap.md)):
   landmark EKF-SLAM on a 360-beam lidar runs in simulation, 6.4 cm aligned error on fresh seeds, but
   failed 2 of its 9 judged gates.
 - **Planning and driving: done in simulation.** A\* on an occupancy grid, path smoothing and a pure-pursuit follower,
-  judged once on 500 held-out layouts against TD3 and DQN: as good as the best policy at nominal sensors and never
-  colliding, but stalled by false walls under range noise ([report](docs/benchmarks/planning_results.md)).
+  judged on held-out layouts against TD3 and DQN (the 2026-11-19 [report](docs/benchmarks/planning_results.md)).
+  Since the online map's false-wall fix it reaches the goal on 99.6 to 99.8 % of fresh layouts at nominal sensors
+  with no collision, and on about 95 % at heavy range noise, where it now collides about as often as TD3
+  (CHANGELOG.md, 2026-11-22).
 - **The real robot: planned, nothing run yet.** HC-SR04 and lidar on the Jetson, ROS 2 nodes, fitting the simulated
   noise to real readings. Beyond it, proposed only: MuJoCo robots and arms, GPU-parallel simulation, Isaac Lab,
   multi-agent navigation.

@@ -102,9 +102,9 @@ class OnlineMap:
     Only readings up to ``map_range`` mark hits (the grid's ``hit_range``): a sonar's 15-degree cone
     puts a far or oblique hit's whole arc at the nearest range, marking free space as occupied. A
     reading beyond ``map_range`` still clears its cone's rays up to it, which is what removes those
-    false walls; until 2026-11-20 such readings were dropped and nothing cleared them. The 1.0 m
+    false walls; before that fix such readings were dropped and nothing cleared them. The 1.0 m
     default against 1.5 m with the clearing, and what the clearing changed, are in CHANGELOG.md
-    (2026-11-20). The version goes up when the set of occupied cells changes.
+    (2026-11-22). The version goes up when the set of occupied cells changes.
 
     Args:
         occupancy: The log-odds grid to build; this map updates it.

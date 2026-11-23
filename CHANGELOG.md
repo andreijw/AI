@@ -12,6 +12,43 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-22
+
+### Fixed
+
+- **Online-map false walls under range noise** (`fix/online-map-false-walls`; Planning follow-ups). The cause, found
+  on tuning layouts 10000 to 10199 before any fix: an HC-SR04 reading is the nearest range over a 15° cone, so its
+  five rays all mark a hit at that range and write walls into the open space beside the echo, and `OnlineMap` gave
+  every reading beyond its 1 m `map_range` to the grid as NaN, which carves no free space, so nothing ever cleared
+  them: 64 % of the readings were thrown away at nominal sensors. On all 13 stalled runs the final map had no path,
+  and deleting only its false cells reopened one. `OccupancyGrid.update` takes a keyword-only `hit_range` (default
+  None, today's map: the mapping evaluation and SLAM are unchanged, held by golden digests of both presets): a usable
+  reading beyond it marks no hit and frees only the cells its rays leave by `hit_range`, as ROS `costmap_2d`'s
+  obstacle and raytrace ranges do. `OnlineMap` passes its `map_range`; dropouts still carve nothing. Decay toward
+  unknown (0.98 per scan) was probed and rejected: it never changes a cell's sign. With the clearing, a 1.0 m map
+  range reached 198 and 198 of the 200 tuning layouts (continuous and discrete actions) against 197 and 196 at 1.5 m,
+  so the default stays 1.0 m; layout 10042 is closed even on a perfect cell map (a new follow-up), and 10116 still
+  stalls. Judged once on fresh layouts 40000 to 40499 (TESTING.md `PLAN-4`), the fix from commit 6ba67e8 and a
+  baseline of its parent 9afbfb3 on the same layouts, with gates F1 to F6 registered beforehand, all passing:
+  - **F1**: at nominal sensors `P-online-c` 499 of 500 (99.8 %, Wilson 98.9 to 100.0) and `P-online-d` 498 of 500
+    (99.6 %), no collision; no layout was geometrically closed.
+  - **F2**: at range noise 0.4, 94.8 % and 95.2 % (were 59.4 % and 48.4 % in the baseline on the same layouts).
+  - **F3**: no collision at nominal sensors, at any dropout value or at noise up to 0.1. At noise 0.2, 0 and 3 of
+    500 against TD3's median 3.6 % and DQN's 5.6 %; at noise 0.4, 21 and 18 of 500 (4.2 % and 3.6 %) against TD3's
+    median 4.2 % and DQN's 7.4 %. The continuous row passes exactly at its limit. Under heavy noise the planners
+    fail safe less often: noise-long readings erase real walls near the robot, where the baseline stalled
+    and timed out (it collided 1 and 2 times at noise 0.2, 3 and 0 at 0.4).
+  - **F4**: from a solo timing run, the sliding 10-step 99th percentile at most 11.0 ms and every step at most
+    53.9 ms on the four nominal planner rows.
+  - **F5**: the true-map rows are identical to the baseline's, episode by episode.
+  - **F6**: against the baseline, exact McNemar, the fix wins 67 and 100 layouts and loses 1 and 0 at noise 0.2, and
+    wins 178 and 237 and loses 1 and 3 at noise 0.4 (one-sided p below 1e-18); at nominal it wins 10 and 15 and
+    loses none.
+
+  The policies on the same run, reported: TD3 93.0 to 97.8 % at nominal and 94.2 to 96.0 % at noise 0.4, DQN 94.6 %
+  and 92.6 %; at noise 0.4 no checkpoint differs from its online planner (McNemar p 0.12 to 0.77). The 2026-11-19
+  report (`docs/benchmarks/planning_results.md`) is kept as history; its online rows predate this fix.
+
 ## 2026-11-20
 
 ### Added

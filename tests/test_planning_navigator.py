@@ -181,7 +181,7 @@ def test_the_online_map_hits_only_within_its_range_and_clears_beyond_it():
 
 
 def test_far_readings_clear_a_false_wall_that_closed_the_route():
-    """The bug of 2026-11-19 (docs/roadmap.md, Planning follow-ups): one scan reading 0.6 m on
+    """The bug fixed on 2026-11-22 (CHANGELOG.md): one scan reading 0.6 m on
     every sonar, in a corridor 1.2 m wide, puts the five cones' arcs across it; their cells hold
     no obstacle, and nothing cleared them, because readings beyond ``map_range`` were dropped.
     Far readings from the same pose cross every arc cell: ``ceil(l_occ / -l_free)`` of them

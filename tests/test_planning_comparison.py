@@ -690,7 +690,7 @@ def test_a_nominal_planner_row_missing_from_the_run_is_not_played_for_g4():
 def test_the_online_planner_clears_the_false_walls_that_stalled_layout_10102(continuous):
     """Tuning layout 10102 stalled both online planners until they timed out: cone arcs of the
     sonars wrote walls into open space, and readings beyond the map range, which would have
-    cleared them, were dropped (docs/roadmap.md, Planning follow-ups, 2026-11-20)."""
+    cleared them, were dropped (CHANGELOG.md, 2026-11-22)."""
     env = NavigationGymEnv(continuous=continuous)
     try:
         record = play(env, PlannerController("online"), 10102)
