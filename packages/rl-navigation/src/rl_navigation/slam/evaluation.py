@@ -43,6 +43,7 @@ from rl_navigation.estimation.evaluation import (
     FactoryContext,
     Localizer,
     Trial,
+    pose_nees,
     run_trial,
     summarize,
 )
@@ -78,6 +79,12 @@ LOW_MEAN_NEES = 0.5
 
 # A run whose mean pose NEES exceeds this is in the overconfident tail (3 is consistent).
 HIGH_MEAN_NEES = 6.0
+
+
+def arena_bounds(arena: Arena, margin: float = BOUNDS_MARGIN) -> tuple[float, float, float, float]:
+    """``(x_min, y_min, x_max, y_max)`` of the arena grown by ``margin``: where a SLAM filter's
+    pose must stay."""
+    return (-margin, -margin, arena.width + margin, arena.height + margin)
 
 
 def oracle_labels(
@@ -144,19 +151,13 @@ class SlamFactory:
 
     def __call__(self, context: FactoryContext) -> Localizer:
         arena = context.range_map.arena
-        bounds = (
-            -BOUNDS_MARGIN,
-            -BOUNDS_MARGIN,
-            arena.width + BOUNDS_MARGIN,
-            arena.height + BOUNDS_MARGIN,
-        )
         slam = EkfSlam(
             context.range_map.sensor,
             context.odometry,
             context.start,
             context.covariance,
             self.settings,
-            bounds=bounds,
+            bounds=arena_bounds(arena),
         )
         self.made = _RecordedSlam(slam, arena, self.oracle_poses)
         return self.made
@@ -467,11 +468,7 @@ def score_run(run: SlamRun) -> RunScore:
         radius_errors=np.array(radius_errors),
         first_estimate_drift=float(drift.max(initial=0.0)),
         loops=loop_closures(events, position_errors, stds),
-        collapsed=collapsed(
-            np.einsum(
-                "ti,ti->t", error, np.linalg.solve(trial.covariances, error[..., None])[..., 0]
-            )
-        ),
+        collapsed=collapsed(pose_nees(trial)),
     )
 
 

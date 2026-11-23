@@ -13,6 +13,12 @@ section here. The repository's day-by-day log is the root CHANGELOG.md.
   for bit).
 - `rl_navigation.estimation.runs`: `record_run` and `MappingRun`, moved from `rl_navigation.mapping.evaluation`, which
   still re-exports both.
+- `rl_navigation.slam.scan_matching`: lidar scan-to-map matching on the log-odds grid (`ScanMatchSettings`,
+  `match_points`, `match_scan`, `match_residuals`, `scan_endpoints`, `ScanMatch`) and `ScanMatchingSlam`, a
+  scan-matching SLAM front end; `rl_navigation.mapping.fields` (`distance_field`, `DistanceField`); `rl_navigation.sim`
+  `rotation`; `rl_navigation.estimation.evaluation.pose_nees` (the comparison's `nees_per_step` is now this function);
+  `rl_navigation.mapping.evaluation.map_from_poses`; `rl_navigation.slam.evaluation.arena_bounds`; and the desk tool
+  `rl_navigation.slam.scan_evaluation`. The `slam` core now imports the `mapping` core.
 
 ### Changed
 

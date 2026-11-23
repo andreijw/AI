@@ -177,17 +177,30 @@ steps 3 to 5 are sketches to turn into full items when picked.
     seeded outputs are bit-identical before and after (CHANGELOG.md, 2026-11-20). The plan for 3a and 3b, with its
     gates to register after tuning on seeds 1 to 50 and to judge once on seeds 251 to 300, is approved; the
     `pose_nees` follow-up below goes with 3a.
+  - **Progress (PR 3a, 2026-11-22)**: `rl_navigation.slam.scan_matching` matches a lidar scan against the log-odds
+    grid's distance field (`rl_navigation.mapping.fields`) by Gauss-Newton from the odometry prediction, and
+    `ScanMatchingSlam` keeps one pose and the grid by it. Judged once on fresh seeds 251 to 300 against gates the
+    maintainer registered beforehand, every gate passes: the matcher on true-pose maps has mean NEES 3.01 and 8.4 mm
+    median error (`SCAN-1`); the front end on the 360-beam lidar has an aligned trajectory error of 10.0 mm mean, no
+    run above 10 cm, 0.028 of dead reckoning's, and maps of precision 0.9997, also at 30 % dropout (`SLAM-4`); an
+    update takes 9.5 to 9.7 ms (`SLAM-5`) (CHANGELOG.md, 2026-11-22). `pose_nees` is shared (the follow-up is done).
+    Left: 3b, the grid as a `RangeMap` (`GridMap`), with an out-of-sample EKF gate.
   - **Follow-ups**:
+    - **`warmup_scans` for the 64-beam lidar**: with 64 beams, in some runs the front end's first map, one sparse
+      scan, explains no later scan: every later match is rejected and the map never grows (`SLAM-4` row c on seeds
+      251 to 300: 4 aligned failures and at least one locked-out run, a run's accepted share as low as 0.0; on tuning
+      seeds 1 to 50, 5 locked-out runs and 8 failures, 3 of them not lockouts). Candidate: map the first few scans at
+      the odometry pose before matching starts; tune on seeds 1 to 100, rerun rows a and b, judge on fresh seeds
+      (CHANGELOG.md, 2026-11-22).
     - **One gauge projection for the second-order term**: project the frame out once over the pose and all landmark
       centres per scan and slice that covariance for both association and the update, so the two gate on the same
       term (today association projects per pose-and-landmark block and the update over the scan's block: trace ratio
       median 1.06, max 35 on random covariances; the per-feature fallback reuses the stacked term from the prior). It
       would also cut the 1.3 ms the term costs against `SLAM-2`'s 0.23 ms margin (CHANGELOG.md, 2026-11-12).
-    - **`pose_nees` shared**: make `estimation.evaluation._nees` public and use it in `slam.evaluation.score_run`
-      instead of its 3-line copy.
     - **SLAM-1 on the 64-beam lidar after bridging**: not verified. Bridging is capped by angle, so on the 64-beam
       lidar it bridges nothing, but SLAM-1 was not rerun there (CHANGELOG.md, 2026-11-12).
-    - Left for later PRs: lidar scan matching and the grid as a `RangeMap` (PR 3), grid FastSLAM (PR 4).
+    - Left for later PRs: the grid as a `RangeMap` (PR 3b), grid FastSLAM (PR 4), which inherits the scan matcher's
+      covariance as its proposal's.
   - **Description**: Occupancy-grid mapping from range readings with known poses (log-odds, an inverse sensor
     model for both presets), then SLAM without them: landmark EKF-SLAM, then a particle-filter grid SLAM
     (FastSLAM-style) with scan matching for the lidar preset. Judged by map and pose error against ground truth,

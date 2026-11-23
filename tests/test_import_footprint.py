@@ -198,6 +198,9 @@ def test_a_c_export_does_not_import_onnx(tmp_path):
         "rl_navigation.slam.feature_evaluation",
         "rl_navigation.slam.ekf_slam",
         "rl_navigation.slam.evaluation",
+        "rl_navigation.slam.scan_matching",
+        "rl_navigation.slam.scan_evaluation",
+        "rl_navigation.mapping.fields",
         "rl_navigation.planning",
         "rl_navigation.planning.grid",
         "rl_navigation.planning.astar",
@@ -286,41 +289,54 @@ def test_the_mapping_package_does_not_import_its_evaluation():
     assert result.stdout.strip() == "False", "rl_navigation/mapping/__init__.py imported evaluation"
 
 
-def test_the_slam_core_imports_only_the_simulator_and_the_estimation_core():
-    """SLAM runs on the robot: a layer above the estimators (whose Kalman update, motion model and
-    chi-square quantile it shares), with neither the mapper, the Gymnasium layer nor the
-    estimators' desk tools. A fresh process."""
+def test_the_slam_core_imports_the_simulator_and_the_estimation_and_mapping_cores():
+    """SLAM runs on the robot: a layer above the estimators (whose Kalman update, pose predict and
+    chi-square quantile it shares) and the mapper (whose grid the scan matcher builds and
+    matches against), with neither the Gymnasium layer nor any desk tool. A fresh process."""
+    desk_tools = (
+        "rl_navigation.estimation.evaluation",
+        "rl_navigation.estimation.comparison",
+        "rl_navigation.estimation.recording",
+        "rl_navigation.estimation.runs",
+        "rl_navigation.mapping.evaluation",
+    )
     code = (
         "import sys; "
-        "import rl_navigation.slam, rl_navigation.slam.features, rl_navigation.slam.ekf_slam; "
+        "import rl_navigation.slam, rl_navigation.slam.features, rl_navigation.slam.ekf_slam, "
+        "rl_navigation.slam.scan_matching; "
         "print(' '.join(sorted({m.split('.')[1] for m in sys.modules "
         "if m.startswith('rl_navigation.')})), "
-        "[m for m in ('rl_navigation.estimation.evaluation', 'rl_navigation.estimation.comparison', "
-        "'rl_navigation.estimation.recording') if m in sys.modules])"
+        f"[m for m in {desk_tools!r} if m in sys.modules])"
     )
     result = subprocess.run(
         [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "estimation sim slam []", (
+    assert result.stdout.strip() == "estimation mapping sim slam []", (
         f"the slam core loaded {result.stdout.strip()}: it may import NumPy, rl_navigation.sim "
-        "and the estimation core only"
+        "and the estimation and mapping cores only"
     )
 
 
 @pytest.mark.parametrize(
-    "tool", ["rl_navigation.slam.feature_evaluation", "rl_navigation.slam.evaluation"]
+    "tool",
+    [
+        "rl_navigation.slam.feature_evaluation",
+        "rl_navigation.slam.evaluation",
+        "rl_navigation.slam.scan_evaluation",
+    ],
 )
 def test_the_slam_desk_tools_stay_inside_the_navigation_library(tool):
     loaded = _loaded_navigation_packages(tool)
-    assert set(loaded) <= {"estimation", "sim", "slam"}, f"loaded rl_navigation.{loaded}"
+    assert set(loaded) <= {"estimation", "mapping", "sim", "slam"}, f"loaded rl_navigation.{loaded}"
 
 
 def test_the_slam_package_does_not_import_its_desk_tools():
     code = (
         "import sys; import rl_navigation.slam; "
         "print(any(m in sys.modules for m in ('rl_navigation.slam.feature_evaluation', "
-        "'rl_navigation.slam.evaluation', 'rl_navigation.mapping')))"
+        "'rl_navigation.slam.evaluation', 'rl_navigation.slam.scan_evaluation', "
+        "'rl_navigation.mapping.evaluation')))"
     )
     result = subprocess.run(
         [sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120

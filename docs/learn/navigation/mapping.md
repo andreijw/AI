@@ -52,6 +52,12 @@ for SLAM: the robot has to estimate its pose and the map together. An update tak
 100 cells) (TESTING.md `MAP-2`). `rl_navigation.mapping.evaluation` drives and scores such runs; the package does not
 import it.
 
+With poses estimated by [scan matching](slam.md#scan-matching) instead, against this same grid as it grows, the lidar
+map keeps occupied precision 0.9997 and cell accuracy 0.9997 on fresh seeds 251 to 300, and its recall of reached
+surfaces is 0.78, where true-pose maps reach 0.94 to 0.95 on the other seeds above (TESTING.md `SLAM-4`, `MAP-1`)
+(CHANGELOG.md, 2026-11-22). The distance
+field the matcher reads is `rl_navigation.mapping.fields.DistanceField`.
+
 The planner reads this grid: `rl_navigation.planning.from_occupied` inflates the occupied cells by the robot's radius
 into the cells its centre may not enter (see [Planning and control](planning.md#the-configuration-space)).
 

@@ -110,20 +110,26 @@ To optimize token usage and context window limits:
     challenge uses it.
   * `rl_navigation/mapping/`: occupancy-grid mapping with known poses, a peer of `estimation`: `beams.py`
     (`traverse_cells`, the exact vectorised cell traversal, `endpoint_visits`, the inverse sensor model's free and
-    occupied cells, and `sensor_rays`) and `grid.py` (`OccupancyGrid`, the log-odds grid, and `LogOddsModel` with the
-    `LIDAR_LOG_ODDS` and `HC_SR04_LOG_ODDS` presets) import NumPy and `rl_navigation.sim` only; `evaluation.py`
-    (`build_map`, `score_map`, `map_trial`, `summarize_maps`, and a re-export of `record_run`: seeded runs on
+    occupied cells, and `sensor_rays`), `grid.py` (`OccupancyGrid`, the log-odds grid, and `LogOddsModel` with the
+    `LIDAR_LOG_ODDS` and `HC_SR04_LOG_ODDS` presets) and `fields.py` (`distance_field`, `DistanceField`: the distance
+    to the nearest occupied cell, sampled bilinearly with its gradient) import NumPy and `rl_navigation.sim` only;
+    `evaluation.py` (`build_map`, `map_from_poses`, `score_map`, `map_trial`, `summarize_maps`, and a re-export of
+    `record_run`: seeded runs on
     `run_trial`'s trajectory scored against the true map) is a desk tool, the one module that imports `estimation`, and
     the package does not import it.
   * `rl_navigation/slam/`: simultaneous localization and mapping, a layer above `estimation`: `features.py`
     (`FeatureSettings`, `CircleFeature`, `scan_points`, `segment_scan`, `fit_circle`, `extract_circles`: circles fitted
     to the segments of a lidar scan, the landmarks) and `ekf_slam.py` (`SlamSettings`, `SlamUpdate`, `EkfSlam`, and the
     Jacobians `fej_motion_jacobian`, `landmark_measurement`, `initialize_landmark`, the association `associate_ml` and
-    EKF2's gauge-free `second_order_covariance`: landmark EKF-SLAM with first-estimate Jacobians) import NumPy,
-    `rl_navigation.sim` and the `estimation` core;
-    `feature_evaluation.py` (`feature_trial`, `summarize_features`: `TESTING.md` `CIRC-1` and `CIRC-2`) and
-    `evaluation.py` (`slam_trial`, `SlamFactory`, `align_se2`, `score_landmarks`, `loop_closures`, `summarize_slam`,
-    `collapsed`: `TESTING.md` `SLAM-1` and `SLAM-3`) are desk tools the package does not import.
+    EKF2's gauge-free `second_order_covariance`: landmark EKF-SLAM with first-estimate Jacobians) and
+    `scan_matching.py` (`ScanMatchSettings`, `match_points`, `match_scan`, `match_residuals`, `ScanMatch` and
+    `ScanMatchingSlam`: lidar scan-to-map matching on the grid's distance field, and a front end that keeps one pose and
+    the grid by it) import NumPy, `rl_navigation.sim` and the `estimation` and `mapping` cores;
+    `feature_evaluation.py` (`feature_trial`, `summarize_features`: `TESTING.md` `CIRC-1` and `CIRC-2`),
+    `evaluation.py` (`slam_trial`, `SlamFactory`, `align_se2`, `arena_bounds`, `score_landmarks`, `loop_closures`,
+    `summarize_slam`, `collapsed`: `TESTING.md` `SLAM-1` and `SLAM-3`) and `scan_evaluation.py` (`scan1_trials`,
+    `scan_slam_trial`, `summarize_scan1`, `summarize_scan_slam`, the frozen `SCAN1_ROWS` and `SLAM4_ROWS`:
+    `TESTING.md` `SCAN-1`, `SLAM-4` and `SLAM-5`) are desk tools the package does not import.
   * `rl_navigation/localization_video.py`: `python -m rl_navigation.localization_video`, which writes a
     `recording` to an MP4 (imageio-ffmpeg, the `video` extra) and PNG stills (matplotlib); never overwrites a file.
   * `rl_navigation/gym_env.py`: `NavigationGymEnv`, the Gymnasium environment; importing it registers both ids.

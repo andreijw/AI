@@ -147,7 +147,9 @@ tags are in [docs/releasing.md](docs/releasing.md).
    - `rl_navigation.mapping` is a peer of `estimation`, not a layer over it: a log-odds occupancy grid built from range
      scans at known poses (`beams`: the exact, vectorised traversal of the cells a ray crosses and the inverse sensor
      model's choice of free and occupied cells; `grid`: `OccupancyGrid` and its `LogOddsModel` presets for the lidar and
-     the HC-SR04). Its core imports NumPy and `rl_navigation.sim` only, so it runs on the robot without the estimators.
+     the HC-SR04; `fields`: `distance_field` and `DistanceField`, the distance from each cell centre to the nearest
+     occupied one, sampled bilinearly with its gradient, which the scan matcher minimises). Its core imports NumPy and
+     `rl_navigation.sim` only, so it runs on the robot without the estimators.
      `evaluation`, seeded runs on `run_trial`'s trajectory (recorded by `estimation.runs.record_run`, which it
      re-exports) scored against the arena rasterised with `occupancy_grid`, is a desk tool the package's `__init__` does
      not import, and the only module of `mapping` that imports `estimation`;
@@ -161,13 +163,20 @@ tags are in [docs/releasing.md](docs/releasing.md).
      and 10.2, with the provisional list) with first-estimate Jacobians (FEJ, Huang et al. 2008), one batch Joseph
      update per scan, a 15 mm model-error floor per feature, EKF2's second-order term with the unobservable frame taken
      out (`second_order_covariance`, so that one update after a long unseen stretch does not collapse the heading), and
-     guards so that it never raises on a scan's content. `EkfSlam` keeps the `Localizer` protocol, so `run_trial` drives
-     it like the localizers. Its core imports NumPy, `rl_navigation.sim` and the `estimation` core (`kalman_update`,
-     `symmetrized`, `predict_pose`, `chi2_quantile`, the pose checks), never `mapping` or `estimation`'s desk tools.
-     `feature_evaluation` and `evaluation` (`slam_trial`, `SlamFactory`, the oracle, the aligned scoring) are desk tools
-     the package's `__init__` does not import; both take their scans and true poses from
-     `estimation.runs.record_run`, so `slam` loads no `mapping`. Nothing below it
-     (`estimation`, `mapping`, the Gymnasium layer, the challenge) imports it.
+     guards so that it never raises on a scan's content. `scan_matching` matches a lidar scan against the log-odds grid
+     (`match_points`: Gauss-Newton on the grid's distance field with the odometry prediction as a prior, as Hector SLAM
+     does; a truncated quadratic over the beams in the grid, steps halved while the cost rises, and checks on inliers,
+     residual RMS and a chi-square gate before a match is accepted) and `ScanMatchingSlam` keeps one pose and the grid
+     by it: predict with `predict_pose`, match, map the scan at the matched pose when the match is accepted (no loop
+     closure, no map uncertainty). `EkfSlam` and `ScanMatchingSlam` keep the `Localizer` protocol, so `run_trial` drives
+     them like the localizers. Its core imports NumPy, `rl_navigation.sim`, the `estimation` core (`kalman_update`,
+     `symmetrized`, `predict_pose`, `chi2_quantile`, the pose checks) and the `mapping` core (`OccupancyGrid`,
+     `DistanceField`), never `estimation`'s or `mapping`'s desk tools (`tests/test_import_footprint.py`).
+     `feature_evaluation`, `evaluation` (`slam_trial`, `SlamFactory`, the oracle, the aligned scoring, `arena_bounds`)
+     and `scan_evaluation` (`SCAN-1`, `SLAM-4` and `SLAM-5`: `scan1_trials`, `scan_slam_trial`, `ScanSlamFactory`, the
+     frozen rows) are desk tools the package's `__init__` does not import; they take their scans and true poses from
+     `estimation.runs.record_run`, and `scan_evaluation` scores maps with `mapping.evaluation` (`map_from_poses`,
+     `score_map`). Nothing below it (`estimation`, `mapping`, the Gymnasium layer, the challenge) imports it.
      **Move triggers:** when a third package needs `predict_pose`, `kalman_update` and `chi2_quantile`, they move to a
      shared module (`sim` for the motion model). Done: `record_run` moved to `estimation.runs` when `slam` became its
      second user, and the filter factories take one `FactoryContext` instead of six keywords when `SlamFactory` became
@@ -267,8 +276,8 @@ flowchart TD
         NavAvg["rl_navigation.estimation.averages: NaN-on-empty mean and median (NumPy only)"]
         NavCmp["rl_navigation.estimation.comparison: EKF against MCL, report and CLI (desk tool)"]
         NavRuns["rl_navigation.estimation.runs: record_run, scans and true poses with no filter (desk tool)"]
-        NavMap["rl_navigation.mapping: log-odds OccupancyGrid from scans at known poses (core: NumPy + sim)"]
-        NavSlam["rl_navigation.slam: circle features and landmark EKF-SLAM (core: NumPy + sim + estimation core)"]
+        NavMap["rl_navigation.mapping: log-odds OccupancyGrid and its DistanceField (core: NumPy + sim)"]
+        NavSlam["rl_navigation.slam: landmark EKF-SLAM and scan matching (core: NumPy + sim + estimation and mapping cores)"]
     end
 
     subgraph Core ["rl_core Framework (rl-core)"]
@@ -329,6 +338,7 @@ flowchart TD
     NavCmp --> NavSim
     NavMap --> NavSim
     NavSlam --> NavEst
+    NavSlam --> NavMap
     NavSlam --> NavSim
     NavSlam -. evaluation .-> NavRuns
     NavMap -. evaluation .-> NavRuns

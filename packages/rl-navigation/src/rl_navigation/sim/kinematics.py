@@ -20,6 +20,13 @@ def wrap_angle(angle: ArrayLike) -> NDArray[np.float64]:
     return np.where(wrapped >= math.pi, wrapped - 2.0 * math.pi, wrapped)
 
 
+def rotation(theta: float) -> NDArray[np.float64]:
+    """``(2, 2)`` the rotation by ``theta`` radians, ``[[cos, -sin], [sin, cos]]``: a body-frame
+    vector ``v`` is ``rotation(theta) @ v`` in the world."""
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([[c, -s], [s, c]])
+
+
 def unicycle_step(
     pose: ArrayLike, v: ArrayLike, omega: ArrayLike, dt: float
 ) -> NDArray[np.float64]:

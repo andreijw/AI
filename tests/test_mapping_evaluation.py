@@ -10,6 +10,7 @@ from rl_navigation.estimation import evaluation as estimation_evaluation
 from rl_navigation.mapping.evaluation import (
     MappingRun,
     build_map,
+    map_from_poses,
     map_trial,
     record_run,
     score_map,
@@ -127,6 +128,26 @@ def test_a_short_lidar_run_maps_its_arena_and_dead_reckoning_maps_it_worse():
     dead = build_map(run, LIDAR_LOG_ODDS, poses="dead_reckoning")
     dead_scores = score_map(dead, run.arena, run.true_poses)
     assert dead_scores["occupied_precision"] < true_scores["occupied_precision"] - 0.05
+
+
+def test_map_from_poses_is_build_map_from_any_trajectory():
+    """``build_map`` maps from one of the run's own pose sources; ``map_from_poses`` takes any
+    ``(T, 3)`` trajectory, such as an estimate aligned to the truth, on the same arena frame."""
+    run = record_run(1, lidar(), steps=40)
+    for source, poses in (("true", run.true_poses), ("dead_reckoning", run.dead_reckoning)):
+        built = build_map(run, LIDAR_LOG_ODDS, poses=source)
+        mapped = map_from_poses(run.arena, run.sensor, poses, run.readings, LIDAR_LOG_ODDS)
+        np.testing.assert_array_equal(mapped.log_odds, built.log_odds)
+        assert (mapped.origin, mapped.shape) == (built.origin, built.shape)
+    shifted = run.true_poses + np.array([0.1, 0.0, 0.0])
+    moved = map_from_poses(run.arena, run.sensor, shifted, run.readings, LIDAR_LOG_ODDS)
+    assert not np.array_equal(moved.log_odds, build_map(run, LIDAR_LOG_ODDS).log_odds)
+
+
+def test_map_from_poses_needs_one_pose_per_scan():
+    run = record_run(1, lidar(), steps=3)
+    with pytest.raises(ValueError, match="one pose per scan"):
+        map_from_poses(run.arena, run.sensor, run.true_poses[:2], run.readings, LIDAR_LOG_ODDS)
 
 
 def test_build_map_refuses_an_unknown_pose_source():
