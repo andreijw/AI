@@ -9,7 +9,8 @@ and corrects all of them each time it sees a landmark again.
 landmarks are the arena's cylinders, fitted as circles to a lidar's scan; the robot will carry a 360° lidar at about 1°
 per beam (the maintainer's decision, 2026-11-09), so the evaluation uses `lidar(num_beams=360)` (CHANGELOG.md,
 2026-11-10). Like `rl_navigation.estimation` it runs on the robot: it imports NumPy, `rl_navigation.sim` and the
-`estimation` core only.
+`estimation` and `mapping` cores only. The second half of the page, [scan matching](#scan-matching), keeps the map as
+an occupancy grid instead of landmarks.
 
 ```mermaid
 flowchart LR
@@ -125,5 +126,63 @@ dead reckoning (box corners are the follow-up); and with 30 % of beams dropped t
 circles, about 3 in 4 of those that keep 8 usable beams. Bridging up to 3° of dropped beams (TESTING.md `CIRC-2`, judged
 on seeds 151 to 200, 2026-11-12) lifted it from 10 % with 28 % false fits (tuning seeds, before) and keeps false fits at
 0.4 %, and the SLAM at 30 % dropout now fails 4 of 50 runs against 5 without dropout (CHANGELOG.md, 2026-11-12).
+
+## Scan matching
+
+Landmarks throw most of a scan away: only the beams that hit a cylinder count. *Scan matching* uses every beam. It keeps
+the map as the log-odds grid of [mapping](mapping.md), built in the frame of the robot's first pose, and asks where the
+robot must stand for the new scan's end points to land on the grid's occupied cells.
+
+```mermaid
+flowchart LR
+    Odo["wheel travel"] --> Predict["predict_pose: prior pose and covariance"]
+    Grid["OccupancyGrid"] --> Field["DistanceField: distance to the nearest occupied cell"]
+    Scan["lidar scan"] --> Match["match_points: Gauss-Newton from the prior"]
+    Predict --> Match
+    Field --> Match
+    Match -->|"accepted"| Pose["pose and covariance"]
+    Match -->|"accepted"| Grid
+    Match -->|"rejected"| Keep["keep the prediction, map nothing"]
+    Pose --> Predict
+    Keep --> Predict
+```
+
+```python
+from rl_navigation.sim import WheelOdometry, lidar
+from rl_navigation.slam import ScanMatchingSlam
+
+sensor = lidar(num_beams=360)
+slam = ScanMatchingSlam(sensor, WheelOdometry(), start, covariance, (140, 140), (-1.0, -1.0))
+slam.predict(wheel_travel)  # the encoders' (left, right) travel, metres
+result = slam.update(readings)  # match the scan, then map it if the match was accepted
+slam.pose, slam.covariance, slam.grid  # the grid is a mapping.OccupancyGrid
+```
+
+The grid becomes a field first: `rl_navigation.mapping.fields.distance_field` gives each cell the distance from its
+centre to the nearest occupied cell's, and `DistanceField.sample` interpolates it between cell centres with its
+gradient. This is the likelihood field of Thrun, Burgard and Fox's *Probabilistic Robotics*. `match_points` then
+minimises, as Hector SLAM does (Kohlbrecher and colleagues), the squared distance of every end point from the map,
+capped at `max_distance`, plus the distance of the pose from the odometry prediction in the prediction's own covariance.
+A beam farther than the cap from every occupied cell is an outlier with a fixed cost, so a chair the map does not hold
+cannot pull the pose. Each Gauss-Newton step uses the field's gradient, and a step that would raise the cost is halved.
+The covariance of the result is the inverse of the cost's curvature there. A match is accepted when enough of its beams
+fit the map closely and it did not move further from the prediction than a chi-square gate allows; then the scan is
+mapped at the matched pose. A rejected scan keeps the prediction and leaves the map alone.
+
+**How well does it work?** On a map built from the true poses, the matcher alone lands within 8.4 mm of the true pose
+in the median, 1.7 cm at the 95th percentile, from priors 3 cm and 0.03 rad off, and its covariance is consistent (mean
+NEES 3.01, where 3 is consistent; TESTING.md `SCAN-1`). As a SLAM front end with the 360-beam lidar, judged once on
+fresh seeds 251 to 300, its aligned trajectory error is 1.0 cm mean, against 36 cm for dead reckoning over the same
+encoders, with no run above 10 cm, maps whose occupied cells are 99.97 % right, and 0.9 cm at 30 % dropout
+(TESTING.md `SLAM-4`). An update (field, match and mapping) takes 9.5 to 9.7 ms in the median on one Jetson core
+(TESTING.md `SLAM-5`) (CHANGELOG.md, 2026-11-22).
+
+**Known limits.** The front end has no loop closure and no map uncertainty: its covariance is the pose's relative to a
+map that drifts unseen, so it is overconfident against the truth (aligned NEES 168 where 3 is consistent). A surface on
+a cell border is mapped half a cell (2.5 cm) behind itself, the same way along the whole surface, which is why each end
+point's noise is set to 3.3 cm against the lidar's 1 cm. With the 64-beam lidar, in some runs the first map, one sparse
+scan, cannot explain the next scans: every later match is rejected and the map never grows. At least one of the 50
+judged runs locked out and 4 failed, not all of them by locking out (the `warmup_scans` follow-up in the roadmap)
+(CHANGELOG.md, 2026-11-22).
 
 Continue with [Planning and control](planning.md), which turns a map and a pose into motion.

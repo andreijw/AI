@@ -29,12 +29,42 @@ PoseSource = Literal["true", "dead_reckoning"]
 BoolGrid = NDArray[np.bool_]
 
 
-def _arena_grid(
-    arena: Arena, sensor: RangeSensor, resolution: float, model: LogOddsModel
+def map_from_poses(
+    arena: Arena,
+    sensor: RangeSensor,
+    poses: ArrayLike,
+    readings: ArrayLike,
+    model: LogOddsModel,
+    *,
+    resolution: float = 0.05,
 ) -> OccupancyGrid:
-    """An empty grid on the arena's frame: origin ``(0, 0)`` and ``occupancy_grid``'s shape."""
+    """Scans mapped at the given poses on the arena's frame (origin ``(0, 0)``,
+    ``occupancy_grid``'s shape), so :func:`score_map` can score the result.
+
+    Args:
+        arena: The true arena, for the frame.
+        sensor: The sensor that read the scans.
+        poses: ``(T, 3)`` the pose of each scan: the truth, dead reckoning, or an estimate
+            aligned to the truth.
+        readings: ``(T, N)`` the scans.
+        model: The log-odds model.
+        resolution: Cell side in metres.
+
+    Raises:
+        ValueError: Not one pose per scan.
+    """
+    poses = np.asarray(poses, dtype=np.float64).reshape(-1, 3)
+    scans = np.asarray(readings, dtype=np.float64)
+    if len(poses) != len(scans):
+        raise ValueError(
+            f"map_from_poses needs one pose per scan, got {len(poses)} poses and {len(scans)} "
+            "scans."
+        )
     rows, cols = occupancy_grid(arena, resolution).shape
-    return OccupancyGrid(sensor, (rows, cols), resolution, model)
+    grid = OccupancyGrid(sensor, (rows, cols), resolution, model)
+    for pose, scan in zip(poses, scans, strict=True):
+        grid.update(pose, scan)
+    return grid
 
 
 def build_map(
@@ -44,7 +74,8 @@ def build_map(
     resolution: float = 0.05,
     poses: PoseSource = "true",
 ) -> OccupancyGrid:
-    """The run's scans mapped on the arena's frame, from the true poses or from dead reckoning.
+    """The run's scans mapped on the arena's frame, from the true poses or from dead reckoning
+    (:func:`map_from_poses` takes any other trajectory).
 
     Args:
         run: The run.
@@ -60,10 +91,9 @@ def build_map(
     sources = {"true": run.true_poses, "dead_reckoning": run.dead_reckoning}
     if poses not in sources:
         raise ValueError(f"build_map poses must be one of {sorted(sources)}, got {poses!r}.")
-    grid = _arena_grid(run.arena, run.sensor, resolution, model)
-    for pose, readings in zip(sources[poses], run.readings, strict=True):
-        grid.update(pose, readings)
-    return grid
+    return map_from_poses(
+        run.arena, run.sensor, sources[poses], run.readings, model, resolution=resolution
+    )
 
 
 def _dilate(mask: BoolGrid, outside: bool = False) -> BoolGrid:

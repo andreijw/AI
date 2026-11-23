@@ -15,6 +15,7 @@ from rl_navigation.estimation.evaluation import (
     localization_steps,
     localization_success,
     mcl,
+    pose_nees,
     run_trial,
     summarize,
     summarize_localization,
@@ -94,6 +95,23 @@ def test_heading_errors_wrap():
     assert summarize([trial])["heading_rmse"] == pytest.approx(0.02, rel=1e-9), (
         "An estimate 0.02 rad across +-pi is 0.02 rad off, not 2 pi - 0.02."
     )
+
+
+def test_pose_nees_by_hand():
+    """Step 1: 0.1 m off in x with variance 0.01, so 1. Step 2: 0.2 m off in y with variance
+    0.04 and 0.1 rad off with variance 0.01, so 1 + 1. Step 3: a heading off by 0.1 across pi
+    (estimate pi - 0.05, truth -pi + 0.05), wrapped, with variance 0.0025, so 4."""
+    trial = Trial(
+        true_poses=np.array([[1.0, 1.0, 0.0], [1.0, 1.0, 0.0], [1.0, 1.0, -math.pi + 0.05]]),
+        estimates=np.array([[1.1, 1.0, 0.0], [1.0, 1.2, 0.1], [1.0, 1.0, math.pi - 0.05]]),
+        covariances=np.array(
+            [np.diag([0.01, 1.0, 1.0]), np.diag([1.0, 0.04, 0.01]), np.diag([1.0, 1.0, 0.0025])]
+        ),
+        dead_reckoning=np.zeros((3, 3)),
+        beams_used=np.zeros(3, dtype=np.int_),
+        collided=False,
+    )
+    np.testing.assert_allclose(pose_nees(trial), [1.0, 2.0, 4.0], rtol=1e-9)
 
 
 def test_average_nees_is_per_step_over_runs_cut_to_the_shortest():

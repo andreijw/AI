@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from rl_navigation.sim.geometry import Arena
-from rl_navigation.sim.kinematics import unicycle_step, wrap_angle
+from rl_navigation.sim.kinematics import rotation, unicycle_step, wrap_angle
 from rl_navigation.sim.sensors import hc_sr04
 from rl_navigation.sim.world import World
 
@@ -29,6 +29,19 @@ EMPTY = Arena(width=5.0, height=5.0)
 )
 def test_wrap_angle(angle, expected):
     assert wrap_angle(angle) == pytest.approx(expected, abs=1e-12)
+
+
+def test_rotation_turns_body_vectors_into_the_world_frame():
+    """A quarter turn takes the body's x axis to the world's y axis; any rotation keeps lengths
+    and its inverse is its transpose."""
+    np.testing.assert_allclose(rotation(math.pi / 2) @ [1.0, 0.0], [0.0, 1.0], atol=1e-15)
+    turn = rotation(0.7)
+    np.testing.assert_allclose(turn @ turn.T, np.eye(2), atol=1e-15)
+    np.testing.assert_allclose(
+        turn @ [3.0, 4.0],
+        [3 * math.cos(0.7) - 4 * math.sin(0.7), 3 * math.sin(0.7) + 4 * math.cos(0.7)],
+        atol=1e-14,
+    )
 
 
 def test_wrap_angle_stays_below_pi_just_under_minus_pi():

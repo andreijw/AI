@@ -21,6 +21,7 @@ from numpy.typing import ArrayLike, NDArray
 from rl_navigation.estimation.averages import mean_or_nan
 from rl_navigation.estimation.runs import record_run
 from rl_navigation.sim.geometry import Arena, FloatArray
+from rl_navigation.sim.kinematics import rotation
 from rl_navigation.sim.sensors import RangeSensor, usable_readings
 from rl_navigation.slam.features import CircleFeature, FeatureSettings, extract_circles
 
@@ -32,11 +33,6 @@ HIT_TOLERANCE = 1e-6
 
 # A circle's radius bias is tested only with at least this many matched fits.
 BIAS_MIN_FITS = 30
-
-
-def _rotation(theta: float) -> FloatArray:
-    c, s = np.cos(theta), np.sin(theta)
-    return np.array([[c, -s], [s, c]])
 
 
 def visible_circles(
@@ -87,7 +83,7 @@ def match_features(
     if not features or not len(arena.circle_radii):
         return np.full(len(features), -1, dtype=np.intp)
     body = np.array([feature.z[:2] for feature in features])
-    world = pose[:2] + body @ _rotation(float(pose[2])).T
+    world = pose[:2] + body @ rotation(float(pose[2])).T
     distances = np.hypot(*(world[:, None, :] - arena.circle_centers[None]).transpose(2, 0, 1))
     nearest = distances.argmin(axis=1)
     within = distances[np.arange(len(features)), nearest] <= match_radius
@@ -173,7 +169,7 @@ def feature_trial(
         visible_count += len(visible)
         reachable += len(visible_circles(arena, sensor, pose, true, settings.min_points, readings))
         detected += len(set(visible.tolist()) & set(matches.tolist()))
-        to_body = _rotation(float(pose[2])).T
+        to_body = rotation(float(pose[2])).T
         for feature, circle in zip(features, matches, strict=True):
             if circle < 0:
                 continue

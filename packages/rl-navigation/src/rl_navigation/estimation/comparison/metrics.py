@@ -18,6 +18,7 @@ from rl_navigation.estimation.evaluation import (
     NEES_UPPER_95,
     Trial,
     localization_steps,
+    pose_nees,
     summarize,
     summarize_localization,
 )
@@ -51,11 +52,8 @@ class Comparison:
     meta: dict[str, Any]
 
 
-def nees_per_step(trial: Trial) -> FloatArray:
-    """``(T,)`` normalised estimation error squared ``e^T P^-1 e`` at each step of the trial."""
-    errors = pose_difference(trial.estimates, trial.true_poses)
-    solved = np.linalg.solve(trial.covariances, errors[..., None])[..., 0]
-    return np.asarray(np.einsum("ti,ti->t", errors, solved))
+# The comparison's name, kept in its public names, for the evaluation's one pose NEES.
+nees_per_step = pose_nees
 
 
 def confidently_wrong(

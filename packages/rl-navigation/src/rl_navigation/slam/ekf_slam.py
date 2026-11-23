@@ -88,7 +88,7 @@ from rl_navigation.estimation.ekf import chi2_quantile, predict_pose
 from rl_navigation.estimation.kalman import kalman_update, symmetrized
 from rl_navigation.estimation.poses import checked_start, checked_wheel_travel
 from rl_navigation.sim.geometry import FloatArray
-from rl_navigation.sim.kinematics import wrap_angle
+from rl_navigation.sim.kinematics import rotation, wrap_angle
 from rl_navigation.sim.odometry import WheelOdometry
 from rl_navigation.sim.sensors import RangeSensor
 from rl_navigation.slam.features import CircleFeature, FeatureSettings, extract_circles
@@ -105,11 +105,6 @@ Associate = Callable[[Sequence[CircleFeature]], Sequence[int]]
 number to leave it out: the known-correspondence path (an oracle in the desk tool)."""
 
 _QUARTER_TURN = np.array([[0.0, -1.0], [1.0, 0.0]])
-
-
-def _rotation(theta: float) -> FloatArray:
-    c, s = np.cos(theta), np.sin(theta)
-    return np.array([[c, -s], [s, c]])
 
 
 def fej_motion_jacobian(previous_prediction: ArrayLike, prediction: ArrayLike) -> FloatArray:
@@ -141,7 +136,7 @@ def landmark_measurement(
     pose = np.asarray(pose, dtype=np.float64)
     landmarks = np.asarray(landmarks, dtype=np.float64)
     arm = landmarks[..., :2] if lever is None else np.asarray(lever, dtype=np.float64)
-    R = _rotation(float(pose[2]))
+    R = rotation(float(pose[2]))
     body = (landmarks[..., :2] - pose[:2]) @ R  # R^T (m - p), row-wise
     h = np.concatenate([body, landmarks[..., 2:3]], axis=-1)
     lever_body = (arm - pose[:2]) @ R
@@ -165,7 +160,7 @@ def initialize_landmark(pose: ArrayLike, z: ArrayLike) -> tuple[FloatArray, Floa
     """
     pose = np.asarray(pose, dtype=np.float64)
     z = np.asarray(z, dtype=np.float64)
-    R = _rotation(float(pose[2]))
+    R = rotation(float(pose[2]))
     world = R @ z[:2]
     m = np.array([pose[0] + world[0], pose[1] + world[1], z[2]])
     G_pose = np.zeros((3, 3))
@@ -211,7 +206,7 @@ def second_order_covariance(
     count = centres.shape[-2]
     size = 3 + 2 * count
     batch = centres.shape[:-2]
-    R = _rotation(float(pose[2]))
+    R = rotation(float(pose[2]))
     R_prime = R @ _QUARTER_TURN
     # The gauge: translation along x and y, and rotation about the origin, over the block.
     N = np.zeros(batch + (size, 3))

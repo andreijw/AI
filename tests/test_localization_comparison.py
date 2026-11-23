@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from rl_navigation.estimation import EkfLocalizer, MclSettings
+from rl_navigation.estimation import comparison as comparison_package
 from rl_navigation.estimation.comparison import (
     COLLAPSED_POSITION_STD,
     ComparisonRow,
@@ -25,7 +26,7 @@ from rl_navigation.estimation.comparison import (
     run_records,
 )
 from rl_navigation.estimation.comparison import runner as comparison_runner
-from rl_navigation.estimation.evaluation import LOST_ERROR, Trial, average_nees
+from rl_navigation.estimation.evaluation import LOST_ERROR, Trial, pose_nees
 from rl_navigation.sim import lidar
 
 # Short runs: 2 seeds of 120 steps, kidnapped at 60, localized within 20 steps and held for 10,
@@ -692,9 +693,10 @@ def test_ekf_reset_defaults_are_the_filters():
     assert dataclasses.asdict(EkfReset()) == defaults, "EkfReset should default as EkfLocalizer"
 
 
-def test_nees_per_step_agrees_with_the_evaluations_nees():
-    trial = _trial([0.3, 0.1, 0.7], [0.01, 0.2, 0.05], kidnap_at=1)
-    np.testing.assert_allclose(nees_per_step(trial), average_nees([trial]), rtol=1e-12)
+def test_nees_per_step_is_the_evaluations_pose_nees():
+    """Kept in the comparison's public names (released in 0.1.0) as the one shared NEES."""
+    assert nees_per_step is pose_nees
+    assert "nees_per_step" in comparison_package.__all__
 
 
 def _known_record(seed, mode):

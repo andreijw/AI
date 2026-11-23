@@ -18,14 +18,14 @@ robot's installer needs: the install, the module map and the environment's stand
 | The Gymnasium environments and their agents | [the challenge page](learn/challenges/navigation.md) | `rl_navigation.gym_env`, `rl_navigation.environments` | Gymnasium; the second also `rl_core` |
 | State estimation: EKF and Monte Carlo localization | [estimation](learn/navigation/estimation.md) | `rl_navigation.estimation` | NumPy, `sim` |
 | Occupancy-grid mapping | [mapping](learn/navigation/mapping.md) | `rl_navigation.mapping` | NumPy, `sim` |
-| Landmark EKF-SLAM | [slam](learn/navigation/slam.md) | `rl_navigation.slam` | NumPy, `sim`, the `estimation` core |
+| Landmark EKF-SLAM and lidar scan matching | [slam](learn/navigation/slam.md) | `rl_navigation.slam` | NumPy, `sim`, the `estimation` and `mapping` cores |
 | A*, pure pursuit and the navigator | [planning](learn/navigation/planning.md) | `rl_navigation.planning` | NumPy, `sim`, `mapping` |
 | Policy export to C and ONNX | [export-to-robot](learn/navigation/export-to-robot.md) | `rl_core.export` | the `onnx` extra for ONNX |
 
 The desk tools are not imported by the libraries: `rl_navigation.estimation.comparison`,
 `rl_navigation.estimation.runs`, `rl_navigation.mapping.evaluation`, `rl_navigation.slam.evaluation`,
-`rl_navigation.slam.feature_evaluation`, `rl_navigation.localization_video` and `rl_navigation.planning_comparison`
-(which imports the Gymnasium layer but never `rl_core`).
+`rl_navigation.slam.feature_evaluation`, `rl_navigation.slam.scan_evaluation`, `rl_navigation.localization_video` and
+`rl_navigation.planning_comparison` (which imports the Gymnasium layer but never `rl_core`).
 
 ## Installing on the robot
 
