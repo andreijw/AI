@@ -5,7 +5,7 @@ the robot's own code (state estimation, mapping, planning) can use it without ei
 """
 
 from rl_navigation.sim.geometry import Arena, cast_rays, clearance, occupancy_grid, segment_hits
-from rl_navigation.sim.kinematics import unicycle_step, wrap_angle
+from rl_navigation.sim.kinematics import rotation, unicycle_step, wrap_angle
 from rl_navigation.sim.layouts import (
     Layout,
     LayoutParams,
@@ -34,6 +34,7 @@ __all__ = [
     "lidar",
     "occupancy_grid",
     "path_exists",
+    "rotation",
     "segment_hits",
     "unicycle_step",
     "usable_readings",

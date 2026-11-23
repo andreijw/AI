@@ -140,5 +140,10 @@ solve and then fall back, which is solving without holding. [Foundations](founda
 fixed start states, after training or every `eval_frequency` episodes. It is reported beside the solve rate; reaching
 the threshold in it is recorded but is not a solve. [Foundations](foundations.md#solved-and-held).
 
+**Scan matching.** Finding the pose at which a lidar scan's end points fall on a map's occupied cells. Here the map is
+the log-odds grid, read through its distance field (how far each cell is from the nearest occupied one), and the pose
+minimises the end points' distances from the map plus its distance from the odometry's prediction.
+[SLAM](navigation/slam.md#scan-matching).
+
 **Threshold.** The challenge's `solve_threshold`: the score Gymnasium or this repository calls the task done. Each
 challenge page states its own. [Foundations](foundations.md#solved-and-held).

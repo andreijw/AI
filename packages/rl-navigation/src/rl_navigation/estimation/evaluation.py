@@ -340,8 +340,10 @@ def _check_trials(trials: Sequence[Trial]) -> None:
         )
 
 
-def _nees(trial: Trial) -> FloatArray:
-    """``(T,)`` normalised estimation error squared, ``e^T P^-1 e``."""
+def pose_nees(trial: Trial) -> FloatArray:
+    """``(T,)`` normalised estimation error squared of the pose at each step, ``e^T P^-1 e``,
+    with ``e`` the estimate minus the truth (heading wrapped) and ``P`` the filter's covariance.
+    The one NEES of every desk tool (the comparison's ``nees_per_step`` is this function)."""
     errors = pose_difference(trial.estimates, trial.true_poses)
     solved = np.linalg.solve(trial.covariances, errors[..., None])[..., 0]
     return np.asarray(np.einsum("ti,ti->t", errors, solved))
@@ -355,7 +357,7 @@ def average_nees(trials: Sequence[Trial]) -> FloatArray:
     """
     _check_trials(trials)
     length = min(len(trial.true_poses) for trial in trials)
-    return np.mean([_nees(trial)[:length] for trial in trials], axis=0)
+    return np.mean([pose_nees(trial)[:length] for trial in trials], axis=0)
 
 
 def _error_summary(trials: Sequence[Trial], estimates: str, prefix: str) -> dict[str, float]:
@@ -387,7 +389,7 @@ def summarize(trials: Sequence[Trial]) -> dict[str, float]:
         ValueError: No trials, or a trial without steps.
     """
     _check_trials(trials)
-    nees = np.concatenate([_nees(trial) for trial in trials])
+    nees = np.concatenate([pose_nees(trial) for trial in trials])
     return {
         **_error_summary(trials, "estimates", ""),
         "mean_nees": float(nees.mean()),

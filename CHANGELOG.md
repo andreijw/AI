@@ -12,6 +12,36 @@ from 2026-10-16; earlier results use the 10-episode rule.
 Acrobot-v1) and
 "holds" is the final 100-episode average still at or above it.
 
+## 2026-11-22
+
+### Added
+
+- **Lidar scan matching and a scan-matching SLAM front end** (`feature/slam-scan-matching`; PR 3a of the
+  occupancy-grid mapping and SLAM item, stacked on PR 3-0). `rl_navigation.slam.scan_matching` matches a lidar scan
+  against the log-odds grid as Hector SLAM does, on Thrun's likelihood field: `rl_navigation.mapping.fields` turns the
+  grid into the distance from each cell centre to the nearest occupied one, sampled bilinearly with its gradient, and
+  `match_points` minimises the end points' distances, capped at 15 cm, plus the pose's distance from the odometry
+  prediction, by Gauss-Newton with halved steps. A match is accepted on its inlier share (at least 0.8), its RMS (at
+  most 5 cm) and a chi-square 0.999 gate. `ScanMatchingSlam` keeps one pose and the grid by it (no loop closure, no
+  map uncertainty); the `slam` core now imports the `mapping` core. `estimation.evaluation.pose_nees` is public and the
+  one pose NEES (the comparison's `nees_per_step` is it, and `score_run` uses it); `mapping.evaluation.map_from_poses`
+  maps any trajectory. Tuned on seeds 1 to 50 and checked on 51 to 100 (each end point's noise 3.3 cm, no pose-noise
+  floor), then judged once on fresh seeds 251 to 300 against gates the maintainer registered beforehand
+  (TESTING.md `SCAN-1`, `SLAM-4`, `SLAM-5`); every gate passes. The matcher on true-pose maps: mean NEES 3.01, error
+  8.4 mm median and 16.8 mm p95, all 1000 trials within 5 cm, 96.9 % converged. The front end on the 360-beam lidar:
+  aligned trajectory error 10.0 mm mean and 9.2 mm median, no run above 10 cm, 0.028 of dead reckoning's (0.357 m),
+  maps with occupied precision and cell accuracy 0.9997, 99.997 % of matches accepted, 9.4 mm at 30 % dropout; an
+  update takes 9.5 to 9.7 ms in the median and 13 ms at p99 on one Jetson core. Reported: visible-surface recall 0.78
+  (true-pose maps reach 0.94 to 0.95, on `MAP-1`'s seeds 101 to 150, not these) and an aligned NEES of 168,
+  overconfident because the map's drift is not in the state. Not run: the plan's `EkfSlam` row on the same seeds; it
+  was left out of the frozen rows, and `SLAM-1` and `SLAM-3` hold its figures on other seeds.
+  **Known limit: the 64-beam lidar can lock out.** In some runs its first map, one sparse scan, explains no later
+  scan: every later match is rejected and the map never grows. On seeds 251 to 300 at least one run locked out (a
+  run's accepted share as low as 0.0; 91 % of matches accepted over all runs), and 4 of 50 runs failed (ATE 40 mm mean,
+  9.3 mm median); on tuning seeds 1 to 50, 5 runs locked out and 3 of the 8 failures were not lockouts. The follow-up
+  is a `warmup_scans` setting. Tuning found the RMS limit first set from true-pose maps (3 cm) rejected every scan of
+  a 30 % dropout run's gappy first map and lost 16 of 50 runs; 5 cm does not.
+
 ## 2026-11-20
 
 ### Added
