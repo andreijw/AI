@@ -486,8 +486,8 @@ def test_with_no_path_the_shortest_length_is_the_straight_line():
 
 
 def test_an_observation_of_dropouts_writes_no_cell_of_the_online_map():
-    """A dropout reads the sensor's maximum range (1 in the observation): not a hit, and beyond
-    the map range, so the online map stays unknown."""
+    """A dropout reads the sensor's maximum range (1 in the observation): an unusable reading, so
+    it neither marks nor clears a cell and the online map stays unknown."""
     controller = PlannerController("online")
     env = NavigationGymEnv()
     try:
@@ -684,3 +684,16 @@ def test_a_nominal_planner_row_missing_from_the_run_is_not_played_for_g4():
         "| P-online-d",
     ]
     assert sum(line.endswith("| not played |") for line in g4) == 3
+
+
+@pytest.mark.parametrize("continuous", [True, False])
+def test_the_online_planner_clears_the_false_walls_that_stalled_layout_10102(continuous):
+    """Tuning layout 10102 stalled both online planners until they timed out: cone arcs of the
+    sonars wrote walls into open space, and readings beyond the map range, which would have
+    cleared them, were dropped (CHANGELOG.md, 2026-11-22)."""
+    env = NavigationGymEnv(continuous=continuous)
+    try:
+        record = play(env, PlannerController("online"), 10102)
+    finally:
+        env.close()
+    assert record.success, f"{'continuous' if continuous else 'discrete'} actions stalled"

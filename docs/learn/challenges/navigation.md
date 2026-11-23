@@ -91,7 +91,8 @@ report](../../benchmarks/navigation_continuous_results.md)).
 
 **Sonars write false walls.** The agents see five sonar readings, a cone each. The classical
 planner of [Planning and control](../navigation/planning.md#planner-against-trained-policies), with a map built from the
-same readings, is stalled by false walls under range noise where TD3 is not.
+same readings, was stalled by false walls under range noise where TD3 was not, until far readings were made to clear
+them; since then it matches TD3 there, at about TD3's collision rate (CHANGELOG.md, 2026-11-22).
 
 ## See it
 

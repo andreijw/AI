@@ -8,7 +8,7 @@ import pytest
 
 from rl_navigation.mapping.grid import HC_SR04_LOG_ODDS, OccupancyGrid
 from rl_navigation.planning.follower import Command, FollowerParams
-from rl_navigation.planning.grid import PlanningGrid, from_occupied
+from rl_navigation.planning.grid import PlanningGrid, from_occupied, reachable
 from rl_navigation.planning.navigator import (
     NO_PATH,
     Navigator,
@@ -164,19 +164,48 @@ def test_the_margin_steps_down_through_a_narrow_gap():
     assert navigator.inflation == pytest.approx(0.1 + RES / 2 + 0.04)
 
 
-def test_the_online_map_ignores_readings_beyond_its_range():
+def test_the_online_map_hits_only_within_its_range_and_clears_beyond_it():
     sensor = hc_sr04()
     occupancy = OccupancyGrid(sensor, (100, 100), RES, HC_SR04_LOG_ODDS)
     online = OnlineMap(occupancy, map_range=1.5)
     pose = [2.5, 2.5, 0.0]
     online.update(pose, np.full(sensor.num_readings, 2.0))
-    assert online.version == 0 and not occupancy.observed.any(), "2 m readings are left out"
+    assert online.version == 0 and not occupancy.occupied().any(), "2 m readings mark no hit"
+    assert occupancy.free().any(), "but they clear the cells within 1.5 m"
     online.update(pose, np.full(sensor.num_readings, 1.0))
     assert online.version == 1 and occupancy.occupied().any()
     first = online.grid(0.2)
     assert online.grid(0.2) is first, "a grid is kept until the map changes"
     online.update(pose, np.full(sensor.num_readings, np.nan))
     assert online.version == 1 and online.grid(0.2) is first
+
+
+def test_far_readings_clear_a_false_wall_that_closed_the_route():
+    """The bug fixed on 2026-11-22 (CHANGELOG.md): one scan reading 0.6 m on
+    every sonar, in a corridor 1.2 m wide, puts the five cones' arcs across it; their cells hold
+    no obstacle, and nothing cleared them, because readings beyond ``map_range`` were dropped.
+    Far readings from the same pose cross every arc cell: ``ceil(l_occ / -l_free)`` of them
+    (3 for the HC-SR04 model) free the cells and reopen the corridor, one fewer does not."""
+    sensor = hc_sr04()
+    occupancy = OccupancyGrid(sensor, (100, 24), RES, HC_SR04_LOG_ODDS)
+    online = OnlineMap(occupancy, map_range=1.0)
+    pose, goal = np.array([0.6, 1.0, math.pi / 2]), np.array([0.6, 4.0])
+    inflation = NavigatorParams().inflations(RES)[-1]
+
+    def is_open():
+        grid = online.grid(inflation)
+        return reachable(grid, grid.cell_of(pose[:2]), grid.cell_of(goal))
+
+    assert is_open()
+    online.update(pose, np.full(sensor.num_readings, 0.6))
+    assert not is_open(), "the arcs close the corridor"
+    model = HC_SR04_LOG_ODDS
+    misses = math.ceil(model.l_occ / -model.l_free)
+    for _ in range(misses - 1):
+        online.update(pose, np.full(sensor.num_readings, 2.0))
+    assert not is_open(), f"{misses - 1} far scans leave every arc cell above 0"
+    online.update(pose, np.full(sensor.num_readings, 2.0))
+    assert is_open(), f"{misses} far scans free the false wall"
 
 
 def test_true_map_grids_are_the_arena_inflated_and_kept():

@@ -93,6 +93,15 @@ about it (CHANGELOG.md, 2026-11-13). The margin and the turn-in-place threshold 
 in 200 of 200 with either action kind, and on the online HC-SR04 map in 194 and 193 of 200 with no collision, the 13
 timeouts stalling behind false walls in the sonar map (CHANGELOG.md, 2026-11-13).
 
+**Why the sonar map wrote false walls.** An HC-SR04 reading is the nearest range over a 15° cone, so all five rays of
+the cone mark a hit at that range, and the arc beside the real echo becomes wall. The online map gave every reading
+beyond its 1 m map range to the grid as unusable, and an unusable reading clears nothing, so those walls stayed: most
+readings in open space are farther than 1 m. Now a reading beyond the map range marks no hit but clears the cells its
+rays cross before 1 m (`rl_navigation.mapping.grid.OccupancyGrid.update`'s `hit_range`, the split ROS's costmap makes
+between obstacle and raytrace range), and on the same tuning layouts the online planner reached the goal in 198 and
+198 of 200 (CHANGELOG.md, 2026-11-22). The cost shows under heavy range noise: a reading that comes back too long can
+now clear a real wall too.
+
 ## Planner against trained policies
 
 `rl_navigation.planning_comparison` plays a `rl_navigation.planning_comparison.PlannerController` (on the true map, or
@@ -107,22 +116,26 @@ The judged run played held-out layouts, once, with every gate registered beforeh
 [planning_results.md](../../benchmarks/planning_results.md); read its rows rather than a summary of them. In short, and
 as the maintainer's decision to publish it recorded (CHANGELOG.md, 2026-11-19): every registered gate passed. At nominal
 sensors the online planner matches TD3 on two of its three seeds and beats the third, with shorter paths and no
-collisions where the policies have a few. Under range noise the order reverses: the online map's false walls stall the
-planner while TD3 holds its success rate. Dropout leaves the planners unhurt.
+collisions where the policies have a few. Under range noise the order reversed: the online map's false walls stalled
+the planner while TD3 held its success rate. Dropout leaves the planners unhurt. That report's online rows predate the
+false-wall fix. Judged again on fresh layouts after it, the online planner reached the goal on 99.8 and 99.6 % at
+nominal sensors and on 94.8 and 95.2 % at range noise 0.4, as often as TD3 there, and collided about as often as TD3
+(continuous) and less often than DQN (discrete) (CHANGELOG.md, 2026-11-22; TESTING.md `PLAN-4`).
 
 What the comparison suggests (the author's reading, not a measured claim):
 
 - The planner on the true map shows what a perfect map and pose allow; the online-map rows add the effect of building
   the map from sonar readings.
-- The online planner stalls on false walls that its own map wrote under range noise; a policy reads the sensors each
-  step and keeps no map to be wrong. The policies, in turn, collide at nominal sensors where the planner does not.
+- A map can be wrong in a way a policy cannot: the online planner stalled on false walls its own map wrote, because the
+  map threw away the far readings that would have cleared them; a policy reads the sensors each step and keeps no map
+  to be wrong. The policies, in turn, collide at nominal sensors where the planner does not.
 - The planner is a pipeline of parts that can each be tested and debugged on their own; the policy is one network, which
   is judged only by what it does.
 
 **Known limits.** The comparison is open-ended work, listed in the "Planning follow-ups" item of
-[docs/roadmap.md](../../roadmap.md): the online map's false walls under range noise (the HC-SR04's 15° cone writes false
-walls that close every route, and turning on the spot never clears them, because the same cone reads them again); every
-planner row uses the true pose, as the policies do, where the robot will have the EKF's; the lidar rows are not played;
-and a bigger arena needs a faster search (CHANGELOG.md, 2026-11-19, and the roadmap item).
+[docs/roadmap.md](../../roadmap.md): a gap can close on any cell map, since each occupied cell is inflated as a whole
+square (one tuning layout of 200); every planner row uses the true pose, as the policies do, where the robot will have
+the EKF's; the lidar rows are not played; and a bigger arena needs a faster search (CHANGELOG.md, 2026-11-19 and
+2026-11-22, and the roadmap item).
 
 Continue with [Export to the robot](export-to-robot.md), the last step of the track.

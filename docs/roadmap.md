@@ -208,13 +208,16 @@ steps 3 to 5 are sketches to turn into full items when picked.
 
 - [ ] **Planning follow-ups** (left open when Planning and control closed, 2026-11-19; CHANGELOG.md, 2026-11-19;
   `docs/benchmarks/planning_results.md`). Not picked.
-  - **Online-map false walls under range noise**: the judged run's online planners fall to 61.6 % and 47.2 % at
-    noise 0.4 (all timeouts, no collision), where TD3 holds 95.8 to 97.4 %. On tuning layouts 10000 to 10199, 13
-    online-map runs already stall at nominal sensors: 6 with continuous actions (10004, 10042, 10070, 10102, 10116,
-    10149) and 7 with discrete (10042, 10070, 10097, 10102, 10116, 10149, 10161). The HC-SR04's 15° cone writes false
-    walls into the log-odds map that close every route, and turning on the spot never clears them, because the same
-    cone reads them again. Candidates: decay old evidence toward unknown, a noise-aware inverse sensor model, or
-    backing off along the path driven to look again from another angle; tune on 10000 to 10199, judge on fresh seeds.
+  - **Cell-inflation gaps on the online map**: `from_occupied` inflates each occupied cell's whole square, so a gap
+    the exact arena leaves open can close on any cell map. Tuning layout 10042 is closed at the smallest
+    inflation even on a perfect cell map (the true occupancy cells), while `from_arena` is open, and the online
+    planner times out there with either action kind; 1 of 200 tuning layouts and 0 of the judged 500 (CHANGELOG.md,
+    2026-11-22). Candidates: inflate by the distance to the obstacle surface the hits measured rather than the cell
+    square, or a finer grid near narrow gaps.
+  - **The stall left at the map-range edge**: tuning layout 10116 still times out with either action kind after the
+    false-wall fix, because a far reading leaves untouched the cell that holds its `hit_range`, so a false wall in
+    that cell is never cleared (a choice made in the fix; CHANGELOG.md, 2026-11-22). Candidate: free that edge
+    cell when the reading is well beyond it, after checking that this does not erase real walls under noise.
   - **The EKF pose in the loop**: every planner row uses the true pose, as the policies do; the robot will not have
     one.
   - **Lidar rows**: the comparison plays the HC-SR04 sensor only.
